@@ -14,13 +14,23 @@ if [ ! -d ".venv" ]; then
     uv pip install -e .
 fi
 
-# Ensure webhook .env exists (shared credentials)
-if [ ! -f "../webhook/.env" ]; then
-    echo "ERROR: webhook/.env not found. Credentials are shared with the webhook receiver."
-    exit 1
+# Ensure the shared .env exists. Since the 2026-07-08 consolidation both the
+# processor and the webhook read the SAME file at the project root — see
+# processor/config.py. webhook/.env is legacy; fall back to it only if the
+# consolidated file is missing, so an un-migrated VPS still starts.
+ENV_FILE="../.env"
+if [ ! -f "$ENV_FILE" ]; then
+    if [ -f "../webhook/.env" ]; then
+        ENV_FILE="../webhook/.env"
+        echo "WARNING: using legacy ../webhook/.env — see deploy/ENV-CONSOLIDATION-RUNBOOK.md"
+    else
+        echo "ERROR: no .env found at ../.env (or the legacy ../webhook/.env)."
+        exit 1
+    fi
 fi
 
 echo "Starting job processor..."
-echo "  Poll interval: $(grep -E '^PROCESSOR_POLL_INTERVAL=' ../webhook/.env 2>/dev/null | cut -d= -f2 || echo '2.0s (default)')"
+echo "  Config file:   $ENV_FILE"
+echo "  Poll interval: $(grep -E '^PROCESSOR_POLL_INTERVAL=' "$ENV_FILE" 2>/dev/null | cut -d= -f2 || echo '2.0s (default)')"
 
 exec uv run python -m orchestrator
