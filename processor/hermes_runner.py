@@ -355,6 +355,11 @@ def _parse_json_result(output: str) -> dict[str, Any]:
         # so model output must never be allowed to claim that a write occurred.
         result["gorgias_priority_set"] = False
         result["note_posted"] = False
+        # "no_draft" is a PROCESSOR decision, not a model one. draft_for_console()
+        # honours it by returning nothing at all, so a model that emitted it
+        # could throw away its own perfectly good draft with no alert. Only the
+        # two internal paths in this module may set it.
+        result.pop("no_draft", None)
 
         return result
 
@@ -387,11 +392,15 @@ def process_ticket_with_hermes(
 
     # ── Gate on the CUSTOMER MESSAGE before spending an LLM call ────
     # QA #19: an empty message got a fabricated reply. A message that is only
-    # "thanks" / an emoji / punctuation has nothing to answer, so we skip
-    # Hermes entirely and store NO draft. should_draft() only suppresses
-    # messages made ENTIRELY of acknowledgement tokens — anything with a real
-    # question or a sensitive word still goes through.
-    gate = should_draft(message_text)
+    # "thanks" / a friendly emoji has nothing to answer, so we skip Hermes
+    # entirely and store NO draft.
+    #
+    # The gate reads the SUBJECT as well as the body: a mail with an empty
+    # body but a real subject line is a real question. It suppresses only when
+    # every word is an acknowledgement or filler AND a genuine "thanks"-type
+    # word is present, so "So much for the help!", a bare "?" and an angry
+    # emoji all still reach Hermes.
+    gate = should_draft(message_text, ticket_subject)
     if not gate.ok:
         log_event(logger, "INFO", "Skipping draft — nothing to answer",
                   ticket_id=ticket_id, gate_reason=gate.reason)

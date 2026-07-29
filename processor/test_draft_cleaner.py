@@ -252,6 +252,14 @@ class EmptyDraftTests(unittest.TestCase):
                 self.assertTrue(res.no_draft)
                 self.assertEqual(res.text, "")
 
+    def test_repetition_collapses_all_the_way_not_just_once(self):
+        """4x used to come out doubled: the dedupe only knew 2x and 3x."""
+        for copies in (2, 3, 4, 6, 8, 9):
+            with self.subTest(copies=copies):
+                res = dc.clean_draft("\n\n".join([_GOOD] * copies))
+                self.assertEqual(_norm(res.text), _norm(_GOOD),
+                                 f"{copies} copies did not collapse to one")
+
     def test_clean_draft_is_idempotent(self):
         leaked = f"{_GOOD}\n\n{_GOOD}\n\nThe response above was complete."
         once = dc.clean_draft(leaked).text
@@ -265,9 +273,10 @@ class EmptyDraftTests(unittest.TestCase):
 # ===========================================================================
 class ShouldDraftTests(unittest.TestCase):
     NO_CONTENT = [
-        "", "  ", "!", "...", "thanks", "Thanks!", "Thank you!!",
-        "thank you so much!", "ty", "ok",
-        "\U0001F44D", "\U0001F64F", None,
+        "", "  ", "...", "thanks", "Thanks!", "Thank you!!",
+        "thank you so much!", "ty", "ok", "Perfect, thanks so much!",
+        "Got it, thank you!", "cheers", "Thanks again for everything!",
+        "\U0001F44D", "\U0001F64F", "\U0001F44D\U0001F44D", None,
     ]
     REAL_QUESTIONS = [
         "Where is my order #BB1015?",
@@ -296,6 +305,58 @@ class ShouldDraftTests(unittest.TestCase):
                     "I want to speak to a manager"]:
             with self.subTest(message=msg):
                 self.assertTrue(dc.should_draft(msg).ok)
+
+    # ── regressions from the code review ────────────────────────────
+    def test_filler_without_a_thanks_anchor_is_not_an_acknowledgement(self):
+        """The original gate matched any string of filler words.
+
+        "So much for the help!" is a customer being sarcastic, not a customer
+        saying thank you. Suppressing it meant no draft AND no owner alert.
+        """
+        for msg in ["So much for the help!", "So much for your team.",
+                    "well that is just great", "So much for all of it"]:
+            with self.subTest(message=msg):
+                self.assertTrue(dc.should_draft(msg).ok, msg)
+
+    def test_a_bare_question_mark_or_angry_emoji_still_drafts(self):
+        """A customer chasing a reply is not an acknowledgement."""
+        for msg in ["?", "??", "?!", "!", "\U0001F621", "\U0001F92C", "\U0001F44E"]:
+            with self.subTest(message=repr(msg)):
+                self.assertTrue(dc.should_draft(msg).ok, repr(msg))
+
+    def test_subject_counts_as_content(self):
+        """HTML-only mail often arrives with an empty body and a real subject."""
+        s = dc.should_draft("", subject="Do you have this in 6-9 months?")
+        self.assertTrue(s.ok)
+        s = dc.should_draft("thanks!", subject="Where is order #10322?")
+        self.assertTrue(s.ok)
+        # both empty is still nothing to answer
+        self.assertFalse(dc.should_draft("", subject="").ok)
+        # a thank-you subject with a thank-you body is still an ack
+        self.assertFalse(dc.should_draft("thanks!", subject="Thank you!").ok)
+
+    def test_gate_is_linear_not_exponential(self):
+        """The original regex took >1s on 350 bytes and never returned on ~700.
+
+        should_draft() runs synchronously before the first await, so a slow
+        call freezes the whole processor - the job timeout cannot interrupt it.
+        """
+        import time
+        payload = "Much appreciated! " * 400 + "Sent from my iPhone"
+        self.assertGreater(len(payload), 7000)
+        started = time.perf_counter()
+        dc.should_draft(payload)
+        elapsed = time.perf_counter() - started
+        self.assertLess(elapsed, 0.5,
+                        f"should_draft took {elapsed:.3f}s on {len(payload)} bytes")
+
+    def test_gate_is_linear_on_a_long_hostile_message(self):
+        import time
+        for payload in ("thanks " * 5000, "a" * 50000, ("thank you so much " * 2000)):
+            with self.subTest(length=len(payload)):
+                started = time.perf_counter()
+                dc.should_draft(payload)
+                self.assertLess(time.perf_counter() - started, 0.5)
 
 
 if __name__ == "__main__":

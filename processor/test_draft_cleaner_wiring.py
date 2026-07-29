@@ -44,11 +44,12 @@ def _hermes_output(draft: str) -> str:
     return f"{_JSON_OK}\n<DRAFT>\n{draft}\n</DRAFT>"
 
 
-def _call(message_text: str = "Where is my order #BB1015?"):
+def _call(message_text: str = "Where is my order #BB1015?",
+          ticket_subject: str = "Order question"):
     return process_ticket_with_hermes(
         ticket_id=12345,
         message_text=message_text,
-        ticket_subject="Order question",
+        ticket_subject=ticket_subject,
         customer_email="customer@example.com",
         intents=[],
     )
@@ -64,7 +65,8 @@ class ShouldDraftGateTests(unittest.TestCase):
         for message in ["", "   ", "thanks!", "Thank you so much!", "\U0001F44D", "..."]:
             with self.subTest(message=repr(message)):
                 run.reset_mock()
-                result = _call(message)
+                # subject empty too: the gate reads both, and it should.
+                result = _call(message, ticket_subject="")
                 run.assert_not_called()
                 self.assertTrue(result["no_draft"])
                 self.assertEqual(result["draft_text"], "")
@@ -98,6 +100,71 @@ class ShouldDraftGateTests(unittest.TestCase):
                 result = _call(message)
                 run.assert_called_once()
                 self.assertNotEqual(draft_for_console(result), "")
+
+
+class GateRegressionTests(unittest.TestCase):
+    """Regressions from the code review of this branch."""
+
+    @patch("hermes_runner.subprocess.run")
+    @patch("hermes_runner.get_settings")
+    def test_subject_only_ticket_still_reaches_hermes(self, get_settings, run):
+        """HTML-only mail arrives with an empty body and a real subject."""
+        get_settings.return_value = SimpleNamespace(job_timeout=30)
+        run.return_value = SimpleNamespace(returncode=0, stderr="",
+                                           stdout=_hermes_output(_GOOD))
+        result = _call("", ticket_subject="Do you have this in 6-9 months?")
+        run.assert_called_once()
+        self.assertEqual(draft_for_console(result), _GOOD)
+
+    @patch("hermes_runner.subprocess.run")
+    @patch("hermes_runner.get_settings")
+    def test_sarcasm_and_nudges_are_not_treated_as_acknowledgements(
+        self, get_settings, run
+    ):
+        get_settings.return_value = SimpleNamespace(job_timeout=30)
+        run.return_value = SimpleNamespace(returncode=0, stderr="",
+                                           stdout=_hermes_output(_GOOD))
+        for message in ["So much for the help!", "?", "??", "\U0001F621"]:
+            with self.subTest(message=repr(message)):
+                run.reset_mock()
+                result = _call(message, ticket_subject="")
+                run.assert_called_once()
+                self.assertNotEqual(draft_for_console(result), "")
+
+    @patch("hermes_runner.subprocess.run")
+    @patch("hermes_runner.get_settings")
+    def test_the_model_cannot_set_no_draft_itself(self, get_settings, run):
+        """no_draft is a processor decision.
+
+        draft_for_console() honours it by returning nothing, so a model that
+        emitted it in JSON_RESULT could throw away its own good draft with no
+        alert to anyone.
+        """
+        get_settings.return_value = SimpleNamespace(job_timeout=30)
+        run.return_value = SimpleNamespace(
+            returncode=0, stderr="",
+            stdout=('JSON_RESULT: {"priority":"low","reason":"ack",'
+                    '"action":"drafted","notify_owner":false,'
+                    '"gorgias_priority_set":false,"note_posted":false,'
+                    '"no_draft":true}\n'
+                    f"<DRAFT>{_GOOD}</DRAFT>"))
+        result = _call()
+        self.assertNotIn("no_draft", result)
+        self.assertEqual(draft_for_console(result), _GOOD)
+
+    @patch("hermes_runner.subprocess.run")
+    @patch("hermes_runner.get_settings")
+    def test_the_model_still_cannot_claim_a_gorgias_write(self, get_settings, run):
+        get_settings.return_value = SimpleNamespace(job_timeout=30)
+        run.return_value = SimpleNamespace(
+            returncode=0, stderr="",
+            stdout=('JSON_RESULT: {"priority":"low","reason":"ok",'
+                    '"action":"drafted","notify_owner":false,'
+                    '"gorgias_priority_set":true,"note_posted":true}\n'
+                    f"<DRAFT>{_GOOD}</DRAFT>"))
+        result = _call()
+        self.assertFalse(result["gorgias_priority_set"])
+        self.assertFalse(result["note_posted"])
 
 
 class CleanDraftWiringTests(unittest.TestCase):

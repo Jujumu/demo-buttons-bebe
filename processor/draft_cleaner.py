@@ -197,13 +197,22 @@ def clean_draft(text: str) -> CleanResult:
     out = str(text)
     reasons: list[str] = []
 
-    out, cut = _cut_self_talk(out)
-    if cut:
-        reasons.append("stripped model self-commentary")
+    # Iterate to a fixed point. _dedupe_repeats only understands 2x and 3x, so
+    # a draft the model wrote four times used to come out still doubled. Four
+    # passes collapses any repetition the function can see; the loop always
+    # terminates because every pass that changes anything makes `out` strictly
+    # shorter.
+    for _ in range(4):
+        out, cut = _cut_self_talk(out)
+        if cut and "stripped model self-commentary" not in reasons:
+            reasons.append("stripped model self-commentary")
 
-    out, deduped = _dedupe_repeats(out)
-    if deduped:
-        reasons.append("removed duplicated draft body")
+        out, deduped = _dedupe_repeats(out)
+        if deduped and "removed duplicated draft body" not in reasons:
+            reasons.append("removed duplicated draft body")
+
+        if not (cut or deduped):
+            break
 
     out = out.strip()
     if not out:
@@ -216,35 +225,98 @@ def clean_draft(text: str) -> CleanResult:
 
 # --- customer-message gate (QA #19) ----------------------------------------
 #
-# A message made up ONLY of thanks / acknowledgement / emoji / punctuation has
-# nothing to answer. The pattern must match the WHOLE (stripped) message.
+# REWRITTEN after code review. The original was a single regex alternation
+# matched against the WHOLE message. It had two serious defects:
 #
-# The token set is deliberately safe to broaden: the pattern must match the
-# WHOLE message and never includes "?" or real content words, so any genuine
-# question or request (which contains a "?" or a non-ack word) still returns
-# ok=True. Only a message made ENTIRELY of thanks/ack tokens is suppressed.
-_SURVEY_PAT = re.compile(
-    r"^(?:thanks|thank you|thank u|thx|ty|ok(?:ay)?|k|great|awesome|perfect|"
-    r"got it|received|no worries|cheers|much appreciated|appreciate it|"
-    r"appreciate|appreciated|so|much|really|everything|the help|your help|"
-    r"guys|team|again|all|for|your|the|it|👍|🙏|❤️|😊|\.|!|,|~|\s)+$",
-    re.IGNORECASE,
+#   1. Exponential backtracking. Multi-word alternatives ("much appreciated",
+#      "appreciate it") could also be read as separate tokens, so a failing
+#      match explored 2^n paths. A ~350-byte email took over a second; ~700
+#      bytes never returned. should_draft() runs synchronously before the
+#      first await, so the job timeout could not interrupt it — one email
+#      would have frozen the processor permanently.
+#   2. It suppressed real messages. Every filler word was its own alternative
+#      with no requirement that an actual "thanks" be present, so
+#      "So much for the help!" — an angry customer — matched and was silently
+#      dropped with no draft and no owner alert.
+#
+# The replacement is a linear token scan with no backtracking at all, and it
+# suppresses ONLY when both conditions hold:
+#   * every word is a known acknowledgement or filler word, AND
+#   * at least one of them is a real acknowledgement anchor.
+# Anything else — any question mark, any unknown word, any angry emoji —
+# drafts. When in doubt, draft: a needless draft costs one human glance, a
+# silently dropped complaint costs a customer.
+
+# A genuine "this conversation is finished" signal. One of these must be
+# present before anything is suppressed.
+_ACK_ANCHORS = frozenset({
+    "thanks", "thank", "thanx", "thx", "ty", "tysm", "cheers",
+    "appreciate", "appreciated", "appreciation",
+    "ok", "okay", "kk", "noted", "understood", "received", "got",
+    "perfect", "great", "awesome", "excellent", "brilliant",
+})
+
+# Words that may accompany an acknowledgement without adding a question.
+_ACK_FILLER = frozenset({
+    "a", "again", "all", "am", "and", "are", "as", "at", "be", "been", "best",
+    "bye", "care", "day", "dear", "do", "everything", "fine", "folks", "for",
+    "from", "getting", "good", "goodbye", "guys", "have", "hi", "hello", "hey",
+    "i", "im", "is", "it", "its", "lot", "lots", "love", "loved", "lovely",
+    "m", "many", "me", "much", "my", "night", "nice", "no", "np", "of", "oh",
+    "on", "problem", "really", "regards", "so", "sorry", "super", "take",
+    "team", "thats", "the", "then", "there", "this", "to", "too", "u", "very",
+    "was", "we", "weekend", "well", "were", "with", "worries", "yall", "you",
+    "your", "yours", "youre", "yep", "yes", "yeah",
+})
+
+_ACK_ALLOWED = _ACK_ANCHORS | _ACK_FILLER
+
+# Words and digits. Linear, no alternation, no backtracking.
+_TOKEN_RE = re.compile(r"[0-9a-z]+")
+
+# Emoji that mean "we are done here". A message made only of these is an ack.
+# Anything NOT on this list — including every angry or confused emoji — drafts.
+_SAFE_EMOJI = (
+    "\U0001F44D", "\U0001F64F", "\u2764\ufe0f", "\u2764", "\U0001F60A",
+    "\U0001F642", "\U0001F600", "\U0001F601", "\U0001F970", "\U0001F60D",
+    "\U0001F44C", "\u2705", "\U0001F389", "\U0001F495", "\U0001F49B",
+    "\U0001F44F", "\U0001F929", "\u2b50", "\U0001F31F",
 )
 
+# Punctuation that carries no meaning on its own. Note "?" and "!" are NOT
+# here: a bare "?" is a customer chasing an answer, not an acknowledgement.
+_INERT_CHARS = " \t\r\n.,~-\u2013\u2014\u2026'\"()"
 
-def should_draft(message: str) -> ShouldDraft:
-    """Return ok=False when there is nothing to answer (empty / whitespace /
-    bare thanks / emoji / punctuation-only). The pipeline must then draft NOTHING.
-    Any real question or request returns ok=True.
+
+def should_draft(message: str, subject: str = "") -> ShouldDraft:
+    """Return ok=False only when there is genuinely nothing to answer.
+
+    The subject line counts as content: an email with an empty body but a real
+    subject ("Do you have this in 6-9 months?") is a real question, and the
+    pipeline must still draft for it.
+
+    Runs in linear time on the length of the message. Do not reintroduce a
+    whole-message regex here — see the note above.
     """
-    if message is None:
+    text = f"{subject or ''} {message or ''}".strip()
+    if not text:
         return ShouldDraft(False, "empty message")
-    m = str(message).strip()
-    if not m:
-        return ShouldDraft(False, "empty message")
-    # Short and not alphanumeric -> punctuation / a lone emoji.
-    if len(m) <= 2 and not m.isalnum():
-        return ShouldDraft(False, "punctuation-only message")
-    if _SURVEY_PAT.match(m):
+
+    tokens = _TOKEN_RE.findall(text.lower())
+
+    if not tokens:
+        # No letters or digits at all: emoji and/or punctuation.
+        residue = text
+        for emoji in _SAFE_EMOJI:
+            residue = residue.replace(emoji, "")
+        residue = residue.strip(_INERT_CHARS)
+        if not residue:
+            return ShouldDraft(False, "acknowledgement only (emoji/punctuation)")
+        # "?", "!", "\U0001F621" and friends are a customer wanting something.
+        return ShouldDraft(True)
+
+    if (all(t in _ACK_ALLOWED for t in tokens)
+            and any(t in _ACK_ANCHORS for t in tokens)):
         return ShouldDraft(False, "no question to answer (thanks/ack only)")
+
     return ShouldDraft(True)
