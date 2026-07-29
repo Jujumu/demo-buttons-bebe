@@ -34,10 +34,17 @@ from pathlib import Path
 import ast
 import json
 
-roots = [Path("feedback"), Path("kb"), Path("processor"), Path("tools"), Path("webhook"), Path("deploy")]
+roots = [Path("feedback"), Path("kb"), Path("processor"), Path("testing"), Path("tools"), Path("webhook"), Path("deploy")]
 for root in roots:
     for path in root.rglob("*.py"):
         ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+
+scenarios = json.loads(Path("testing/scenarios.json").read_text(encoding="utf-8"))
+if len(scenarios) != 48:
+    raise SystemExit(f"testing/scenarios.json must hold 48 scenarios, found {len(scenarios)}")
+ids = [s.get("id") for s in scenarios]
+if len(set(ids)) != len(ids):
+    raise SystemExit("testing/scenarios.json has duplicate scenario ids")
 
 package = json.loads(Path("whatsapp-connect/package.json").read_text(encoding="utf-8"))
 lock = json.loads(Path("whatsapp-connect/package-lock.json").read_text(encoding="utf-8"))
@@ -68,11 +75,23 @@ if "$PYTHON" -c 'import aiosqlite' >/dev/null 2>&1; then
   PYTHONPATH="$ROOT_DIR/webhook/src${PYTHONPATH:+:$PYTHONPATH}" \
     "$PYTHON" -m unittest discover -s webhook -p 'test_notification_api.py' -v
 fi
-"$PROCESSOR_PYTHON" -m unittest \
-  processor.test_whatsapp_notifier \
-  processor.test_feedback_retirement \
-  processor.test_hermes_readonly_prompt \
-  -v
+# Every processor/test_*.py runs, discovered rather than listed, so a new test
+# file cannot be added without CI picking it up - and so each task in the Fable
+# port does not have to edit this same line (which conflicts on merge).
+# test_e2e.py is excluded: it is a live diagnostic script against a running VPS,
+# not an offline unit test.
+processor_tests=()
+for _test in processor/test_*.py; do
+  [[ -e "$_test" ]] || continue
+  _name="$(basename "$_test" .py)"
+  [[ "$_name" == "test_e2e" ]] && continue
+  processor_tests+=("processor.$_name")
+done
+if [[ ${#processor_tests[@]} -eq 0 ]]; then
+  fail "no processor test modules found - the discovery glob is wrong"
+fi
+echo "release gate: processor tests -> ${processor_tests[*]}"
+"$PROCESSOR_PYTHON" -m unittest "${processor_tests[@]}" -v
 
 node --check whatsapp-connect/server.js
 node --test whatsapp-connect/test/security.test.js
