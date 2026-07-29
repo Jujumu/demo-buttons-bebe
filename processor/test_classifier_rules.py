@@ -120,6 +120,21 @@ WEAK_EXEMPLARS = {
         "The box holds someone else's order.",
 }
 
+# The HIGH-tier rules this port added. Non-delivery sits at HIGH rather than
+# IMMEDIATE on purpose: "I still haven't received it" is the commonest WISMO
+# wording, and every one of those would otherwise page the owner.
+PORTED_HIGH_EXEMPLARS = {
+    r"\b(?:has\s?n'?t|has\s+not|have\s+not|have\s?n'?t)\s+(?:arrived|turned\s+up|shown\s+up)\b":
+        "My parcels haven't arrived.",
+    r"\bstill\s+(?:has\s?n'?t|have\s?n'?t|not)\s+(?:arrived|come|received)\b":
+        "It still hasn't come.",
+    r"\bnot\s+(?:been\s+)?delivered\b": "It was not delivered.",
+    r"\bnothing\s+(?:has\s+|had\s+)?(?:arrived|come|turned\s+up|showed\s+up|been\s+delivered)\b":
+        "Nothing has arrived.",
+    r"\bwhere\s+my\s+(?:order|parcel|package|delivery|items?|stuff)\s+(?:is|are)\b":
+        "Do you know where my parcel is?",
+}
+
 MANAGER_EXEMPLARS = {
     r"\b(?:speak|talk)\s+to\s+(?:a|your|the)\s+(?:manager|supervisor|owner)\b":
         "Let me talk to a manager.",
@@ -165,8 +180,23 @@ class EveryNewRuleIsLoadBearingTests(unittest.TestCase):
         finally:
             setattr(cls, attr, original)
 
+    def test_removing_a_ported_high_rule_stops_its_exemplar_escalating(self):
+        for pattern, message in PORTED_HIGH_EXEMPLARS.items():
+            with self.subTest(pattern=pattern):
+                self.assertEqual(_c(message)["priority"], HIGH, message)
+                self.assertEqual(
+                    self._classify_without("_HIGH_KEYWORDS", pattern, message),
+                    NORMAL,
+                    f"{pattern!r} is dead code - {message!r} still escalates without it",
+                )
+
     def test_every_new_pattern_has_an_exemplar(self):
-        covered = set(STRONG_EXEMPLARS) | set(WEAK_EXEMPLARS) | set(MANAGER_EXEMPLARS)
+        covered = (set(STRONG_EXEMPLARS) | set(WEAK_EXEMPLARS)
+                   | set(MANAGER_EXEMPLARS) | set(PORTED_HIGH_EXEMPLARS))
+        for pattern in cls._PORTED_HIGH_PATTERNS:
+            self.assertIn(pattern, covered, f"ported HIGH rule has no exemplar: {pattern}")
+            self.assertIn(pattern, cls._HIGH_KEYWORDS,
+                          f"exemplar names a HIGH pattern not in the table: {pattern}")
         # Only the patterns this port added need exemplars. Main's originals
         # start above the ported block; compare against the known lists.
         for pattern in cls._WEAK_IMMEDIATE:
@@ -243,6 +273,17 @@ class WeakRulesNeedContextTests(unittest.TestCase):
         ]:
             with self.subTest(message=message):
                 self.assertEqual(_c(message)["priority"], IMMEDIATE)
+
+    def test_a_politely_phrased_complaint_still_escalates(self):
+        """The browsing guard must yield to a real delivery problem."""
+        for message in [
+            "Is it possible the courier lost my parcel? Tracking stopped 8 days ago.",
+            "Can I ask why my parcel arrived with a huge stain on it?",
+            "Am I able to get a refund, the dress arrived torn?",
+            "Do you know where my order is? Nothing has arrived and it has been 3 weeks.",
+        ]:
+            with self.subTest(message=message):
+                self.assertNotEqual(_c(message)["priority"], NORMAL)
 
     def test_a_browsing_question_never_unlocks_the_weak_rules(self):
         # Even with an order word present, a "can I / do you" question is a

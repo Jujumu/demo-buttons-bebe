@@ -175,11 +175,26 @@ _BROWSING_QUESTION_RE = re.compile(
 )
 
 
+# A polite complaint is still a complaint. "Is it possible the courier lost my
+# parcel? Tracking stopped 8 days ago." opens with a browsing marker but is
+# plainly a delivery problem, so these indicators lift the browsing guard.
+_PROBLEM_CONTEXT_RE = re.compile(
+    r"\b(tracking|courier|carrier|still\s+waiting|still\s+not|no\s+update|"
+    r"has\s?n'?t\s+moved|has\s+not\s+moved|days\s+ago|weeks?\s+ago|"
+    r"where\s+is|chasing|chase\s+this|follow(?:ing)?\s?up|"
+    r"never\s+(?:came|arrived|turned\s+up)|"
+    r"\d+\s*(?:days?|weeks?)\b)",
+    re.IGNORECASE,
+)
+
+
 def _weak_triggers_apply(text: str) -> bool:
     """True when a weak trigger is allowed to escalate."""
-    if _BROWSING_QUESTION_RE.search(text):
+    if not _ORDER_CONTEXT_RE.search(text):
         return False
-    return bool(_ORDER_CONTEXT_RE.search(text))
+    if _BROWSING_QUESTION_RE.search(text) and not _PROBLEM_CONTEXT_RE.search(text):
+        return False
+    return True
 
 
 # Demanding a manager / refusing to deal with support. Main had NO rule for
@@ -234,7 +249,20 @@ _HIGH_KEYWORDS = [
     r"\b(?:has\s?n'?t|has\s+not|have\s+not|have\s?n'?t)\s+(?:arrived|turned\s+up|shown\s+up)\b",
     r"\bstill\s+(?:has\s?n'?t|have\s?n'?t|not)\s+(?:arrived|come|received)\b",
     r"\bnot\s+(?:been\s+)?delivered\b",
+    r"\bnothing\s+(?:has\s+|had\s+)?(?:arrived|come|turned\s+up|showed\s+up|been\s+delivered)\b",
+    # Main only had the "where is my order" word order.
+    r"\bwhere\s+my\s+(?:order|parcel|package|delivery|items?|stuff)\s+(?:is|are)\b",
 ]
+
+# The subset of _HIGH_KEYWORDS this port added. Kept as its own tuple purely so
+# processor/test_classifier_rules.py can mutation-test them like the others.
+_PORTED_HIGH_PATTERNS = (
+    r"\b(?:has\s?n'?t|has\s+not|have\s+not|have\s?n'?t)\s+(?:arrived|turned\s+up|shown\s+up)\b",
+    r"\bstill\s+(?:has\s?n'?t|have\s?n'?t|not)\s+(?:arrived|come|received)\b",
+    r"\bnot\s+(?:been\s+)?delivered\b",
+    r"\bnothing\s+(?:has\s+|had\s+)?(?:arrived|come|turned\s+up|showed\s+up|been\s+delivered)\b",
+    r"\bwhere\s+my\s+(?:order|parcel|package|delivery|items?|stuff)\s+(?:is|are)\b",
+)
 
 # Intent names that indicate sensitive topics
 _SENSITIVE_INTENTS = {
@@ -264,6 +292,7 @@ _HIGH_SENSITIVE_PATTERN = re.compile(
     # though the tier stays HIGH rather than IMMEDIATE.
     r"(?:has\s?n'?t|has\s+not|have\s+not|have\s?n'?t)\s+(?:arrived|turned\s+up|shown\s+up)|"
     r"still\s+(?:has\s?n'?t|have\s?n'?t|not)\s+(?:arrived|come|received)|"
+    r"nothing\s+(?:has\s+|had\s+)?(?:arrived|come|turned\s+up|showed\s+up|been\s+delivered)|"
     r"not\s+(?:been\s+)?delivered)\b",
     re.IGNORECASE,
 )
@@ -756,6 +785,16 @@ _SELFTEST_CASES: list[tuple[str, str, bool]] = [
     ("Just received it and I LOVE IT!!! Best purchase ever!!!", NORMAL, False),
     ("Do you carry NUNA UPPABABY BUGABOO DOONA CYBEX MAXI COSI?", NORMAL, False),
     ("Please don't escalate this, I just have a quick sizing question.", NORMAL, False),
+    # A polite complaint is still a complaint.
+    ("Is it possible the courier lost my parcel? Tracking stopped 8 days ago.",
+     IMMEDIATE, True),
+    ("Can I ask why my parcel arrived with a huge stain on it?", IMMEDIATE, True),
+    ("Am I able to get a refund, the dress arrived torn?", IMMEDIATE, True),
+    # ...but a browsing question with an order word is not.
+    ("My order arrived today - can I also add a hat to my next one?", NORMAL, False),
+    ("The parcel arrived, thank you! Do you do gift wrap?", NORMAL, False),
+    ("Do you know where my order is? Nothing has arrived and it has been 3 weeks.",
+     HIGH, True),
 
     # ── Ordinary benign traffic ─────────────────────────────
     ("Do you ship to Canada and how much?", NORMAL, False),
