@@ -404,6 +404,9 @@ async def run_processor() -> int:
     # 5. Main loop
     consecutive_errors = 0
     max_consecutive_errors = 10
+    # Monotonic timestamp of the last "still alive" line. Starts at -inf so the
+    # first idle pass logs immediately, proving liveness right after startup.
+    last_idle_heartbeat = float("-inf")
 
     while not _shutdown:
         try:
@@ -431,8 +434,18 @@ async def run_processor() -> int:
                 consecutive_errors = 0
                 continue
 
-            # No jobs — sleep
+            # No jobs — emit a periodic "still alive" line, then sleep.
+            # processor/heartbeat.sh reads the journal and treats total silence
+            # over PROCESSOR_STALE_MINUTES as "the loop is wedged". Without this
+            # line a genuinely quiet night would look identical to a hang.
             consecutive_errors = 0
+            heartbeat_every = getattr(settings, "heartbeat_seconds", 120.0)
+            if heartbeat_every > 0:
+                now = time.monotonic()
+                if now - last_idle_heartbeat >= heartbeat_every:
+                    last_idle_heartbeat = now
+                    log_event(logger, "INFO", "Processor idle heartbeat",
+                              pid=os.getpid())
             await asyncio.sleep(settings.poll_interval)
 
         except Exception as exc:

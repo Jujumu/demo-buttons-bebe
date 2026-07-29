@@ -1,0 +1,15 @@
+[Unit]
+Description=Check every 5 minutes that the Buttons Bebe processor is alive
+
+[Timer]
+# First check shortly after boot (give the processor time to start), then
+# every 5 minutes. With PROCESSOR_STALE_MINUTES=10 that means an outage is
+# reported within ~10 minutes at worst.
+OnBootSec=3min
+OnUnitActiveSec=5min
+AccuracySec=30s
+Persistent=true
+Unit=buttonsbebe-heartbeat.service
+
+[Install]
+WantedBy=timers.target

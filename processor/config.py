@@ -56,6 +56,10 @@ class ProcessorSettings(BaseSettings):
     job_timeout: int = Field(default=120, alias="PROCESSOR_JOB_TIMEOUT")  # seconds
     max_retries: int = Field(default=3, alias="PROCESSOR_MAX_RETRIES")
     stale_job_minutes: int = Field(default=10, alias="PROCESSOR_STALE_MINUTES")
+    # How often the idle loop emits a "still alive" log line. processor/heartbeat.sh
+    # treats total journal silence as "wedged", so this must stay well under
+    # PROCESSOR_STALE_MINUTES. Set to 0 to disable the idle heartbeat entirely.
+    heartbeat_seconds: float = Field(default=120.0, alias="PROCESSOR_HEARTBEAT_SECONDS")
 
     # ── Logging ───────────────────────────────────────────
     log_format: str = Field(default="json", alias="LOG_FORMAT")
