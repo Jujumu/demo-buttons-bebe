@@ -54,14 +54,36 @@ if package.get("dependencies") != lock.get("packages", {}).get("", {}).get("depe
     raise SystemExit("WhatsApp dependency lock does not match package.json")
 PY
 
-for script in $(git ls-files '*.sh'); do
+# Tracked AND untracked. `git ls-files '*.sh'` alone skipped a new script
+# until it was staged - exactly when a local pre-commit run is most useful -
+# and silently checked nothing at all outside a git checkout, while the gate
+# still printed "release gate passed: ... syntax ...".
+shell_scripts=()
+while IFS= read -r -d '' script; do
+  [[ -f "$script" ]] || continue
+  shell_scripts+=("$script")
+done < <(git ls-files -z --cached --others --exclude-standard '*.sh') \
+  || fail "could not list shell scripts (not a git checkout?)"
+[[ ${#shell_scripts[@]} -gt 0 ]] || fail "no shell scripts found - the listing is broken"
+echo "release gate: checking ${#shell_scripts[@]} shell scripts"
+for script in "${shell_scripts[@]}"; do
   bash -n "$script"
 done
 
-if rg -n -i 'twilio|twilio_' processor webhook tools kb whatsapp-connect \
-    --glob '*.py' --glob '*.js' --glob '*.sh' --glob '!verify_release.sh'; then
-  fail "active Twilio reference found"
-fi
+# rg exits 0 on a match, 1 on none, 2+ on error - and it is in none of the
+# eight manifests above. `if rg ...` treated both "not installed" (127) and
+# "bad path" (2) as "clean", so the check could pass without ever running.
+command -v rg >/dev/null 2>&1 || fail "ripgrep (rg) is required by this gate"
+set +e
+rg -n -i 'twilio|twilio_' processor webhook tools kb whatsapp-connect \
+    --glob '*.py' --glob '*.js' --glob '*.sh' --glob '!verify_release.sh'
+rg_status=$?
+set -e
+case "$rg_status" in
+  0) fail "active Twilio reference found" ;;
+  1) ;;  # clean
+  *) fail "ripgrep failed with status $rg_status - the Twilio check did not run" ;;
+esac
 
 # The feedback and KB suites already replace optional network/vector modules in
 # their tests. Keep the requests stub explicit so this gate remains offline.
@@ -84,7 +106,10 @@ processor_tests=()
 for _test in processor/test_*.py; do
   [[ -e "$_test" ]] || continue
   _name="$(basename "$_test" .py)"
-  [[ "$_name" == "test_e2e" ]] && continue
+  # Live diagnostics opt OUT with a marker line rather than by filename, so
+  # renaming or adding one cannot silently pull a VPS-hitting script into the
+  # offline gate.
+  grep -q '^# offline-gate: skip' "$_test" && continue
   processor_tests+=("processor.$_name")
 done
 if [[ ${#processor_tests[@]} -eq 0 ]]; then

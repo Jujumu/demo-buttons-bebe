@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# offline-gate: skip
+# This is a LIVE diagnostic against a running VPS, not an offline unit test.
+# tools/verify_release.sh looks for the marker line above and skips this file.
 """End-to-end test for the Buttons Bebe ticket processing pipeline.
 
 Tests each component in sequence:
