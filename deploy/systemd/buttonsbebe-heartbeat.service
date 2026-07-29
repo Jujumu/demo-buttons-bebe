@@ -1,6 +1,6 @@
 [Unit]
 Description=Buttons Bebe processor heartbeat (dead-man's switch)
-Documentation=file:///root/Buttonsbebe Agent/processor/heartbeat.sh
+Documentation="file:///root/Buttonsbebe%20Agent/processor/heartbeat.sh"
 After=network-online.target
 
 [Service]
@@ -19,6 +19,10 @@ EnvironmentFile=-/root/Buttonsbebe Agent/.env
 # PrivateTmp=true here or every run will re-alert.
 StateDirectory=buttonsbebe
 Environment="HEARTBEAT_STATE_FILE=/var/lib/buttonsbebe/heartbeat.state"
+# Own window, decoupled from the queue's PROCESSOR_STALE_MINUTES.
+Environment="HEARTBEAT_STALE_MINUTES=10"
+# EnvironmentFile= is merged AFTER Environment= regardless of order here,
+# so anything the shared .env defines wins. Keep these two OUT of the .env.
 
 StandardOutput=journal
 StandardError=journal

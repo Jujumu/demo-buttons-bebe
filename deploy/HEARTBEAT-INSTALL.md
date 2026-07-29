@@ -56,6 +56,11 @@ repeats while it is down, the state file is not persisting — check that
 `StateDirectory=buttonsbebe` is still in the service unit and that nothing
 added `PrivateTmp=true`.
 
+If you get **no** message at all, check `journalctl -u buttonsbebe-heartbeat`.
+An alert is only marked as sent once WhatsApp actually accepted it, so a failed
+delivery logs `staying unlatched` and retries on the next firing rather than
+going quiet.
+
 ## Settings you can change
 
 All of these are read from the environment, so they go in the `.env` or in the
@@ -64,12 +69,19 @@ service drop-in:
 | Variable | Default | Meaning |
 |---|---|---|
 | `PROCESSOR_UNIT` | `buttonsbebe-processor` | Which service to watch |
-| `PROCESSOR_STALE_MINUTES` | `10` | Silence longer than this counts as "hung" |
+| `HEARTBEAT_STALE_MINUTES` | `10` | No completed work in this long counts as "hung" |
 | `HEARTBEAT_STATE_FILE` | `/var/lib/buttonsbebe/heartbeat.state` | Where the "already alerted" marker lives |
 | `PROCESSOR_HEARTBEAT_SECONDS` | `120` | How often the processor logs "still alive" while idle |
 
 `PROCESSOR_HEARTBEAT_SECONDS` must stay comfortably below
-`PROCESSOR_STALE_MINUTES × 60`, otherwise a quiet queue looks like a hang.
+`HEARTBEAT_STALE_MINUTES × 60`, otherwise a quiet queue looks like a hang.
+
+Note these are deliberately **two different settings**. `PROCESSOR_STALE_MINUTES`
+belongs to the queue — it decides when a job stuck in `processing` gets retried.
+Reusing it here meant that tuning the queue silently widened or narrowed the
+dead-man's switch. Keep both out of the shared `.env`: systemd merges
+`EnvironmentFile=` **after** `Environment=`, so anything in the `.env` would
+override the unit.
 
 ## Safety
 
