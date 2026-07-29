@@ -254,7 +254,9 @@ class EmptyDraftTests(unittest.TestCase):
 
     def test_repetition_collapses_all_the_way_not_just_once(self):
         """4x used to come out doubled: the dedupe only knew 2x and 3x."""
-        for copies in (2, 3, 4, 6, 8, 9):
+        # Includes the PRIME multiples. The first fix iterated a 2x/3x dedupe,
+        # which reaches 4, 6, 8 and 9 but never 5 or 7.
+        for copies in range(2, 13):
             with self.subTest(copies=copies):
                 res = dc.clean_draft("\n\n".join([_GOOD] * copies))
                 self.assertEqual(_norm(res.text), _norm(_GOOD),

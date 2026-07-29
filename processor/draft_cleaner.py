@@ -172,7 +172,12 @@ def _dedupe_repeats(text: str) -> tuple[str, bool]:
     if len(norm) < _MIN_DUP_CHARS:
         return stripped, False
 
-    for k in (2, 3):
+    # Every multiple, not just 2x and 3x. The original tried k in (2, 3) and
+    # relied on repeated passes, which reaches 4, 6, 8 and 9 but never a prime
+    # multiple: a draft the model wrote five times came out still fivefold.
+    # k is bounded by the length floor, so this stays cheap.
+    max_k = max(2, len(norm) // _MIN_DUP_CHARS)
+    for k in range(2, max_k + 1):
         base = _repeated_unit(norm, k)
         if base is None:
             continue
