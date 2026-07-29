@@ -1,0 +1,193 @@
+"""Wiring tests — proves draft_cleaner is actually plumbed into the pipeline.
+
+processor/test_draft_cleaner.py tests the cleaner in isolation. This file tests
+the two call sites inside process_ticket_with_hermes():
+
+  1. should_draft() on the CUSTOMER MESSAGE, before the prompt is built.
+     A message with nothing to answer must skip Hermes entirely and store no
+     draft — not a fabricated fallback one.
+  2. clean_draft() on the AI DRAFT, before it reaches draft_for_console().
+
+It also guards the behaviour that must NOT change: a clean draft passes through
+byte-for-byte, and a Hermes response with no <DRAFT> block still fails closed to
+the existing reviewable fallback.
+
+Hermes is mocked throughout — nothing here shells out, hits the network, or
+touches Gorgias.
+"""
+
+from __future__ import annotations
+
+import sys
+import unittest
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
+
+PROCESSOR_DIR = Path(__file__).resolve().parent
+WEBHOOK_SRC = PROCESSOR_DIR.parent / "webhook" / "src"
+sys.path[:0] = [str(PROCESSOR_DIR), str(WEBHOOK_SRC)]
+
+from hermes_runner import (  # noqa: E402
+    _FALLBACK_RESULT,
+    draft_for_console,
+    process_ticket_with_hermes,
+)
+
+_GOOD = "Hi! Thanks for reaching out. Your order usually ships within 24-48 hours."
+_JSON_OK = ('JSON_RESULT: {"priority":"normal","reason":"classified",'
+            '"action":"drafted","notify_owner":false,'
+            '"gorgias_priority_set":false,"note_posted":false}')
+
+
+def _hermes_output(draft: str) -> str:
+    return f"{_JSON_OK}\n<DRAFT>\n{draft}\n</DRAFT>"
+
+
+def _call(message_text: str = "Where is my order #BB1015?"):
+    return process_ticket_with_hermes(
+        ticket_id=12345,
+        message_text=message_text,
+        ticket_subject="Order question",
+        customer_email="customer@example.com",
+        intents=[],
+    )
+
+
+class ShouldDraftGateTests(unittest.TestCase):
+    """Call site 1 — the gate on the customer message."""
+
+    @patch("hermes_runner.subprocess.run")
+    @patch("hermes_runner.get_settings")
+    def test_ack_only_message_never_invokes_hermes(self, get_settings, run):
+        get_settings.return_value = SimpleNamespace(job_timeout=30)
+        for message in ["", "   ", "thanks!", "Thank you so much!", "\U0001F44D", "..."]:
+            with self.subTest(message=repr(message)):
+                run.reset_mock()
+                result = _call(message)
+                run.assert_not_called()
+                self.assertTrue(result["no_draft"])
+                self.assertEqual(result["draft_text"], "")
+                self.assertEqual(result["action"], "no_draft_needed")
+                self.assertFalse(result["notify_owner"])
+                self.assertEqual(result["priority"], "normal")
+                # And the console gets nothing at all — not the canned fallback.
+                self.assertEqual(draft_for_console(result), "")
+
+    @patch("hermes_runner.subprocess.run")
+    @patch("hermes_runner.get_settings")
+    def test_real_question_still_reaches_hermes(self, get_settings, run):
+        get_settings.return_value = SimpleNamespace(job_timeout=30)
+        run.return_value = SimpleNamespace(returncode=0, stderr="",
+                                           stdout=_hermes_output(_GOOD))
+        result = _call("Where is my order #BB1015?")
+        run.assert_called_once()
+        self.assertNotIn("no_draft", result)
+        self.assertEqual(draft_for_console(result), _GOOD)
+
+    @patch("hermes_runner.subprocess.run")
+    @patch("hermes_runner.get_settings")
+    def test_sensitive_message_is_never_gated_out(self, get_settings, run):
+        get_settings.return_value = SimpleNamespace(job_timeout=30)
+        run.return_value = SimpleNamespace(returncode=0, stderr="",
+                                           stdout=_hermes_output(_GOOD))
+        for message in ["refund", "my order arrived damaged",
+                        "I want to speak to a manager"]:
+            with self.subTest(message=message):
+                run.reset_mock()
+                result = _call(message)
+                run.assert_called_once()
+                self.assertNotEqual(draft_for_console(result), "")
+
+
+class CleanDraftWiringTests(unittest.TestCase):
+    """Call site 2 — the cleaner on the model's draft."""
+
+    @patch("hermes_runner.subprocess.run")
+    @patch("hermes_runner.get_settings")
+    def test_self_talk_is_stripped_before_the_console(self, get_settings, run):
+        get_settings.return_value = SimpleNamespace(job_timeout=30)
+        leaked = f"{_GOOD}\n\nThe response above was complete and ready for review."
+        run.return_value = SimpleNamespace(returncode=0, stderr="",
+                                           stdout=_hermes_output(leaked))
+        result = _call()
+        self.assertEqual(draft_for_console(result), _GOOD)
+        self.assertNotIn("response above was complete", draft_for_console(result))
+
+    @patch("hermes_runner.subprocess.run")
+    @patch("hermes_runner.get_settings")
+    def test_duplicated_draft_is_collapsed_before_the_console(self, get_settings, run):
+        get_settings.return_value = SimpleNamespace(job_timeout=30)
+        run.return_value = SimpleNamespace(returncode=0, stderr="",
+                                           stdout=_hermes_output(f"{_GOOD}\n\n{_GOOD}"))
+        result = _call()
+        self.assertEqual(draft_for_console(result), _GOOD)
+
+    @patch("hermes_runner.subprocess.run")
+    @patch("hermes_runner.get_settings")
+    def test_draft_of_only_self_talk_stores_no_draft(self, get_settings, run):
+        get_settings.return_value = SimpleNamespace(job_timeout=30)
+        run.return_value = SimpleNamespace(
+            returncode=0, stderr="",
+            stdout=_hermes_output("The response above was complete."))
+        result = _call()
+        self.assertTrue(result["no_draft"])
+        # Failure path: still fails closed to high + notify, but with NO draft.
+        self.assertEqual(result["priority"], "high")
+        self.assertTrue(result["notify_owner"])
+        self.assertEqual(draft_for_console(result), "")
+        self.assertNotEqual(draft_for_console(result),
+                            _FALLBACK_RESULT["draft_text"])
+
+    @patch("hermes_runner.subprocess.run")
+    @patch("hermes_runner.get_settings")
+    def test_clean_draft_passes_through_untouched(self, get_settings, run):
+        get_settings.return_value = SimpleNamespace(job_timeout=30)
+        draft = ("Hi! Your order is complete and on its way.\n\n"
+                 "Note that delivery usually takes 3-5 business days.\n\n"
+                 "Warmly,\nButtons Bebe Support")
+        run.return_value = SimpleNamespace(returncode=0, stderr="",
+                                           stdout=_hermes_output(draft))
+        result = _call()
+        self.assertEqual(draft_for_console(result), draft)
+
+
+class UnchangedBehaviourTests(unittest.TestCase):
+    """Regression guards — the cleaner must not have moved these."""
+
+    @patch("hermes_runner.subprocess.run")
+    @patch("hermes_runner.get_settings")
+    def test_missing_draft_block_still_uses_the_reviewable_fallback(
+        self, get_settings, run
+    ):
+        get_settings.return_value = SimpleNamespace(job_timeout=30)
+        run.return_value = SimpleNamespace(returncode=0, stderr="", stdout=_JSON_OK)
+        result = _call()
+        self.assertEqual(result["priority"], "high")
+        self.assertTrue(result["notify_owner"])
+        self.assertEqual(draft_for_console(result), _FALLBACK_RESULT["draft_text"])
+
+    @patch("hermes_runner.subprocess.run")
+    @patch("hermes_runner.get_settings")
+    def test_hermes_failure_still_uses_the_reviewable_fallback(
+        self, get_settings, run
+    ):
+        get_settings.return_value = SimpleNamespace(job_timeout=30)
+        run.return_value = SimpleNamespace(returncode=1, stderr="boom", stdout="")
+        result = _call()
+        self.assertEqual(result["priority"], "high")
+        self.assertEqual(draft_for_console(result), _FALLBACK_RESULT["draft_text"])
+
+    @patch("hermes_runner.subprocess.run")
+    @patch("hermes_runner.get_settings")
+    def test_processor_still_claims_no_gorgias_writes(self, get_settings, run):
+        get_settings.return_value = SimpleNamespace(job_timeout=30)
+        run.return_value = SimpleNamespace(returncode=0, stderr="",
+                                           stdout=_hermes_output(_GOOD))
+        result = _call()
+        self.assertFalse(result["gorgias_priority_set"])
+        self.assertFalse(result["note_posted"])
+
+
+if __name__ == "__main__":
+    unittest.main()

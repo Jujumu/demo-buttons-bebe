@@ -4,6 +4,10 @@ Uses `hermes --yolo -z "prompt"` to run the full ticket processing
 pipeline (read context, search KB, classify, and return a console draft).
 Parses the JSON_RESULT block from stdout for the job processor.
 
+Every draft passes through processor/draft_cleaner.py on the way out, and the
+customer message passes through it on the way in — see the two call sites in
+process_ticket_with_hermes().
+
 Performance:
   - KB search + classify + draft: 6-10 seconds
   - Full read-only pipeline with Gorgias context: 30-60 seconds
@@ -19,6 +23,7 @@ import sys
 from typing import Any
 
 from config import get_settings
+from draft_cleaner import clean_draft, should_draft
 from logging_setup import get_logger, log_event
 
 logger = get_logger(__name__)
@@ -93,8 +98,31 @@ _FALLBACK_RESULT: dict[str, Any] = {
 }
 
 
+# Returned when the customer message has nothing to answer at all (QA #19 —
+# an empty message previously got a fabricated reply). The console must show a
+# "no action needed" card, NOT a canned fallback draft.
+_NO_DRAFT_RESULT: dict[str, Any] = {
+    "priority": "normal",
+    "reason": "No draft generated — nothing to answer in the customer message",
+    "action": "no_draft_needed",
+    "notify_owner": False,
+    "gorgias_priority_set": False,
+    "note_posted": False,
+    "draft_text": "",
+    "no_draft": True,
+}
+
+
 def draft_for_console(hermes_result: dict[str, Any]) -> str:
-    """Return a reviewable draft without ever echoing customer input."""
+    """Return a reviewable draft without ever echoing customer input.
+
+    When the pipeline deliberately decided NOT to draft — the customer message
+    had nothing to answer, or the model produced only self-commentary — return
+    an empty string. The console then shows a human-action-required card
+    instead of a fabricated fallback reply.
+    """
+    if hermes_result.get("no_draft"):
+        return ""
     draft = str(hermes_result.get("draft_text") or "").strip()
     return draft or str(_FALLBACK_RESULT["draft_text"])
 
@@ -356,6 +384,21 @@ def process_ticket_with_hermes(
         gorgias_priority_set, note_posted, draft_text
     """
     settings = get_settings()
+
+    # ── Gate on the CUSTOMER MESSAGE before spending an LLM call ────
+    # QA #19: an empty message got a fabricated reply. A message that is only
+    # "thanks" / an emoji / punctuation has nothing to answer, so we skip
+    # Hermes entirely and store NO draft. should_draft() only suppresses
+    # messages made ENTIRELY of acknowledgement tokens — anything with a real
+    # question or a sensitive word still goes through.
+    gate = should_draft(message_text)
+    if not gate.ok:
+        log_event(logger, "INFO", "Skipping draft — nothing to answer",
+                  ticket_id=ticket_id, gate_reason=gate.reason)
+        skipped = dict(_NO_DRAFT_RESULT)
+        skipped["reason"] = f"No draft generated — {gate.reason}"
+        return skipped
+
     prompt = _build_prompt(ticket_id, message_text, ticket_subject,
                            customer_email, intents)
 
@@ -417,10 +460,35 @@ def process_ticket_with_hermes(
         # empty console card with no human action controls.
         draft_text = _extract_draft(stdout)
         if draft_text:
-            parsed["draft_text"] = draft_text
-            log_event(logger, "INFO", "Draft extracted from Hermes output",
-                      ticket_id=ticket_id,
-                      draft_length=len(draft_text))
+            # ── Clean the AI DRAFT before any human sees it ─────────
+            # Strips trailing model self-commentary and collapses a draft the
+            # model accidentally wrote twice. Both passes are conservative: a
+            # normal reply passes through byte-for-byte untouched.
+            cleaned = clean_draft(draft_text)
+            if cleaned.reasons:
+                log_event(logger, "INFO", "Draft cleaned before review",
+                          ticket_id=ticket_id,
+                          clean_reasons=cleaned.reasons,
+                          length_before=len(draft_text),
+                          length_after=len(cleaned.text))
+            if cleaned.no_draft:
+                # Nothing survived — the model wrote only self-commentary.
+                # That is a failure, so keep the fail-closed high priority,
+                # but store NO draft rather than a fabricated fallback.
+                log_event(logger, "WARNING",
+                          "Draft was entirely model self-commentary — storing no draft",
+                          ticket_id=ticket_id, clean_reasons=cleaned.reasons)
+                parsed = dict(_FALLBACK_RESULT)
+                parsed["reason"] = (
+                    "Hermes produced only self-commentary — defaulting to high for safety"
+                )
+                parsed["draft_text"] = ""
+                parsed["no_draft"] = True
+            else:
+                parsed["draft_text"] = cleaned.text
+                log_event(logger, "INFO", "Draft extracted from Hermes output",
+                          ticket_id=ticket_id,
+                          draft_length=len(cleaned.text))
         else:
             log_event(logger, "WARNING", "Hermes output missing reviewable draft",
                       ticket_id=ticket_id)
