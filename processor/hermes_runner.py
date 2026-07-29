@@ -1,7 +1,8 @@
 """Hermes headless runner — invokes Hermes in one-shot mode to process tickets.
 
-Uses `hermes --yolo -z "prompt"` to run the full ticket processing
-pipeline (read context, search KB, classify, and return a console draft).
+Uses `hermes -t <read-only toolsets> -z "prompt"` to run the full ticket
+processing pipeline (read context, search KB, classify, and return a console
+draft). The toolset list is an explicit allow-list — see build_hermes_command().
 Parses the JSON_RESULT block from stdout for the job processor.
 
 Performance:
@@ -335,6 +336,54 @@ def _parse_json_result(output: str) -> dict[str, Any]:
         return dict(_FALLBACK_RESULT)
 
 
+def build_hermes_command(prompt: str, settings: Any) -> list[str]:
+    """Build the Hermes invocation with an explicit read-only tool allow-list.
+
+    Why this exists (DEV-ISSUES #8):
+
+    The processor used to run `hermes --yolo -z "..."`. `--yolo` skips Hermes'
+    approval prompts for EVERY tool call, and ~/.hermes/config.yaml grants the
+    CLI platform the `terminal` and `file` toolsets. That combination means one
+    prompt-injected ticket away from an unapproved shell command. It was safe
+    only by convention.
+
+    Now the processor names the toolsets it wants and nothing else. Each MCP
+    server registers a runtime toolset called "mcp-<server key>", so the default
+    list is exactly the three read-only Buttons Bebe servers:
+
+        hermes -t mcp-buttonsbebe_kb,mcp-buttonsbebe_redo,mcp-buttonsbebe_gorgias -z "..."
+
+    With no dangerous tool in scope there is nothing to auto-approve, so --yolo
+    is gone. If a run ever hangs waiting for an approval prompt, set
+    HERMES_SKIP_APPROVAL=1 as a TEMPORARY unblock and investigate.
+
+    IMPORTANT — verify before deploying. A misspelled toolset name does not
+    error; Hermes just silently loses the tool and drafts quietly get worse.
+    Run tools/verify_hermes_toolset.sh on the VPS first.
+    """
+    cmd = ["hermes"]
+
+    toolsets = str(getattr(settings, "hermes_toolsets", "") or "").strip()
+    if toolsets:
+        # Normalise: drop blanks, keep the caller's order, de-duplicate.
+        wanted: list[str] = []
+        for name in toolsets.split(","):
+            name = name.strip()
+            if name and name not in wanted:
+                wanted.append(name)
+        if wanted:
+            cmd += ["-t", ",".join(wanted)]
+
+    if getattr(settings, "hermes_skip_approval", False):
+        log_event(logger, "WARNING",
+                  "Hermes running with --yolo (HERMES_SKIP_APPROVAL=1) — "
+                  "approval prompts are being skipped; this should be temporary")
+        cmd.append("--yolo")
+
+    cmd += ["-z", prompt]
+    return cmd
+
+
 def process_ticket_with_hermes(
     ticket_id: int,
     message_text: str,
@@ -359,24 +408,14 @@ def process_ticket_with_hermes(
     prompt = _build_prompt(ticket_id, message_text, ticket_subject,
                            customer_email, intents)
 
-    # --yolo auto-approves all tool calls without human confirmation.
-    # This is safe because:
-    # 1. The 3 registered MCP tools (buttonsbebe_kb, buttonsbebe_redo,
-    #    buttonsbebe_gorgias) are ALL read-only (GET only — no POST/PUT/DELETE).
-    # 2. The prompt forbids curl/direct API access and returns the draft to the
-    #    processor. Only a human-triggered console endpoint may write to Gorgias.
-    # 3. `hermes mcp list` confirms exactly 3 tools, all read-only.
-    # If a future MCP tool with write capability is added, --yolo would
-    # auto-approve it — revisit this decision at that point.
-    cmd = [
-        "hermes",
-        "--yolo",
-        "-z", prompt,
-    ]
+    cmd = build_hermes_command(prompt, settings)
 
     log_event(logger, "INFO", "Invoking Hermes headless",
               ticket_id=ticket_id,
               prompt_length=len(prompt),
+              # Everything except the prompt, so the tool policy is auditable
+              # from the log without leaking customer text.
+              hermes_flags=cmd[1:-1],
               timeout=settings.job_timeout)
 
     try:

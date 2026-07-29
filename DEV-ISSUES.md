@@ -72,13 +72,22 @@ Two sections: **A. Open issues to fix**, then **B. Already fixed (context only)*
    - Fix: either add the real international rate to the KB (`policies/international-orders.md`)
      or reinforce "don't quote prices not in the KB" in the prompt/SOUL.
 
-8. **Review the `--yolo` flag on the processor's Hermes call.**
-   - Where: `processor/hermes_runner.py` (`hermes --yolo -z ...`).
-   - Problem: `--yolo` auto-approves ALL tool calls with no confirmation. Safe today because
-     the only write is a staff-only internal note, but it's worth a deliberate review/guardrail
-     so a future tool can't be auto-invoked destructively.
-   - Fix: restrict the toolset explicitly (e.g. `-t`) and/or confirm the write path
-     (`processor/gorgias_writer.py`) is the only write and is gated.
+8. **~~Review the `--yolo` flag on the processor's Hermes call.~~ FIXED IN REPO —
+   still needs a VPS verification run.**
+   - Where: `processor/hermes_runner.py` → `build_hermes_command()`.
+   - Was: `hermes --yolo -z ...` auto-approved ALL tool calls. Worse than first
+     recorded — `~/.hermes/config.yaml` grants the CLI platform the `terminal` and
+     `file` toolsets, so `--yolo` also covered shell and filesystem access.
+   - Now: `hermes -t mcp-buttonsbebe_kb,mcp-buttonsbebe_redo,mcp-buttonsbebe_gorgias -z ...`
+     with no `--yolo`. Each MCP server registers a runtime toolset named
+     `mcp-<server key>`, so the allow-list is exactly the three read-only servers.
+     Tunable via `HERMES_TOOLSETS`; `HERMES_SKIP_APPROVAL=1` restores `--yolo` as a
+     temporary unblock and logs a WARNING every run.
+   - **Before deploying:** run `bash tools/verify_hermes_toolset.sh` on the VPS. A
+     misspelled toolset name does not error — Hermes silently loses the tool and
+     drafts quietly get worse. The script also checks whether `platform_toolsets.cli`
+     still grants `terminal`/`file`, which would need clearing too.
+   - Pinned by `processor/test_hermes_toolset.py`.
 
 9. **`.env` duplication — make one source of truth.**
    - Where: `/root/Buttonsbebe Agent/.env` (read by the MCP tools) and
