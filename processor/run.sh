@@ -14,19 +14,20 @@ if [ ! -d ".venv" ]; then
     uv pip install -e .
 fi
 
-# Ensure the shared .env exists. Since the 2026-07-08 consolidation both the
-# processor and the webhook read the SAME file at the project root — see
-# processor/config.py. webhook/.env is legacy; fall back to it only if the
-# consolidated file is missing, so an un-migrated VPS still starts.
+# Since the 2026-07-08 consolidation both the processor and the webhook read
+# the SAME file at the project root. processor/config.py hard-codes that path
+# and never looks at webhook/.env, so there is no useful fallback: starting
+# anyway would boot the processor with an empty GORGIAS_API_KEY and
+# LLM_API_KEY, which fails per-ticket rather than at startup. Fail loudly.
 ENV_FILE="../.env"
 if [ ! -f "$ENV_FILE" ]; then
+    echo "ERROR: no .env at $(cd .. && pwd)/.env"
     if [ -f "../webhook/.env" ]; then
-        ENV_FILE="../webhook/.env"
-        echo "WARNING: using legacy ../webhook/.env — see deploy/ENV-CONSOLIDATION-RUNBOOK.md"
-    else
-        echo "ERROR: no .env found at ../.env (or the legacy ../webhook/.env)."
-        exit 1
+        echo "       Found the legacy webhook/.env. processor/config.py does NOT read"
+        echo "       it — this VPS has not been migrated. Follow"
+        echo "       deploy/ENV-CONSOLIDATION-RUNBOOK.md before starting the processor."
     fi
+    exit 1
 fi
 
 echo "Starting job processor..."
