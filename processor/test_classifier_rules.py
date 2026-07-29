@@ -51,70 +51,235 @@ class BuiltInSelfTestTests(unittest.TestCase):
         self.assertGreater(total, 50)
 
 
-class NewImmediateRuleTests(unittest.TestCase):
-    """Rules Fable had and main did not. Each must reach IMMEDIATE."""
+# Every pattern this port adds, paired with a message that exercises it.
+# The mutation test below removes each pattern in turn and asserts its exemplar
+# stops escalating - so a rule that is already covered by a pre-existing
+# pattern, or an exemplar that fires some OTHER rule, both fail loudly.
+# Code review of the first version found 31 of 62 new patterns were deletable
+# with the whole suite still green.
+STRONG_EXEMPLARS = {
+    r"\bcharge\s?-?\s?back\b": "I will charge back the payment.",
+    r"\bcharged\s+back\b": "I have charged back the payment.",
+    r"\breverse\s+the\s+(charge|payment)\b": "Please reverse the charge.",
+    r"\bdisput(?:ing|ed)\b": "I am disputing this with my bank.",
+    r"\bcontest\s+the\s+charge\b": "I will contest the charge.",
+    r"\b(?:did\s+not|didn'?t|never|have\s+not|haven'?t)\s+authoris?z?e\w*\b":
+        "I never authorised this payment.",
+    r"\bunauthoris(?:ed|ing)\s+(charge|transaction|payment)\b":
+        "There is an unauthorised transaction on my card.",
+    r"\bunauthorized\s+transaction\b": "There is an unauthorized transaction.",
+    r"\bfraudulent\b": "This looks fraudulent.",
+    r"\bscamm(?:ed|er)\b": "I have been scammed.",
+    r"\brip\s?off\b": "What a ripoff.",
+    r"\bripped\s+me\s+off\b": "You ripped me off.",
+    r"\bstole\s+my\s+money\b": "They stole my money.",
+    r"\b(?:want|give\s+me|return)\s+my\s+money\b": "I want my money.",
+    r"\byou\s+stole\b": "You stole from me.",
+    r"\btheft\b": "This is theft.",
+    r"\bsuing\b": "I am suing.",
+    r"\blegal\s+counsel\b": "I have retained legal counsel.",
+    r"\bcease\s+and\s+desist\b": "Consider this a cease and desist.",
+    r"\bfile\s+a\s+complaint\b": "I will file a complaint.",
+    r"\b(?:is\s?n'?t|was\s?n'?t|not)\s+what\s+i\s+ordered\b":
+        "This isn't what I ordered.",
+    r"\b(?:got|sent|received)\s+the\s+wrong\b": "You sent the wrong one.",
+    r"\bnot\s+mine\b": "These are not mine.",
+    r"\bnot\s+as\s+described\b": "It is not as described.",
+    r"\blooks?\s+nothing\s+like\b": "It looks nothing like it.",
+    r"\bnothing\s+like\s+the\s+(photo|picture|listing|description|website)\b":
+        "Nothing like the photo.",
+    r"\bbut\s+(?:i\s+)?got\s+(?:a|an|the)\s": "I picked blue but got a pink one.",
+    r"\bbut\s+received\s+(?:a|an|the)\s": "I picked blue but received a pink one.",
+    r"\binstead\s+i\s+got\b": "Instead I got the gown.",
+    r"\bcracked\b": "It is cracked.",
+    r"\bshattered\b": "It is shattered.",
+    r"\bfrayed\b": "The hem is frayed.",
+    r"\bfell\s+apart\b": "It fell apart.",
+    r"\bseam\s+ripped\b": "The seam ripped.",
+    r"\b(?:did\s+not|didn'?t)\s+come\s+with\b": "It didn't come with the bib.",
+    r"\bmarked\s+delivered\s+but\b": "It is marked delivered but nothing came.",
+}
 
-    CASES = {
-        # Manager / escalation demands — an entire category main lacked.
-        "manager": "I want to speak to a manager right now.",
-        "get-me-a-manager": "Get me a manager please.",
-        "supervisor": "Put me through to your supervisor.",
-        "i-demand": "I demand a full explanation today.",
-        "worst-company": "This is the worst company I have ever used.",
-        "bypass-support": "Give me the owner's personal phone number.",
-        # Wrong item with no literal "wrong".
-        "not-what-i-ordered": "This isn't what I ordered at all.",
-        "but-got-a": "I ordered a blue bodysuit but got a pink dress.",
-        "instead-of-the": "You sent the gown instead of the romper.",
-        "different-item": "A completely different item turned up.",
-        "someone-elses": "This box has another customer's name on it.",
-        "not-as-described": "The coat is not as described.",
-        "nothing-like": "It looks nothing like the listing.",
-        # Damage words main lacked.
-        "cracked": "The mug arrived cracked.",
-        "shattered": "The frame was shattered in transit.",
-        "ripped": "The seam ripped after one wear.",
-        "frayed": "The hem is frayed already.",
-        "stained": "The bib arrived stained.",
-        "fell-apart": "The outfit fell apart in the wash.",
-        "a-hole": "There is a hole in the sleeve.",
-        "hole-in": "A hole in the knee of the leggings.",
-        "zipper": "The zipper is broken.",
-        # Missing / undelivered gaps.
-        "bare-missing": "One item is missing from the parcel.",
-        "didnt-come-with": "The set didn't come with the headband.",
-        "not-included": "The matching hat was not included.",
-        "left-out": "The socks were left out of the box.",
-        "hasnt-arrived": "My parcel hasn't arrived yet.",
-        "not-delivered": "The order was not delivered.",
-        "marked-delivered": "Tracking says marked delivered but nothing came.",
-        "bare-lost": "I think the parcel is lost.",
-        # Fraud, dispute and legal variants.
-        "charged-back": "I have charged back the payment.",
-        "reverse-charge": "Please reverse the charge on my card.",
-        "disputing": "I am disputing this with my bank.",
-        "never-authorized": "I never authorized this payment.",
-        "unauthorised-british": "There is an unauthorised charge on my card.",
-        "scammed": "I have been scammed.",
-        "ripped-me-off": "You ripped me off.",
-        "stole-my-money": "You stole my money.",
-        "cease-and-desist": "Consider this a cease and desist.",
-        "file-a-complaint": "I will file a complaint.",
-    }
+# Weak rules need order/delivery context, so every exemplar supplies some.
+WEAK_EXEMPLARS = {
+    r"\bmissing\b": "One item is missing from the parcel.",
+    r"\blost\b": "My parcel seems lost.",
+    r"\bwithout\s+the\b": "The set arrived without the headband.",
+    r"\bnot\s+included\b": "The hat was not included in my order.",
+    r"\bwas\s?n'?t\s+included\b": "The hat wasn't included in my order.",
+    r"\bleft\s+out\b": "The socks were left out of the box.",
+    r"\bsupposed\s+to\s+include\b": "My order was supposed to include a bib.",
+    r"\bdifferent\s+item\b": "My parcel held a completely different item.",
+    r"\binstead\s+of\s+the\b": "You sent the gown instead of the romper.",
+    r"\bripped\b": "The parcel held a ripped bodysuit.",
+    r"\bstained\b": "My order held a stained bib.",
+    r"\ba\s+(?:hole|rip|tear|stain)\b(?!\s*-?\s*away)": "My parcel held a top with a stain.",
+    r"\b(?:hole|rip|tear|stain)\s+(?:in|on)\b": "My parcel held a top with holes, hole in the arm.",
+    r"\banother\s+customer\b": "The box is labelled for another customer.",
+    r"\bsomeone\s+else'?s?\s+(order|name|items?|package|parcel|box)\b":
+        "The box holds someone else's order.",
+}
 
-    def test_each_new_rule_reaches_immediate(self):
-        for label, message in self.CASES.items():
-            with self.subTest(rule=label):
+MANAGER_EXEMPLARS = {
+    r"\b(?:speak|talk)\s+to\s+(?:a|your|the)\s+(?:manager|supervisor|owner)\b":
+        "Let me talk to a manager.",
+    r"\bget\s+me\s+(?:a|your|the)\s+(?:manager|supervisor|owner)\b":
+        "Get me a manager.",
+    r"\bwant\s+(?:a|to\s+speak\s+to\s+a)\s+manager\b": "I want a manager.",
+    r"\byour\s+supervisor\b": "Put me through to your supervisor.",
+    r"\bi\s+demand\b": "I demand an answer.",
+    r"\b(?:owner|manager|supervisor)'?s?\s+(?:personal\s+)?"
+    r"(?:phone|number|cell|mobile|email|address)\b":
+        "Give me the owner's personal phone number.",
+}
+
+
+class SelfTestCorpusTests(unittest.TestCase):
+    """The corpus that `python classifier.py` runs must also pass in CI."""
+
+    def test_selftest_passes(self):
+        ok, total = cls._selftest()
+        self.assertTrue(ok, "classifier self-test reported failures")
+
+    def test_every_selftest_case_matches_its_label(self):
+        for message, want_priority, want_sensitive in cls._SELFTEST_CASES:
+            with self.subTest(message=message[:60]):
+                got = _c(message)
+                self.assertEqual(got["priority"], want_priority, got["reason"])
+                self.assertEqual(got["sensitive"], want_sensitive)
+
+
+class EveryNewRuleIsLoadBearingTests(unittest.TestCase):
+    """Mutation test: remove one new rule, its exemplar must stop escalating.
+
+    This is what stops the suite drifting into vacuity. Adding a pattern
+    without an exemplar fails `test_every_new_pattern_has_an_exemplar`;
+    adding one that some other rule already covers fails the mutation check.
+    """
+
+    def _classify_without(self, attr: str, pattern: str, message: str) -> str:
+        original = getattr(cls, attr)
+        try:
+            setattr(cls, attr, [p for p in original if p != pattern])
+            return _c(message)["priority"]
+        finally:
+            setattr(cls, attr, original)
+
+    def test_every_new_pattern_has_an_exemplar(self):
+        covered = set(STRONG_EXEMPLARS) | set(WEAK_EXEMPLARS) | set(MANAGER_EXEMPLARS)
+        # Only the patterns this port added need exemplars. Main's originals
+        # start above the ported block; compare against the known lists.
+        for pattern in cls._WEAK_IMMEDIATE:
+            self.assertIn(pattern, covered, f"weak rule has no exemplar: {pattern}")
+        for pattern in cls._MANAGER_DEMAND_KEYWORDS:
+            self.assertIn(pattern, covered, f"manager rule has no exemplar: {pattern}")
+        for pattern in STRONG_EXEMPLARS:
+            self.assertIn(pattern, cls._IMMEDIATE_KEYWORDS,
+                          f"exemplar names a pattern that is not in the table: {pattern}")
+
+    def test_removing_a_strong_rule_stops_its_exemplar_escalating(self):
+        for pattern, message in STRONG_EXEMPLARS.items():
+            with self.subTest(pattern=pattern):
+                self.assertEqual(_c(message)["priority"], IMMEDIATE, message)
+                self.assertEqual(
+                    self._classify_without("_IMMEDIATE_KEYWORDS", pattern, message),
+                    NORMAL,
+                    f"{pattern!r} is dead code - {message!r} still escalates without it",
+                )
+
+    def test_removing_a_weak_rule_stops_its_exemplar_escalating(self):
+        for pattern, message in WEAK_EXEMPLARS.items():
+            with self.subTest(pattern=pattern):
+                self.assertEqual(_c(message)["priority"], IMMEDIATE, message)
+                self.assertEqual(
+                    self._classify_without("_WEAK_IMMEDIATE", pattern, message),
+                    NORMAL,
+                    f"{pattern!r} is dead code - {message!r} still escalates without it",
+                )
+
+    def test_removing_a_manager_rule_stops_its_exemplar_escalating(self):
+        for pattern, message in MANAGER_EXEMPLARS.items():
+            with self.subTest(pattern=pattern):
+                self.assertEqual(_c(message)["priority"], IMMEDIATE, message)
+                self.assertEqual(
+                    self._classify_without("_MANAGER_DEMAND_KEYWORDS", pattern, message),
+                    NORMAL,
+                    f"{pattern!r} is dead code - {message!r} still escalates without it",
+                )
+
+
+class WeakRulesNeedContextTests(unittest.TestCase):
+    """The heart of the fix: ordinary words only count when an order exists."""
+
+    def test_weak_word_alone_does_not_escalate(self):
+        for message in [
+            "Am I missing something? I can't find the size chart.",
+            "I'm a bit lost, which size do I need for a 6 month old?",
+            "I lost the discount code you emailed me, can you resend it?",
+            "Can I order the romper without the bow?",
+            "Do you sell the dress without the headband?",
+            "Are duties and taxes not included in the price?",
+            "How do I get a stain out of a cotton onesie?",
+            "What is the best way to remove a stain on white muslin?",
+            "Can I exchange it for a different item?",
+            "Can I get the pink one instead of the blue one?",
+            "I left out my apartment number when I placed the order.",
+            "Another customer recommended your store to me!",
+            "Do you have a tear-away label on the leggings?",
+        ]:
+            with self.subTest(message=message):
                 result = _c(message)
-                self.assertEqual(result["priority"], IMMEDIATE, msg=message)
-                self.assertTrue(result["sensitive"])
-                self.assertTrue(result["should_notify_owner"])
-                self.assertTrue(result["matched"], "audit trail must not be empty")
+                self.assertEqual(result["priority"], NORMAL, result["reason"])
 
-    def test_acceptance_case_from_the_port_tasklist(self):
-        result = _c("I want to speak to a manager, this is UNACCEPTABLE!!!")
-        self.assertEqual(result["priority"], IMMEDIATE)
-        self.assertTrue(result["sensitive"])
+    def test_the_same_word_with_an_order_escalates(self):
+        for message in [
+            "One item is missing from the parcel.",
+            "My parcel seems lost.",
+            "The romper set arrived without the matching headband.",
+            "The hat was not included in my order.",
+            "The socks were left out of the box.",
+            "My parcel held a completely different item.",
+            "The box is labelled for another customer.",
+        ]:
+            with self.subTest(message=message):
+                self.assertEqual(_c(message)["priority"], IMMEDIATE)
+
+    def test_a_browsing_question_never_unlocks_the_weak_rules(self):
+        # Even with an order word present, a "can I / do you" question is a
+        # request, not a complaint.
+        self.assertEqual(
+            _c("My order arrives Friday - can I add a hat without the bow?")["priority"],
+            NORMAL)
+
+    def test_strong_rules_ignore_the_browsing_guard(self):
+        # A refund or damage report is a complaint however it is phrased.
+        for message in ["Can I get a refund? My order arrived damaged.",
+                        "Do you handle this? I am filing a chargeback.",
+                        "How do I return this? It isn't what I ordered."]:
+            with self.subTest(message=message):
+                self.assertEqual(_c(message)["priority"], IMMEDIATE)
+
+
+class SmartPunctuationTests(unittest.TestCase):
+    """Apple, Gmail and Outlook all substitute a curly apostrophe."""
+
+    PAIRS = [
+        "I didn't receive my order.",
+        "This isn't what I ordered at all.",
+        "The set didn't come with the headband.",
+        "Give me the owner's personal phone number.",
+        "I haven't received my order.",
+        "The box holds someone else's order.",
+        "The hat wasn't included in my order.",
+    ]
+
+    def test_curly_and_straight_apostrophes_agree(self):
+        for straight in self.PAIRS:
+            curly = straight.replace("'", "\u2019")
+            with self.subTest(message=straight):
+                self.assertEqual(_c(straight)["priority"], _c(curly)["priority"],
+                                 f"curly apostrophe changed the verdict: {straight}")
+                self.assertNotEqual(_c(curly)["priority"], NORMAL)
 
 
 class StructuralAngerTests(unittest.TestCase):
@@ -125,57 +290,80 @@ class StructuralAngerTests(unittest.TestCase):
         self.assertGreaterEqual(_RANK[result["priority"]], _RANK[HIGH])
         self.assertIn("!!!", result["matched"])
 
+    def test_enthusiasm_is_not_anger(self):
+        for message in ["Thank you so much!!! The dress is perfect!!!",
+                        "Just received it and I LOVE IT!!! Best purchase ever!!!",
+                        "OBSESSED!!! So cute!!!"]:
+            with self.subTest(message=message):
+                self.assertEqual(_c(message)["priority"], NORMAL)
+
     def test_one_or_two_exclamations_do_not_escalate(self):
         for message in ["Thanks so much!", "Love it!!"]:
             with self.subTest(message=message):
                 self.assertEqual(_c(message)["priority"], NORMAL)
 
-    def test_shouting_escalates(self):
-        result = _c("WHY HAS NOBODY ANSWERED ME PLEASE REPLY TODAY")
-        self.assertGreaterEqual(_RANK[result["priority"]], _RANK[HIGH])
-        self.assertIn("ALL CAPS", result["matched"])
-
-    def test_shipping_acronyms_are_not_shouting(self):
-        result = _c("Do you ship via USPS UPS DHL FEDEX to the USA and is VAT included?")
+    def test_exclamation_in_the_subject_is_not_the_customers(self):
+        # A customer replying to the store's own "FLASH SALE!!!" promo.
+        result = _c("Do you restock the cream romper?",
+                    subject="Re: FLASH SALE!!! 30% OFF EVERYTHING")
         self.assertEqual(result["priority"], NORMAL)
+
+    def test_shouting_escalates(self):
+        for message in ["WHY HAS NOBODY ANSWERED ME PLEASE REPLY TODAY",
+                        "THIS IS A JOKE", "PICK UP THE PHONE",
+                        "I HAVE HAD IT WITH YOU AND THE WAY YOU AND THE TEAM TREAT ME"]:
+            with self.subTest(message=message):
+                self.assertGreaterEqual(_RANK[_c(message)["priority"]], _RANK[HIGH])
+
+    def test_capitals_that_are_not_shouting(self):
+        for message in [
+            "Do you carry NUNA UPPABABY BUGABOO DOONA CYBEX MAXI COSI?",
+            "ORDER 10322 JANE SMITH 42 MAPLE AVE TORONTO ONTARIO CANADA",
+            "Do you ship via USPS UPS DHL FEDEX to the USA and is VAT included?",
+            "Can I pay COD or do you need a PIN?",
+        ]:
+            with self.subTest(message=message):
+                self.assertEqual(_c(message)["priority"], NORMAL)
 
     def test_all_caps_subject_alone_is_not_shouting(self):
-        # Gorgias subjects are often machine-generated in capitals. If the caps
-        # rule read the subject, every one of these would escalate.
-        result = _c(
-            "Hi, when will my order ship? Thanks.",
-            subject="ORDER CONFIRMATION FROM BUTTONS BEBE ONLINE STORE",
-        )
+        result = _c("Hi, when will my order ship? Thanks.",
+                    subject="ORDER CONFIRMATION FROM BUTTONS BEBE ONLINE STORE")
         self.assertEqual(result["priority"], NORMAL)
 
-    def test_one_capitalised_acronym_mid_sentence_is_not_shouting(self):
-        self.assertEqual(_c("Can I pay COD or do you need a PIN?")["priority"], NORMAL)
+    def test_quoted_history_does_not_dilute_a_rant(self):
+        rant = "WHY HAS NOBODY REPLIED I HAVE BEEN WAITING WEEKS THIS IS RIDICULOUS"
+        quoted = (rant + "\n\nOn Mon, Jul 20 2026 at 9:14 AM Buttons Bebe Support "
+                  "wrote: thanks for reaching out, we will look into your order and "
+                  "get back to you as soon as we can with an update on the delivery.")
+        self.assertGreaterEqual(_RANK[_c(quoted)["priority"]], _RANK[HIGH])
 
 
-class NoFalsePositiveTests(unittest.TestCase):
-    """Word-boundary guards — these must all stay NORMAL."""
+class NegationTests(unittest.TestCase):
+    def test_asking_not_to_escalate_is_not_an_escalation(self):
+        self.assertEqual(
+            _c("Please don't escalate this, I just have a quick sizing question.")["priority"],
+            NORMAL)
 
-    BENIGN = [
-        "I took a trip to the store and loved it.",
-        "Do you have a good grip strap for strollers?",
-        "Please discard the old invoice, the new one is right.",
-        "I scanned the QR code on the package.",
-        "It arrived today and I love it, thank you!",
-        "Do you ship to Canada and how much?",
-        "What size bodysuit should I order for a 4 month old?",
-        "What brands do you carry?",
-        "Thanks so much, the dress is adorable!",
-        "Can I pick up locally instead of coming by post?",
-    ]
+    def test_asking_to_escalate_still_is(self):
+        self.assertEqual(
+            _c("Please escalate this to someone who can help.")["priority"], IMMEDIATE)
 
-    def test_benign_messages_stay_normal(self):
-        for message in self.BENIGN:
-            with self.subTest(message=message):
-                result = _c(message)
-                self.assertEqual(result["priority"], NORMAL, msg=result["reason"])
-                self.assertFalse(result["sensitive"])
-                self.assertEqual(result["matched"], [])
-                self.assertFalse(result["should_notify_owner"])
+
+class BoundedWorkTests(unittest.TestCase):
+    """Ticket bodies are attacker-influenced."""
+
+    def test_classify_is_bounded_on_a_hostile_message(self):
+        import time
+        # This shape backtracks super-linearly against a pre-existing pattern.
+        payload = "following up " * 20000 + "q" * 5000
+        started = time.perf_counter()
+        _c(payload)
+        elapsed = time.perf_counter() - started
+        self.assertLess(elapsed, 1.0, f"classify took {elapsed:.2f}s on {len(payload)} bytes")
+
+    def test_a_long_message_is_still_classified(self):
+        padding = "hello there this is a normal sentence. " * 500
+        self.assertEqual(_c("I want a refund. " + padding)["priority"], IMMEDIATE)
 
 
 class ContractTests(unittest.TestCase):
