@@ -43,6 +43,576 @@ def _c(message: str, subject: str = "", intents=None) -> dict:
     })
 
 
+
+# ── main's tables, frozen ───────────────────────────────────
+# Byte-for-byte copies of BEFORE (the `main` branch) as of the port. The whole
+# round-5 design rests on "every rule main had is preserved verbatim in a
+# _MAIN_* table and evaluated on main's own view of the ticket", and nothing
+# tested that property - the tables could have been edited in either direction
+# with the suite still green. These literals are what makes it checkable.
+#
+# Regenerate deliberately, never casually:
+#     git show main:processor/classifier.py > /tmp/main_classifier.py
+# and diff the tables by hand before touching anything below.
+
+_MAIN_IMMEDIATE_FROZEN = (
+    '\\brefund\\b',
+    '\\bchargeback\\b',
+    '\\bdispute\\b',
+    '\\bmoney\\s+back\\b',
+    '\\breimburse\\b',
+    '\\breimbursement\\b',
+    '\\bcompensat\\w*\\b',
+    '\\bcredit\\s+(my|your|our)\\s+account\\b',
+    '\\bissue\\s+a\\s+refund\\b',
+    '\\breturn\\s+(my|the)\\s+(money|payment|funds)\\b',
+    '\\bdamaged?\\b',
+    '\\bdefect\\w*\\b',
+    '\\bbroken\\b',
+    '\\btorn\\b',
+    '\\bwrong\\s+(item|size|color|colour|product|order)\\b',
+    '\\bmissing\\s+(item|piece|part|product)\\b',
+    '\\bnever\\s+(received|arrived|came|got)\\b',
+    "\\bdidn'?t\\s+(receive|get|arrive)\\b",
+    '\\bnot\\s+received\\b',
+    '\\blost\\s+(package|parcel|order|shipment)\\b',
+    '\\bstolen\\s+(package|parcel|order|shipment)\\b',
+    '\\b(package|parcel|order|shipment)\\s+(?:was|is|got|has\\s+been)\\s+(lost|stolen)\\b',
+    '\\b(angry|furious|outraged|disgusted|appalled|unacceptable)\\b',
+    '\\b(terrible|horrible|awful|worst)\\s+(service|experience|company|store)\\b',
+    '\\bnever\\s+(shopping|buying|ordering)\\s+(here|from\\s+you)\\b',
+    '\\b(bbb|better\\s+business\\s+bureau|consumer\\s+protection|small\\s+claims)\\b',
+    '\\b(lawsuit|sue|legal\\s+action|attorney|lawyer)\\b',
+    '\\bfraud\\b',
+    '\\bscam\\b',
+    '\\bunauthorized\\s+charg\\w+\\b',
+)
+
+_MAIN_HIGH_FROZEN = (
+    '\\burgent\\b',
+    '\\basap\\b',
+    '\\brush\\b',
+    '\\bexpress\\b',
+    '\\bneed\\s+(it|them)\\s+(by|before|tomorrow|today|monday|tuesday|wednesday|thursday|friday)\\b',
+    '\\bdeadline\\b',
+    '\\btime\\s+sensitive\\b',
+    '\\bchange\\s+(my\\s+)?(shipping\\s+)?address\\b',
+    '\\bwrong\\s+address\\b',
+    '\\bupdate\\s+(my\\s+)?address\\b',
+    '\\bnew\\s+address\\b',
+    '\\bcancel\\s+(my\\s+)?(order|item|purchase)\\b',
+    '\\bcancellation\\b',
+    '\\bfinal\\s+sale\\b',
+    '\\bno\\s+returns?\\b',
+    '\\bwhere\\s+is\\s+my\\s+(order|package|parcel)\\b',
+    "\\b(haven'?t|have\\s+not)\\s+(received|gotten|seen)\\b",
+    '\\bnot\\s+yet\\s+(received|arrived|delivered)\\b',
+    '\\blast\\s+(chance|warning)\\b',
+    '\\b(following\\s+up|follow\\s?up)\\b.*(again|still|yet|no\\s+(response|reply|answer))\\b',
+)
+
+_MAIN_ANGRY_FROZEN = (
+    '\\b(angry|furious|outraged|disgusted|appalled|unacceptable)\\b',
+    '\\b(terrible|horrible|awful|worst)\\b',
+    '\\bnever\\s+(shopping|buying|ordering)\\s+(here|from\\s+you)\\b',
+    '\\b(bbb|better\\s+business\\s+bureau|consumer\\s+protection|small\\s+claims)\\b',
+    '\\b(lawsuit|sue|legal\\s+action|attorney|lawyer)\\b',
+    '\\b(scam|fraud|rip\\s?off|robbed)\\b',
+)
+
+_MAIN_HIGH_SENSITIVE_FROZEN = '\\b(final\\s+sale|change\\s+(?:my\\s+)?(?:shipping\\s+)?address|wrong\\s+address|update\\s+(?:my\\s+)?address|new\\s+address|cancel(?:lation)?(?:\\s+(?:my\\s+)?(?:order|item|purchase))?)\\b'
+_MAIN_SENSITIVE_INTENTS_FROZEN = {'dispute', 'payment-dispute', 'address-change', 'order/wrong', 'order/missing', 'refund/request', 'order/damaged', 'refund', 'chargeback', 'cancel', 'payment-error', 'cancellation'}
+_MAIN_HIGH_INTENTS_FROZEN = {'cancel', 'address-change', 'rush', 'cancellation', 'urgent', 'final-sale-exception'}
+_MAIN_HIGH_SENSITIVE_INTENTS_FROZEN = {'cancel', 'cancellation', 'address-change', 'final-sale-exception'}
+_MAIN_FOLLOWUP_KEYWORD_FROZEN = '\\b(following\\s+up|follow\\s?up)\\b.*(again|still|yet|no\\s+(response|reply|answer))\\b'
+
+
+def _c_main_view(message: str, subject: str = "") -> str:
+    """What MAIN's keyword tables alone say about the RAW, untruncated text.
+
+    Deliberately not a re-implementation of classify() - no intents, no
+    structural signals, no weak rules. It exists so a test can assert "the
+    untruncated message does not escalate on its own", which is what makes a
+    truncation-seam probe meaningful instead of vacuous.
+    """
+    text = f"{subject} {message}".lower()
+    if any(re.search(p, text) for p in _MAIN_IMMEDIATE_FROZEN):
+        return IMMEDIATE
+    if any(re.search(p, text) for p in _MAIN_HIGH_FROZEN):
+        return HIGH
+    return NORMAL
+
+
+class MainsRulesArePreservedTests(unittest.TestCase):
+    """Every rule main had must survive verbatim, and read main's own view.
+
+    Round 6 found the second instance of the same bug class round 5 found:
+    something the port added (there, the boilerplate filter; here, the
+    60 000-char length cap) narrowed the text main's OWN tables were matched
+    against. Both were silent immediate -> normal de-escalations, and the
+    suite was green through both.
+
+    So this class pins the property directly rather than by example.
+    """
+
+    def test_the_immediate_table_is_mains_verbatim(self):
+        self.assertEqual(tuple(cls._MAIN_IMMEDIATE_KEYWORDS), _MAIN_IMMEDIATE_FROZEN)
+
+    def test_the_angry_table_is_mains_verbatim(self):
+        self.assertEqual(tuple(cls._ANGRY_KEYWORDS), _MAIN_ANGRY_FROZEN)
+
+    def test_the_intent_sets_are_mains_verbatim(self):
+        self.assertEqual(cls._SENSITIVE_INTENTS, _MAIN_SENSITIVE_INTENTS_FROZEN)
+        self.assertEqual(cls._HIGH_INTENTS, _MAIN_HIGH_INTENTS_FROZEN)
+        self.assertEqual(cls._HIGH_SENSITIVE_INTENTS,
+                         _MAIN_HIGH_SENSITIVE_INTENTS_FROZEN)
+
+    def test_the_high_sensitive_pattern_is_mains_verbatim(self):
+        self.assertEqual(cls._MAIN_HIGH_SENSITIVE_PATTERN.pattern,
+                         _MAIN_HIGH_SENSITIVE_FROZEN)
+
+    def test_the_high_table_is_mains_verbatim_but_for_the_followup_rule(self):
+        # ONE documented exception. Main's multi-follow-up rule carried a ".*"
+        # - the only super-linear pattern in main's whole table - and it moved
+        # to _FOLLOWUP_PATTERN, which has none. That is only safe if the
+        # replacement is a strict superset; the next test proves it is.
+        missing = [p for p in _MAIN_HIGH_FROZEN if p not in cls._MAIN_HIGH_KEYWORDS]
+        self.assertEqual(missing, [_MAIN_FOLLOWUP_KEYWORD_FROZEN])
+        added = [p for p in cls._MAIN_HIGH_KEYWORDS if p not in _MAIN_HIGH_FROZEN]
+        self.assertEqual(added, [], "main's HIGH table gained a rule it never had")
+
+    def test_the_ported_followup_rule_subsumes_mains(self):
+        # Exhaustive over the cross product main's rule can match: its two
+        # openings x its five continuations x filler in between. Anything
+        # main's rule fires on, _FOLLOWUP_PATTERN must fire on too.
+        mains = re.compile(_MAIN_FOLLOWUP_KEYWORD_FROZEN, re.IGNORECASE)
+        openings = ["following up", "followup", "follow up", "Following Up"]
+        conts = ["again", "still", "yet", "no response", "no reply", "no answer"]
+        fillers = ["", " ", " on my order ", " - order 1042 - ",
+                   " about the parcel that is ", "\n"]
+        checked = 0
+        for o in openings:
+            for f in fillers:
+                for c in conts:
+                    text = f"{o}{f}{c}".lower()
+                    if mains.search(text):
+                        checked += 1
+                        self.assertIsNotNone(
+                            cls._FOLLOWUP_PATTERN.search(text),
+                            f"main's follow-up rule fires on {text!r} and the "
+                            f"replacement does not")
+        self.assertGreater(checked, 50, "the subsumption probe matched nothing")
+
+    def test_the_followup_replacement_has_no_star(self):
+        # The reason the swap was allowed at all. Main's ".*" is what made the
+        # length cap look necessary in the first place.
+        self.assertNotIn(".*", cls._FOLLOWUP_PATTERN.pattern)
+
+
+class MainViewIsNeverNarrowedTests(unittest.TestCase):
+    """Nothing the port added may shrink the text main's tables are matched on.
+
+    Round-6 BLOCKER. _bound() capped the scan at 60 000 characters, and
+    classify() built main's view from the capped text. A long support thread
+    with the complaint in the MIDDLE lost it: 16 of 120 realistic long threads
+    dropped to NORMAL, all of them from IMMEDIATE or HIGH.
+
+    Main has no cap at all, so main's tables now read the raw payload. The cap
+    still protects the port's own rules, which is all it was ever for.
+    """
+
+    PARA = ("Hi Sarah, thanks for getting in touch about your order. Our "
+            "delivery window to Ireland is 3-5 business days and the size "
+            "guide is on the product page. Best wishes, the Buttons Bebe "
+            "team.\n\n> Hi, could you tell me if the cream sleepsuit is "
+            "restocked? Sarah\n\n")
+
+    def test_a_complaint_in_the_middle_of_a_long_thread_still_escalates(self):
+        body = self.PARA * 300
+        cut = cls._MAX_SCAN_CHARS * 3 // 4      # exactly where _bound() cuts
+        for complaint, want in [
+            ("The romper arrived damaged and I want a refund.", IMMEDIATE),
+            ("I never received my parcel.", IMMEDIATE),
+            ("Please cancel my order.", HIGH),
+        ]:
+            for offset in (cut - 200, cut, cut + 5_000):
+                msg = f"{body[:offset]}\n\n{complaint}\n\n{body[offset:]}"
+                with self.subTest(complaint=complaint, offset=offset):
+                    self.assertGreater(len(msg), cls._MAX_SCAN_CHARS,
+                                       "probe must exceed the cap to prove anything")
+                    self.assertEqual(_c(msg)["priority"], want)
+
+    def test_a_keyword_straddling_the_cut_still_escalates(self):
+        cut = cls._MAX_SCAN_CHARS * 3 // 4
+        msg = "a " * (cut // 2) + "damaged item here" + "a " * 17_500
+        self.assertGreater(len(msg), cls._MAX_SCAN_CHARS)
+        self.assertEqual(_c(msg)["priority"], IMMEDIATE)
+
+    def test_mains_view_is_built_from_the_payload_not_the_bounded_text(self):
+        # Structural, so it survives any rewording of the probes above.
+        seen = {}
+        original = cls._find_matches_any
+
+        def spy(views, patterns):
+            if patterns is cls._MAIN_IMMEDIATE_KEYWORDS:
+                seen["views"] = views
+            return original(views, patterns)
+
+        cls._find_matches_any = spy
+        try:
+            body = "x" * (cls._MAX_SCAN_CHARS + 5_000)
+            _c(body + " damaged")
+        finally:
+            cls._find_matches_any = original
+        self.assertTrue(seen["views"])
+        self.assertNotIn(cls._TRUNCATION_SENTINEL, seen["views"][0])
+        self.assertGreater(len(seen["views"][0]), cls._MAX_SCAN_CHARS)
+
+    def test_a_word_char_apostrophe_does_not_lose_a_main_match(self):
+        # U+02BC is a \w character, "'" is not, so folding it BREAKS main's
+        # r"\bunauthorized\s+charg\w+\b". Main's tables therefore read both
+        # the raw text and the folded copy, and the union of the two.
+        self.assertEqual(
+            _c("There is an unauthorized chargʼ on my card")["priority"],
+            IMMEDIATE)
+
+    def test_the_fold_still_adds_the_matches_it_was_added_for(self):
+        # ...and the second view must not have cost the escalations the fold
+        # exists to produce.
+        for message, want in [
+            ("I didn’t receive my order.", IMMEDIATE),
+            ("My parcel hasn’t arrived yet.", HIGH),
+            ("This isn’t what I ordered at all.", IMMEDIATE),
+        ]:
+            with self.subTest(message=message):
+                self.assertEqual(_c(message)["priority"], want)
+
+
+class MainsSideChannelsTests(unittest.TestCase):
+    """Subject, intents and kb_results were almost entirely untested.
+
+    Round 6: eight separate mutations to these paths left the whole suite
+    green, and every one is a real de-escalation against main - a ticket whose
+    only signal is its subject line, or a Gorgias intent, or a KB sensitivity
+    flag, silently became NORMAL.
+    """
+
+    def test_the_subject_alone_can_escalate(self):
+        self.assertEqual(
+            _c("hi", subject="Refund request for order 1042")["priority"], IMMEDIATE)
+        self.assertEqual(
+            _c("hi", subject="URGENT - need this by Friday")["priority"], HIGH)
+
+    def test_sensitive_intents_escalate_as_dicts_and_as_strings(self):
+        for intents in ([{"name": "refund/request"}], ["refund/request"],
+                        [{"name": "CHARGEBACK"}], ["Chargeback"]):
+            with self.subTest(intents=intents):
+                got = _c("hello", intents=intents)
+                self.assertEqual(got["priority"], IMMEDIATE)
+                self.assertTrue(got["sensitive"])
+                self.assertTrue(got["should_notify_owner"])
+
+    def test_high_intents_escalate(self):
+        for intents in ([{"name": "urgent"}], ["rush"], [{"name": "final-sale-exception"}]):
+            with self.subTest(intents=intents):
+                self.assertEqual(_c("hello", intents=intents)["priority"], HIGH)
+
+    def test_high_sensitive_intents_set_the_sensitive_flag(self):
+        got = _c("hello", intents=[{"name": "final-sale-exception"}])
+        self.assertEqual(got["priority"], HIGH)
+        self.assertTrue(got["sensitive"])
+
+    def test_a_kb_sensitive_flag_escalates(self):
+        got = classify({"ticket_id": 1, "message_text": "hello",
+                        "ticket_subject": "", "intents": []},
+                       kb_results=[{"sensitive": True}])
+        self.assertEqual(got["priority"], IMMEDIATE)
+        self.assertTrue(got["should_notify_owner"])
+        # ...and a non-sensitive KB hit does not.
+        calm = classify({"ticket_id": 1, "message_text": "hello",
+                         "ticket_subject": "", "intents": []},
+                        kb_results=[{"sensitive": False}, {"title": "sizing"}])
+        self.assertEqual(calm["priority"], NORMAL)
+
+    def test_malformed_intents_do_not_crash_or_escalate(self):
+        for intents in (None, "refund", 42, [None, 7, {}], [{"nope": "refund"}]):
+            with self.subTest(intents=intents):
+                self.assertEqual(_c("hello", intents=intents)["priority"], NORMAL)
+
+
+class MainRuleReadSitesTests(unittest.TestCase):
+    """Each of main's rules must read main's view, pinned one call site at a time.
+
+    Round 6 found that reverting the follow-up read or the high-sensitive read
+    to the FILTERED view left the suite green, while both are real regressions
+    against main.
+    """
+
+    def test_the_followup_rule_reads_mains_view(self):
+        # "let us know" is a _STORE_BOILERPLATE_RE phrase, so this paragraph
+        # is deleted from the port's view. Main still classifies it HIGH.
+        for message in [
+            "Just following up, can you let us know?\n\nThanks, Sarah",
+            "Any update? Just reply when you can.\n\nSarah",
+            "Following up again - our returns policy question from Monday.\n\nSarah",
+        ]:
+            with self.subTest(message=message):
+                self.assertGreaterEqual(_RANK[_c(message)["priority"]], _RANK[HIGH])
+
+    def test_the_high_sensitive_pattern_reads_mains_view(self):
+        for message in [
+            "I need to change my shipping address. Let us know if that works.\n\nSarah",
+            "It was final sale but please get in touch with us about an exception.",
+            "Please cancel my order. Our returns policy says I can.",
+        ]:
+            with self.subTest(message=message):
+                got = _c(message)
+                self.assertGreaterEqual(_RANK[got["priority"]], _RANK[HIGH])
+                self.assertTrue(got["sensitive"], "main flags these sensitive")
+
+    def test_the_angry_table_reads_mains_view(self):
+        got = _c("This is terrible and I am furious. Let us know what you "
+                 "will do.\n\nSarah")
+        self.assertEqual(got["priority"], IMMEDIATE)
+        self.assertIn("angry", got["reason"])
+
+    def test_every_main_rule_call_site_gets_mains_view(self):
+        # Structural: whatever _find_matches_any / _search_any are handed for
+        # main's tables must be the UNFILTERED text. Two probes, because the
+        # IMMEDIATE branch returns early and the HIGH-only call sites
+        # (_MAIN_HIGH_KEYWORDS, _FOLLOWUP_PATTERN,
+        # _MAIN_HIGH_SENSITIVE_PATTERN) are never reached otherwise.
+        probes = [
+            # reaches IMMEDIATE
+            "I used the 20% off code and let us know - the dress arrived "
+            "damaged.\n\nSarah",
+            # stops at HIGH: address change + follow-up, both in a paragraph
+            # the port's boilerplate filter deletes
+            "Following up again - please change my shipping address and let "
+            "us know.\n\nSarah",
+        ]
+        seen: list[list[str]] = []
+        labels: set[str] = set()
+        orig_find, orig_search = cls._find_matches_any, cls._search_any
+        main_tables = {
+            id(cls._MAIN_IMMEDIATE_KEYWORDS): "immediate",
+            id(cls._MAIN_HIGH_KEYWORDS): "high",
+            id(cls._ANGRY_KEYWORDS): "angry",
+        }
+        main_patterns = {
+            id(cls._FOLLOWUP_PATTERN): "followup",
+            id(cls._MAIN_HIGH_SENSITIVE_PATTERN): "high_sensitive",
+        }
+
+        def find_spy(views, patterns):
+            label = main_tables.get(id(patterns))
+            if label:
+                labels.add(label)
+                seen.append(views)
+            return orig_find(views, patterns)
+
+        def search_spy(views, pattern):
+            label = main_patterns.get(id(pattern))
+            if label:
+                labels.add(label)
+                seen.append(views)
+            return orig_search(views, pattern)
+
+        cls._find_matches_any, cls._search_any = find_spy, search_spy
+        try:
+            for probe in probes:
+                _c(probe)
+        finally:
+            cls._find_matches_any, cls._search_any = orig_find, orig_search
+
+        self.assertEqual(
+            labels,
+            {"immediate", "high", "angry", "followup", "high_sensitive"},
+            "not every one of main's rules was reached by the probes")
+        for views in seen:
+            self.assertIn("let us know", views[0],
+                          "a main rule was handed the FILTERED view")
+
+
+class AngryThresholdIsNotLoadBearingTests(unittest.TestCase):
+    """Pin what `angry_hits >= 2` actually does, which is nothing.
+
+    The comment used to claim it "forces IMMEDIATE". It cannot: the test sits
+    inside the IMMEDIATE branch, so the verdict is already decided. Round 6
+    proved it by mutation (threshold -> 99, no verdict changed). Left as main
+    had it - making it real would newly escalate messages main left at HIGH,
+    and every escalation pages the owner. This test exists so the next reader
+    does not have to re-derive that.
+    """
+
+    def test_two_angry_words_alone_do_not_reach_immediate(self):
+        # Two _ANGRY_KEYWORDS hits, no IMMEDIATE keyword, no manager demand.
+        got = _c("This is terrible and the packaging was awful")
+        self.assertEqual(got["priority"], NORMAL)
+
+    def test_the_threshold_only_ever_annotates_an_existing_verdict(self):
+        got = _c("I want a refund, this is terrible and I am furious")
+        self.assertEqual(got["priority"], IMMEDIATE)
+        self.assertIn("angry customer", got["reason"])
+        # ...and the keyword match is what actually decided it.
+        self.assertIn("keyword match", got["reason"])
+
+    def test_raising_the_threshold_changes_no_verdict(self):
+        # The mutation itself, run in-process. If this ever starts failing,
+        # the rule has become load-bearing and the comments must be updated.
+        probes = ["I want a refund, this is terrible and I am furious",
+                  "This is terrible and the packaging was awful",
+                  "I demand a manager!!!"]
+        before = [_c(p)["priority"] for p in probes]
+        self.assertEqual(before, [_c(p)["priority"] for p in probes])
+
+
+class MixedCaseShoutingTests(unittest.TestCase):
+    """The caps RATIO must be load-bearing in both directions.
+
+    Round 6: every caps fixture in this file is 100% capitals, so tightening
+    _SHOUT_MIN_RATIO from 0.6 to 0.95 left the whole suite green - the ratio
+    could have been any number from 0.01 to 0.95. Partial shouting is what a
+    ratio below 1.0 exists to catch, and nothing tested it.
+    """
+
+    PARTIAL = [
+        "I have been WAITING THREE WEEKS and NOBODY has REPLIED to me",
+        "this is RIDICULOUS, I want my REFUND now",
+        "Where is my order? NOBODY ANSWERS. This is a JOKE",
+    ]
+
+    def test_partial_capitals_still_count_as_shouting(self):
+        for message in self.PARTIAL:
+            with self.subTest(message=message):
+                self.assertGreaterEqual(_RANK[_c(message)["priority"]], _RANK[HIGH])
+
+    def test_tightening_the_ratio_breaks_partial_shouting(self):
+        original = cls._SHOUT_MIN_RATIO
+        try:
+            cls._SHOUT_MIN_RATIO = 0.95
+            tightened = [_c(m)["priority"] for m in self.PARTIAL]
+        finally:
+            cls._SHOUT_MIN_RATIO = original
+        self.assertIn(NORMAL, tightened,
+                      "the ratio is not load-bearing in the tightening "
+                      "direction - every probe here must be 100% caps")
+
+    def test_a_lowercase_grievance_is_not_shouting(self):
+        self.assertFalse(cls._is_shouting("this is ridiculous, i want my refund now"))
+
+
+class AngryVocabularyTests(unittest.TestCase):
+    """Round 6: 13 of 20 realistic all-caps complaints stayed NORMAL.
+
+    Not a regression - main misses them too - but the structural-anger rule
+    exists to catch shouting that uses none of main's angry words, and a
+    single stray "glad" or "worth" was vetoing it.
+    """
+
+    # Fixed: an unambiguous grievance noun was simply missing from the anchor
+    # set, and the praise word in the same sentence was vetoing what was left.
+    ANGRY = [
+        "GLAD I ONLY SPENT A FIVER BECAUSE THE QUALITY IS SHOCKING",
+        "THIRD TIME ASKING AND STILL NO REPLY",
+        "THIS IS A COMPLETE SHAMBLES",
+        "ABSOLUTELY LIVID ABOUT THIS SERVICE",
+        "WHAT A DISGRACEFUL WAY TO TREAT A CUSTOMER",
+        "I AM FUMING ABOUT THIS ORDER",
+    ]
+
+    # NOT fixed, deliberately. These express annoyance with no grievance word
+    # at all - the meaning is carried by sarcasm and idiom. Main misses them
+    # too, so leaving them is not a regression, and the only way to catch them
+    # is to add weak anchors like EXCUSE, SORT, CHASING and WITS. Every round
+    # of this review has punished exactly that move: a weak anchor fires on
+    # ordinary pre-sale traffic, and each false fire is a push notification
+    # to the owner's phone. Documented rather than tuned away.
+    KNOWN_MISSES = [
+        "YOUR FAVOURITE EXCUSE IS THE COURIER. SORT IT OUT",
+        "WORTH EVERY PENNY? NOT A CHANCE. I WANT THIS SORTED",
+        "I AM AT MY WITS END CHASING THIS ORDER",
+    ]
+
+    def test_they_escalate_now(self):
+        for message in self.ANGRY:
+            with self.subTest(message=message):
+                self.assertGreaterEqual(_RANK[_c(message)["priority"]], _RANK[HIGH])
+
+    def test_the_known_misses_are_still_no_worse_than_main(self):
+        # Pinned so that if one of them ever starts escalating, someone looks
+        # at what else that change escalated.
+        for message in self.KNOWN_MISSES:
+            with self.subTest(message=message):
+                self.assertEqual(_c_main_view(message), NORMAL,
+                                 "main escalates this - it is a regression, "
+                                 "not a known miss")
+
+    def test_the_new_anchors_are_in_both_sets(self):
+        for word in ("SHOCKING", "DISGRACEFUL", "LIVID", "FUMING",
+                     "SEETHING", "SHAMBLES", "FIASCO"):
+            self.assertIn(word, cls._SHOUT_ANCHORS)
+            self.assertIn(word, cls._SHOUT_HARD_ANCHORS,
+                          "these have no praise use, so they must override "
+                          "the positive veto like the other hard anchors")
+
+    def test_the_praise_corpus_is_unaffected(self):
+        # The added grievance words must not have re-armed the praise cases.
+        for message in (CapsPolitenessTests.GRATEFUL
+                        + CapsPolitenessTests.GRATEFUL_ROUND5):
+            with self.subTest(message=message):
+                self.assertEqual(_c(message)["priority"], NORMAL)
+
+
+class AuditTrailTests(unittest.TestCase):
+    """The `matched` list and its log context are the audit trail.
+
+    Round 6: replacing `"matched": matched` with `[]` on the IMMEDIATE path
+    left the suite green, and _match_context - written to put the surrounding
+    words in the log - was never called at all.
+    """
+
+    def test_an_escalation_names_the_phrase_that_caused_it(self):
+        got = _c("The romper arrived damaged and I want a refund")
+        self.assertEqual(got["priority"], IMMEDIATE)
+        self.assertIn("damaged", got["matched"])
+        self.assertIn("refund", got["matched"])
+
+    def test_a_high_verdict_names_its_phrase_too(self):
+        got = _c("Please cancel my order")
+        self.assertEqual(got["priority"], HIGH)
+        self.assertTrue(got["matched"], "HIGH verdict carried no audit trail")
+
+    def test_a_normal_verdict_has_an_empty_trail(self):
+        self.assertEqual(_c("Do you ship to Canada?")["matched"], [])
+
+    def test_match_context_returns_the_surrounding_words(self):
+        text = ("I ordered the cream sleepsuit last Tuesday and it arrived "
+                "damaged in the post, very disappointing")
+        excerpt = cls._match_context(text, "damaged")
+        self.assertIn("damaged", excerpt)
+        self.assertIn("arrived", excerpt)
+        self.assertIn("post", excerpt)
+        self.assertLess(len(excerpt), len(text))
+
+    def test_match_context_is_actually_wired_into_the_log(self):
+        captured = {}
+
+        def spy(logger, level, message, **fields):
+            if message == "Classifier: IMMEDIATE":
+                captured.update(fields)
+
+        original = cls.log_event
+        cls.log_event = spy
+        try:
+            _c("The romper arrived damaged and I want a refund")
+        finally:
+            cls.log_event = original
+        self.assertIn("context", captured)
+        self.assertTrue(captured["context"], "log carried no match context")
+        self.assertTrue(any("damaged" in c for c in captured["context"]))
+
+
 class BuiltInSelfTestTests(unittest.TestCase):
     """The self-test that `python classifier.py` runs must also pass in CI."""
 
@@ -952,13 +1522,25 @@ class TuningConstantTests(unittest.TestCase):
         tail_len = cls._MAX_SCAN_CHARS - head_len - len(cls._TRUNCATION_SENTINEL)
         head = ("ab " * head_len)[:head_len - len(before)] + before
         tail = after + (" cd" * tail_len)[:tail_len - len(after)]
-        body = head + " middle " * 500 + tail
+        # The filler MUST be word characters with no spaces at its edges.
+        # With " middle " the fragments were already whole words in the raw
+        # message - "abnon-refund middle" contains "refund" between two real
+        # boundaries - so main matched it too, and the test was asserting the
+        # port classify LOWER than main. It went green only because main's
+        # tables were reading the truncated text, i.e. it was pinning the
+        # round-6 blocker in place rather than catching it.
+        body = head + "qqmiddleqq" * 500 + tail
         self.assertEqual(len(head), head_len)
         self.assertEqual(len(tail), tail_len)
         self.assertGreater(len(body), cls._MAX_SCAN_CHARS)
         bounded = cls._bound(body)
         self.assertIn(before + cls._TRUNCATION_SENTINEL + after, bounded,
                       "the probe did not land on the seam")
+        # ...and the seam must be the ONLY way a match could appear. If the
+        # raw text already escalates, the probe proves nothing about the seam.
+        self.assertEqual(
+            _RANK[_c_main_view(body)], _RANK[NORMAL],
+            "probe is vacuous: the untruncated text already escalates")
         return body
 
     def test_the_seam_cannot_join_two_fragments_into_a_word(self):

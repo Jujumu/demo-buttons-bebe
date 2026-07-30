@@ -370,7 +370,20 @@ _HIGH_SENSITIVE_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
-# Angry indicator count threshold — if 2+ angry keywords, force IMMEDIATE
+# Angry indicator keywords.
+#
+# The old comment here said "if 2+ angry keywords, force IMMEDIATE". It does
+# not, and never did - on main either. The angry_hits test in classify() sits
+# INSIDE the IMMEDIATE branch, so by the time it runs the verdict is already
+# IMMEDIATE and all it does is add a line to the reason string. Round 6
+# confirmed it by mutation: raising the threshold to 99 changes no verdict.
+#
+# Left as main had it. Making it load-bearing would escalate messages main
+# left at HIGH ("this is terrible and awful"), and every new escalation is a
+# push notification to the owner's phone - out of scope for a port whose rule
+# is "same or higher, and no new false alarms". See
+# AngryThresholdIsNotLoadBearingTests, which pins the real behaviour so the
+# next reader does not trust the label either.
 _ANGRY_KEYWORDS = [
     r"\b(angry|furious|outraged|disgusted|appalled|unacceptable)\b",
     r"\b(terrible|horrible|awful|worst)\b",
@@ -433,7 +446,16 @@ _NEGATIVE_RE = re.compile(
     # Balance for the praise words added above: "worth" is positive, but
     # "not worth it" and "waste of money" are not.
     r"n[o']?t\s+worth|waste|wasted|poor\s+quality|bad\s+quality|"
-    r"cheap\s+quality|falling\s+apart)\b",
+    r"cheap\s+quality|falling\s+apart|"
+    # Round 6: 13 of 20 realistic all-caps complaints stayed NORMAL because
+    # this list had no word for how people actually express annoyance. None
+    # of them was a regression against main - main misses them too - but the
+    # structural-anger rule exists precisely to catch shouting that uses no
+    # angry *word* from main's table, and it was being vetoed by a single
+    # stray "glad" or "worth".
+    r"shocking|shockingly|disgraceful|frustrat\w+|livid|fuming|seething|"
+    r"appalled|outrage\w*|no\s+(?:reply|response|answer|word|update)|"
+    r"chasing|wits\s+end|joke|shambles|fiasco|third\s+time|3rd\s+time)\b",
     re.IGNORECASE)
 
 # Quoted email history dilutes every ratio, so measure the new text only.
@@ -489,6 +511,10 @@ _SHOUT_ANCHORS = frozenset({
     "WRONG", "BROKEN", "DAMAGED", "MISSING", "CANCEL", "IMMEDIATELY",
     "ANSWER", "ANSWERED", "REPLY", "RESPOND", "RESPONSE", "WAITING",
     "PHONE", "MANAGER", "SUPERVISOR", "URGENT",
+    # Round 6. Unambiguous grievance nouns with no praise use at all, so they
+    # are safe to add to both this set and the HARD set below.
+    "SHOCKING", "DISGRACEFUL", "LIVID", "FUMING", "SEETHING",
+    "SHAMBLES", "FIASCO",
 })
 
 # Grammar words. A rant has pronouns and verbs; a pasted postal address or a
@@ -532,6 +558,8 @@ _SHOUT_HARD_ANCHORS = frozenset({
     "APPALLING", "USELESS", "FURIOUS", "ANGRY", "WORST", "AWFUL",
     "TERRIBLE", "HORRIBLE", "JOKE", "ENOUGH", "NOBODY", "IGNORED",
     "IGNORING", "MISSING", "DAMAGED", "BROKEN", "WRONG", "CANCEL",
+    "SHOCKING", "DISGRACEFUL", "LIVID", "FUMING", "SEETHING",
+    "SHAMBLES", "FIASCO",
 })
 
 _SHOUT_MIN_WORDS = 2       # with the anchor requirement doing the filtering
@@ -583,29 +611,48 @@ def _bound(text: str) -> str:
     return text[:head] + _TRUNCATION_SENTINEL + text[-tail:]
 
 
-def _normalise_text(value: str, *, drop_quotes: bool = False) -> str:
-    """Fold smart punctuation and bound the length before any regex sees it."""
-    text = _bound(str(value or ""))
+def _fold_smart_quotes(text: str) -> str:
+    """Replace the curly punctuation every mail client substitutes."""
     for fancy, plain in _SMART_QUOTES.items():
         if fancy in text:
             text = text.replace(fancy, plain)
-    # ALWAYS, not only when the message is long. Gating this on the length cap
-    # meant that for every real-sized ticket the STORE's own quoted words were
-    # keyword-matched as if the customer had written them - so a customer
-    # replying "thanks!" under a support footer that says "if an item is
-    # missing from your parcel, reply to this email" paged the owner.
-    # KEYWORD view: keep everything the customer can see, minus paragraphs only
-    # a shop would write. A customer quoting their own earlier complaint must
-    # still be classified on it - dropping all quoted text lost that.
-    #
-    # AFTER the fold, not before: "we're so sorry" written with a curly
-    # apostrophe is still store boilerplate.
-    #
-    # Only the rules this port ADDED are evaluated on this view - see
-    # classify(). Main's tables always see the unfiltered text.
-    if drop_quotes:
-        text = _drop_store_boilerplate(text)
     return text
+
+
+def _normalise_text(value: str) -> str:
+    """Fold smart punctuation and bound the length before any regex sees it.
+
+    THE PORT'S VIEW ONLY. classify() builds main's view straight from the
+    payload - see the comment there. Bounding the text main's tables read was
+    a silent de-escalation, which is the one thing this port may not do.
+    """
+    return _fold_smart_quotes(_bound(str(value or "")))
+
+
+def _find_matches_any(views: list[str], patterns: list[str]) -> list[str]:
+    """Union of the matches across every view of the ticket.
+
+    Main's tables are matched against BOTH the raw text and the
+    smart-quote-folded copy, because neither strictly contains the other:
+    folding adds "didn't receive" for a curly apostrophe, and removes
+    "unauthorized chargʼ" because U+02BC is a word character and "'" is not.
+    A union can only ever ADD matches, so it cannot de-escalate against main.
+    """
+    found: list[str] = []
+    for view in views:
+        for hit in _find_matches(view, patterns):
+            if hit not in found:
+                found.append(hit)
+    return found
+
+
+def _search_any(views: list[str], pattern: re.Pattern) -> re.Match | None:
+    """First match of a compiled pattern across any view. See above."""
+    for view in views:
+        m = pattern.search(view)
+        if m:
+            return m
+    return None
 
 
 # Paragraphs that are unmistakably the SHOP's own words. Used to drop store
@@ -796,24 +843,54 @@ def classify(
             "source": str,              # "deterministic" (this classifier)
         }
     """
-    # TWO VIEWS of the same ticket, and the difference matters:
+    # THREE VIEWS of the same ticket, and the differences matter:
     #
-    #   full_text     - everything, exactly what main's classifier saw.
-    #   combined_text - the same minus paragraphs only a shop would write.
+    #   main_views    - byte-for-byte what main's classifier saw, plus the
+    #                   smart-quote-folded copy when they differ. Nothing is
+    #                   truncated and nothing is filtered.
+    #   combined_text - bounded, folded, minus paragraphs only a shop writes.
     #
-    # Main's rules read full_text. The rules this port ADDED read
-    # combined_text. Splitting them is what guarantees the port can only ever
-    # classify a ticket the SAME or HIGHER than main did: the boilerplate
-    # filter exists to stop the store's own footer from firing the new rules,
-    # and it must never be able to hide a customer's words from the old ones.
+    # Main's rules read main_views. The rules this port ADDED read
+    # combined_text. Keeping them apart is what guarantees the port can only
+    # ever classify a ticket the SAME or HIGHER than main did.
     #
-    # Reviewed measurement of the version that filtered both: 25 080 messages
-    # silently dropped from immediate to normal.
-    raw_message = _normalise_text(payload.get("message_text"))
-    raw_subject = _normalise_text(payload.get("ticket_subject"))
+    # TWO separate reviews found the same bug class here, so it is worth
+    # spelling out. Anything that shows main's tables LESS text than main saw
+    # is a silent de-escalation, whatever the reason:
+    #   * round 5 - _drop_store_boilerplate ran on main's view. A customer
+    #     writing "I used the 20% off code and the dress arrived damaged"
+    #     had the sentence deleted. 3998 of 4238 messages dropped to NORMAL.
+    #   * round 6 - _bound()'s 60 000-char cap ran on main's view. A long
+    #     email thread with the complaint in the MIDDLE lost it. 16 of 120
+    #     realistic long threads dropped to NORMAL.
+    # Hence: main's tables now read the raw payload. The cap and the filter
+    # protect the port's own rules only, which is all they were ever for.
+    #
+    # The cap was a ReDoS guard, and giving it up is safe because it is
+    # measured: every pattern main's tables use is linear (500 KB in 263 ms,
+    # 4 MB in 2.2 s), and the one super-linear pattern main had - the
+    # ".*"-bearing multi-follow-up rule - is not in this file at all. It was
+    # replaced by _FOLLOWUP_PATTERN, which has no ".*"; see
+    # test_the_ported_followup_rule_subsumes_mains for the proof.
+    raw_subject_text = str(payload.get("ticket_subject") or "")
+    raw_message_text = str(payload.get("message_text") or "")
+
+    # Main's view. No _bound(), no _drop_store_boilerplate(), no fold.
+    main_views = [f"{raw_subject_text} {raw_message_text}".lower()]
+    # The fold can only ADD matches ("didn't" written with a curly
+    # apostrophe), so it is a second view rather than a replacement. It is a
+    # replacement nowhere, because U+02BC is a word character and folding it
+    # to "'" can BREAK a match: main's r"\bunauthorized\s+charg\w+\b" matches
+    # "chargʼ" and stops matching once the fold runs.
+    _folded = _fold_smart_quotes(main_views[0])
+    if _folded != main_views[0]:
+        main_views.append(_folded)
+
+    # The port's view: bounded and folded, as before.
+    raw_message = _normalise_text(raw_message_text)
+    raw_subject = _normalise_text(raw_subject_text)
     message_text = raw_message.lower()
     ticket_subject = raw_subject.lower()
-    full_text = f"{ticket_subject} {message_text}"
     combined_text = f"{ticket_subject} {_drop_store_boilerplate(message_text)}"
 
     # Extract intent names from payload
@@ -844,8 +921,8 @@ def classify(
     shouting = _is_shouting(raw_message)
 
     # ── IMMEDIATE conditions ────────────────────────────────
-    # Main's table on the whole text; the ported table on the filtered view.
-    immediate_matches = _find_matches(full_text, _MAIN_IMMEDIATE_KEYWORDS)
+    # Main's table on main's own view; the ported table on the filtered view.
+    immediate_matches = _find_matches_any(main_views, _MAIN_IMMEDIATE_KEYWORDS)
     immediate_matches.extend(
         m for m in _find_matches(combined_text, _PORT_IMMEDIATE_KEYWORDS)
         if m not in immediate_matches
@@ -862,8 +939,8 @@ def classify(
             and not _ESCALATE_NEGATED_RE.search(combined_text)):
         manager_matches.append("escalate this")
 
-    # Main's rule — whole text.
-    angry_matches = _find_matches(full_text, _ANGRY_KEYWORDS)
+    # Main's rule — main's view.
+    angry_matches = _find_matches_any(main_views, _ANGRY_KEYWORDS)
     immediate_hits = len(immediate_matches)
     # Structural signals and a manager demand each count as an angry signal,
     # so "I demand a manager!!!" reaches the 2-signal angry threshold on its own.
@@ -893,7 +970,9 @@ def classify(
             reason_parts.append("shouting (all-caps message)")
             matched.append("ALL CAPS")
 
-        # Check for angry customer (2+ angry signals → force immediate)
+        # Angry-signal count. NOTE: this is reporting only - we are already
+        # inside the IMMEDIATE branch, so it cannot change the verdict. See
+        # the note above _ANGRY_KEYWORDS.
         if angry_hits >= 2:
             reason_parts.append(f"angry customer ({angry_hits} angry signals)")
             matched.extend(m for m in angry_matches if m not in matched)
@@ -907,10 +986,16 @@ def classify(
             except (ValueError, TypeError):
                 pass
 
+        # matched=['missing'] on its own tells a reader nothing; the words
+        # around it are what let someone explain a surprising escalation in
+        # seconds. _match_context was written for exactly this and was never
+        # actually called - round 6 found it dead.
         log_event(logger, "INFO", "Classifier: IMMEDIATE",
                   ticket_id=payload.get("ticket_id"),
                   reason="; ".join(reason_parts),
-                  matched=matched)
+                  matched=matched,
+                  context=[_match_context(raw_message_text, m)
+                           for m in matched[:5] if m not in ("!!!", "ALL CAPS")])
 
         return {
             "priority": IMMEDIATE,
@@ -923,8 +1008,8 @@ def classify(
         }
 
     # ── HIGH conditions ─────────────────────────────────────
-    # Same split as IMMEDIATE: main's table sees everything.
-    high_matches = _find_matches(full_text, _MAIN_HIGH_KEYWORDS)
+    # Same split as IMMEDIATE: main's table sees main's view.
+    high_matches = _find_matches_any(main_views, _MAIN_HIGH_KEYWORDS)
     high_matches.extend(
         m for m in _find_matches(combined_text, _PORT_HIGH_KEYWORDS)
         if m not in high_matches
@@ -935,12 +1020,12 @@ def classify(
     # Check for repeated follow-ups (3+ messages with no reply is CRITICAL in
     # the LLM prompt, but we can't count messages here — we look for the
     # follow-up keyword pattern as a HIGH signal)
-    # Main had this rule too (as a _HIGH_KEYWORDS entry), so: whole text.
-    followup_match = _FOLLOWUP_PATTERN.search(full_text)
+    # Main had this rule too (as a _HIGH_KEYWORDS entry), so: main's view.
+    followup_match = _search_any(main_views, _FOLLOWUP_PATTERN)
 
     if high_hits > 0 or high_intent_hit or followup_match or exclaiming or shouting:
         high_sensitive = bool(intent_names & _HIGH_SENSITIVE_INTENTS) or bool(
-            _MAIN_HIGH_SENSITIVE_PATTERN.search(full_text)
+            _search_any(main_views, _MAIN_HIGH_SENSITIVE_PATTERN)
         ) or bool(
             _HIGH_SENSITIVE_PATTERN.search(combined_text)
         )
