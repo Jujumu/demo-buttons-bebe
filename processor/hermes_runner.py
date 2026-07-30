@@ -89,33 +89,81 @@ _DRAFT_TAG_RE = re.compile(
 )
 
 
+def _valid_verdict(output: str) -> tuple[re.Match | None, dict[str, Any] | None, int]:
+    """Find the ONE JSON_RESULT block that counts, and where it starts.
+
+    The last block that both parses and validates. Neither end is safe on its
+    own: a "Plan: JSON_RESULT: {...placeholder...}" line beat the real verdict
+    under first-match, and a trailing AGENT NOTE quoting the schema template
+    beat it under last-match. A template echo (with "<critical|high|normal|
+    low>") simply fails validation and is skipped instead of destroying the
+    real answer.
+
+    Returns (match, parsed, candidate_count). This is the SINGLE definition of
+    "the verdict" - both _parse_json_result and _extract_draft call it, so
+    they can never anchor to different blocks. They previously could: the
+    draft extractor cut at the FIRST marker while the parser took the LAST
+    valid one, so a fake early marker sent the extractor down its fallback
+    path and back to the trailing agent note.
+    """
+    candidates = list(_JSON_RESULT_MARKER_RE.finditer(output))
+    required = {"priority", "reason", "action", "notify_owner"}
+    for candidate in reversed(candidates):
+        raw_json = _extract_json_block(output, candidate.start(1))
+        if not raw_json:
+            continue
+        try:
+            parsed = json.loads(raw_json)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(parsed, dict):
+            continue
+        if not required.issubset(parsed.keys()):
+            continue
+        if str(parsed["priority"]).lower().strip() not in (
+                "critical", "high", "normal", "low"):
+            continue
+        return candidate, parsed, len(candidates)
+    return None, None, len(candidates)
+
+
 def _extract_draft(output: str) -> str | None:
     """Extract the draft text from <DRAFT>...</DRAFT> tags in Hermes output.
 
-    Anchored to the VERDICT, because neither end of the output is safe on its
-    own. The prompt puts the draft before JSON_RESULT and any AGENT NOTE
-    after it, so:
+    Anchored to the VERDICT - the same block _parse_json_result uses - because
+    neither end of the output is safe on its own. The prompt puts the draft
+    before JSON_RESULT and any AGENT NOTE after it, so:
       * first-match loses to a preamble - the model restating "I'll output the
         full draft between <DRAFT> and </DRAFT> tags now" produced a draft of
         the word "and";
       * last-match loses to a trailing note that quotes something, which is
         how a customer's spoofed refund promise reached the reviewer.
-    The last block before the first verdict line is neither.
+    The last block before the real verdict is neither.
+
+    When there is no valid verdict, or every draft block sits after it, the
+    fallback is the FIRST block, not the last. A preamble draft is a quality
+    problem; a trailing note is the injection vector, and the old last-match
+    fallback handed it straight back.
 
     Note this cannot rely on _neutralise_markers alone: Hermes reads the
     original ticket back through the Gorgias tool, so raw markers can return
     in anything it quotes.
     """
-    verdict = _JSON_RESULT_MARKER_RE.search(output)
-    limit = verdict.start() if verdict else len(output)
-    before = [m for m in _DRAFT_TAG_RE.finditer(output) if m.start() < limit]
-    if before:
-        return before[-1].group(1).strip()
-    # No verdict, or every block came after it: fall back to the last block.
     matches = list(_DRAFT_TAG_RE.finditer(output))
-    if matches:
-        return matches[-1].group(1).strip()
-    return None
+    if not matches:
+        return None
+
+    verdict, _, _ = _valid_verdict(output)
+    if verdict is not None:
+        before = [m for m in matches if m.start() < verdict.start()]
+        if before:
+            return before[-1].group(1).strip()
+
+    # No valid verdict at all, or every block sits after it. Note the limit
+    # must NOT default to len(output) here: that makes "the last block before
+    # the verdict" mean "the last block", which is the trailing note again -
+    # the exact bug this function exists to avoid.
+    return matches[0].group(1).strip()
 
 
 # Default result if Hermes fails or output is unparseable
@@ -388,41 +436,18 @@ def _parse_json_result(output: str) -> dict[str, Any]:
 
     Returns a parsed dict, or the fallback result if not found.
     """
-    # LAST block that actually parses and validates. Neither end is safe on
-    # its own: a "Plan: JSON_RESULT: {...placeholder...}" line beat the real
-    # verdict under first-match, and a trailing AGENT NOTE quoting the schema
-    # template beat it under last-match. Taking the last VALID one is neither,
-    # and a template echo (with "<critical|high|normal|low>") simply fails
-    # validation and is skipped instead of destroying the real answer.
-    candidates = list(_JSON_RESULT_MARKER_RE.finditer(output))
-    if not candidates:
+    # Shared with _extract_draft, so the draft and the verdict can never come
+    # from different blocks of the same output.
+    _match, result, candidate_count = _valid_verdict(output)
+
+    if not candidate_count:
         log_event(logger, "WARNING", "No JSON_RESULT found in Hermes output")
         return dict(_FALLBACK_RESULT)
-
-    result = None
-    for candidate in reversed(candidates):
-        raw_json = _extract_json_block(output, candidate.start(1))
-        if not raw_json:
-            continue
-        try:
-            parsed = json.loads(raw_json)
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(parsed, dict):
-            continue
-        required = {"priority", "reason", "action", "notify_owner"}
-        if not required.issubset(parsed.keys()):
-            continue
-        if str(parsed["priority"]).lower().strip() not in (
-                "critical", "high", "normal", "low"):
-            continue
-        result = parsed
-        break
 
     if result is None:
         log_event(logger, "WARNING",
                   "No valid JSON_RESULT in Hermes output",
-                  candidates=len(candidates))
+                  candidates=candidate_count)
         return dict(_FALLBACK_RESULT)
 
     try:
