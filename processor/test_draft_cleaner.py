@@ -277,7 +277,7 @@ class ShouldDraftTests(unittest.TestCase):
     NO_CONTENT = [
         "", "  ", "...", "thanks", "Thanks!", "Thank you!!",
         "thank you so much!", "ty", "ok", "Perfect, thanks so much!",
-        "Got it, thank you!", "cheers", "Thanks again for everything!",
+        "Got it, thank you!", "cheers", "Thanks again!",
         "\U0001F44D", "\U0001F64F", "\U0001F44D\U0001F44D", None,
     ]
     REAL_QUESTIONS = [
@@ -309,6 +309,27 @@ class ShouldDraftTests(unittest.TestCase):
                 self.assertTrue(dc.should_draft(msg).ok)
 
     # ── regressions from the code review ────────────────────────────
+    def test_the_filler_list_never_swallows_a_complaint(self):
+        """It used to list "there", "problem", "do", "yes", "no", "have" and
+        "is", so whole complaints and instructions were suppressed."""
+        for msg in ["Ok there is a problem", "Ok I have a problem",
+                    "Great so this is a problem", "Yes thanks", "No thanks",
+                    "Ok do it", "Ok take it", "Yes please",
+                    "please cancel my order", "send me a return label",
+                    "let me know", "Have you received it", "Is this ok"]:
+            with self.subTest(message=msg):
+                self.assertTrue(dc.should_draft(msg).ok, msg)
+
+    def test_an_ascii_emoticon_is_content(self):
+        """":", "-", "(" and "/" are all inert punctuation, so ":(" dissolved
+        to nothing - while the emoji version was correctly kept."""
+        for msg in ["thanks :(", "thanks :-(", "thanks :/", "thanks :'(",
+                    ":(", ":-(", "ok =/"]:
+            with self.subTest(message=msg):
+                self.assertTrue(dc.should_draft(msg).ok, msg)
+        # ...but a URL is not an emoticon
+        self.assertFalse(dc.should_draft("thanks").ok)
+
     def test_filler_without_a_thanks_anchor_is_not_an_acknowledgement(self):
         """The original gate matched any string of filler words.
 

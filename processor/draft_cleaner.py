@@ -258,20 +258,25 @@ _ACK_ANCHORS = frozenset({
     "thanks", "thank", "thanx", "thx", "ty", "tysm", "cheers",
     "appreciate", "appreciated", "appreciation",
     "ok", "okay", "kk", "noted", "understood", "received", "got",
-    "perfect", "great", "awesome", "excellent", "brilliant",
+    "perfect", "great", "awesome", "excellent", "brilliant", "amazing",
 })
 
 # Words that may accompany an acknowledgement without adding a question.
+#
+# DELIBERATELY SHORT. The previous version listed "there", "problem", "do",
+# "yes", "no", "have", "is", "was", "been", "take", "care", "everything" and
+# more, so whole complaints and instructions were suppressed: "Ok there is a
+# problem", "Yes thanks" (after "shall we cancel?"), "Have you received it".
+# The two directions are not symmetric — drafting a reply to a thank-you costs
+# one glance, silently dropping a complaint costs a customer — so anything
+# that could carry meaning stays OUT of this set.
 _ACK_FILLER = frozenset({
-    "a", "again", "all", "am", "and", "are", "as", "at", "be", "been", "best",
-    "bye", "care", "day", "dear", "do", "everything", "fine", "folks", "for",
-    "from", "getting", "good", "goodbye", "guys", "have", "hi", "hello", "hey",
-    "i", "im", "is", "it", "its", "lot", "lots", "love", "loved", "lovely",
-    "m", "many", "me", "much", "my", "night", "nice", "no", "np", "of", "oh",
-    "on", "problem", "really", "regards", "so", "sorry", "super", "take",
-    "team", "thats", "the", "then", "there", "this", "to", "too", "u", "very",
-    "was", "we", "weekend", "well", "were", "with", "worries", "yall", "you",
-    "your", "yours", "youre", "yep", "yes", "yeah",
+    "a", "again", "all", "and", "at", "bye", "dear", "everyone", "folks",
+    "for", "from", "guys", "hello", "hey", "hi", "in", "it", "its", "lot",
+    "lots", "love", "loved", "lovely", "me", "much", "my", "night", "nice",
+    "of", "oh", "on", "regards", "so", "super", "team", "that", "the",
+    "this", "to", "too", "u", "very", "we", "weekend", "with", "you",
+    "your", "yours", "x", "xx", "xxx",
 })
 
 _ACK_ALLOWED = _ACK_ANCHORS | _ACK_FILLER
@@ -314,6 +319,13 @@ def _strip_decoration(text: str) -> str:
     return text
 
 
+# ASCII emoticons. ":", "-", "(", ")", "'" and "/" are all inert punctuation,
+# so ":(" and ":-(" used to dissolve to nothing and be read as an
+# acknowledgement — while the emoji 🙁 was correctly treated as content.
+# The (?!/) keeps "https://" out of it.
+_EMOTICON_RE = re.compile(r"[:;=8][-'~^]?(?:[()\[\]|\\<>DPpOo3]|/(?!/))")
+
+
 def _carries_no_content(value: str | None) -> bool:
     """True when this ONE piece of text has nothing in it to answer.
 
@@ -332,6 +344,10 @@ def _carries_no_content(value: str | None) -> bool:
     # so "Have you received it?" used to read as bare filler plus the anchor
     # "received" and was suppressed.
     if "?" in text:
+        return False
+
+    # A sad or frustrated face is content, exactly like an angry emoji.
+    if _EMOTICON_RE.search(text):
         return False
 
     tokens = _TOKEN_RE.findall(text.lower())
