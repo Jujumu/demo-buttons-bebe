@@ -72,23 +72,6 @@ _MARKER_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Content that makes a line a WARNING rather than self-congratulation. Any
-# line carrying one of these survives the marker cut no matter how it opens.
-# The stakes are asymmetric: keeping a redundant "the above response is
-# complete" costs the reviewer one glance, while deleting "do NOT send this,
-# possible fraud" costs a refund.
-_SAFETY_NOTE_RE = re.compile(
-    r"(do\s+not\s+send|don'?t\s+send|should\s+not\s+be\s+sent|"
-    r"not\s+be\s+sent|do\s+not\s+reply|hold\s+(?:this|off)|"
-    r"\bfraud\w*\b|\bscam\w*\b|suspicious|chargeback|"
-    r"already\s+refunded|refunded\s+(?:twice|before|already)|duplicate\s+refund|"
-    r"escalate|check\s+(?:with|first)|verify|confirm\s+(?:with|before)|"
-    r"careful|caution|warning|do\s+not\s+promise|needs?\s+(?:a\s+)?human|"
-    r"review\s+(?:this\s+)?(?:carefully|before)|"
-    r"before\s+sending|manual\s+review)",
-    re.IGNORECASE,
-)
-
 # A repeated block must be at least this many normalised characters before we
 # treat it as a genuine duplication. Keeps short, legitimately-repeated content
 # (e.g. "Yes.\n\nYes.") from being collapsed.
@@ -100,6 +83,11 @@ class CleanResult:
     text: str
     no_draft: bool = False
     reasons: list[str] = field(default_factory=list)
+    # The text that was cut, verbatim. It has to reach the reviewer: some of
+    # what the model writes after its draft is a warning ("the billing address
+    # does not match the shipping address on this order"), and deciding which
+    # by keyword was wrong in both directions.
+    removed_note: str = ""
 
 
 @dataclass
@@ -108,30 +96,34 @@ class ShouldDraft:
     reason: str = ""
 
 
-def _cut_self_talk(text: str) -> tuple[str, bool]:
+def _cut_self_talk(text: str) -> tuple[str, str]:
     """Cut everything from the first self-talk marker line onward.
 
-    Returns (possibly-trimmed text, whether anything was cut).
+    Returns (trimmed text, the removed tail) - the tail rather than a bare
+    flag, because it has to be shown to the reviewer.
+
+    A keyword veto used to try to KEEP lines that carried a warning
+    ("do not send", "fraud", "escalate"). Review broke it in both directions:
+    it kept ordinary chatter that happened to contain "careful", and it still
+    deleted real warnings that used none of the listed words -
+
+        "The above draft assumes the customer is who they say they are; the
+         billing address does not match the shipping address on this order."
+        "The above reply promises a replacement we have no stock for - the
+         SKU is discontinued."
+
+    There is no keyword list that gets this right, because the property is
+    semantic. So the cut is unconditional and the removed text is RETURNED
+    instead, to be surfaced next to the draft. Nothing is lost and nothing
+    self-congratulatory ends up in the sendable body.
     """
     lines = text.splitlines()
     for i, line in enumerate(lines):
         stripped = line.strip()
         if not _MARKER_RE.match(stripped):
             continue
-        # A marker line that also carries a WARNING is not self-talk, whatever
-        # it starts with. The comment above _SELF_TALK_MARKERS argues that
-        # "note to the reviewer" is excluded because it can carry "do NOT send
-        # this, possible fraud" - but that reasoning was phrase-specific, and
-        # review found it did not hold: "The above draft should NOT be sent
-        # as-is - this customer was already refunded twice and this looks like
-        # fraud" matched r"the above (?:response|reply|draft) " and the whole
-        # warning was deleted, leaving a clean, sendable draft.
-        #
-        # So the veto is on the CONTENT, not the opening phrase.
-        if _SAFETY_NOTE_RE.search(stripped):
-            continue
-        return "\n".join(lines[:i]).rstrip(), True
-    return text, False
+        return "\n".join(lines[:i]).rstrip(), "\n".join(lines[i:]).strip()
+    return text, ""
 
 
 def _normalise(block: str) -> str:
@@ -236,6 +228,7 @@ def clean_draft(text: str) -> CleanResult:
 
     out = str(text)
     reasons: list[str] = []
+    removed: list[str] = []
 
     # Iterate to a fixed point. _dedupe_repeats only understands 2x and 3x, so
     # a draft the model wrote four times used to come out still doubled. Four
@@ -244,8 +237,10 @@ def clean_draft(text: str) -> CleanResult:
     # shorter.
     for _ in range(4):
         out, cut = _cut_self_talk(out)
-        if cut and "stripped model self-commentary" not in reasons:
-            reasons.append("stripped model self-commentary")
+        if cut:
+            removed.append(cut)
+            if "stripped model self-commentary" not in reasons:
+                reasons.append("stripped model self-commentary")
 
         out, deduped = _dedupe_repeats(out)
         if deduped and "removed duplicated draft body" not in reasons:
@@ -255,12 +250,15 @@ def clean_draft(text: str) -> CleanResult:
             break
 
     out = out.strip()
+    note = "\n".join(removed).strip()
     if not out:
         return CleanResult(
             text="", no_draft=True,
             reasons=reasons + ["nothing left after cleaning"],
+            removed_note=note,
         )
-    return CleanResult(text=out, no_draft=False, reasons=reasons)
+    return CleanResult(text=out, no_draft=False, reasons=reasons,
+                       removed_note=note)
 
 
 # --- customer-message gate (QA #19) ----------------------------------------

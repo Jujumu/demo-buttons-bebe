@@ -296,11 +296,30 @@ class SafetyNoteSurvivesTests(unittest.TestCase):
         "account looks suspicious.",
     ]
 
-    def test_the_warning_survives_the_cut(self):
-        for warning in self.WARNINGS:
+    # Warnings a keyword veto could never have caught - none of them contains
+    # "do not send", "fraud", "escalate" or any other flag word. Round 7 found
+    # all five still being deleted by the veto version.
+    SUBTLE = [
+        "The above draft assumes the customer is who they say they are; the "
+        "billing address does not match the shipping address on this order.",
+        "The above reply promises a replacement we have no stock for - the "
+        "SKU is discontinued.",
+        "The above response quotes a 30-day window; this order is 94 days old.",
+        "I have completed the response, but the customer has 4 open tickets "
+        "and 3 prior credits this month.",
+        "[End of draft] - the order number the customer gave belongs to a "
+        "different account.",
+    ]
+
+    def test_the_warning_is_never_lost(self):
+        # It comes out of the sendable body - it is not a reply to the
+        # customer - but it must still reach the reviewer verbatim.
+        for warning in self.WARNINGS + self.SUBTLE:
             with self.subTest(warning=warning[:50]):
                 result = dc.clean_draft(f"{self.GOOD}\n\n{warning}")
-                self.assertIn(warning, result.text,
+                self.assertNotIn(warning, result.text,
+                                 "a note to the reviewer is not a customer reply")
+                self.assertIn(warning, result.removed_note,
                               "a safety warning was silently deleted")
 
     def test_ordinary_self_talk_is_still_cut(self):
@@ -309,6 +328,10 @@ class SafetyNoteSurvivesTests(unittest.TestCase):
             "The response above was complete and covers everything.",
             "I have now completed the draft.",
             "[End of response]",
+            # Round 7: the keyword veto WRONGLY KEPT these, because they
+            # happen to contain a flag word.
+            "The above response is complete and I double-checked it carefully.",
+            "I have completed the response; escalate only if she writes back.",
         ]:
             with self.subTest(chatter=chatter):
                 result = dc.clean_draft(f"{self.GOOD}\n\n{chatter}")
@@ -319,6 +342,12 @@ class SafetyNoteSurvivesTests(unittest.TestCase):
         # The reviewer has to be able to tell that text was removed.
         result = dc.clean_draft(f"{self.GOOD}\n\n[End of response]")
         self.assertTrue(result.reasons)
+        self.assertIn("End of response", result.removed_note)
+
+    def test_a_clean_draft_reports_nothing_removed(self):
+        result = dc.clean_draft(self.GOOD)
+        self.assertEqual(result.removed_note, "")
+        self.assertEqual(result.reasons, [])
 
 
 # ===========================================================================
