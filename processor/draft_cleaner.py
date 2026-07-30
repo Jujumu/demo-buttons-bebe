@@ -72,6 +72,23 @@ _MARKER_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Content that makes a line a WARNING rather than self-congratulation. Any
+# line carrying one of these survives the marker cut no matter how it opens.
+# The stakes are asymmetric: keeping a redundant "the above response is
+# complete" costs the reviewer one glance, while deleting "do NOT send this,
+# possible fraud" costs a refund.
+_SAFETY_NOTE_RE = re.compile(
+    r"(do\s+not\s+send|don'?t\s+send|should\s+not\s+be\s+sent|"
+    r"not\s+be\s+sent|do\s+not\s+reply|hold\s+(?:this|off)|"
+    r"\bfraud\w*\b|\bscam\w*\b|suspicious|chargeback|"
+    r"already\s+refunded|refunded\s+(?:twice|before|already)|duplicate\s+refund|"
+    r"escalate|check\s+(?:with|first)|verify|confirm\s+(?:with|before)|"
+    r"careful|caution|warning|do\s+not\s+promise|needs?\s+(?:a\s+)?human|"
+    r"review\s+(?:this\s+)?(?:carefully|before)|"
+    r"before\s+sending|manual\s+review)",
+    re.IGNORECASE,
+)
+
 # A repeated block must be at least this many normalised characters before we
 # treat it as a genuine duplication. Keeps short, legitimately-repeated content
 # (e.g. "Yes.\n\nYes.") from being collapsed.
@@ -98,8 +115,22 @@ def _cut_self_talk(text: str) -> tuple[str, bool]:
     """
     lines = text.splitlines()
     for i, line in enumerate(lines):
-        if _MARKER_RE.match(line.strip()):
-            return "\n".join(lines[:i]).rstrip(), True
+        stripped = line.strip()
+        if not _MARKER_RE.match(stripped):
+            continue
+        # A marker line that also carries a WARNING is not self-talk, whatever
+        # it starts with. The comment above _SELF_TALK_MARKERS argues that
+        # "note to the reviewer" is excluded because it can carry "do NOT send
+        # this, possible fraud" - but that reasoning was phrase-specific, and
+        # review found it did not hold: "The above draft should NOT be sent
+        # as-is - this customer was already refunded twice and this looks like
+        # fraud" matched r"the above (?:response|reply|draft) " and the whole
+        # warning was deleted, leaving a clean, sendable draft.
+        #
+        # So the veto is on the CONTENT, not the opening phrase.
+        if _SAFETY_NOTE_RE.search(stripped):
+            continue
+        return "\n".join(lines[:i]).rstrip(), True
     return text, False
 
 
@@ -290,6 +321,14 @@ _GRATITUDE_ANCHORS = frozenset({
     "appreciated", "appreciation",
 })
 
+# Words that ANSWER a question rather than close a conversation. If the agent
+# last asked "shall I cancel order #10234 before it ships?", every one of
+# these is a yes - and suppressing the reply stores an empty console card with
+# no action controls while the order ships.
+_DECISION_ANCHORS = frozenset({
+    "ok", "okay", "kk", "noted", "understood", "received", "got",
+})
+
 _ACK_ALLOWED = _ACK_ANCHORS | _ACK_FILLER
 
 # Word characters, Unicode-aware. A Latin-only [0-9a-z]+ found NO tokens in
@@ -401,12 +440,21 @@ def _carries_no_content(value: str | None) -> bool:
             and any(t in _ACK_ANCHORS for t in tokens)):
         return False
 
-    # A one-word reply is only an acknowledgement if the word is unambiguous
-    # gratitude. "ok", "noted", "received", "got it", "perfect" are answers to
-    # a question the agent just asked - "shall I cancel order #10234 before it
-    # ships?" - and suppressing them stored an empty card and shipped the
-    # order. "yes"/"sure"/"go ahead" already draft, so suppressing "ok" was
-    # incoherent as well as unsafe.
+    # A DECISION word is content however much gratitude surrounds it.
+    #
+    # "ok", "noted", "received", "got it" are answers to a question the agent
+    # just asked - "shall I cancel order #10234 before it ships?" - and
+    # suppressing them stores an empty card and ships the order. The first
+    # version of this guard was length-based ("<= 2 tokens without gratitude"),
+    # which review broke in one word: "ok thanks" has a gratitude anchor so
+    # the guard never fired, and "got it thanks" is three tokens so it did not
+    # apply at all. Both were suppressed. The property has nothing to do with
+    # length, so it is no longer expressed as a length.
+    if any(t in _DECISION_ANCHORS for t in tokens):
+        return False
+
+    # ...and a very short reply still needs an unambiguous gratitude word,
+    # so a bare "perfect" or "great" (equally an answer to a question) drafts.
     if len(tokens) <= 2 and not any(t in _GRATITUDE_ANCHORS for t in tokens):
         return False
 

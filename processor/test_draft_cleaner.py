@@ -270,6 +270,57 @@ class EmptyDraftTests(unittest.TestCase):
         self.assertEqual(twice.reasons, [])
 
 
+class SafetyNoteSurvivesTests(unittest.TestCase):
+    """A warning to the reviewer must never be cut as self-talk.
+
+    Round 6. The code argued that "note to the reviewer" was left out of
+    _SELF_TALK_MARKERS because such a note can carry "do NOT send this,
+    possible fraud". The reasoning was sound but the implementation was
+    phrase-specific: a semantically identical warning that happened to open
+    with "The above draft ..." matched a different marker and the whole
+    warning was deleted, leaving a clean, sendable draft and no trace.
+
+    The veto is now on the CONTENT of the line, not its opening phrase.
+    """
+
+    GOOD = "Hi Sarah, we're reviewing this for you and will get back shortly."
+
+    WARNINGS = [
+        "The above draft should NOT be sent as-is — this customer was already "
+        "refunded twice for the same order and this looks like fraud.",
+        "The above reply must be reviewed carefully before sending.",
+        "The previous draft is complete, but please verify the order total first.",
+        "This response is complete — do not send until you check with the owner.",
+        "End of draft. Warning: possible chargeback, escalate to the owner.",
+        "The above response addresses the question, but hold this — the "
+        "account looks suspicious.",
+    ]
+
+    def test_the_warning_survives_the_cut(self):
+        for warning in self.WARNINGS:
+            with self.subTest(warning=warning[:50]):
+                result = dc.clean_draft(f"{self.GOOD}\n\n{warning}")
+                self.assertIn(warning, result.text,
+                              "a safety warning was silently deleted")
+
+    def test_ordinary_self_talk_is_still_cut(self):
+        for chatter in [
+            "The above response addresses the customer's question.",
+            "The response above was complete and covers everything.",
+            "I have now completed the draft.",
+            "[End of response]",
+        ]:
+            with self.subTest(chatter=chatter):
+                result = dc.clean_draft(f"{self.GOOD}\n\n{chatter}")
+                self.assertEqual(result.text.strip(), self.GOOD)
+                self.assertTrue(result.reasons, "the cut was not reported")
+
+    def test_a_cut_is_always_reported(self):
+        # The reviewer has to be able to tell that text was removed.
+        result = dc.clean_draft(f"{self.GOOD}\n\n[End of response]")
+        self.assertTrue(result.reasons)
+
+
 # ===========================================================================
 # 6. should_draft — gate on the CUSTOMER message.
 # ===========================================================================
@@ -277,7 +328,7 @@ class ShouldDraftTests(unittest.TestCase):
     NO_CONTENT = [
         "", "  ", "...", "thanks", "Thanks!", "Thank you!!",
         "thank you so much!", "ty", "Perfect, thanks so much!",
-        "Got it, thank you!", "cheers", "Thanks again!",
+        "cheers", "Thanks again!",
         "\U0001F44D", "\U0001F64F", "\U0001F44D\U0001F44D", None,
     ]
     REAL_QUESTIONS = [
@@ -288,12 +339,43 @@ class ShouldDraftTests(unittest.TestCase):
         "Can I change my shipping address?",
     ]
 
+    # A DECISION word, however much gratitude surrounds it. Moved out of
+    # NO_CONTENT in round 6: the agent's previous message may have been
+    # "shall I cancel order #10234 before it ships?", and every one of these
+    # is a yes. Suppressing them stored an empty console card - no draft, no
+    # action controls, no owner alert - while the order shipped.
+    #
+    # The cost is asymmetric and this file already says so elsewhere: drafting
+    # a reply to a thank-you costs the reviewer one glance; dropping an answer
+    # costs a customer their order.
+    DECISIONS = [
+        "Got it, thank you!", "ok thanks", "Ok, thanks!", "Received, thanks",
+        "Noted, thanks!", "understood thanks", "okay thank you", "kk thanks",
+    ]
+
     def test_should_not_draft_for_no_content(self):
         for msg in self.NO_CONTENT:
             with self.subTest(message=repr(msg)):
                 s = dc.should_draft(msg)
                 self.assertFalse(s.ok)
                 self.assertTrue(s.reason)
+
+    def test_a_decision_word_always_drafts(self):
+        for msg in self.DECISIONS:
+            with self.subTest(message=msg):
+                self.assertTrue(
+                    dc.should_draft(msg).ok,
+                    f"{msg!r} may be answering 'shall I cancel your order?'")
+        # ...with a realistic subject line too.
+        for msg in self.DECISIONS:
+            with self.subTest(message=msg, subject="Re: Your order #10234"):
+                self.assertTrue(dc.should_draft(msg, "Re: Your order #10234").ok)
+
+    def test_pure_gratitude_still_does_not_draft(self):
+        # The fix must not have swallowed the whole gate.
+        for msg in ("thanks", "Thank you so much!", "cheers", "ty"):
+            with self.subTest(message=msg):
+                self.assertFalse(dc.should_draft(msg).ok)
 
     def test_should_draft_for_real_questions(self):
         for msg in self.REAL_QUESTIONS:

@@ -82,33 +82,98 @@ def _as_bool(value: Any) -> bool:
     return bool(value)
 
 
-# Regex to extract draft text from <DRAFT>...</DRAFT> tags
+# Regex to extract draft text from <DRAFT>...</DRAFT> tags.
+#
+# The body may not itself contain a marker. Without that guard an UNCLOSED
+# "<DRAFT>" in the customer's message - echoed back when Hermes re-reads the
+# ticket - made the non-greedy match span from the attacker's tag all the way
+# to the model's own "</DRAFT>", prepending the attacker's text to the real
+# draft. One match, so no ambiguity check would have seen it.
 _DRAFT_TAG_RE = re.compile(
-    r'<DRAFT>\s*(.*?)\s*</DRAFT>',
+    r'<DRAFT>\s*((?:(?!</?DRAFT>).)*?)\s*</DRAFT>',
     re.DOTALL | re.IGNORECASE,
 )
 
+# A "draft" this short is a fragment of the model narrating its own plan
+# ("I will put the reply between <DRAFT> and </DRAFT> tags" contains a
+# matching block whose body is the word "and"), not a reply to a customer.
+_MIN_DRAFT_WORDS = 3
 
-def _valid_verdict(output: str) -> tuple[re.Match | None, dict[str, Any] | None, int]:
-    """Find the ONE JSON_RESULT block that counts, and where it starts.
+# Bound on how many JSON_RESULT markers are examined. Each unbalanced
+# candidate scans to end-of-output, so an output with thousands of markers is
+# quadratic. 50 is far above anything a real run produces.
+_MAX_VERDICT_CANDIDATES = 50
 
-    The last block that both parses and validates. Neither end is safe on its
-    own: a "Plan: JSON_RESULT: {...placeholder...}" line beat the real verdict
-    under first-match, and a trailing AGENT NOTE quoting the schema template
-    beat it under last-match. A template echo (with "<critical|high|normal|
-    low>") simply fails validation and is skipped instead of destroying the
-    real answer.
 
-    Returns (match, parsed, candidate_count). This is the SINGLE definition of
-    "the verdict" - both _parse_json_result and _extract_draft call it, so
-    they can never anchor to different blocks. They previously could: the
-    draft extractor cut at the FIRST marker while the parser took the LAST
-    valid one, so a fake early marker sent the extractor down its fallback
-    path and back to the trailing agent note.
+def _normalise_for_echo(text: str) -> str:
+    """Collapse whitespace and case, for "did the customer write this?" tests."""
+    return " ".join((text or "").split()).lower()
+
+
+def _is_echo_of_customer(fragment: str, customer_text: str | None) -> bool:
+    """True when this fragment is the CUSTOMER's words, not the model's.
+
+    THE core defence, and the only one that does not depend on the model
+    cooperating. Hermes re-reads the ticket through the Gorgias tool, so
+    anything the customer wrote can come back verbatim in the model's output -
+    including raw <DRAFT> tags and JSON_RESULT: markers. _neutralise_markers
+    sanitises the PROMPT and cannot reach what a tool returns mid-run.
+
+    The attack only works if the marker AND its payload survive verbatim: a
+    paraphrase breaks the marker. So verbatim containment is exactly the right
+    test, and it costs one substring search.
+    """
+    if not customer_text:
+        return False
+    needle = _normalise_for_echo(fragment)
+    if len(needle) < 12:
+        # Too short to distinguish a quote from a coincidence.
+        return False
+    return needle in _normalise_for_echo(customer_text)
+
+
+# Severity order, most severe last. Used to merge verdicts conservatively.
+_PRIORITY_ORDER = ("low", "normal", "high", "critical")
+# Same idea for "action": the more cautious value wins a disagreement.
+_ACTION_SEVERITY = {"drafted": 0, "no_kb_match": 1, "sensitive_draft": 2,
+                    "escalated": 3}
+
+
+def _valid_verdicts(
+    output: str, customer_text: str | None = None
+) -> tuple[list[tuple[re.Match, dict[str, Any]]], int, int]:
+    """Every JSON_RESULT block that parses, validates and is not an echo.
+
+    POSITION DECIDES NOTHING. Earlier versions picked the first, then the
+    last, then the last that validated - and every one of those was wrong,
+    because the model's real verdict and the customer's forged one are
+    indistinguishable by position:
+
+      * first-match lost to the model narrating its plan;
+      * last-match lost to the AGENT NOTE the prompt itself asks for AFTER
+        JSON_RESULT, which is where quoted ticket text lands. A customer who
+        types JSON_RESULT: {"priority":"low","notify_owner":false, ...} into
+        their email therefore switched off the owner's alert on their own
+        chargeback. That was a regression against main, which took the first.
+
+    So: collect them all, drop the ones the customer demonstrably wrote, and
+    let the caller merge what is left conservatively. Validation alone cannot
+    save us - "four keys and a priority word" is trivially typed by hand.
+
+    Returns (blocks, marker_count, echo_count).
     """
     candidates = list(_JSON_RESULT_MARKER_RE.finditer(output))
+    marker_count = len(candidates)
+    if marker_count > _MAX_VERDICT_CANDIDATES:
+        log_event(logger, "WARNING",
+                  "Absurd number of JSON_RESULT markers - examining a prefix",
+                  markers=marker_count, examined=_MAX_VERDICT_CANDIDATES)
+        candidates = candidates[:_MAX_VERDICT_CANDIDATES]
+
     required = {"priority", "reason", "action", "notify_owner"}
-    for candidate in reversed(candidates):
+    blocks: list[tuple[re.Match, dict[str, Any]]] = []
+    echoes = 0
+    for candidate in candidates:
         raw_json = _extract_json_block(output, candidate.start(1))
         if not raw_json:
             continue
@@ -120,50 +185,78 @@ def _valid_verdict(output: str) -> tuple[re.Match | None, dict[str, Any] | None,
             continue
         if not required.issubset(parsed.keys()):
             continue
-        if str(parsed["priority"]).lower().strip() not in (
-                "critical", "high", "normal", "low"):
+        # A template echo ("<critical|high|normal|low>") fails here and is
+        # skipped rather than destroying the real answer.
+        if str(parsed["priority"]).lower().strip() not in _PRIORITY_ORDER:
             continue
-        return candidate, parsed, len(candidates)
-    return None, None, len(candidates)
+        if _is_echo_of_customer(raw_json, customer_text):
+            echoes += 1
+            continue
+        blocks.append((candidate, parsed))
+    return blocks, marker_count, echoes
 
 
-def _extract_draft(output: str) -> str | None:
-    """Extract the draft text from <DRAFT>...</DRAFT> tags in Hermes output.
+def _merge_verdicts(blocks: list[tuple[re.Match, dict[str, Any]]]) -> dict[str, Any]:
+    """Combine several candidate verdicts by taking the most cautious of each.
 
-    Anchored to the VERDICT - the same block _parse_json_result uses - because
-    neither end of the output is safe on its own. The prompt puts the draft
-    before JSON_RESULT and any AGENT NOTE after it, so:
-      * first-match loses to a preamble - the model restating "I'll output the
-        full draft between <DRAFT> and </DRAFT> tags now" produced a draft of
-        the word "and";
-      * last-match loses to a trailing note that quotes something, which is
-        how a customer's spoofed refund promise reached the reviewer.
-    The last block before the real verdict is neither.
+    When the output contains more than one verdict we cannot tell which the
+    model meant, so we do not guess: priority takes the maximum, notify_owner
+    is true if ANY block asked for it, and action takes the most severe. A
+    planted block can therefore only ever RAISE the verdict - the same
+    escalate-only rule the deterministic classifier follows - and can never
+    talk a real complaint down to "normal, do not notify".
 
-    When there is no valid verdict, or every draft block sits after it, the
-    fallback is the FIRST block, not the last. A preamble draft is a quality
-    problem; a trailing note is the injection vector, and the old last-match
-    fallback handed it straight back.
-
-    Note this cannot rely on _neutralise_markers alone: Hermes reads the
-    original ticket back through the Gorgias tool, so raw markers can return
-    in anything it quotes.
+    Raising is not free (a spurious page is alert fatigue), but it is
+    recoverable; silently clearing an owner alert on a chargeback is not.
     """
-    matches = list(_DRAFT_TAG_RE.finditer(output))
-    if not matches:
-        return None
+    best = max(blocks, key=lambda b: _PRIORITY_ORDER.index(
+        str(b[1]["priority"]).lower().strip()))[1]
+    merged = dict(best)
+    merged["notify_owner"] = any(_as_bool(p.get("notify_owner")) for _m, p in blocks)
+    actions = [str(p.get("action", "")).lower().strip() for _m, p in blocks]
+    severe = max(actions, key=lambda a: _ACTION_SEVERITY.get(a, -1))
+    if _ACTION_SEVERITY.get(severe, -1) >= 0:
+        merged["action"] = severe
+    return merged
 
-    verdict, _, _ = _valid_verdict(output)
-    if verdict is not None:
-        before = [m for m in matches if m.start() < verdict.start()]
-        if before:
-            return before[-1].group(1).strip()
 
-    # No valid verdict at all, or every block sits after it. Note the limit
-    # must NOT default to len(output) here: that makes "the last block before
-    # the verdict" mean "the last block", which is the trailing note again -
-    # the exact bug this function exists to avoid.
-    return matches[0].group(1).strip()
+def _extract_draft(
+    output: str, customer_text: str | None = None
+) -> tuple[str | None, bool]:
+    """Pull the model's draft out of the Hermes output.
+
+    Returns (draft, ambiguous). `ambiguous` means "more than one block could
+    plausibly be the model's reply" - the caller must then force the ticket
+    to a reviewable, owner-alerting verdict rather than presenting one of them
+    as if we knew.
+
+    Position decides as little as possible here too. Blocks are dropped when:
+      * the customer demonstrably wrote them (the injection vector - Hermes
+        re-reads the ticket through the Gorgias tool and quotes it back);
+      * they are under _MIN_DRAFT_WORDS words, which is the model narrating
+        its own plan ("between <DRAFT> and </DRAFT>" is a matching block whose
+        body is the word "and"), not a reply to a customer.
+
+    Whatever survives, the FIRST is used: the prompt puts the draft before
+    JSON_RESULT and any AGENT NOTE after it, so a trailing block is the
+    dangerous one. But if more than one survives we say so rather than
+    pretending, and the caller fails closed.
+    """
+    survivors: list[str] = []
+    for match in _DRAFT_TAG_RE.finditer(output):
+        body = match.group(1).strip()
+        if len(body.split()) < _MIN_DRAFT_WORDS:
+            continue
+        if _is_echo_of_customer(body, customer_text):
+            log_event(logger, "WARNING",
+                      "Discarded a <DRAFT> block the customer wrote",
+                      length=len(body))
+            continue
+        survivors.append(body)
+
+    if not survivors:
+        return None, False
+    return survivors[0], len(survivors) > 1
 
 
 # Default result if Hermes fails or output is unparseable
@@ -431,24 +524,38 @@ def _build_prompt(ticket_id: int, message_text: str, ticket_subject: str,
     )
 
 
-def _parse_json_result(output: str) -> dict[str, Any]:
-    """Extract the JSON_RESULT block from Hermes output.
+def _parse_json_result(output: str, customer_text: str | None = None) -> dict[str, Any]:
+    """Extract the JSON_RESULT verdict from Hermes output.
 
-    Returns a parsed dict, or the fallback result if not found.
+    Returns a parsed dict, or the fallback result if not found. Pass
+    customer_text so blocks the CUSTOMER wrote can be discarded - without it
+    a customer who types a JSON_RESULT line into their email can set their own
+    ticket's priority and switch off the owner's alert.
     """
-    # Shared with _extract_draft, so the draft and the verdict can never come
-    # from different blocks of the same output.
-    _match, result, candidate_count = _valid_verdict(output)
+    blocks, marker_count, echoes = _valid_verdicts(output, customer_text)
 
-    if not candidate_count:
+    if not marker_count:
         log_event(logger, "WARNING", "No JSON_RESULT found in Hermes output")
         return dict(_FALLBACK_RESULT)
 
-    if result is None:
+    if not blocks:
         log_event(logger, "WARNING",
                   "No valid JSON_RESULT in Hermes output",
-                  candidates=candidate_count)
+                  candidates=marker_count, customer_echoes=echoes)
         return dict(_FALLBACK_RESULT)
+
+    if echoes:
+        log_event(logger, "WARNING",
+                  "Discarded JSON_RESULT block(s) the customer wrote",
+                  discarded=echoes, kept=len(blocks))
+
+    if len(blocks) > 1:
+        log_event(logger, "WARNING",
+                  "Multiple verdicts in Hermes output - merging conservatively",
+                  count=len(blocks),
+                  priorities=[str(p.get("priority")) for _m, p in blocks])
+
+    result = _merge_verdicts(blocks)
 
     try:
         result["priority"] = str(result["priority"]).lower().strip()
@@ -585,13 +692,32 @@ def process_ticket_with_hermes(
                       stderr=stderr[:500])
             return dict(_FALLBACK_RESULT)
 
-        # Parse the JSON_RESULT from the output
-        parsed = _parse_json_result(stdout)
+        # Parse the JSON_RESULT from the output. message_text is passed so
+        # that a verdict the CUSTOMER typed into their email is discarded
+        # rather than obeyed.
+        parsed = _parse_json_result(stdout, message_text)
 
         # A valid classification without a usable draft is still malformed.
         # Fail closed to a reviewable sensitive draft instead of persisting an
         # empty console card with no human action controls.
-        draft_text = _extract_draft(stdout)
+        draft_text, draft_ambiguous = _extract_draft(stdout, message_text)
+        if draft_ambiguous:
+            # More than one block survived the echo filter, so we cannot tell
+            # which is the model's reply. Show the first, but make sure a
+            # human definitely looks: raise to at least high, flag sensitive,
+            # and page the owner.
+            log_event(logger, "WARNING",
+                      "Ambiguous draft in Hermes output — forcing review",
+                      ticket_id=ticket_id)
+            if _PRIORITY_ORDER.index(str(parsed.get("priority", "high")).lower()
+                                     ) < _PRIORITY_ORDER.index("high"):
+                parsed["priority"] = "high"
+            parsed["action"] = "sensitive_draft"
+            parsed["notify_owner"] = True
+            parsed["reason"] = (
+                "Hermes output contained more than one candidate draft — "
+                f"flagged for careful review. {parsed.get('reason', '')}".strip()
+            )
         if draft_text:
             # ── Clean the AI DRAFT before any human sees it ─────────
             # Strips trailing model self-commentary and collapses a draft the
@@ -619,6 +745,13 @@ def process_ticket_with_hermes(
                 parsed["no_draft"] = True
             else:
                 parsed["draft_text"] = cleaned.text
+                # Carry the fact that something was removed all the way to the
+                # console. It was previously logged and nowhere else, so a
+                # reviewer looking at a trimmed draft had no way to know text
+                # had been cut - which matters most in exactly the case where
+                # the cut was wrong.
+                if cleaned.reasons:
+                    parsed["clean_reasons"] = list(cleaned.reasons)
                 log_event(logger, "INFO", "Draft extracted from Hermes output",
                           ticket_id=ticket_id,
                           draft_length=len(cleaned.text))
