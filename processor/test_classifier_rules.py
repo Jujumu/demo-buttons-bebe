@@ -175,21 +175,65 @@ class EveryNewRuleIsLoadBearingTests(unittest.TestCase):
     adding one that some other rule already covers fails the mutation check.
     """
 
+    # Several tables are split in two at runtime - main's original rules and
+    # the ones this port added read DIFFERENT views of the ticket - so
+    # patching only the combined name is a no-op, and the mutation test would
+    # pass while proving nothing. It did exactly that once already.
+    _SPLIT_TABLES = {
+        "_WEAK_IMMEDIATE": (
+            "_WEAK_IMMEDIATE", "_WEAK_DAMAGE", "_WEAK_OMISSION"),
+        "_IMMEDIATE_KEYWORDS": (
+            "_IMMEDIATE_KEYWORDS", "_MAIN_IMMEDIATE_KEYWORDS",
+            "_PORT_IMMEDIATE_KEYWORDS"),
+        "_HIGH_KEYWORDS": (
+            "_HIGH_KEYWORDS", "_MAIN_HIGH_KEYWORDS", "_PORT_HIGH_KEYWORDS"),
+    }
+
+    # Tables classify() never consults. A pattern surviving in one of these is
+    # harmless, so the leak guard below ignores them.
+    _NOT_READ_BY_CLASSIFY = frozenset({"_PORTED_HIGH_PATTERNS"})
+
     def _classify_without(self, attr: str, pattern: str, message: str) -> str:
-        # The weak table is split in two at runtime, so patching the combined
-        # _WEAK_IMMEDIATE alone would have been a no-op - the mutation test
-        # would have passed while proving nothing.
-        targets = [attr]
-        if attr == "_WEAK_IMMEDIATE":
-            targets = ["_WEAK_IMMEDIATE", "_WEAK_DAMAGE", "_WEAK_OMISSION"]
+        targets = list(self._SPLIT_TABLES.get(attr, (attr,)))
         originals = {name: getattr(cls, name) for name in targets}
         try:
             for name, original in originals.items():
                 setattr(cls, name, [p for p in original if p != pattern])
+
+            # Leak guard. If the pattern is still reachable from any table
+            # classify() reads, the mutation did nothing and the caller's
+            # assertion proves nothing. This fires the moment someone splits
+            # another table without adding it to _SPLIT_TABLES above.
+            leaked = sorted(
+                name for name in dir(cls)
+                if name.startswith("_") and name not in self._NOT_READ_BY_CLASSIFY
+                and isinstance(getattr(cls, name, None), (list, tuple))
+                and pattern in getattr(cls, name)
+            )
+            self.assertEqual(
+                leaked, [],
+                f"mutation of {attr} is a no-op: {pattern!r} is still live in "
+                f"{leaked} - add them to _SPLIT_TABLES",
+            )
             return _c(message)["priority"]
         finally:
             for name, original in originals.items():
                 setattr(cls, name, original)
+
+    def test_ported_high_tuple_is_derived_not_retyped(self):
+        # _PORTED_HIGH_PATTERNS is exempt from the leak guard above, so pin it
+        # to the real table instead - a hand-copied version drifted once.
+        self.assertEqual(cls._PORTED_HIGH_PATTERNS, tuple(cls._PORT_HIGH_KEYWORDS))
+
+    def test_split_tables_still_compose_the_combined_ones(self):
+        self.assertEqual(
+            cls._IMMEDIATE_KEYWORDS,
+            cls._MAIN_IMMEDIATE_KEYWORDS + cls._PORT_IMMEDIATE_KEYWORDS)
+        self.assertEqual(
+            cls._HIGH_KEYWORDS,
+            cls._MAIN_HIGH_KEYWORDS + cls._PORT_HIGH_KEYWORDS)
+        self.assertEqual(
+            cls._WEAK_IMMEDIATE, cls._WEAK_DAMAGE + cls._WEAK_OMISSION)
 
     def test_removing_a_ported_high_rule_stops_its_exemplar_escalating(self):
         for pattern, message in PORTED_HIGH_EXEMPLARS.items():
@@ -613,6 +657,90 @@ class QuotedStoreTextTests(unittest.TestCase):
     def test_the_customers_own_complaint_under_a_quote_still_escalates(self):
         body = f"My order arrived damaged and I want a refund.\n\n{self.FOOTER}"
         self.assertEqual(_c(body)["priority"], IMMEDIATE)
+
+
+class BoilerplateFilterNeverDeescalatesTests(unittest.TestCase):
+    """The boilerplate filter must never hide text from MAIN's rules.
+
+    A boilerplate phrase is not always the store talking. "%off" is in the
+    pattern because shop footers advertise sales - but customers mention their
+    discount code constantly, and "working days" / "terms and conditions" /
+    "flash sale" / "unsubscribe" are all things a customer writes too.
+
+    When such a sentence is its own paragraph AND some other paragraph
+    survives, the empty-result fallback does not fire and the complaint is
+    simply deleted. Measured against main's classifier on 4 238 messages of
+    exactly this shape: 3 998 silent immediate -> normal de-escalations
+    (94.3%). Splitting the tables so main's rules read the unfiltered text
+    took that to 0.
+
+    Every case below is IMMEDIATE or HIGH under main's classifier. If any of
+    them comes back NORMAL, the port has made the system less safe than the
+    code it is replacing - which is the one thing it may not do.
+    """
+
+    TAIL = "\n\nKind regards,\nSarah"
+
+    IMMEDIATE_CASES = [
+        "I used the 20% off code at checkout and the dress arrived damaged.",
+        "I paid with the 15% off voucher and want a refund.",
+        "The 10%off code applied but you sent the wrong size.",
+        "It has been 7 working days and my parcel never arrived.",
+        "Your terms and conditions say final sale but the romper is defective.",
+        "I ordered in the flash sale and the onesie arrived torn.",
+        "Please unsubscribe me, and also refund order 1042.",
+        "Unsubscribe. This is a scam.",
+        "Let us know when the refund lands, the item was damaged.",
+        "We are looking into legal action, my package was stolen.",
+        "Thanks for your patience but I am filing a chargeback.",
+    ]
+
+    HIGH_CASES = [
+        "Five working days later and the item is still not received.",
+        "I read the terms and conditions and this is urgent.",
+        "I will hit reply again tomorrow - where is my order?",
+    ]
+
+    def test_poisoned_paragraphs_still_reach_immediate(self):
+        for body in self.IMMEDIATE_CASES:
+            with self.subTest(body=body):
+                self.assertEqual(_c(body + self.TAIL)["priority"], IMMEDIATE, body)
+                # And with the survivor above rather than below it.
+                self.assertEqual(_c("Hi there,\n\n" + body)["priority"], IMMEDIATE, body)
+
+    def test_poisoned_paragraphs_still_reach_at_least_high(self):
+        for body in self.HIGH_CASES:
+            with self.subTest(body=body):
+                self.assertGreaterEqual(
+                    _RANK[_c(body + self.TAIL)["priority"]], _RANK[HIGH], body)
+
+    def test_the_filter_still_protects_the_new_rules(self):
+        # The whole point of the filter: a store footer must not fire the
+        # rules this port ADDED. "missing from your parcel" is _WEAK_OMISSION.
+        footer = ("Thanks for reaching out! If an item is missing from your "
+                  "parcel, just reply to this email and our customer care "
+                  "team will sort it out.")
+        self.assertEqual(_c(f"Thank you, all sorted!\n\n{footer}")["priority"], NORMAL)
+
+    def test_main_rules_read_the_unfiltered_text(self):
+        # Direct structural check, so this survives a rewording of the cases.
+        seen = {}
+        original = cls._find_matches
+
+        def spy(text, patterns):
+            if patterns is cls._MAIN_IMMEDIATE_KEYWORDS:
+                seen["main"] = text
+            elif patterns is cls._PORT_IMMEDIATE_KEYWORDS:
+                seen["port"] = text
+            return original(text, patterns)
+
+        cls._find_matches = spy
+        try:
+            _c("I used the 20% off code and the dress arrived damaged.\n\nSarah")
+        finally:
+            cls._find_matches = original
+        self.assertIn("20% off", seen["main"])
+        self.assertNotIn("20% off", seen["port"])
 
 
 class PurchaseHistoryTests(unittest.TestCase):

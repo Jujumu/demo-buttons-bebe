@@ -54,7 +54,12 @@ NORMAL = "normal"
 # ── Keyword patterns ────────────────────────────────────────
 
 # IMMEDIATE: money/dispute/damage/angry — always sensitive
-_IMMEDIATE_KEYWORDS = [
+#
+# MAIN'S ORIGINAL TABLE. Everything in here is evaluated on the UNFILTERED
+# text, exactly as main evaluated it. Nothing this port added may narrow the
+# input these rules see, or the port could classify LOWER than main - the one
+# outcome it is not allowed to have. See classify() for the two views.
+_MAIN_IMMEDIATE_KEYWORDS = [
     # Refunds and money
     r"\brefund\b", r"\bchargeback\b", r"\bdispute\b", r"\bmoney\s+back\b",
     r"\breimburse\b", r"\breimbursement\b", r"\bcompensat\w*\b",
@@ -77,12 +82,19 @@ _IMMEDIATE_KEYWORDS = [
     r"\b(lawsuit|sue|legal\s+action|attorney|lawyer)\b",
     # Fraud
     r"\bfraud\b", r"\bscam\b", r"\bunauthorized\s+charg\w+\b",
+]
 
-    # ── Ported from the Fable branch (rules only — Task 4 of the port).
-    # Only phrases that are UNAMBIGUOUS in a support inbox go in this list;
-    # the merely-suggestive ones live in _WEAK_IMMEDIATE below and need
-    # corroborating context before they fire. See the note above that list.
-
+# ── Ported from the Fable branch (rules only — Task 4 of the port).
+# Only phrases that are UNAMBIGUOUS in a support inbox go in this list;
+# the merely-suggestive ones live in _WEAK_IMMEDIATE below and need
+# corroborating context before they fire. See the note above that list.
+#
+# Kept as a SEPARATE table because these - and only these - are evaluated on
+# the boilerplate-filtered view of the message. Filtering exists to stop the
+# store's own footer ("if an item is missing from your parcel, reply to this
+# email") from firing the new rules; it must never be allowed to hide text
+# from main's rules above.
+_PORT_IMMEDIATE_KEYWORDS = [
     # Chargeback / payment-reversal phrasings main missed
     r"\bcharge\s?-?\s?back\b", r"\bcharged\s+back\b",
     r"\breverse\s+the\s+(charge|payment)\b",
@@ -132,6 +144,11 @@ _IMMEDIATE_KEYWORDS = [
     r"\b(?:marked|says|shows|tracking\s+says)\s+(?:it\s+was\s+|as\s+)?delivered\s+but\b",
     r"\bnothing\s+(?:is\s+)?here\b",
 ]
+
+# One name for anything that wants the whole table (the mutation harness in
+# processor/test_classifier_rules.py, for one). classify() deliberately does
+# NOT use this: it runs the two halves against two different views.
+_IMMEDIATE_KEYWORDS = _MAIN_IMMEDIATE_KEYWORDS + _PORT_IMMEDIATE_KEYWORDS
 
 # ── Weak triggers: only a complaint IN CONTEXT ──────────────
 # Every phrase here is ordinary English that a browsing customer uses all the
@@ -259,7 +276,9 @@ _ESCALATE_NEGATED_RE = re.compile(
 )
 
 # HIGH: urgent/time-sensitive — may or may not be sensitive
-_HIGH_KEYWORDS = [
+#
+# MAIN'S ORIGINAL TABLE — evaluated on the UNFILTERED text, as main did.
+_MAIN_HIGH_KEYWORDS = [
     r"\burgent\b", r"\basap\b", r"\brush\b", r"\bexpress\b",
     r"\bneed\s+(it|them)\s+(by|before|tomorrow|today|monday|tuesday|wednesday|thursday|friday)\b",
     r"\bdeadline\b", r"\btime\s+sensitive\b",
@@ -277,14 +296,19 @@ _HIGH_KEYWORDS = [
     r"\blast\s+(chance|warning)\b",
     # (The multi-follow-up rule lives in _FOLLOWUP_PATTERN, which is applied to
     # a bounded slice: its ".*" is the one pattern here that backtracks.)
+]
 
-    # ── Ported from Fable (Task 4). Non-delivery phrasings main missed.
-    # These sit at HIGH, not IMMEDIATE: "I still haven't received it" is the
-    # single most common where-is-my-order wording, and routing every WISMO to
-    # the owner's phone would bury the alerts that matter. Outright theft
-    # signals ("never arrived", "marked delivered but") stay IMMEDIATE above.
-    # Main covered only the singular "hasn't received"; the plural forms and
-    # "hasn't arrived" fell all the way to NORMAL.
+# ── Ported from Fable (Task 4). Non-delivery phrasings main missed.
+# These sit at HIGH, not IMMEDIATE: "I still haven't received it" is the
+# single most common where-is-my-order wording, and routing every WISMO to
+# the owner's phone would bury the alerts that matter. Outright theft
+# signals ("never arrived", "marked delivered but") stay IMMEDIATE above.
+# Main covered only the singular "hasn't received"; the plural forms and
+# "hasn't arrived" fell all the way to NORMAL.
+#
+# Like _PORT_IMMEDIATE_KEYWORDS, these - and only these - see the
+# boilerplate-filtered view of the message.
+_PORT_HIGH_KEYWORDS = [
     r"\b(?:has\s?n'?t|has\s+not|have\s+not|have\s?n'?t)\s+(?:arrived|turned\s+up|shown\s+up)\b",
     r"\bstill\s+(?:has\s?n'?t|have\s?n'?t|not)\s+(?:arrived|come|received)\b",
     r"\bnot\s+(?:been\s+)?delivered\b",
@@ -293,15 +317,15 @@ _HIGH_KEYWORDS = [
     r"\bwhere\s+my\s+(?:order|parcel|package|delivery|items?|stuff)\s+(?:is|are)\b",
 ]
 
+# One name for anything that wants the whole table. classify() deliberately
+# does NOT use this: it runs the two halves against two different views.
+_HIGH_KEYWORDS = _MAIN_HIGH_KEYWORDS + _PORT_HIGH_KEYWORDS
+
 # The subset of _HIGH_KEYWORDS this port added. Kept as its own tuple purely so
 # processor/test_classifier_rules.py can mutation-test them like the others.
-_PORTED_HIGH_PATTERNS = (
-    r"\b(?:has\s?n'?t|has\s+not|have\s+not|have\s?n'?t)\s+(?:arrived|turned\s+up|shown\s+up)\b",
-    r"\bstill\s+(?:has\s?n'?t|have\s?n'?t|not)\s+(?:arrived|come|received)\b",
-    r"\bnot\s+(?:been\s+)?delivered\b",
-    r"\bnothing\s+(?:has\s+|had\s+)?(?:arrived|come|turned\s+up|showed\s+up|been\s+delivered)\b",
-    r"\bwhere\s+my\s+(?:order|parcel|package|delivery|items?|stuff)\s+(?:is|are)\b",
-)
+# DERIVED, not retyped: the hand-copied version silently drifted out of sync
+# with the table the first time a pattern was edited.
+_PORTED_HIGH_PATTERNS = tuple(_PORT_HIGH_KEYWORDS)
 
 # Intent names that indicate sensitive topics
 _SENSITIVE_INTENTS = {
@@ -321,6 +345,16 @@ _HIGH_SENSITIVE_INTENTS = {
     "cancel", "cancellation", "address-change", "final-sale-exception",
 }
 
+# MAIN'S ORIGINAL — evaluated on the UNFILTERED text, as main did.
+_MAIN_HIGH_SENSITIVE_PATTERN = re.compile(
+    r"\b(final\s+sale|change\s+(?:my\s+)?(?:shipping\s+)?address|"
+    r"wrong\s+address|update\s+(?:my\s+)?address|new\s+address|"
+    r"cancel(?:lation)?(?:\s+(?:my\s+)?(?:order|item|purchase))?)\b",
+    re.IGNORECASE,
+)
+
+# Main's rules plus this port's. Evaluated on the filtered view; classify()
+# ORs it with _MAIN_HIGH_SENSITIVE_PATTERN so filtering can only ever add.
 _HIGH_SENSITIVE_PATTERN = re.compile(
     r"\b(final\s+sale|change\s+(?:my\s+)?(?:shipping\s+)?address|"
     r"wrong\s+address|update\s+(?:my\s+)?address|new\s+address|"
@@ -523,6 +557,9 @@ def _bound(text: str) -> str:
 def _normalise_text(value: str, *, drop_quotes: bool = False) -> str:
     """Fold smart punctuation and bound the length before any regex sees it."""
     text = _bound(str(value or ""))
+    for fancy, plain in _SMART_QUOTES.items():
+        if fancy in text:
+            text = text.replace(fancy, plain)
     # ALWAYS, not only when the message is long. Gating this on the length cap
     # meant that for every real-sized ticket the STORE's own quoted words were
     # keyword-matched as if the customer had written them - so a customer
@@ -531,11 +568,14 @@ def _normalise_text(value: str, *, drop_quotes: bool = False) -> str:
     # KEYWORD view: keep everything the customer can see, minus paragraphs only
     # a shop would write. A customer quoting their own earlier complaint must
     # still be classified on it - dropping all quoted text lost that.
+    #
+    # AFTER the fold, not before: "we're so sorry" written with a curly
+    # apostrophe is still store boilerplate.
+    #
+    # Only the rules this port ADDED are evaluated on this view - see
+    # classify(). Main's tables always see the unfiltered text.
     if drop_quotes:
         text = _drop_store_boilerplate(text)
-    for fancy, plain in _SMART_QUOTES.items():
-        if fancy in text:
-            text = text.replace(fancy, plain)
     return text
 
 
@@ -727,11 +767,25 @@ def classify(
             "source": str,              # "deterministic" (this classifier)
         }
     """
-    raw_message = _normalise_text(payload.get("message_text"), drop_quotes=True)
+    # TWO VIEWS of the same ticket, and the difference matters:
+    #
+    #   full_text     - everything, exactly what main's classifier saw.
+    #   combined_text - the same minus paragraphs only a shop would write.
+    #
+    # Main's rules read full_text. The rules this port ADDED read
+    # combined_text. Splitting them is what guarantees the port can only ever
+    # classify a ticket the SAME or HIGHER than main did: the boilerplate
+    # filter exists to stop the store's own footer from firing the new rules,
+    # and it must never be able to hide a customer's words from the old ones.
+    #
+    # Reviewed measurement of the version that filtered both: 25 080 messages
+    # silently dropped from immediate to normal.
+    raw_message = _normalise_text(payload.get("message_text"))
     raw_subject = _normalise_text(payload.get("ticket_subject"))
     message_text = raw_message.lower()
     ticket_subject = raw_subject.lower()
-    combined_text = f"{ticket_subject} {message_text}"
+    full_text = f"{ticket_subject} {message_text}"
+    combined_text = f"{ticket_subject} {_drop_store_boilerplate(message_text)}"
 
     # Extract intent names from payload
     raw_intents = payload.get("intents", [])
@@ -761,7 +815,12 @@ def classify(
     shouting = _is_shouting(raw_message)
 
     # ── IMMEDIATE conditions ────────────────────────────────
-    immediate_matches = _find_matches(combined_text, _IMMEDIATE_KEYWORDS)
+    # Main's table on the whole text; the ported table on the filtered view.
+    immediate_matches = _find_matches(full_text, _MAIN_IMMEDIATE_KEYWORDS)
+    immediate_matches.extend(
+        m for m in _find_matches(combined_text, _PORT_IMMEDIATE_KEYWORDS)
+        if m not in immediate_matches
+    )
 
     # Weak triggers are ordinary English ("missing", "lost", "without the").
     # They only escalate when the message also shows an order was placed or
@@ -774,7 +833,8 @@ def classify(
             and not _ESCALATE_NEGATED_RE.search(combined_text)):
         manager_matches.append("escalate this")
 
-    angry_matches = _find_matches(combined_text, _ANGRY_KEYWORDS)
+    # Main's rule — whole text.
+    angry_matches = _find_matches(full_text, _ANGRY_KEYWORDS)
     immediate_hits = len(immediate_matches)
     # Structural signals and a manager demand each count as an angry signal,
     # so "I demand a manager!!!" reaches the 2-signal angry threshold on its own.
@@ -834,17 +894,25 @@ def classify(
         }
 
     # ── HIGH conditions ─────────────────────────────────────
-    high_matches = _find_matches(combined_text, _HIGH_KEYWORDS)
+    # Same split as IMMEDIATE: main's table sees everything.
+    high_matches = _find_matches(full_text, _MAIN_HIGH_KEYWORDS)
+    high_matches.extend(
+        m for m in _find_matches(combined_text, _PORT_HIGH_KEYWORDS)
+        if m not in high_matches
+    )
     high_hits = len(high_matches)
     high_intent_hit = bool(intent_names & _HIGH_INTENTS)
 
     # Check for repeated follow-ups (3+ messages with no reply is CRITICAL in
     # the LLM prompt, but we can't count messages here — we look for the
     # follow-up keyword pattern as a HIGH signal)
-    followup_match = _FOLLOWUP_PATTERN.search(combined_text)
+    # Main had this rule too (as a _HIGH_KEYWORDS entry), so: whole text.
+    followup_match = _FOLLOWUP_PATTERN.search(full_text)
 
     if high_hits > 0 or high_intent_hit or followup_match or exclaiming or shouting:
         high_sensitive = bool(intent_names & _HIGH_SENSITIVE_INTENTS) or bool(
+            _MAIN_HIGH_SENSITIVE_PATTERN.search(full_text)
+        ) or bool(
             _HIGH_SENSITIVE_PATTERN.search(combined_text)
         )
         reason_parts = []
