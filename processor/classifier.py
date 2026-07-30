@@ -401,17 +401,39 @@ _POSITIVE_RE = re.compile(
     r"\b(thank|thanks|thankyou|thx|love|loved|loving|adorable|perfect|beautiful|"
     r"gorgeous|cute|amazing|wonderful|excellent|obsessed|delighted|thrilled|"
     r"pleased|happy|brilliant|fantastic|lovely|great|awesome|best|nice|super|"
-    r"fab|fabulous|appreciate|appreciated|recommend|quick|fast|impressed)\b",
+    r"fab|fabulous|appreciate|appreciated|recommend|quick|fast|impressed|"
+    # Added after a review measured 6 of 20 grateful all-caps messages paging
+    # the owner. Every word below came from one of them; the vocabulary of
+    # praise for baby clothes is not the vocabulary the first list assumed.
+    r"worth|favourite|favorite|soft|softer|softest|comfy|cosy|cozy|snug|"
+    r"cutest|recommended|glad|happier|happiest|adore|adored|stunning|"
+    r"well\s+spent|every\s+penny)\b",
     re.IGNORECASE)
 # Grievance words only. The first version listed "not", "no" and "still", which
 # are in half of all English sentences - one stray "no notes!" re-armed the
 # exclamation rule and paged the owner about a compliment.
+#
+# "never" is NOT a bare entry. "I have never been happier", "still my
+# favourite", "I will never shop anywhere else" are praise, and treating the
+# word alone as a grievance cancelled the positive veto on all of them. It
+# counts only with a complaint continuation, or with a "never ... again".
+# The genuine misses this could create are all covered by keyword rules that
+# do not consult this pattern at all ("never received", "never arrived").
 _NEGATIVE_RE = re.compile(
-    r"\b(never|refund|damaged|broken|wrong|missing|late|angry|furious|"
+    r"\b(never\s+(?:received|receive|arrived|arrive|came|come|got|get|"
+    r"turned\s+up|show(?:ed|n)\s+up|delivered|deliver|shipped|ship|sent|send|"
+    r"replied|reply|responded|respond|answered|answer|heard|resolved|"
+    r"refunded|works?|worked|shopping|buying|ordering|using)|"
+    r"never\s+(?:\w+\s+){0,3}again|"
+    r"refund|damaged|broken|wrong|missing|late|angry|furious|"
     r"unacceptable|terrible|awful|worst|horrible|disappointed|disappointing|"
     r"ridiculous|useless|rubbish|scam|fraud|cancel|complaint|complain|"
     r"nobody|noone|ignored|ignoring|refused|refusing|disgusting|disgrace|"
-    r"appalling|pathetic|unhappy|fed\s+up|sick\s+of|had\s+enough)\b",
+    r"appalling|pathetic|unhappy|fed\s+up|sick\s+of|had\s+enough|"
+    # Balance for the praise words added above: "worth" is positive, but
+    # "not worth it" and "waste of money" are not.
+    r"n[o']?t\s+worth|waste|wasted|poor\s+quality|bad\s+quality|"
+    r"cheap\s+quality|falling\s+apart)\b",
     re.IGNORECASE)
 
 # Quoted email history dilutes every ratio, so measure the new text only.
@@ -497,12 +519,19 @@ _SHOUT_COMPLAINT_VERBS = frozenset({
 # MANAGER, IMMEDIATELY, ...) shows up in delighted customers too:
 # "THANKS SO MUCH FOR THE QUICK REPLY" and "WORTH EVERY PENNY MONEY WELL
 # SPENT" were both paging the owner.
+#
+# NEVER is deliberately NOT here. It overrode the positive veto, so "I HAVE
+# NEVER BEEN HAPPIER WITH AN ORDER" and "I WILL NEVER SHOP ANYWHERE ELSE,
+# LOVE IT" both paged the owner. It stays in _SHOUT_ANCHORS, so an angry
+# all-caps "NEVER" still escalates - it just no longer beats an otherwise
+# unambiguously positive message. Angry uses of it ("NEVER ORDERING FROM YOU
+# AGAIN, WHAT A DISGRACE") carry a real hard anchor or a negative word.
 _SHOUT_HARD_ANCHORS = frozenset({
     "REFUND", "SCAM", "FRAUD", "LAWYER", "DEMAND", "COMPLAINT",
     "UNACCEPTABLE", "RIDICULOUS", "DISGRACE", "DISGUSTING", "PATHETIC",
     "APPALLING", "USELESS", "FURIOUS", "ANGRY", "WORST", "AWFUL",
     "TERRIBLE", "HORRIBLE", "JOKE", "ENOUGH", "NOBODY", "IGNORED",
-    "IGNORING", "MISSING", "DAMAGED", "BROKEN", "WRONG", "CANCEL", "NEVER",
+    "IGNORING", "MISSING", "DAMAGED", "BROKEN", "WRONG", "CANCEL",
 })
 
 _SHOUT_MIN_WORDS = 2       # with the anchor requirement doing the filtering
@@ -1073,6 +1102,27 @@ _SELFTEST_CASES: list[tuple[str, str, bool]] = [
     ("THIS IS A JOKE", HIGH, False),
     ("PICK UP THE PHONE", HIGH, False),
     ("I HAVE HAD IT WITH YOU AND THE WAY YOU AND THE TEAM TREAT ME", HIGH, False),
+    # ...and praise for baby clothes has its own vocabulary. Each of these
+    # was paging the owner until round 5.
+    ("I HAVE NEVER BEEN HAPPIER WITH AN ORDER", NORMAL, False),
+    ("STILL MY FAVOURITE SHOP, THE SOFTEST COTTON", NORMAL, False),
+    ("I WAS WAITING FOR THIS RESTOCK AND IT WAS WORTH IT", NORMAL, False),
+    ("I WILL NEVER SHOP ANYWHERE ELSE, LOVE IT", NORMAL, False),
+    ("ORDERED IMMEDIATELY AND SO GLAD I DID", NORMAL, False),
+    # ...but "never" in a complaint still counts.
+    ("NEVER ORDERING FROM YOU AGAIN, WHAT A DISGRACE", IMMEDIATE, True),
+    ("NOT WORTH THE MONEY, WHAT A WASTE", HIGH, False),
+
+    # ── Store boilerplate must never hide a customer's complaint ──
+    # "%off", "working days" and "terms and conditions" are all things a
+    # CUSTOMER writes. Filtering them out of main's own keyword view dropped
+    # 94% of these to NORMAL.
+    ("I used the 20% off code at checkout and the dress arrived damaged.\n\n"
+     "Kind regards,\nSarah", IMMEDIATE, True),
+    ("It has been 7 working days and my parcel never arrived.\n\nSarah",
+     IMMEDIATE, True),
+    ("Your terms and conditions say final sale but the romper is defective.\n\n"
+     "Sarah", IMMEDIATE, True),
 
     # ── A baby's age is not a delivery delay ────────────────
     ("The parcel came today and I love it. Can I order the sleepsuit without "

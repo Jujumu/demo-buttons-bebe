@@ -789,6 +789,24 @@ class CapsPolitenessTests(unittest.TestCase):
         "SO PLEASED WITH THIS LITTLE SET THANK YOU",
     ]
 
+    # Round-5 review measured 6 of these 20 paging the owner. Two causes:
+    # the praise vocabulary for baby clothes was missing from _POSITIVE_RE
+    # (worth, favourite, softest, comfy, glad, happier), and "never" counted
+    # as a grievance word on its own, which cancelled the positive veto for
+    # "NEVER BEEN HAPPIER" and made NEVER a hard anchor on top.
+    GRATEFUL_ROUND5 = [
+        "I HAVE NEVER BEEN HAPPIER WITH AN ORDER",
+        "STILL MY FAVOURITE SHOP, THE SOFTEST COTTON",
+        "I WAS WAITING FOR THIS RESTOCK AND IT WAS WORTH IT",
+        "I WILL NEVER SHOP ANYWHERE ELSE, LOVE IT",
+        "STILL WEARING IT EVERY DAY, SO SOFT",
+        "ORDERED IMMEDIATELY AND SO GLAD I DID",
+        "SO COMFY AND COSY, HIGHLY RECOMMEND",
+        "TELL YOUR MANAGER THE PACKAGING IS BEAUTIFUL",
+        "PLEASE REPLY WITH THE RESTOCK DATE, I LOVE THESE",
+        "MONEY WELL SPENT, THE QUALITY IS AMAZING",
+    ]
+
     HARD = [
         "THANK YOU BUT I WANT A REFUND NOW",
         "THANKS BUT THIS IS UNACCEPTABLE",
@@ -796,8 +814,29 @@ class CapsPolitenessTests(unittest.TestCase):
         "LOVELY SHOP BUT THIS IS A DISGRACE",
     ]
 
+    # Loosening the veto must not cost any of these. Every one is all-caps
+    # anger, and several use the exact words the praise list above uses.
+    ANGRY = [
+        "I WANT MY MONEY NOW",
+        "THIS IS A JOKE",
+        "PICK UP THE PHONE",
+        "I HAVE HAD ENOUGH OF BEING IGNORED",
+        "WHERE IS MY REFUND",
+        "ABSOLUTELY UNACCEPTABLE SERVICE",
+        "I HAVE HAD IT WITH YOU AND THE WAY YOU AND THE TEAM TREAT ME",
+        "NOBODY HAS ANSWERED ME IN TWO WEEKS",
+        "MY ORDER IS STILL MISSING AND NOBODY REPLIES",
+        "THIS IS RIDICULOUS, I WANT A MANAGER",
+        "I AM FURIOUS ABOUT THIS",
+        "STILL NO ANSWER, THIS IS PATHETIC",
+        "NEVER ORDERING FROM YOU AGAIN, WHAT A DISGRACE",
+        "I HAVE WAITED THREE WEEKS AND PAID FOR EXPRESS",
+        "I DEMAND A RESPONSE TODAY",
+        "NOT WORTH THE MONEY, WHAT A WASTE",
+    ]
+
     def test_grateful_capitals_never_page_the_owner(self):
-        for message in self.GRATEFUL:
+        for message in self.GRATEFUL + self.GRATEFUL_ROUND5:
             with self.subTest(message=message):
                 self.assertEqual(_c(message)["priority"], NORMAL)
 
@@ -806,9 +845,31 @@ class CapsPolitenessTests(unittest.TestCase):
             with self.subTest(message=message):
                 self.assertGreaterEqual(_RANK[_c(message)["priority"]], _RANK[HIGH])
 
+    def test_all_caps_anger_still_escalates(self):
+        for message in self.ANGRY:
+            with self.subTest(message=message):
+                self.assertGreaterEqual(_RANK[_c(message)["priority"]], _RANK[HIGH])
+
+    def test_never_alone_is_not_a_grievance_word(self):
+        # The word by itself is as common in praise as in complaint.
+        self.assertIsNone(cls._NEGATIVE_RE.search("never been happier"))
+        self.assertIsNone(cls._NEGATIVE_RE.search("i will never shop elsewhere"))
+        # ...but the complaint uses of it still count.
+        for grievance in ("never received", "never arrived", "never replied",
+                          "never ordering from you again", "never again"):
+            self.assertIsNotNone(cls._NEGATIVE_RE.search(grievance), grievance)
+
+    def test_never_received_still_reaches_immediate_by_keyword(self):
+        # The narrowed _NEGATIVE_RE must not be load-bearing for real misses:
+        # these are caught by main's keyword table, not by sentiment.
+        for message in ("I NEVER RECEIVED MY ORDER", "THANK YOU BUT I NEVER GOT IT"):
+            with self.subTest(message=message):
+                self.assertEqual(_c(message)["priority"], IMMEDIATE)
+
     def test_the_hard_anchor_set_excludes_words_praise_uses(self):
         for soft in ("MONEY", "REPLY", "RESPONSE", "WAITING", "MANAGER",
-                     "PHONE", "IMMEDIATELY", "URGENT", "SERIOUSLY", "STILL"):
+                     "PHONE", "IMMEDIATELY", "URGENT", "SERIOUSLY", "STILL",
+                     "NEVER"):
             self.assertNotIn(soft, cls._SHOUT_HARD_ANCHORS)
         for hard in ("REFUND", "SCAM", "FRAUD", "UNACCEPTABLE", "DISGRACE"):
             self.assertIn(hard, cls._SHOUT_HARD_ANCHORS)
