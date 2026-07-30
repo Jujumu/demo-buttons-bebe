@@ -484,6 +484,79 @@ class QuotedHistoryTests(unittest.TestCase):
         self.assertEqual(_c(body)["priority"], IMMEDIATE)
 
 
+class BottomPostedTests(unittest.TestCase):
+    """The commonest reply shape in email: quote header on top, the customer's
+    words under it, a sign-off at the end.
+
+    A previous version dropped the paragraph directly under a quote header, on
+    the theory that it was the quoted body. It deleted the customer's
+    complaint in 100% of these - the trailing "Thanks, Jane" defeated the
+    empty-result fallback, so nothing noticed.
+    """
+
+    HEADERS = [
+        "On Mon, Jul 20, 2026 at 9:14 AM Buttons Bebe Support <hello@bb.com> wrote:",
+        "From: Buttons Bebe <hello@bb.com>\nSubject: Re: your order",
+        "-------- Forwarded message --------",
+        "----- Original Message -----",
+    ]
+    SIGN_OFFS = ["Thanks,\nJane", "Kind regards,\nJane", "Jane", "Many thanks"]
+
+    def test_a_complaint_under_a_quote_header_survives_a_sign_off(self):
+        for header in self.HEADERS:
+            for sign_off in self.SIGN_OFFS:
+                body = (f"{header}\n\nMy parcel arrived damaged and I would "
+                        f"like a refund.\n\n{sign_off}")
+                with self.subTest(header=header[:24], sign_off=sign_off[:12]):
+                    self.assertEqual(_c(body)["priority"], IMMEDIATE)
+
+    def test_a_customer_quoting_their_own_earlier_complaint(self):
+        """Keyword matching sees the whole message; only structural signals
+        are limited to what the customer typed this time."""
+        body = ("> I ordered a romper on the 3rd and it arrived damaged.\n\n"
+                "Any update on this?")
+        self.assertEqual(_c(body)["priority"], IMMEDIATE)
+
+    def test_a_header_shaped_line_mid_body_does_not_truncate_the_complaint(self):
+        body = ("Hi there,\n\nSubject: order 10322\n\n"
+                "My parcel arrived damaged and I want a refund.")
+        self.assertEqual(_c(body)["priority"], IMMEDIATE)
+
+    def test_a_multi_paragraph_store_auto_reply_does_not_escalate_a_thank_you(self):
+        """Only ONE paragraph used to be dropped, so a "Hi Jane," greeting ate
+        the drop and the footer leaked as the customer's words."""
+        body = ("From: Buttons Bebe <hello@bb.com>\nSubject: Re: your order\n\n"
+                "Hi Jane,\n\nIf your order hasn't arrived within 5 working days, "
+                "or an item is missing from your parcel, just reply to this "
+                "email.\n\nThanks!")
+        self.assertEqual(_c(body)["priority"], NORMAL)
+
+
+class ReDoSTests(unittest.TestCase):
+    """Ticket bodies are attacker-influenced and arrive before any human sees
+    them. Every pattern applied to them must be linear."""
+
+    def test_the_quote_header_pattern_is_bounded(self):
+        import time
+        # "<[^>]+@[^>]+>" nested two unbounded quantifiers: 72 SECONDS on 512KB.
+        payload = "hi <" + "a@" * 40000
+        started = time.perf_counter()
+        _c(payload)
+        elapsed = time.perf_counter() - started
+        self.assertLess(elapsed, 1.0, f"{elapsed:.2f}s on {len(payload)} bytes")
+
+    def test_classification_is_bounded_on_every_hostile_shape(self):
+        import time
+        shapes = ["following up ", "a stain ", "!!! ", "MISSING ", "> quoted\n",
+                  "On 1 Jan 2026 x wrote:\n", "why ", "hi <a@", "\n\n"]
+        for shape in shapes:
+            payload = shape * 40000
+            with self.subTest(shape=shape[:12]):
+                started = time.perf_counter()
+                _c(payload, subject=payload[:2000])
+                self.assertLess(time.perf_counter() - started, 1.0)
+
+
 class LengthCapTests(unittest.TestCase):
     """A plain head truncation was the one way this classifier could come out
     LOWER than main's - and the tail is exactly where a bottom-posting customer
@@ -565,26 +638,52 @@ class PurchaseHistoryTests(unittest.TestCase):
                 self.assertEqual(_c(message)["priority"], IMMEDIATE)
 
 
-class SarcasmTests(unittest.TestCase):
-    """A shouted grievance word outranks a polite one.
+class CapsPolitenessTests(unittest.TestCase):
+    """Praise in capitals is common, and it uses the same words anger does.
 
-    The positive-sentiment veto used to run BEFORE the anchor test, and
-    sarcasm supplies the positive word while carrying no grievance word.
+    A deliberate trade, measured both ways. Removing the positive-sentiment
+    veto from the anchor path caught a handful of all-caps sarcasm but
+    escalated 19 of 20 genuinely grateful all-caps messages - and every one of
+    those is a push notification to the owner's phone. The veto is back, with
+    an exemption for anchors that essentially never appear in praise.
     """
 
-    def test_sarcastic_caps_with_a_grievance_word_escalates(self):
-        for message in ["AMAZING HOW FAST YOU TAKE THE MONEY AND HOW SLOW YOU SHIP IT",
-                        "NICE ONE, THREE EMAILS AND NOT ONE REPLY",
-                        "I APPRECIATE THE REPLY BUT I WANT MY PARCEL NOT AN APOLOGY"]:
+    GRATEFUL = [
+        "THANKS SO MUCH FOR THE QUICK REPLY",
+        "STILL LOVING THE ROMPER THANK YOU",
+        "SERIOUSLY THE CUTEST THING EVER THANK YOU",
+        "WORTH EVERY PENNY MONEY WELL SPENT LOVE IT",
+        "GORGEOUS QUALITY WORTH THE MONEY THANK YOU",
+        "PLEASE PASS ON MY THANKS TO YOUR MANAGER LOVELY SERVICE",
+        "PERFECT THANK YOU I WILL ORDER AGAIN IMMEDIATELY",
+        "THANK YOU SO MUCH I AM SO HAPPY WITH MY ORDER",
+        "THANK YOU SO MUCH FOR THE FAST DELIVERY",
+        "SO PLEASED WITH THIS LITTLE SET THANK YOU",
+    ]
+
+    HARD = [
+        "THANK YOU BUT I WANT A REFUND NOW",
+        "THANKS BUT THIS IS UNACCEPTABLE",
+        "THANKS FOR THE REPLY BUT MY PARCEL IS STILL MISSING",
+        "LOVELY SHOP BUT THIS IS A DISGRACE",
+    ]
+
+    def test_grateful_capitals_never_page_the_owner(self):
+        for message in self.GRATEFUL:
+            with self.subTest(message=message):
+                self.assertEqual(_c(message)["priority"], NORMAL)
+
+    def test_a_hard_anchor_fires_through_the_politeness(self):
+        for message in self.HARD:
             with self.subTest(message=message):
                 self.assertGreaterEqual(_RANK[_c(message)["priority"]], _RANK[HIGH])
 
-    def test_caps_gratitude_is_still_not_shouting(self):
-        for message in ["THANK YOU SO MUCH I AM SO HAPPY WITH MY ORDER",
-                        "THANK YOU SO MUCH FOR THE FAST DELIVERY",
-                        "SO PLEASED WITH THIS LITTLE SET THANK YOU"]:
-            with self.subTest(message=message):
-                self.assertEqual(_c(message)["priority"], NORMAL)
+    def test_the_hard_anchor_set_excludes_words_praise_uses(self):
+        for soft in ("MONEY", "REPLY", "RESPONSE", "WAITING", "MANAGER",
+                     "PHONE", "IMMEDIATELY", "URGENT", "SERIOUSLY", "STILL"):
+            self.assertNotIn(soft, cls._SHOUT_HARD_ANCHORS)
+        for hard in ("REFUND", "SCAM", "FRAUD", "UNACCEPTABLE", "DISGRACE"):
+            self.assertIn(hard, cls._SHOUT_HARD_ANCHORS)
 
 
 class TuningConstantTests(unittest.TestCase):
@@ -656,13 +755,40 @@ class TuningConstantTests(unittest.TestCase):
         self.assertGreater(len(body), 16_000)
         self.assertEqual(_c(body)["priority"], IMMEDIATE)
 
-    def test_the_truncation_seam_cannot_manufacture_a_match(self):
-        # Every pattern uses \s+, which matches a newline, so joining the two
-        # halves with "\n" let the splice invent a phrase present in neither.
-        head = "we will answer your " * 4000 + "for your  wrong"
-        tail = "size guide question: " + "thanks so much " * 4000
-        self.assertGreater(len(head + tail), cls._MAX_SCAN_CHARS)
-        self.assertEqual(_c(head + tail)["priority"], NORMAL)
+    def _seam_probe(self, before: str, after: str) -> str:
+        """Build a message whose truncation seam falls EXACTLY between the two
+        fragments, computed from the live constants so the test cannot go
+        vacuous if the cap or the split ratio changes."""
+        head_len = cls._MAX_SCAN_CHARS * 3 // 4
+        tail_len = cls._MAX_SCAN_CHARS - head_len - len(cls._TRUNCATION_SENTINEL)
+        head = ("ab " * head_len)[:head_len - len(before)] + before
+        tail = after + (" cd" * tail_len)[:tail_len - len(after)]
+        body = head + " middle " * 500 + tail
+        self.assertEqual(len(head), head_len)
+        self.assertEqual(len(tail), tail_len)
+        self.assertGreater(len(body), cls._MAX_SCAN_CHARS)
+        bounded = cls._bound(body)
+        self.assertIn(before + cls._TRUNCATION_SENTINEL + after, bounded,
+                      "the probe did not land on the seam")
+        return body
+
+    def test_the_seam_cannot_join_two_fragments_into_a_word(self):
+        # Every pattern uses \s+, which matches a newline, so a "\n" sentinel
+        # let the splice invent a phrase present in neither half.
+        self.assertEqual(_c(self._seam_probe("for your  wrong", "size guide"))["priority"],
+                         NORMAL)
+
+    def test_the_seam_cannot_supply_a_word_boundary(self):
+        # A punctuation-only sentinel closed the \s+ splice but not the \b
+        # splice: "...abnon-refund" + "able..." matched "refund".
+        self.assertEqual(_c(self._seam_probe("abnon-refund", "able"))["priority"], NORMAL)
+        self.assertEqual(_c(self._seam_probe("xundam", "aged parcel"))["priority"], NORMAL)
+
+    def test_a_follow_up_late_in_a_long_message_still_counts(self):
+        body = ("Hi there, hope you are well and that the shop is doing nicely. " * 200
+                + " Just following up again, still no response from anyone.")
+        self.assertGreater(len(body), 8000)
+        self.assertGreaterEqual(_RANK[_c(body)["priority"]], _RANK[HIGH])
 
     def test_the_negative_word_list_is_load_bearing(self):
         angry = "This is a disgrace!!! I am furious!!!"

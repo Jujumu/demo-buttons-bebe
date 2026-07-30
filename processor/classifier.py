@@ -394,7 +394,10 @@ _QUOTE_HEADER_RE = re.compile(
     # ordered a gift set. Your colleague wrote: ..." must NOT be discarded.
     # The trailing text is allowed because Gmail puts it on the same line.
     r"on\s.{0,200}\d.{0,160}\swrote:"
-    r"|.{0,120}<[^>]+@[^>]+>\s+wrote:"
+    # Bounded character classes. The original "<[^>]+@[^>]+>" nested two
+    # unbounded quantifiers and took 72 SECONDS on a 512KB line - 226x main,
+    # which has no such pattern at all.
+    r"|.{0,120}<[^>@\s]{1,64}@[^>\s]{1,64}>\s+wrote:"
     r"|-{2,}\s*(?:original message|forwarded message)"
     r"|begin\s+forwarded\s+message:"
     r"|_{5,}\s*$"
@@ -454,6 +457,20 @@ _SHOUT_COMPLAINT_VERBS = frozenset({
     "REFUSED", "LIED", "STOLE", "CHARGED", "RUINED", "WASTED", "DISAPPOINTED",
 })
 
+# Anchors that essentially never appear in praise. A caps message containing
+# one of these escalates even if it also says "thanks" - "THANK YOU BUT I WANT
+# A REFUND NOW". Everything else in _SHOUT_ANCHORS (MONEY, REPLY, WAITING,
+# MANAGER, IMMEDIATELY, ...) shows up in delighted customers too:
+# "THANKS SO MUCH FOR THE QUICK REPLY" and "WORTH EVERY PENNY MONEY WELL
+# SPENT" were both paging the owner.
+_SHOUT_HARD_ANCHORS = frozenset({
+    "REFUND", "SCAM", "FRAUD", "LAWYER", "DEMAND", "COMPLAINT",
+    "UNACCEPTABLE", "RIDICULOUS", "DISGRACE", "DISGUSTING", "PATHETIC",
+    "APPALLING", "USELESS", "FURIOUS", "ANGRY", "WORST", "AWFUL",
+    "TERRIBLE", "HORRIBLE", "JOKE", "ENOUGH", "NOBODY", "IGNORED",
+    "IGNORING", "MISSING", "DAMAGED", "BROKEN", "WRONG", "CANCEL", "NEVER",
+})
+
 _SHOUT_MIN_WORDS = 2       # with the anchor requirement doing the filtering
 _SHOUT_MIN_RATIO = 0.6
 _SUSTAINED_MIN_CAPS = 8    # the anchor-free path, for long all-caps rants
@@ -467,16 +484,17 @@ _SUSTAINED_MIN_GRAMMAR = 2
 # message, which was a strict de-escalation against main - main has no cap.
 _MAX_SCAN_CHARS = 60_000
 
-# The follow-up rule alone is quadratic: 16s on a 184KB body. Nothing useful
-# lives past the opening of a message for that particular rule.
-_FOLLOWUP_SCAN_CHARS = 8000
-
 # The two halves of a truncated message are joined with a NON-whitespace
 # sentinel. Every pattern here uses \s+, which matches a newline, so a plain
 # "\n" let the seam manufacture a phrase present in neither half - a head
 # ending "...for your  wrong" spliced onto a tail starting "size guide"
 # matched "wrong size" and paged the owner.
-_TRUNCATION_SENTINEL = "\n\u00b7\u00b7\u00b7\n"
+# No whitespace and no punctuation: the sentinel must be word characters on
+# BOTH edges, so it can neither let \s+ span the join ("...for your  wrong" +
+# "size guide" matched "wrong size") nor supply the \b that lets a fragment
+# match on its own ("...abnon-refund" + "able" matched "refund"). Anything
+# beginning with a newline satisfies \b and reopens the second case.
+_TRUNCATION_SENTINEL = "zqxtruncatedzqx"
 
 # Apple, Gmail and Outlook all substitute a curly apostrophe. Without this,
 # "didn't receive", "hasn't arrived" and "isn't what I ordered" silently fell
@@ -504,19 +522,58 @@ def _bound(text: str) -> str:
 
 def _normalise_text(value: str, *, drop_quotes: bool = False) -> str:
     """Fold smart punctuation and bound the length before any regex sees it."""
-    text = str(value or "")
+    text = _bound(str(value or ""))
     # ALWAYS, not only when the message is long. Gating this on the length cap
     # meant that for every real-sized ticket the STORE's own quoted words were
     # keyword-matched as if the customer had written them - so a customer
     # replying "thanks!" under a support footer that says "if an item is
     # missing from your parcel, reply to this email" paged the owner.
+    # KEYWORD view: keep everything the customer can see, minus paragraphs only
+    # a shop would write. A customer quoting their own earlier complaint must
+    # still be classified on it - dropping all quoted text lost that.
     if drop_quotes:
-        text = _strip_quoted_history(text)
-    text = _bound(text)
+        text = _drop_store_boilerplate(text)
     for fancy, plain in _SMART_QUOTES.items():
         if fancy in text:
             text = text.replace(fancy, plain)
     return text
+
+
+# Paragraphs that are unmistakably the SHOP's own words. Used to drop store
+# boilerplate out of the keyword view without guessing by position - the
+# position guess deleted the customer's complaint whenever they replied below
+# a quote and signed off, which is how most people reply.
+#
+# Deliberately unambiguous phrases only. "Buttons Bebe" alone is NOT here: a
+# customer writes "I ordered from Buttons Bebe on Monday and it arrived
+# damaged", and dropping that paragraph would be exactly the bug this
+# replaces.
+_STORE_BOILERPLATE_RE = re.compile(
+    r"(reply\s+to\s+this\s+email|do\s+not\s+reply|unsubscribe|"
+    r"view\s+this\s+email|this\s+email\s+was\s+sent|"
+    r"thanks\s+for\s+(reaching\s+out|getting\s+in\s+touch|your\s+patience)|"
+    r"we\s+(are|'re)\s+(looking\s+into|sorry\s+to\s+hear|so\s+sorry)|"
+    r"we\s+will\s+(get\s+back|be\s+in\s+touch|look\s+into)|"
+    r"working\s+days|%\s*off|flash\s+sale|shop\s+now|"
+    r"(just|simply|hit)\s+reply|let\s+us\s+know|get\s+in\s+touch\s+with\s+us|"
+    r"our\s+returns?\s+policy|terms\s+and\s+conditions|all\s+rights\s+reserved|"
+    r"you\s+are\s+receiving\s+this|"
+    r"our\s+(customer\s+)?(care|support)\s+team)",
+    re.IGNORECASE,
+)
+
+
+def _drop_store_boilerplate(text: str) -> str:
+    """Remove whole paragraphs that only a shop would write.
+
+    This is the KEYWORD view: nothing is dropped for being in the wrong place,
+    only for being recognisably the store's own text. A customer quoting their
+    own earlier complaint is therefore still classified on it.
+    """
+    paragraphs = re.split(r"\n\s*\n", text or "")
+    kept = [p for p in paragraphs if not _STORE_BOILERPLATE_RE.search(p)]
+    result = "\n\n".join(kept).strip()
+    return result or (text or "")
 
 
 def _strip_quoted_history(message_text: str) -> str:
@@ -529,37 +586,22 @@ def _strip_quoted_history(message_text: str) -> str:
     """
     kept: list[str] = []
     seen_content = False
-    in_header = False        # a quote header seen before any customer text
-    marker_quoted = False    # ...whose body was ">"-prefixed
-    skipped_body = False     # ...or was an unprefixed paragraph we dropped
     for line in (message_text or "").splitlines():
         if _QUOTE_LINE_RE.match(line):
-            marker_quoted = True
             continue
         if _QUOTE_HEADER_RE.match(line):
             if seen_content:
                 break        # top-posted: everything below is the old thread
-            in_header, marker_quoted, skipped_body = True, False, False
-            continue         # bottom-posted: skip the header, keep looking
-        if in_header:
-            # In Outlook the quoted body under a From:/Subject: block carries
-            # no ">" prefix, so it reads as the customer's own words - a store
-            # promo ("FLASH SALE!!!") escalated the question sitting under it.
-            # Drop exactly one such paragraph. If the body WAS ">"-prefixed it
-            # has already gone, and the next paragraph is the customer again.
-            if not line.strip():
-                if marker_quoted or skipped_body:
-                    in_header = False
-                continue
-            if marker_quoted:
-                in_header = False       # the customer, writing below a quote
-            else:
-                skipped_body = True
-                continue
+            continue         # bottom-posted: drop the header, keep looking
         kept.append(line)
         if line.strip():
             seen_content = True
     fresh = "\n".join(kept).strip()
+    # Store boilerplate goes whatever position it is in. Nothing is dropped
+    # merely for sitting under a header: doing that deleted the customer's
+    # complaint in 100% of bottom-posted replies that ended with a sign-off,
+    # which is how most people write.
+    fresh = _drop_store_boilerplate(fresh)
     return fresh or (message_text or "")
 
 
@@ -585,12 +627,12 @@ def _is_shouting(message_text: str) -> bool:
     if (len(caps) >= _SHOUT_MIN_WORDS and words
             and (len(caps) / len(words)) >= _SHOUT_MIN_RATIO
             and any(w in _SHOUT_ANCHORS for w in caps)):
-        # Deliberately NOT vetoed by positive sentiment. Sarcasm supplies the
-        # positive word and, by definition, no grievance word - "AMAZING HOW
-        # FAST YOU TAKE THE MONEY" and "NICE ONE, THREE EMAILS AND NOT ONE
-        # REPLY" were both silenced by THANKS/NICE while shouting MONEY and
-        # REPLY. A shouted grievance word outranks a polite one.
-        return True
+        # Praise in capitals is common and it uses these words too. Only a
+        # HARD anchor overrides a positive reading; dropping the veto here
+        # entirely escalated 19 of 20 grateful all-caps messages, which is a
+        # far bigger cost than the handful of all-caps sarcasm it caught.
+        if not positive_only or any(w in _SHOUT_HARD_ANCHORS for w in caps):
+            return True
 
     # Path 2 — sustained shouting with no single grievance word, e.g.
     # "I HAVE HAD IT WITH YOU AND THE WAY YOU AND THE TEAM TREAT ME".
@@ -799,7 +841,7 @@ def classify(
     # Check for repeated follow-ups (3+ messages with no reply is CRITICAL in
     # the LLM prompt, but we can't count messages here — we look for the
     # follow-up keyword pattern as a HIGH signal)
-    followup_match = _FOLLOWUP_PATTERN.search(combined_text[:_FOLLOWUP_SCAN_CHARS])
+    followup_match = _FOLLOWUP_PATTERN.search(combined_text)
 
     if high_hits > 0 or high_intent_hit or followup_match or exclaiming or shouting:
         high_sensitive = bool(intent_names & _HIGH_SENSITIVE_INTENTS) or bool(
