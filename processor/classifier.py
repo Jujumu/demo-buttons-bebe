@@ -123,7 +123,8 @@ _IMMEDIATE_KEYWORDS = [
 
     # Missing / undelivered, phrased unambiguously
     r"\b(?:did\s+not|didn'?t)\s+come\s+with\b",
-    r"\bmarked\s+delivered\s+but\b",
+    r"\b(?:marked|says|shows|tracking\s+says)\s+(?:it\s+was\s+|as\s+)?delivered\s+but\b",
+    r"\bnothing\s+(?:is\s+)?here\b",
 ]
 
 # ── Weak triggers: only a complaint IN CONTEXT ──────────────
@@ -138,19 +139,30 @@ _IMMEDIATE_KEYWORDS = [
 # has been placed or delivered, and is not phrased as a browsing or care
 # question. A genuine complaint always carries that evidence; a pre-sale
 # question almost never does.
-_WEAK_IMMEDIATE = [
-    r"\bmissing\b",
-    r"\blost\b",
-    r"\bwithout\s+the\b",
-    r"\bnot\s+included\b", r"\bwas\s?n'?t\s+included\b",
-    r"\bleft\s+out\b", r"\bsupposed\s+to\s+include\b",
-    r"\bdifferent\s+item\b", r"\binstead\s+of\s+the\b",
+# Damage evidence. Nobody says "arrived ripped" while browsing, so these need
+# order context but are NOT blocked by a browsing-shaped question: "Do you sell
+# a replacement bow? Mine arrived ripped." is a complaint.
+_WEAK_DAMAGE = [
     r"\bripped\b", r"\bstained\b",
     r"\ba\s+(?:hole|rip|tear|stain)\b(?!\s*-?\s*away)",
     r"\b(?:hole|rip|tear|stain)\s+(?:in|on)\b",
     r"\banother\s+customer\b",
     r"\bsomeone\s+else'?s?\s+(order|name|items?|package|parcel|box)\b",
 ]
+
+# Omission wording. These ARE how customers word a purchase request - "can I
+# order the romper without the bow?" - so they stay behind the browsing guard.
+_WEAK_OMISSION = [
+    r"\bmissing\b",
+    r"\blost\b",
+    r"\bwithout\s+the\b",
+    r"\bnot\s+included\b", r"\bwas\s?n'?t\s+included\b",
+    r"\bleft\s+out\b", r"\bsupposed\s+to\s+include\b",
+    r"\bdifferent\s+item\b", r"\binstead\s+of\s+the\b",
+]
+
+# Kept as one name for the mutation tests and for anything that iterates them.
+_WEAK_IMMEDIATE = _WEAK_DAMAGE + _WEAK_OMISSION
 
 # Evidence that this is about a real order, not a pre-sale question.
 _ORDER_CONTEXT_RE = re.compile(
@@ -180,21 +192,43 @@ _BROWSING_QUESTION_RE = re.compile(
 # plainly a delivery problem, so these indicators lift the browsing guard.
 _PROBLEM_CONTEXT_RE = re.compile(
     r"\b(tracking|courier|carrier|still\s+waiting|still\s+not|no\s+update|"
-    r"has\s?n'?t\s+moved|has\s+not\s+moved|days\s+ago|weeks?\s+ago|"
-    r"where\s+is|chasing|chase\s+this|follow(?:ing)?\s?up|"
+    r"has\s?n'?t\s+moved|has\s+not\s+moved|"
+    r"where\s+is|where\s+are|chasing|chase\s+this|follow(?:ing)?\s?up|"
     r"never\s+(?:came|arrived|turned\s+up)|"
-    r"\d+\s*(?:days?|weeks?)\b)",
+    # "why" turns a polite request into a complaint: "Can I ask why my order
+    # came without the hat?"
+    r"why\b|"
+    # NO bare durations. In a baby-clothes store "my 6 week old" and "it
+    # arrived 3 days ago and it is lovely" are ordinary sentences; any
+    # duration alternative turns them into an owner page. Waiting has to be
+    # said out loud.
+    r"still\s+(?:has\s?n'?t|have\s?n'?t|no|nothing)|"
+    r"(?:waiting|waited)\s+(?:for\s+)?(?:over\s+)?(?:\d+|a|two|three)?\s*"
+    r"(?:days?|weeks?|months?)|"
+    r"been\s+(?:over\s+)?(?:\d+|two|three|four)\s*(?:days?|weeks?|months?))",
     re.IGNORECASE,
 )
 
 
-def _weak_triggers_apply(text: str) -> bool:
-    """True when a weak trigger is allowed to escalate."""
+def _weak_matches(text: str) -> list[str]:
+    """Weak triggers that are allowed to escalate for this message.
+
+    Both classes need evidence of a real order. Damage evidence then fires
+    regardless of how the sentence is shaped; omission wording additionally
+    has to survive the browsing guard, because "without the bow" and "a
+    different item" are how customers word a purchase request.
+    """
     if not _ORDER_CONTEXT_RE.search(text):
-        return False
-    if _BROWSING_QUESTION_RE.search(text) and not _PROBLEM_CONTEXT_RE.search(text):
-        return False
-    return True
+        return []
+
+    found = _find_matches(text, _WEAK_DAMAGE)
+
+    browsing = (_BROWSING_QUESTION_RE.search(text)
+                and not _PROBLEM_CONTEXT_RE.search(text))
+    if not browsing:
+        found.extend(m for m in _find_matches(text, _WEAK_OMISSION)
+                     if m not in found)
+    return found
 
 
 # Demanding a manager / refusing to deal with support. Main had NO rule for
@@ -325,20 +359,43 @@ _FOLLOWUP_PATTERN = re.compile(
 _EXCLAIM_RE = re.compile(r"!{3,}")
 
 _POSITIVE_RE = re.compile(
-    r"\b(thank|thanks|thankyou|love|loved|loving|adorable|perfect|beautiful|"
+    r"\b(thank|thanks|thankyou|thx|love|loved|loving|adorable|perfect|beautiful|"
     r"gorgeous|cute|amazing|wonderful|excellent|obsessed|delighted|thrilled|"
-    r"pleased|happy|brilliant|fantastic|lovely)\b", re.IGNORECASE)
+    r"pleased|happy|brilliant|fantastic|lovely|great|awesome|best|nice|super|"
+    r"fab|fabulous|appreciate|appreciated|recommend|quick|fast|impressed)\b",
+    re.IGNORECASE)
+# Grievance words only. The first version listed "not", "no" and "still", which
+# are in half of all English sentences - one stray "no notes!" re-armed the
+# exclamation rule and paged the owner about a compliment.
 _NEGATIVE_RE = re.compile(
-    r"\b(not|no|never|refund|damaged|broken|wrong|missing|late|angry|furious|"
+    r"\b(never|refund|damaged|broken|wrong|missing|late|angry|furious|"
     r"unacceptable|terrible|awful|worst|horrible|disappointed|disappointing|"
-    r"ridiculous|useless|rubbish|scam|fraud|cancel|complaint|complain|waiting|"
-    r"still|nobody|noone|ignore|ignored|refuse|refused)\b", re.IGNORECASE)
+    r"ridiculous|useless|rubbish|scam|fraud|cancel|complaint|complain|"
+    r"nobody|noone|ignored|ignoring|refused|refusing|disgusting|disgrace|"
+    r"appalling|pathetic|unhappy|fed\s+up|sick\s+of|had\s+enough)\b",
+    re.IGNORECASE)
 
 # Quoted email history dilutes every ratio, so measure the new text only.
-_QUOTE_LINE_RE = re.compile(r"^\s*>", re.MULTILINE)
+# Matched per LINE. Truncating at the first marker returned an empty string for
+# every bottom-posted or inline reply - Outlook's default - which silently
+# disabled both structural signals.
+_QUOTE_LINE_RE = re.compile(r"^\s*(?:>|\|)")
+# "wrote:" must END the line. Otherwise "Your colleague wrote: we will chase
+# it. THIS IS RIDICULOUS!!!" - the customer's own prose - was discarded.
 _QUOTE_HEADER_RE = re.compile(
-    r"^\s*(?:on\s.{0,120}\swrote:|-{2,}\s*original message|_{5,}|from:\s)",
-    re.IGNORECASE | re.MULTILINE)
+    r"^\s*(?:"
+    # A real "On <date> <someone> wrote:" header contains a date, so requiring
+    # a digit distinguishes it from the customer's own prose - "On Friday I
+    # ordered a gift set. Your colleague wrote: ..." must NOT be discarded.
+    # The trailing text is allowed because Gmail puts it on the same line.
+    r"on\s.{0,200}\d.{0,160}\swrote:"
+    r"|.{0,120}<[^>]+@[^>]+>\s+wrote:"
+    r"|-{2,}\s*(?:original message|forwarded message)"
+    r"|begin\s+forwarded\s+message:"
+    r"|_{5,}\s*$"
+    r"|(?:from|sent|to|subject):\s.{0,200}$"
+    r")",
+    re.IGNORECASE)
 
 _CAPS_WORD_RE = re.compile(r"\b[A-Z]{2,}\b")
 _WORD_RE = re.compile(r"\b[A-Za-z]{2,}\b")
@@ -355,15 +412,19 @@ _CAPS_STOPWORDS = frozenset({
 
 # A caps message only counts as shouting if at least one SHOUTED word is a
 # grievance word. Brand lists and pasted addresses are all caps too.
+# GRIEVANCE words only. The first version listed WHY, WHAT, HOW, PLEASE, HELP,
+# THIS, THAT, YOUR, WANT and NEED, so any caps-lock question escalated:
+# "DO YOU SHIP TO CANADA AND HOW MUCH IS IT" and "PLEASE SEND ME THE SIZE
+# CHART" both paged the owner. Caps lock is a habit; anger is a word choice.
 _SHOUT_ANCHORS = frozenset({
-    "WHY", "WHAT", "WHERE", "WHEN", "WHO", "HOW", "THIS", "THAT", "YOUR",
-    "NEVER", "STILL", "PLEASE", "HELP", "WANT", "NEED", "MONEY", "REFUND",
-    "NOW", "TODAY", "IMMEDIATELY", "UNACCEPTABLE", "RIDICULOUS", "AGAIN",
-    "ANSWER", "ANSWERED", "REPLY", "RESPOND", "RESPONSE", "WAITING", "WRONG",
-    "BROKEN", "DAMAGED", "MISSING", "CANCEL", "TERRIBLE", "AWFUL", "WORST",
-    "JOKE", "SERIOUSLY", "ENOUGH", "DONE", "SICK", "TIRED", "FED", "PHONE",
-    "CALL", "SPEAK", "MANAGER", "DEMAND", "LAST", "FINAL", "URGENT", "SCAM",
-    "FRAUD", "LAWYER", "NOBODY", "USELESS", "APPALLING", "DISGRACE", "ANGRY",
+    "NEVER", "STILL", "UNACCEPTABLE", "RIDICULOUS", "TERRIBLE", "AWFUL",
+    "WORST", "HORRIBLE", "JOKE", "SERIOUSLY", "ENOUGH", "SICK", "TIRED",
+    "FED", "USELESS", "APPALLING", "DISGRACE", "DISGUSTING", "PATHETIC",
+    "ANGRY", "FURIOUS", "NOBODY", "IGNORING", "IGNORED",
+    "REFUND", "MONEY", "SCAM", "FRAUD", "LAWYER", "DEMAND", "COMPLAINT",
+    "WRONG", "BROKEN", "DAMAGED", "MISSING", "CANCEL", "IMMEDIATELY",
+    "ANSWER", "ANSWERED", "REPLY", "RESPOND", "RESPONSE", "WAITING",
+    "PHONE", "MANAGER", "SUPERVISOR", "URGENT",
 })
 
 # Grammar words. A rant has pronouns and verbs; a pasted postal address or a
@@ -378,9 +439,19 @@ _SHOUT_GRAMMAR = frozenset({
     "KEEP", "STOP", "LOOK", "TAKE", "MAKE", "WITH", "WHAT", "WHY", "HOW",
 })
 
+# Verbs a complaint uses and a shop enquiry does not. The sustained path had
+# no grievance requirement at all, so "DO YOU SHIP TO CANADA AND HOW MUCH IS
+# IT" - caps lock, all grammar words - counted as shouting.
+_SHOUT_COMPLAINT_VERBS = frozenset({
+    "HAD", "ENOUGH", "TREAT", "TREATED", "TREATING", "IGNORE", "IGNORED",
+    "IGNORING", "WAITING", "WAITED", "PAID", "PROMISED", "TOLD", "ASKED",
+    "WANT", "WANTED", "NEED", "DEMAND", "FIX", "SORT", "SORTED", "REFUSE",
+    "REFUSED", "LIED", "STOLE", "CHARGED", "RUINED", "WASTED", "DISAPPOINTED",
+})
+
 _SHOUT_MIN_WORDS = 2       # with the anchor requirement doing the filtering
 _SHOUT_MIN_RATIO = 0.6
-_SUSTAINED_MIN_CAPS = 6    # the anchor-free path, for long all-caps rants
+_SUSTAINED_MIN_CAPS = 8    # the anchor-free path, for long all-caps rants
 _SUSTAINED_MIN_RATIO = 0.9
 _SUSTAINED_MIN_GRAMMAR = 2
 
@@ -398,9 +469,29 @@ _SMART_QUOTES = {
 }
 
 
-def _normalise_text(value: str) -> str:
+def _bound(text: str) -> str:
+    """Bound the length WITHOUT losing the end of the message.
+
+    A plain head truncation was the one way this classifier could come out
+    LOWER than main's: a bottom-posting customer writes the complaint under
+    the quoted thread, so the tail is exactly where the signal is. We keep the
+    opening and the closing and drop the middle.
+    """
+    if len(text) <= _MAX_SCAN_CHARS:
+        return text
+    head = _MAX_SCAN_CHARS * 3 // 4
+    tail = _MAX_SCAN_CHARS - head
+    return text[:head] + "\n" + text[-tail:]
+
+
+def _normalise_text(value: str, *, drop_quotes: bool = False) -> str:
     """Fold smart punctuation and bound the length before any regex sees it."""
-    text = str(value or "")[:_MAX_SCAN_CHARS]
+    text = str(value or "")
+    # Quoted history is stripped BEFORE the cap, so a long thread cannot push
+    # the customer's own words out of scope.
+    if drop_quotes and len(text) > _MAX_SCAN_CHARS:
+        text = _strip_quoted_history(text)
+    text = _bound(text)
     for fancy, plain in _SMART_QUOTES.items():
         if fancy in text:
             text = text.replace(fancy, plain)
@@ -408,13 +499,27 @@ def _normalise_text(value: str) -> str:
 
 
 def _strip_quoted_history(message_text: str) -> str:
-    """Return only what the customer typed this time."""
-    cut = len(message_text)
-    for pattern in (_QUOTE_LINE_RE, _QUOTE_HEADER_RE):
-        match = pattern.search(message_text)
-        if match:
-            cut = min(cut, match.start())
-    return message_text[:cut]
+    """Return only what the customer typed this time.
+
+    Line-based, and it never returns nothing. A top-posted reply stops at the
+    quote header; a bottom-posted or inline one keeps the lines that are not
+    quoted. If every line looks quoted, the original text is returned rather
+    than an empty string - measuring nothing is worse than measuring too much.
+    """
+    kept: list[str] = []
+    seen_content = False
+    for line in (message_text or "").splitlines():
+        if _QUOTE_LINE_RE.match(line):
+            continue
+        if _QUOTE_HEADER_RE.match(line):
+            if seen_content:
+                break          # top-posted: everything below is the old thread
+            continue           # bottom-posted: skip the header, keep looking
+        kept.append(line)
+        if line.strip():
+            seen_content = True
+    fresh = "\n".join(kept).strip()
+    return fresh or (message_text or "")
 
 
 def _is_shouting(message_text: str) -> bool:
@@ -422,6 +527,12 @@ def _is_shouting(message_text: str) -> bool:
     fresh = _strip_quoted_history(message_text or "")
     if not fresh:
         return False
+    # Caps-lock gratitude is not shouting. This vetoes BOTH paths below:
+    # "THANK YOU SO MUCH I AM SO HAPPY WITH MY ORDER" was reaching the
+    # sustained path, which has no grievance requirement of its own.
+    if _POSITIVE_RE.search(fresh) and not _NEGATIVE_RE.search(fresh):
+        return False
+
     all_caps = _CAPS_WORD_RE.findall(fresh)
     all_words = _WORD_RE.findall(fresh)
     if not all_words:
@@ -441,11 +552,14 @@ def _is_shouting(message_text: str) -> bool:
 
     # Path 2 — sustained shouting with no single grievance word, e.g.
     # "I HAVE HAD IT WITH YOU AND THE WAY YOU AND THE TEAM TREAT ME".
-    # Requires the whole message to be capitals AND to read like a sentence:
-    # an address in capitals has no pronouns or verbs.
+    # Requires the whole message to be capitals, to read like a sentence (an
+    # address in capitals has no pronouns or verbs), and to use a verb a
+    # complaint uses. Without that last test every caps-lock shop enquiry
+    # qualified.
     if (len(all_caps) >= _SUSTAINED_MIN_CAPS
             and (len(all_caps) / len(all_words)) >= _SUSTAINED_MIN_RATIO
-            and sum(1 for w in all_caps if w in _SHOUT_GRAMMAR) >= _SUSTAINED_MIN_GRAMMAR):
+            and sum(1 for w in all_caps if w in _SHOUT_GRAMMAR) >= _SUSTAINED_MIN_GRAMMAR
+            and any(w in _SHOUT_COMPLAINT_VERBS for w in all_caps)):
         return True
 
     return False
@@ -525,7 +639,7 @@ def classify(
             "source": str,              # "deterministic" (this classifier)
         }
     """
-    raw_message = _normalise_text(payload.get("message_text"))
+    raw_message = _normalise_text(payload.get("message_text"), drop_quotes=True)
     raw_subject = _normalise_text(payload.get("ticket_subject"))
     message_text = raw_message.lower()
     ticket_subject = raw_subject.lower()
@@ -564,8 +678,7 @@ def classify(
     # Weak triggers are ordinary English ("missing", "lost", "without the").
     # They only escalate when the message also shows an order was placed or
     # delivered, and is not phrased as a browsing or care question.
-    weak_allowed = _weak_triggers_apply(combined_text)
-    weak_matches = _find_matches(combined_text, _WEAK_IMMEDIATE) if weak_allowed else []
+    weak_matches = _weak_matches(combined_text)
     immediate_matches.extend(m for m in weak_matches if m not in immediate_matches)
 
     manager_matches = _find_matches(combined_text, _MANAGER_DEMAND_KEYWORDS)
@@ -795,6 +908,34 @@ _SELFTEST_CASES: list[tuple[str, str, bool]] = [
     ("The parcel arrived, thank you! Do you do gift wrap?", NORMAL, False),
     ("Do you know where my order is? Nothing has arrived and it has been 3 weeks.",
      HIGH, True),
+
+    # ── Caps lock is a habit; anger is a word choice ────────
+    ("DO YOU SHIP TO CANADA AND HOW MUCH IS IT", NORMAL, False),
+    ("PLEASE SEND ME THE SIZE CHART", NORMAL, False),
+    ("HOW LONG IS DELIVERY TO IRELAND", NORMAL, False),
+    ("THANK YOU SO MUCH I AM SO HAPPY WITH MY ORDER", NORMAL, False),
+    ("THIS IS A JOKE", HIGH, False),
+    ("PICK UP THE PHONE", HIGH, False),
+    ("I HAVE HAD IT WITH YOU AND THE WAY YOU AND THE TEAM TREAT ME", HIGH, False),
+
+    # ── A baby's age is not a delivery delay ────────────────
+    ("The parcel came today and I love it. Can I order the sleepsuit without "
+     "the bow for my 6 week old?", NORMAL, False),
+    ("My package arrived 3 days ago and it is lovely, can I order the same "
+     "romper without the bow for my sister?", NORMAL, False),
+    ("My order arrived 2 days ago. Do you sell the dress without the headband?",
+     NORMAL, False),
+
+    # ── Enthusiasm survives a stray "no" or "still" ─────────
+    ("Perfect!!! No notes!!!", NORMAL, False),
+    ("Thanks!!! Still obsessed with the little hat!!!", NORMAL, False),
+    ("Awesome!!!", NORMAL, False),
+    ("Best shop ever!!! So quick!!!", NORMAL, False),
+
+    # ── Damage evidence beats the browsing guard ────────────
+    ("Do you sell a replacement bow? Mine arrived ripped.", IMMEDIATE, True),
+    ("Am I able to swap this? The parcel had a stained romper in it.", IMMEDIATE, True),
+    ("Can I ask why my order came without the hat?", IMMEDIATE, True),
 
     # ── Ordinary benign traffic ─────────────────────────────
     ("Do you ship to Canada and how much?", NORMAL, False),

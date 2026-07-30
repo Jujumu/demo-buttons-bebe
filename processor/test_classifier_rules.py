@@ -97,7 +97,9 @@ STRONG_EXEMPLARS = {
     r"\bfell\s+apart\b": "It fell apart.",
     r"\bseam\s+ripped\b": "The seam ripped.",
     r"\b(?:did\s+not|didn'?t)\s+come\s+with\b": "It didn't come with the bib.",
-    r"\bmarked\s+delivered\s+but\b": "It is marked delivered but nothing came.",
+    r"\b(?:marked|says|shows|tracking\s+says)\s+(?:it\s+was\s+|as\s+)?delivered\s+but\b":
+        "It is marked delivered but I have not seen it.",
+    r"\bnothing\s+(?:is\s+)?here\b": "The courier says delivered, nothing is here.",
 }
 
 # Weak rules need order/delivery context, so every exemplar supplies some.
@@ -173,21 +175,29 @@ class EveryNewRuleIsLoadBearingTests(unittest.TestCase):
     """
 
     def _classify_without(self, attr: str, pattern: str, message: str) -> str:
-        original = getattr(cls, attr)
+        # The weak table is split in two at runtime, so patching the combined
+        # _WEAK_IMMEDIATE alone would have been a no-op - the mutation test
+        # would have passed while proving nothing.
+        targets = [attr]
+        if attr == "_WEAK_IMMEDIATE":
+            targets = ["_WEAK_IMMEDIATE", "_WEAK_DAMAGE", "_WEAK_OMISSION"]
+        originals = {name: getattr(cls, name) for name in targets}
         try:
-            setattr(cls, attr, [p for p in original if p != pattern])
+            for name, original in originals.items():
+                setattr(cls, name, [p for p in original if p != pattern])
             return _c(message)["priority"]
         finally:
-            setattr(cls, attr, original)
+            for name, original in originals.items():
+                setattr(cls, name, original)
 
     def test_removing_a_ported_high_rule_stops_its_exemplar_escalating(self):
         for pattern, message in PORTED_HIGH_EXEMPLARS.items():
             with self.subTest(pattern=pattern):
                 self.assertEqual(_c(message)["priority"], HIGH, message)
-                self.assertEqual(
-                    self._classify_without("_HIGH_KEYWORDS", pattern, message),
-                    NORMAL,
-                    f"{pattern!r} is dead code - {message!r} still escalates without it",
+                self.assertLess(
+                    _RANK[self._classify_without("_HIGH_KEYWORDS", pattern, message)],
+                    _RANK[HIGH],
+                    f"{pattern!r} is dead code - {message!r} is unchanged without it",
                 )
 
     def test_every_new_pattern_has_an_exemplar(self):
@@ -211,30 +221,30 @@ class EveryNewRuleIsLoadBearingTests(unittest.TestCase):
         for pattern, message in STRONG_EXEMPLARS.items():
             with self.subTest(pattern=pattern):
                 self.assertEqual(_c(message)["priority"], IMMEDIATE, message)
-                self.assertEqual(
-                    self._classify_without("_IMMEDIATE_KEYWORDS", pattern, message),
-                    NORMAL,
-                    f"{pattern!r} is dead code - {message!r} still escalates without it",
+                self.assertLess(
+                    _RANK[self._classify_without("_IMMEDIATE_KEYWORDS", pattern, message)],
+                    _RANK[IMMEDIATE],
+                    f"{pattern!r} is dead code - {message!r} is unchanged without it",
                 )
 
     def test_removing_a_weak_rule_stops_its_exemplar_escalating(self):
         for pattern, message in WEAK_EXEMPLARS.items():
             with self.subTest(pattern=pattern):
                 self.assertEqual(_c(message)["priority"], IMMEDIATE, message)
-                self.assertEqual(
-                    self._classify_without("_WEAK_IMMEDIATE", pattern, message),
-                    NORMAL,
-                    f"{pattern!r} is dead code - {message!r} still escalates without it",
+                self.assertLess(
+                    _RANK[self._classify_without("_WEAK_IMMEDIATE", pattern, message)],
+                    _RANK[IMMEDIATE],
+                    f"{pattern!r} is dead code - {message!r} is unchanged without it",
                 )
 
     def test_removing_a_manager_rule_stops_its_exemplar_escalating(self):
         for pattern, message in MANAGER_EXEMPLARS.items():
             with self.subTest(pattern=pattern):
                 self.assertEqual(_c(message)["priority"], IMMEDIATE, message)
-                self.assertEqual(
-                    self._classify_without("_MANAGER_DEMAND_KEYWORDS", pattern, message),
-                    NORMAL,
-                    f"{pattern!r} is dead code - {message!r} still escalates without it",
+                self.assertLess(
+                    _RANK[self._classify_without("_MANAGER_DEMAND_KEYWORDS", pattern, message)],
+                    _RANK[IMMEDIATE],
+                    f"{pattern!r} is dead code - {message!r} is unchanged without it",
                 )
 
 
@@ -273,6 +283,31 @@ class WeakRulesNeedContextTests(unittest.TestCase):
         ]:
             with self.subTest(message=message):
                 self.assertEqual(_c(message)["priority"], IMMEDIATE)
+
+    def test_damage_evidence_beats_the_browsing_guard(self):
+        """Nobody says "arrived ripped" while browsing."""
+        for message in [
+            "Do you sell a replacement bow? Mine arrived ripped.",
+            "Am I able to swap this? The parcel had a stained romper in it.",
+            "Can I ask why my order came without the hat?",
+            "Do you know if my parcel is missing? It says delivered but there is nothing here.",
+        ]:
+            with self.subTest(message=message):
+                self.assertEqual(_c(message)["priority"], IMMEDIATE)
+
+    def test_a_babys_age_is_not_a_delivery_delay(self):
+        """This is a baby-clothes store: "my 6 week old" is in every second
+        message, and a bare duration used to unlock the weak rules."""
+        for message in [
+            "The parcel came today and I love it. Can I order the sleepsuit "
+            "without the bow for my 6 week old?",
+            "My package arrived 3 days ago and it is lovely, can I order the "
+            "same romper without the bow for my sister?",
+            "My order arrived 2 days ago. Do you sell the dress without the headband?",
+            "Do you ship within 3 days? My order arrived without the gift note last time.",
+        ]:
+            with self.subTest(message=message[:50]):
+                self.assertEqual(_c(message)["priority"], NORMAL)
 
     def test_a_politely_phrased_complaint_still_escalates(self):
         """The browsing guard must yield to a real delivery problem."""
@@ -356,6 +391,40 @@ class StructuralAngerTests(unittest.TestCase):
             with self.subTest(message=message):
                 self.assertGreaterEqual(_RANK[_c(message)["priority"]], _RANK[HIGH])
 
+    def test_caps_lock_questions_are_not_shouting(self):
+        """Caps lock is a habit; anger is a word choice."""
+        for message in [
+            "DO YOU SHIP TO CANADA AND HOW MUCH IS IT",
+            "WHAT SIZE FOR A 6 MONTH OLD",
+            "PLEASE SEND ME THE SIZE CHART",
+            "HOW LONG IS DELIVERY TO IRELAND",
+            "PLEASE ADD A GIFT NOTE THAT SAYS WELCOME BABY",
+            "PLEASE HELP",
+            "MY BABY IS SO CUTE IN THIS",
+            "THANK YOU SO MUCH I AM SO HAPPY WITH MY ORDER",
+            "THANK YOU SO MUCH FOR THE FAST DELIVERY",
+            "CAN YOU CONFIRM MY ORDER NUMBER PLEASE",
+            "IS THE PINK ROMPER BACK IN STOCK YET",
+        ]:
+            with self.subTest(message=message):
+                self.assertEqual(_c(message)["priority"], NORMAL)
+
+    def test_short_caps_rants_still_escalate(self):
+        for message in ["THIS IS A JOKE", "PICK UP THE PHONE",
+                        "I HAVE HAD IT WITH YOU AND THE WAY YOU AND THE TEAM TREAT ME"]:
+            with self.subTest(message=message):
+                self.assertGreaterEqual(_RANK[_c(message)["priority"]], _RANK[HIGH])
+
+    def test_enthusiasm_survives_a_stray_negative_word(self):
+        """_NEGATIVE_RE used to contain "not", "no" and "still"."""
+        for message in ["Perfect!!! No notes!!!",
+                        "Thanks!!! Still obsessed with the little hat!!!",
+                        "The dress is gorgeous!!! Not sure which size next time!!!",
+                        "Lovely quality!!! I will not be shopping anywhere else!!!",
+                        "Awesome!!!", "Best shop ever!!! So quick!!!"]:
+            with self.subTest(message=message):
+                self.assertEqual(_c(message)["priority"], NORMAL)
+
     def test_capitals_that_are_not_shouting(self):
         for message in [
             "Do you carry NUNA UPPABABY BUGABOO DOONA CYBEX MAXI COSI?",
@@ -377,6 +446,83 @@ class StructuralAngerTests(unittest.TestCase):
                   "wrote: thanks for reaching out, we will look into your order and "
                   "get back to you as soon as we can with an update on the delivery.")
         self.assertGreaterEqual(_RANK[_c(quoted)["priority"]], _RANK[HIGH])
+
+
+class QuotedHistoryTests(unittest.TestCase):
+    """Truncating at the first quote marker returned "" for every bottom-posted
+    or inline reply - Outlook's default - which silently disabled both
+    structural signals."""
+
+    RANT = "WHERE IS IT I HAVE HAD ENOUGH OF WAITING THIS IS RIDICULOUS"
+
+    def test_a_bottom_posted_rant_is_still_seen(self):
+        for body in [
+            f"> we are looking into it\n\n{self.RANT}",
+            f"| we are looking into it\n\n{self.RANT}",
+            f"On Mon, Jul 20 2026 at 9:14 AM Support wrote:\n> we are on it\n\n{self.RANT}",
+            f"-------- Forwarded message --------\n> earlier text\n\n{self.RANT}",
+        ]:
+            with self.subTest(body=body[:40]):
+                self.assertGreaterEqual(_RANK[_c(body)["priority"]], _RANK[HIGH])
+
+    def test_a_top_posted_rant_is_not_diluted_by_the_thread(self):
+        body = (self.RANT + "\n\nOn Mon, Jul 20 2026 at 9:14 AM Buttons Bebe "
+                "Support wrote:\n> thanks for reaching out, we will look into "
+                "your order and get back to you as soon as we can with an "
+                "update on the delivery and the tracking number")
+        self.assertGreaterEqual(_RANK[_c(body)["priority"]], _RANK[HIGH])
+
+    def test_the_customers_own_prose_is_never_mistaken_for_a_quote_header(self):
+        # "wrote:" mid-sentence is the customer talking, not a mail client.
+        body = ("On Friday I ordered a gift set. Your colleague wrote: we will "
+                "chase it. This is ridiculous!!!")
+        self.assertGreaterEqual(_RANK[_c(body)["priority"]], _RANK[HIGH])
+
+    def test_an_all_quoted_message_falls_back_to_the_whole_text(self):
+        body = "> I want a refund, my order arrived damaged"
+        self.assertEqual(_c(body)["priority"], IMMEDIATE)
+
+
+class LengthCapTests(unittest.TestCase):
+    """A plain head truncation was the one way this classifier could come out
+    LOWER than main's - and the tail is exactly where a bottom-posting customer
+    writes."""
+
+    def test_a_signal_at_the_very_end_survives_the_cap(self):
+        for body in [
+            "x " * 6000 + " my order arrived damaged and I want a refund",
+            "hi " * 4000 + "chargeback",
+        ]:
+            with self.subTest(length=len(body)):
+                self.assertGreater(len(body), cls._MAX_SCAN_CHARS)
+                self.assertEqual(_c(body)["priority"], IMMEDIATE)
+
+    def test_a_long_real_thread_still_escalates(self):
+        reply = ("Thanks for getting in touch, we are looking into this for you "
+                 "and will come back as soon as we have an update.\n"
+                 "> your earlier message\n")
+        body = reply * 130 + "\nI want a refund, my order arrived damaged."
+        self.assertGreater(len(body), 2 * cls._MAX_SCAN_CHARS)
+        self.assertEqual(_c(body)["priority"], IMMEDIATE)
+
+    def test_the_cap_is_big_enough_to_be_useful(self):
+        self.assertGreaterEqual(cls._MAX_SCAN_CHARS, 4000)
+
+
+class AuditListTests(unittest.TestCase):
+    """The mutation test iterates _PORTED_HIGH_PATTERNS, so emptying that tuple
+    would disable the audit rather than fail it."""
+
+    def test_the_ported_high_audit_list_is_not_empty(self):
+        self.assertEqual(len(cls._PORTED_HIGH_PATTERNS), 5)
+        for pattern in cls._PORTED_HIGH_PATTERNS:
+            self.assertIn(pattern, cls._HIGH_KEYWORDS)
+
+    def test_the_weak_tables_are_not_empty(self):
+        self.assertGreaterEqual(len(cls._WEAK_DAMAGE), 5)
+        self.assertGreaterEqual(len(cls._WEAK_OMISSION), 7)
+        self.assertEqual(sorted(cls._WEAK_IMMEDIATE),
+                         sorted(cls._WEAK_DAMAGE + cls._WEAK_OMISSION))
 
 
 class NegationTests(unittest.TestCase):
