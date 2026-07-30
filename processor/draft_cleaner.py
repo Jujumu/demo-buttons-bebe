@@ -276,52 +276,98 @@ _ACK_FILLER = frozenset({
 
 _ACK_ALLOWED = _ACK_ANCHORS | _ACK_FILLER
 
-# Words and digits. Linear, no alternation, no backtracking.
-_TOKEN_RE = re.compile(r"[0-9a-z]+")
+# Word characters, Unicode-aware. A Latin-only [0-9a-z]+ found NO tokens in
+# Chinese, Cyrillic, Hebrew or Arabic, so "ok 我要退款" ("ok, I want a refund")
+# looked like a bare "ok" and was suppressed.
+_TOKEN_RE = re.compile(r"\w+", re.UNICODE)
 
 # Emoji that mean "we are done here". A message made only of these is an ack.
-# Anything NOT on this list — including every angry or confused emoji — drafts.
+# Anything NOT on this list — every angry or confused emoji — is content.
 _SAFE_EMOJI = (
-    "\U0001F44D", "\U0001F64F", "\u2764\ufe0f", "\u2764", "\U0001F60A",
-    "\U0001F642", "\U0001F600", "\U0001F601", "\U0001F970", "\U0001F60D",
-    "\U0001F44C", "\u2705", "\U0001F389", "\U0001F495", "\U0001F49B",
-    "\U0001F44F", "\U0001F929", "\u2b50", "\U0001F31F",
+    "\U0001F44D", "\U0001F64F", "\u2764", "\U0001F60A", "\U0001F642",
+    "\U0001F600", "\U0001F601", "\U0001F970", "\U0001F60D", "\U0001F44C",
+    "\u2705", "\U0001F389", "\U0001F495", "\U0001F49B", "\U0001F44F",
+    "\U0001F929", "\u2b50", "\U0001F31F", "\U0001F338", "\U0001F49C",
 )
 
-# Punctuation that carries no meaning on its own. Note "?" and "!" are NOT
-# here: a bare "?" is a customer chasing an answer, not an acknowledgement.
-_INERT_CHARS = " \t\r\n.,~-\u2013\u2014\u2026'\"()"
+# Skin-tone modifiers, variation selectors and zero-width characters. Stripped
+# before anything else: "\U0001F44D\U0001F3FD" (a thumbs-up with a skin tone) is
+# still a thumbs-up, and a zero-width space is still an empty message.
+_DECORATION = (
+    "".join(chr(c) for c in range(0x1F3FB, 0x1F400))   # skin tones
+    + "\ufe0e\ufe0f"                                   # variation selectors
+    + "\u200b\u200c\u200d\ufeff"                       # zero-width
+)
+
+# Punctuation that carries no meaning on its own. "?" is deliberately absent —
+# a question mark is always content, wherever it appears.
+_INERT_PUNCT = " \t\r\n.,~-\u2013\u2014\u2026'\"()[]:;*_/\\"
+
+
+def _strip_decoration(text: str) -> str:
+    for ch in _DECORATION:
+        if ch in text:
+            text = text.replace(ch, "")
+    for emoji in _SAFE_EMOJI:
+        if emoji in text:
+            text = text.replace(emoji, "")
+    return text
+
+
+def _carries_no_content(value: str | None) -> bool:
+    """True when this ONE piece of text has nothing in it to answer.
+
+    Evaluated per field. should_draft() calls it separately on the message and
+    on the subject, and suppresses only when BOTH are empty — concatenating
+    them was a token union, so an ack subject could supply the missing anchor
+    and silently suppress a real question in the body.
+    """
+    if value is None:
+        return True
+    text = _strip_decoration(str(value))
+    if not text.strip():
+        return True
+
+    # A question mark is content, full stop. The token scan drops punctuation,
+    # so "Have you received it?" used to read as bare filler plus the anchor
+    # "received" and was suppressed.
+    if "?" in text:
+        return False
+
+    tokens = _TOKEN_RE.findall(text.lower())
+
+    # Anything left after removing words and inert punctuation is a symbol the
+    # customer chose deliberately — an angry emoji, a currency sign. "!" only
+    # counts as inert when there are words around it, so a bare "!" is content.
+    residue = _TOKEN_RE.sub(" ", text)
+    inert = _INERT_PUNCT + ("!" if tokens else "")
+    if any(ch not in inert and not ch.isspace() for ch in residue):
+        return False
+
+    if not tokens:
+        return True
+
+    return (all(t in _ACK_ALLOWED for t in tokens)
+            and any(t in _ACK_ANCHORS for t in tokens))
 
 
 def should_draft(message: str, subject: str = "") -> ShouldDraft:
     """Return ok=False only when there is genuinely nothing to answer.
 
-    The subject line counts as content: an email with an empty body but a real
-    subject ("Do you have this in 6-9 months?") is a real question, and the
-    pipeline must still draft for it.
+    The subject and the body are judged INDEPENDENTLY and suppression needs
+    both to be empty. An email with a blank body and a real subject line
+    ("Do you have this in 6-9 months?") is a real question; equally, a thread
+    whose subject is "Thanks" must not silence a body that asks something.
 
-    Runs in linear time on the length of the message. Do not reintroduce a
+    Runs in linear time on the length of the input. Do not reintroduce a
     whole-message regex here — see the note above.
     """
-    text = f"{subject or ''} {message or ''}".strip()
-    if not text:
-        return ShouldDraft(False, "empty message")
-
-    tokens = _TOKEN_RE.findall(text.lower())
-
-    if not tokens:
-        # No letters or digits at all: emoji and/or punctuation.
-        residue = text
-        for emoji in _SAFE_EMOJI:
-            residue = residue.replace(emoji, "")
-        residue = residue.strip(_INERT_CHARS)
-        if not residue:
-            return ShouldDraft(False, "acknowledgement only (emoji/punctuation)")
-        # "?", "!", "\U0001F621" and friends are a customer wanting something.
+    if not _carries_no_content(message):
+        return ShouldDraft(True)
+    if not _carries_no_content(subject):
         return ShouldDraft(True)
 
-    if (all(t in _ACK_ALLOWED for t in tokens)
-            and any(t in _ACK_ANCHORS for t in tokens)):
-        return ShouldDraft(False, "no question to answer (thanks/ack only)")
-
-    return ShouldDraft(True)
+    combined = f"{subject or ''} {message or ''}"
+    if not _strip_decoration(combined).strip():
+        return ShouldDraft(False, "empty message")
+    return ShouldDraft(False, "no question to answer (thanks/ack only)")

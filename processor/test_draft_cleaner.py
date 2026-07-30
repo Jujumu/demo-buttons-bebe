@@ -326,6 +326,47 @@ class ShouldDraftTests(unittest.TestCase):
             with self.subTest(message=repr(msg)):
                 self.assertTrue(dc.should_draft(msg).ok, repr(msg))
 
+    def test_a_question_mark_anywhere_makes_it_content(self):
+        """The token scan drops punctuation, so a question built only from
+        filler and one anchor word read as a bare acknowledgement."""
+        for msg in ["Have you received it?", "Was it received?", "Is this ok?",
+                    "Received?", "Hi, thanks - are you there?",
+                    "Hello? Are you there? Thanks.", "ok?", "thanks, and?"]:
+            with self.subTest(message=msg):
+                self.assertTrue(dc.should_draft(msg).ok, msg)
+
+    def test_a_non_latin_message_is_never_read_as_an_acknowledgement(self):
+        """A Latin-only tokeniser found no words in CJK/Cyrillic/Hebrew, so one
+        stray English ack word made the whole sentence invisible."""
+        for msg in ["ok \u6211\u8981\u9000\u6b3e",          # ok, I want a refund
+                    "ok \u0433\u0434\u0435 \u043c\u043e\u0439 \u0437\u0430\u043a\u0430\u0437",  # ok, where is my order
+                    "\u05ea\u05d5\u05d3\u05d4 thanks \u05d0\u05d9\u05e4\u05d4 \u05d4\u05d4\u05d6\u05de\u05e0\u05d4",
+                    "\u062a\u0645 \u0627\u0644\u0627\u0633\u062a\u0644\u0627\u0645 thanks"]:
+            with self.subTest(message=msg):
+                self.assertTrue(dc.should_draft(msg).ok, msg)
+
+    def test_an_angry_emoji_beside_a_word_still_drafts(self):
+        """The emoji branch was unreachable once any word was present."""
+        for msg in ["Great \U0001F44E", "Thanks \U0001F621", "ok \U0001F92C",
+                    "perfect \U0001F4A9"]:
+            with self.subTest(message=msg):
+                self.assertTrue(dc.should_draft(msg).ok, msg)
+
+    def test_decorated_thumbs_up_is_still_an_acknowledgement(self):
+        """Skin tones and variation selectors survived the strip, so most
+        mobile thumbs-ups were drafting a reply to an emoji."""
+        for msg in ["\U0001F44D\U0001F3FB", "\U0001F44D\U0001F3FD", "\U0001F64F\U0001F3FE",
+                    "\U0001F44D\ufe0f", "\u2705\ufe0f", "\u200b"]:
+            with self.subTest(message=repr(msg)):
+                self.assertFalse(dc.should_draft(msg).ok, repr(msg))
+
+    def test_an_ack_subject_cannot_silence_the_body(self):
+        """Concatenating subject and body was a token union: the subject could
+        only ever supply a missing anchor and make suppression MORE likely."""
+        self.assertTrue(dc.should_draft("Hello?", subject="Thank you").ok)
+        self.assertTrue(dc.should_draft("Are you there?", subject="Thanks").ok)
+        self.assertTrue(dc.should_draft("where is it", subject="Perfect, thank you!").ok)
+
     def test_subject_counts_as_content(self):
         """HTML-only mail often arrives with an empty body and a real subject."""
         s = dc.should_draft("", subject="Do you have this in 6-9 months?")

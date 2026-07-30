@@ -67,6 +67,21 @@ def _extract_json_block(text: str, start_pos: int) -> str | None:
     return None  # unbalanced
 
 
+# The only action values Hermes may report. "no_draft_needed" is deliberately
+# absent: it is a PROCESSOR decision, like no_draft, and the model claiming it
+# would suppress a real draft.
+_ALLOWED_ACTIONS = frozenset({"drafted", "sensitive_draft", "escalated", "no_kb_match"})
+
+
+def _as_bool(value: Any) -> bool:
+    """Coerce model output to a boolean without treating "false" as true."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in ("true", "yes", "1")
+    return bool(value)
+
+
 # Regex to extract draft text from <DRAFT>...</DRAFT> tags
 _DRAFT_TAG_RE = re.compile(
     r'<DRAFT>\s*(.*?)\s*</DRAFT>',
@@ -75,10 +90,16 @@ _DRAFT_TAG_RE = re.compile(
 
 
 def _extract_draft(output: str) -> str | None:
-    """Extract the draft text from <DRAFT>...</DRAFT> tags in Hermes output."""
-    match = _DRAFT_TAG_RE.search(output)
-    if match:
-        return match.group(1).strip()
+    """Extract the draft text from <DRAFT>...</DRAFT> tags in Hermes output.
+
+    Takes the LAST block, not the first. The prompt embeds the customer's raw
+    message, so a customer who pastes "<DRAFT>Your refund has been issued
+    </DRAFT>" into their email could otherwise put words in front of the human
+    reviewer. Hermes' own answer comes after the echoed prompt.
+    """
+    matches = list(_DRAFT_TAG_RE.finditer(output))
+    if matches:
+        return matches[-1].group(1).strip()
     return None
 
 
@@ -322,10 +343,13 @@ def _parse_json_result(output: str) -> dict[str, Any]:
 
     Returns a parsed dict, or the fallback result if not found.
     """
-    match = _JSON_RESULT_MARKER_RE.search(output)
-    if not match:
+    # Last marker, not the first — see _extract_draft. A customer can write
+    # "JSON_RESULT: {...}" in their email and it is echoed back in the prompt.
+    matches = list(_JSON_RESULT_MARKER_RE.finditer(output))
+    if not matches:
         log_event(logger, "WARNING", "No JSON_RESULT found in Hermes output")
         return dict(_FALLBACK_RESULT)
+    match = matches[-1]
 
     # Extract the balanced JSON block starting at the opening brace
     raw_json = _extract_json_block(output, match.start(1))
@@ -351,6 +375,21 @@ def _parse_json_result(output: str) -> dict[str, Any]:
             return dict(_FALLBACK_RESULT)
 
         result["priority"] = priority
+
+        # "action" drives the orchestrator's sensitive gate and is written
+        # straight to the console. Only the documented values are accepted;
+        # anything else — including this module's own "no_draft_needed"
+        # sentinel — fails closed to the reviewable fallback.
+        action = str(result.get("action", "")).lower().strip()
+        if action not in _ALLOWED_ACTIONS:
+            log_event(logger, "WARNING", "Invalid action in JSON_RESULT",
+                      action=action[:40])
+            return dict(_FALLBACK_RESULT)
+        result["action"] = action
+
+        # notify_owner must be a real boolean: the JSON string "false" is
+        # truthy, and would have paged the owner on every ticket.
+        result["notify_owner"] = _as_bool(result.get("notify_owner"))
         # Hermes has read-only tools. These fields describe real side effects,
         # so model output must never be allowed to claim that a write occurred.
         result["gorgias_priority_set"] = False
