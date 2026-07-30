@@ -57,10 +57,11 @@ _SELF_TALK_MARKERS = [
     r"this (?:response|reply|draft) (?:above )?(?:is|was) (?:now )?complete",
     # "I have completed the response." / "I have now finished this draft."
     r"i have (?:now )?(?:completed|finished) (?:the|this|my) (?:response|reply|draft)",
-    # "Note to the reviewer:" / "Note to the team" (self-addressed hand-off).
-    # NB: this is NOT "Internal note for human review" (a legit escalation note)
-    # — that starts with "internal"/"notes for" and is left untouched.
-    r"note to (?:the )?(?:agent|reviewer|team)\b",
+    # NOTE: "Note to the reviewer:" is deliberately NOT here. It reads like
+    # self-talk, but it is the one marker that can carry a safety-relevant
+    # instruction - "Note to the reviewer: do NOT send this, the customer was
+    # already refunded twice and this may be fraud." Stripping it showed the
+    # human a clean, sendable draft and threw the warning away.
     # "End of response" / "[End of draft]"
     r"\[?end of (?:response|reply|draft)\]?",
     # "As an AI, I cannot ..." style refusals leaking into a draft.
@@ -176,8 +177,11 @@ def _dedupe_repeats(text: str) -> tuple[str, bool]:
     # relied on repeated passes, which reaches 4, 6, 8 and 9 but never a prime
     # multiple: a draft the model wrote five times came out still fivefold.
     # k is bounded by the length floor, so this stays cheap.
+    # Largest k first. Returning at the smallest meant each pass only divided
+    # the copy count by its smallest prime factor, so 32 copies came out as 2
+    # and 64 as 4 even after four passes.
     max_k = max(2, len(norm) // _MIN_DUP_CHARS)
-    for k in range(2, max_k + 1):
+    for k in range(max_k, 1, -1):
         base = _repeated_unit(norm, k)
         if base is None:
             continue
@@ -279,6 +283,13 @@ _ACK_FILLER = frozenset({
     "your", "yours", "x", "xx", "xxx",
 })
 
+# The subset that can stand alone as a whole message and mean nothing but
+# "we are done here".
+_GRATITUDE_ANCHORS = frozenset({
+    "thanks", "thank", "thanx", "thx", "ty", "tysm", "cheers",
+    "appreciated", "appreciation",
+})
+
 _ACK_ALLOWED = _ACK_ANCHORS | _ACK_FILLER
 
 # Word characters, Unicode-aware. A Latin-only [0-9a-z]+ found NO tokens in
@@ -316,14 +327,37 @@ def _strip_decoration(text: str) -> str:
     for emoji in _SAFE_EMOJI:
         if emoji in text:
             text = text.replace(emoji, "")
-    return text
+    return _HAPPY_EMOTICON_RE.sub(" ", text)
 
 
 # ASCII emoticons. ":", "-", "(", ")", "'" and "/" are all inert punctuation,
 # so ":(" and ":-(" used to dissolve to nothing and be read as an
 # acknowledgement — while the emoji 🙁 was correctly treated as content.
 # The (?!/) keeps "https://" out of it.
-_EMOTICON_RE = re.compile(r"[:;=8][-'~^]?(?:[()\[\]|\\<>DPpOo3]|/(?!/))")
+# Only the SAD mouths count as content. The first version included ")", "D",
+# "P", "o" and "3", so every happy sign-off - "thanks :)", "thank you :D" -
+# was forced to draft.
+_EMOTICON_RE = re.compile(r"[:;=8][-'~^]?(?:[(\[|\\<]|/(?!/))")
+
+# ...and the happy ones are stripped like an emoji, so their mouth character
+# does not survive as a stray token ("thank you :D" tokenised a bare "d").
+_HAPPY_EMOTICON_RE = re.compile(r"[:;=8][-'~^]?[)\]>DdPpOo3*]+")
+
+
+# Noise every email subject carries. Without stripping it the subject veto
+# fired on essentially every real ticket ("Re: Your Buttons Bebe order
+# #10234"), so this gate never actually ran in production - measured at 0 of
+# 15 acknowledgements suppressed with a realistic subject line.
+_SUBJECT_NOISE_RE = re.compile(
+    r"^\s*((re|fw|fwd|aw|sv)\s*:\s*)+|"
+    r"\border\s*#?\s*\d+|#\s*\d+|"
+    r"\b(no\s+subject|message\s+from\s+(the\s+)?contact\s+form|"
+    r"contact\s+form|order\s+confirmation|your\s+order|"
+    r"buttons\s+bebe|customer\s+(service|support)|support\s+request|"
+    r"new\s+message|website\s+enquiry|enquiry|update)\b|"
+    r"\b(your|our|my|the|a|an|order|orders|ticket|case|ref|reference)\b",
+    re.IGNORECASE,
+)
 
 
 def _carries_no_content(value: str | None) -> bool:
@@ -363,8 +397,20 @@ def _carries_no_content(value: str | None) -> bool:
     if not tokens:
         return True
 
-    return (all(t in _ACK_ALLOWED for t in tokens)
-            and any(t in _ACK_ANCHORS for t in tokens))
+    if not (all(t in _ACK_ALLOWED for t in tokens)
+            and any(t in _ACK_ANCHORS for t in tokens)):
+        return False
+
+    # A one-word reply is only an acknowledgement if the word is unambiguous
+    # gratitude. "ok", "noted", "received", "got it", "perfect" are answers to
+    # a question the agent just asked - "shall I cancel order #10234 before it
+    # ships?" - and suppressing them stored an empty card and shipped the
+    # order. "yes"/"sure"/"go ahead" already draft, so suppressing "ok" was
+    # incoherent as well as unsafe.
+    if len(tokens) <= 2 and not any(t in _GRATITUDE_ANCHORS for t in tokens):
+        return False
+
+    return True
 
 
 def should_draft(message: str, subject: str = "") -> ShouldDraft:
@@ -380,7 +426,7 @@ def should_draft(message: str, subject: str = "") -> ShouldDraft:
     """
     if not _carries_no_content(message):
         return ShouldDraft(True)
-    if not _carries_no_content(subject):
+    if not _carries_no_content(_SUBJECT_NOISE_RE.sub(" ", str(subject or ""))):
         return ShouldDraft(True)
 
     combined = f"{subject or ''} {message or ''}"

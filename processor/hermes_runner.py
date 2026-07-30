@@ -92,14 +92,29 @@ _DRAFT_TAG_RE = re.compile(
 def _extract_draft(output: str) -> str | None:
     """Extract the draft text from <DRAFT>...</DRAFT> tags in Hermes output.
 
-    Takes the FIRST block. Customer text cannot contain the marker - it is
-    defanged by _neutralise_markers() before the prompt is built - and the
-    prompt asks Hermes to write an AGENT NOTE *after* JSON_RESULT, so a
-    last-match rule handed the verdict to whatever that note quoted.
+    Anchored to the VERDICT, because neither end of the output is safe on its
+    own. The prompt puts the draft before JSON_RESULT and any AGENT NOTE
+    after it, so:
+      * first-match loses to a preamble - the model restating "I'll output the
+        full draft between <DRAFT> and </DRAFT> tags now" produced a draft of
+        the word "and";
+      * last-match loses to a trailing note that quotes something, which is
+        how a customer's spoofed refund promise reached the reviewer.
+    The last block before the first verdict line is neither.
+
+    Note this cannot rely on _neutralise_markers alone: Hermes reads the
+    original ticket back through the Gorgias tool, so raw markers can return
+    in anything it quotes.
     """
-    match = _DRAFT_TAG_RE.search(output)
-    if match:
-        return match.group(1).strip()
+    verdict = _JSON_RESULT_MARKER_RE.search(output)
+    limit = verdict.start() if verdict else len(output)
+    before = [m for m in _DRAFT_TAG_RE.finditer(output) if m.start() < limit]
+    if before:
+        return before[-1].group(1).strip()
+    # No verdict, or every block came after it: fall back to the last block.
+    matches = list(_DRAFT_TAG_RE.finditer(output))
+    if matches:
+        return matches[-1].group(1).strip()
     return None
 
 
@@ -160,10 +175,12 @@ _MARKER_SUBSTITUTIONS = (
 
 def _neutralise_markers(text: str) -> str:
     """Defang pipeline control markers in untrusted text."""
+    # No fast-path guard: `"json_reſult" in x.lower()` is False while
+    # re.IGNORECASE matches U+017F, so the one letter in these markers with a
+    # Unicode fold partner slipped straight through.
     out = str(text or "")
     for marker, replacement in _MARKER_SUBSTITUTIONS:
-        if marker.lower() in out.lower():
-            out = re.compile(re.escape(marker), re.IGNORECASE).sub(replacement, out)
+        out = re.compile(re.escape(marker), re.IGNORECASE).sub(replacement, out)
     return out
 
 
@@ -371,38 +388,45 @@ def _parse_json_result(output: str) -> dict[str, Any]:
 
     Returns a parsed dict, or the fallback result if not found.
     """
-    # First marker - see _extract_draft. The customer's copy is defanged before
-    # it ever reaches the prompt, and anything after Hermes' verdict is
-    # commentary, not a second verdict.
-    match = _JSON_RESULT_MARKER_RE.search(output)
-    if not match:
+    # LAST block that actually parses and validates. Neither end is safe on
+    # its own: a "Plan: JSON_RESULT: {...placeholder...}" line beat the real
+    # verdict under first-match, and a trailing AGENT NOTE quoting the schema
+    # template beat it under last-match. Taking the last VALID one is neither,
+    # and a template echo (with "<critical|high|normal|low>") simply fails
+    # validation and is skipped instead of destroying the real answer.
+    candidates = list(_JSON_RESULT_MARKER_RE.finditer(output))
+    if not candidates:
         log_event(logger, "WARNING", "No JSON_RESULT found in Hermes output")
         return dict(_FALLBACK_RESULT)
 
-    # Extract the balanced JSON block starting at the opening brace
-    raw_json = _extract_json_block(output, match.start(1))
-    if not raw_json:
-        log_event(logger, "WARNING", "JSON_RESULT block is unbalanced")
+    result = None
+    for candidate in reversed(candidates):
+        raw_json = _extract_json_block(output, candidate.start(1))
+        if not raw_json:
+            continue
+        try:
+            parsed = json.loads(raw_json)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(parsed, dict):
+            continue
+        required = {"priority", "reason", "action", "notify_owner"}
+        if not required.issubset(parsed.keys()):
+            continue
+        if str(parsed["priority"]).lower().strip() not in (
+                "critical", "high", "normal", "low"):
+            continue
+        result = parsed
+        break
+
+    if result is None:
+        log_event(logger, "WARNING",
+                  "No valid JSON_RESULT in Hermes output",
+                  candidates=len(candidates))
         return dict(_FALLBACK_RESULT)
 
     try:
-        result = json.loads(raw_json)
-
-        # Validate required fields
-        required = {"priority", "reason", "action", "notify_owner"}
-        if not required.issubset(result.keys()):
-            log_event(logger, "WARNING", "JSON_RESULT missing required fields",
-                      found=list(result.keys()))
-            return dict(_FALLBACK_RESULT)
-
-        # Normalize priority
-        priority = str(result["priority"]).lower().strip()
-        if priority not in ("critical", "high", "normal", "low"):
-            log_event(logger, "WARNING", "Invalid priority in JSON_RESULT",
-                      priority=priority)
-            return dict(_FALLBACK_RESULT)
-
-        result["priority"] = priority
+        result["priority"] = str(result["priority"]).lower().strip()
 
         # "action" drives the orchestrator's sensitive gate and is written
         # straight to the console. Only the documented values are accepted;
@@ -438,8 +462,8 @@ def _parse_json_result(output: str) -> dict[str, Any]:
 
         return result
 
-    except json.JSONDecodeError as exc:
-        log_event(logger, "ERROR", f"Failed to parse JSON_RESULT: {exc}")
+    except Exception as exc:  # noqa: BLE001 - a malformed verdict must not crash the loop
+        log_event(logger, "ERROR", f"Failed to normalise JSON_RESULT: {exc}")
         return dict(_FALLBACK_RESULT)
 
 

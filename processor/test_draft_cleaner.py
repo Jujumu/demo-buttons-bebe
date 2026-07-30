@@ -50,8 +50,6 @@ SELF_TALK_LINES = [
     ("this-response-above", "This response above is now complete."),
     ("i-have-completed", "I have completed the response."),
     ("i-have-finished", "I have now finished this draft."),
-    ("note-to-reviewer", "Note to the reviewer: double-check the tone before sending."),
-    ("note-to-team", "Note to team: this looks right."),
     ("end-of-response", "End of response"),
     ("end-of-draft-bracket", "[End of draft]"),
     ("as-an-ai", "As an AI, I cannot process the refund myself."),
@@ -256,7 +254,9 @@ class EmptyDraftTests(unittest.TestCase):
         """4x used to come out doubled: the dedupe only knew 2x and 3x."""
         # Includes the PRIME multiples. The first fix iterated a 2x/3x dedupe,
         # which reaches 4, 6, 8 and 9 but never 5 or 7.
-        for copies in range(2, 13):
+        # Returning at the SMALLEST k meant each pass only divided the copy
+        # count by its smallest prime factor: 32 came out as 2, 64 as 4.
+        for copies in list(range(2, 13)) + [16, 24, 32, 48, 64]:
             with self.subTest(copies=copies):
                 res = dc.clean_draft("\n\n".join([_GOOD] * copies))
                 self.assertEqual(_norm(res.text), _norm(_GOOD),
@@ -276,7 +276,7 @@ class EmptyDraftTests(unittest.TestCase):
 class ShouldDraftTests(unittest.TestCase):
     NO_CONTENT = [
         "", "  ", "...", "thanks", "Thanks!", "Thank you!!",
-        "thank you so much!", "ty", "ok", "Perfect, thanks so much!",
+        "thank you so much!", "ty", "Perfect, thanks so much!",
         "Got it, thank you!", "cheers", "Thanks again!",
         "\U0001F44D", "\U0001F64F", "\U0001F44D\U0001F44D", None,
     ]
@@ -380,6 +380,55 @@ class ShouldDraftTests(unittest.TestCase):
                     "\U0001F44D\ufe0f", "\u2705\ufe0f", "\u200b"]:
             with self.subTest(message=repr(msg)):
                 self.assertFalse(dc.should_draft(msg).ok, repr(msg))
+
+    def test_a_routine_mail_subject_does_not_defeat_the_gate(self):
+        """Every Gorgias email ticket has a subject, and any subject with one
+        non-ack word forced a draft - so this gate almost never ran. Measured
+        at 0 of 15 acknowledgements suppressed with a realistic subject line.
+        """
+        for subject in ["", "Thanks", "Re: Your Buttons Bebe order #10234",
+                        "Re: order confirmation", "(no subject)",
+                        "Message from Contact Form", "Re: Thank you",
+                        "Ticket #4821", "Your order"]:
+            with self.subTest(subject=subject):
+                self.assertFalse(dc.should_draft("thanks so much!", subject).ok)
+
+    def test_a_subject_that_really_asks_something_still_drafts(self):
+        for subject, message in [("Do you have this in 6-9 months?", ""),
+                                 ("wrong size sent", "thanks"),
+                                 ("order not received", "thanks"),
+                                 ("Damaged item", "thanks!")]:
+            with self.subTest(subject=subject):
+                self.assertTrue(dc.should_draft(message, subject).ok)
+
+    def test_a_one_word_confirmation_is_not_an_acknowledgement(self):
+        """"ok" answers "shall I cancel order #10234 before it ships?".
+        Suppressing it stored an empty card and the order shipped - while
+        "yes"/"sure"/"go ahead" already drafted, so it was incoherent too."""
+        for message in ["ok", "okay", "kk", "noted", "received", "got it",
+                        "perfect", "great", "understood", "awesome"]:
+            with self.subTest(message=message):
+                self.assertTrue(dc.should_draft(message).ok)
+
+    def test_gratitude_can_still_stand_alone(self):
+        for message in ["thanks", "thank you", "thanks so much", "cheers",
+                        "ty", "thx", "thank you so much!"]:
+            with self.subTest(message=message):
+                self.assertFalse(dc.should_draft(message).ok)
+
+    def test_a_happy_emoticon_is_an_acknowledgement(self):
+        for message in ["thanks :)", "thank you :D", "ty :P", "cheers :))",
+                        "thanks 8)", "thanks =)", "thanks :o)"]:
+            with self.subTest(message=message):
+                self.assertFalse(dc.should_draft(message).ok)
+
+    def test_the_reviewer_note_is_never_stripped(self):
+        """It reads like self-talk but it is the one marker that can carry a
+        safety warning to the human."""
+        draft = ("Hi Sarah, we're reviewing this for you.\n\n"
+                 "Note to the reviewer: do NOT send this, the customer was "
+                 "already refunded twice and this may be fraud.")
+        self.assertEqual(dc.clean_draft(draft).text, draft)
 
     def test_an_ack_subject_cannot_silence_the_body(self):
         """Concatenating subject and body was a token union: the subject could
