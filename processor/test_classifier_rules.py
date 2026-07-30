@@ -18,6 +18,7 @@ The 48-scenario regression at the bottom skips until the Task 1 harness merges.
 from __future__ import annotations
 
 import json
+import re
 import sys
 import unittest
 from pathlib import Path
@@ -82,7 +83,7 @@ STRONG_EXEMPLARS = {
     r"\bfile\s+a\s+complaint\b": "I will file a complaint.",
     r"\b(?:is\s?n'?t|was\s?n'?t|not)\s+what\s+i\s+ordered\b":
         "This isn't what I ordered.",
-    r"\b(?:got|sent|received)\s+the\s+wrong\b": "You sent the wrong one.",
+    r"\b(?:got|sent|received)\s+the\s+wrong\b": "She received the wrong bag.",
     r"\bnot\s+mine\b": "These are not mine.",
     r"\bnot\s+as\s+described\b": "It is not as described.",
     r"\blooks?\s+nothing\s+like\b": "It looks nothing like it.",
@@ -112,7 +113,7 @@ WEAK_EXEMPLARS = {
     r"\bleft\s+out\b": "The socks were left out of the box.",
     r"\bsupposed\s+to\s+include\b": "My order was supposed to include a bib.",
     r"\bdifferent\s+item\b": "My parcel held a completely different item.",
-    r"\binstead\s+of\s+the\b": "You sent the gown instead of the romper.",
+    r"\binstead\s+of\s+the\b": "My parcel held the gown instead of the romper.",
     r"\bripped\b": "The parcel held a ripped bodysuit.",
     r"\bstained\b": "My order held a stained bib.",
     r"\ba\s+(?:hole|rip|tear|stain)\b(?!\s*-?\s*away)": "My parcel held a top with a stain.",
@@ -490,8 +491,8 @@ class LengthCapTests(unittest.TestCase):
 
     def test_a_signal_at_the_very_end_survives_the_cap(self):
         for body in [
-            "x " * 6000 + " my order arrived damaged and I want a refund",
-            "hi " * 4000 + "chargeback",
+            "x " * 40000 + " my order arrived damaged and I want a refund",
+            "hi " * 30000 + "chargeback",
         ]:
             with self.subTest(length=len(body)):
                 self.assertGreater(len(body), cls._MAX_SCAN_CHARS)
@@ -501,12 +502,178 @@ class LengthCapTests(unittest.TestCase):
         reply = ("Thanks for getting in touch, we are looking into this for you "
                  "and will come back as soon as we have an update.\n"
                  "> your earlier message\n")
-        body = reply * 130 + "\nI want a refund, my order arrived damaged."
+        body = reply * 1000 + "\nI want a refund, my order arrived damaged."
         self.assertGreater(len(body), 2 * cls._MAX_SCAN_CHARS)
         self.assertEqual(_c(body)["priority"], IMMEDIATE)
 
     def test_the_cap_is_big_enough_to_be_useful(self):
         self.assertGreaterEqual(cls._MAX_SCAN_CHARS, 4000)
+
+
+class QuotedStoreTextTests(unittest.TestCase):
+    """The store's own words must never be classified as the customer's.
+
+    Quoted-history stripping used to be gated on the length cap, so for every
+    real-sized ticket the support footer was keyword-matched - and that footer
+    says "if an item is missing from your parcel".
+    """
+
+    FOOTER = ("> Buttons Bebe - if your order hasn't arrived within 5 working "
+              "days, or an item is\n> missing from your parcel, just reply to "
+              "this email and we will sort it out.")
+
+    def test_a_thanks_under_the_support_footer_stays_normal(self):
+        self.assertEqual(_c(f"Thank you, got it!\n\n{self.FOOTER}")["priority"], NORMAL)
+
+    def test_an_outlook_style_quote_block_is_not_the_customer(self):
+        body = ("Thanks, all good!\n\nFrom: Buttons Bebe <hello@buttonsbebe.com>\n"
+                "Subject: your order\n\nIf an item is missing from your parcel "
+                "just reply.")
+        self.assertEqual(_c(body)["priority"], NORMAL)
+
+    def test_a_quoted_store_promo_does_not_escalate_the_question_below_it(self):
+        body = ("From: Buttons Bebe <hello@buttonsbebe.com>\nSubject: FLASH SALE\n\n"
+                "FLASH SALE!!! 30% OFF EVERYTHING!!! HURRY!!!\n\n"
+                "Do you restock the cream romper?")
+        self.assertEqual(_c(body)["priority"], NORMAL)
+
+    def test_the_customers_own_complaint_under_a_quote_still_escalates(self):
+        body = f"My order arrived damaged and I want a refund.\n\n{self.FOOTER}"
+        self.assertEqual(_c(body)["priority"], IMMEDIATE)
+
+
+class PurchaseHistoryTests(unittest.TestCase):
+    """"I ordered from you last year" is history, not delivery evidence."""
+
+    def test_history_alone_does_not_unlock_the_omission_rules(self):
+        for message in [
+            "I bought a gift card from you last month and I have lost the code.",
+            "I ordered from you last year. The gift box option seems missing from checkout now.",
+            "You sent me the newsletter twice and the discount code is missing from it.",
+            "I ordered a few things at Christmas, I have lost track of what I still need.",
+            "I ordered twice before and loved it! One tiny thing, the newsletter link is missing.",
+            "I purchased a voucher and left out the recipient email by mistake.",
+        ]:
+            with self.subTest(message=message[:50]):
+                self.assertEqual(_c(message)["priority"], NORMAL)
+
+    def test_a_shipment_claim_is_still_evidence(self):
+        for message in ["You sent a different item instead of the one I picked.",
+                        "You packed the wrong size.",
+                        "You shipped me the wrong colour."]:
+            with self.subTest(message=message):
+                self.assertEqual(_c(message)["priority"], IMMEDIATE)
+
+
+class SarcasmTests(unittest.TestCase):
+    """A shouted grievance word outranks a polite one.
+
+    The positive-sentiment veto used to run BEFORE the anchor test, and
+    sarcasm supplies the positive word while carrying no grievance word.
+    """
+
+    def test_sarcastic_caps_with_a_grievance_word_escalates(self):
+        for message in ["AMAZING HOW FAST YOU TAKE THE MONEY AND HOW SLOW YOU SHIP IT",
+                        "NICE ONE, THREE EMAILS AND NOT ONE REPLY",
+                        "I APPRECIATE THE REPLY BUT I WANT MY PARCEL NOT AN APOLOGY"]:
+            with self.subTest(message=message):
+                self.assertGreaterEqual(_RANK[_c(message)["priority"]], _RANK[HIGH])
+
+    def test_caps_gratitude_is_still_not_shouting(self):
+        for message in ["THANK YOU SO MUCH I AM SO HAPPY WITH MY ORDER",
+                        "THANK YOU SO MUCH FOR THE FAST DELIVERY",
+                        "SO PLEASED WITH THIS LITTLE SET THANK YOU"]:
+            with self.subTest(message=message):
+                self.assertEqual(_c(message)["priority"], NORMAL)
+
+
+class TuningConstantTests(unittest.TestCase):
+    """Pin the numeric constants. Mutation testing found every one of them
+    could be changed - in either direction - with the whole suite still green.
+    """
+
+    def test_caps_stopwords_cover_the_tokens_that_are_information(self):
+        # These are the tokens that made an ordinary shipping question look
+        # like shouting when they counted toward the caps ratio.
+        for token in ("USPS", "DHL", "FEDEX", "VAT", "THE", "AND", "YOU", "MY"):
+            self.assertIn(token, cls._CAPS_STOPWORDS)
+        self.assertEqual(
+            _c("Do you ship via USPS UPS DHL FEDEX to the USA and is VAT included?")["priority"],
+            NORMAL)
+
+    def test_the_shout_ratio_is_load_bearing(self):
+        probe = ("hello i am WAITING on a REPLY about one small thing and "
+                 "otherwise it is all completely ok")
+        self.assertEqual(_c(probe)["priority"], NORMAL)
+        original = cls._SHOUT_MIN_RATIO
+        try:
+            cls._SHOUT_MIN_RATIO = 0.01
+            loosened = _c(probe)["priority"]
+        finally:
+            cls._SHOUT_MIN_RATIO = original
+        self.assertNotEqual(loosened, NORMAL,
+                            "_SHOUT_MIN_RATIO can be dropped to 0.01 with no effect")
+
+    def test_the_sustained_ratio_is_load_bearing(self):
+        probe = ("hello there i wanted to say that I HAVE HAD IT WITH YOU AND "
+                 "THE WAY YOU TREAT ME but otherwise it is all ok and there is "
+                 "nothing else i would change about any of it at the moment")
+        self.assertEqual(_c(probe)["priority"], NORMAL)
+        original = cls._SUSTAINED_MIN_RATIO
+        try:
+            cls._SUSTAINED_MIN_RATIO = 0.01
+            loosened = _c(probe)["priority"]
+        finally:
+            cls._SUSTAINED_MIN_RATIO = original
+        self.assertNotEqual(loosened, NORMAL,
+                            "_SUSTAINED_MIN_RATIO can be dropped with no effect")
+
+    def test_a_high_value_order_with_a_complaint_is_flagged(self):
+        # The order-value threshold had no test at all: nothing passed order_data.
+        payload = {"ticket_id": 1, "message_text": "my order arrived damaged",
+                   "ticket_subject": "", "intents": []}
+        rich = classify(payload, order_data={"total_price": "240.00"})
+        self.assertEqual(rich["priority"], IMMEDIATE)
+        self.assertIn("240", rich["reason"])
+        cheap = classify(payload, order_data={"total_price": "12.00"})
+        self.assertNotIn("high order value", cheap["reason"])
+
+    def test_a_bad_order_total_does_not_crash(self):
+        payload = {"ticket_id": 1, "message_text": "my order arrived damaged",
+                   "ticket_subject": "", "intents": []}
+        for total in ("", None, "abc", {}, []):
+            with self.subTest(total=total):
+                self.assertEqual(classify(payload, order_data={"total_price": total})["priority"],
+                                 IMMEDIATE)
+
+    def test_the_scan_window_covers_a_realistic_ticket(self):
+        # 8000 was small enough to lose anything written in the MIDDLE of a
+        # long thread, which was a strict de-escalation against main.
+        self.assertGreaterEqual(cls._MAX_SCAN_CHARS, 50_000)
+        body = ("Hi there, hope you are well. " * 250
+                + "The romper you sent arrived damaged and I would like a refund. "
+                + "Anyway, do you restock the sage range? " * 250)
+        self.assertGreater(len(body), 16_000)
+        self.assertEqual(_c(body)["priority"], IMMEDIATE)
+
+    def test_the_truncation_seam_cannot_manufacture_a_match(self):
+        # Every pattern uses \s+, which matches a newline, so joining the two
+        # halves with "\n" let the splice invent a phrase present in neither.
+        head = "we will answer your " * 4000 + "for your  wrong"
+        tail = "size guide question: " + "thanks so much " * 4000
+        self.assertGreater(len(head + tail), cls._MAX_SCAN_CHARS)
+        self.assertEqual(_c(head + tail)["priority"], NORMAL)
+
+    def test_the_negative_word_list_is_load_bearing(self):
+        angry = "This is a disgrace!!! I am furious!!!"
+        original = cls._NEGATIVE_RE
+        try:
+            cls._NEGATIVE_RE = re.compile(r"(?!x)x")   # never matches
+            stubbed = _c("Lovely shop but this is a disgrace!!!")["priority"]
+        finally:
+            cls._NEGATIVE_RE = original
+        self.assertNotEqual(stubbed, _c("Lovely shop but this is a disgrace!!!")["priority"],
+                            "_NEGATIVE_RE can be stubbed out with no effect")
 
 
 class AuditListTests(unittest.TestCase):

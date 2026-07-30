@@ -110,6 +110,12 @@ _IMMEDIATE_KEYWORDS = [
     r"\bbut\s+(?:i\s+)?got\s+(?:a|an|the)\s",
     r"\bbut\s+received\s+(?:a|an|the)\s",
     r"\binstead\s+i\s+got\b",
+    # "You sent a different item" is a shipment claim; "I ordered from you last
+    # year and lost the code" is purchase history. Only the first is evidence,
+    # so the verb needs a wrong/different object rather than sitting in
+    # _ORDER_CONTEXT_RE where it unlocked the whole omission table.
+    r"\byou\s+(?:sent|shipped|packed)\s+(?:me\s+)?(?:a|an|the)?\s*"
+    r"(?:wrong|different|completely\s+different)\b",
 
     # Damage reported as a fact about a received item.
     r"\bcracked\b", r"\bshattered\b", r"\bfrayed\b", r"\bfell\s+apart\b",
@@ -171,7 +177,6 @@ _ORDER_CONTEXT_RE = re.compile(
     r"parcel|parcels|package|packages|shipment|the\s+box|my\s+box|in\s+the\s+box|"
     r"tracking|courier|dispatched|"
     r"my\s+(?:order|purchase|item|items|delivery|parcel|package)|"
-    r"you\s+sent|sent\s+me|i\s+ordered|i\s+bought|i\s+purchased|"
     r"order\s*#?\s*\d|#\s*\d{3,}"
     r")\b",
     re.IGNORECASE,
@@ -270,8 +275,8 @@ _HIGH_KEYWORDS = [
     r"\b(haven'?t|have\s+not)\s+(received|gotten|seen)\b",
     r"\bnot\s+yet\s+(received|arrived|delivered)\b",
     r"\blast\s+(chance|warning)\b",
-    # Multiple follow-ups
-    r"\b(following\s+up|follow\s?up)\b.*(again|still|yet|no\s+(response|reply|answer))\b",
+    # (The multi-follow-up rule lives in _FOLLOWUP_PATTERN, which is applied to
+    # a bounded slice: its ".*" is the one pattern here that backtracks.)
 
     # ── Ported from Fable (Task 4). Non-delivery phrasings main missed.
     # These sit at HIGH, not IMMEDIATE: "I still haven't received it" is the
@@ -455,10 +460,23 @@ _SUSTAINED_MIN_CAPS = 8    # the anchor-free path, for long all-caps rants
 _SUSTAINED_MIN_RATIO = 0.9
 _SUSTAINED_MIN_GRAMMAR = 2
 
-# Ticket bodies are attacker-influenced and some pre-existing patterns in this
-# file backtrack super-linearly. Classification only ever needs the opening of
-# a message, so bound what the regexes ever see.
-_MAX_SCAN_CHARS = 8000
+# Ticket bodies are attacker-influenced. Only ONE pattern in this file
+# backtracks super-linearly (the follow-up rule, with its ".*"), so it gets
+# its own tight bound below and everything else can see a generous window.
+# At 8000 the head+tail window lost anything written in the MIDDLE of a long
+# message, which was a strict de-escalation against main - main has no cap.
+_MAX_SCAN_CHARS = 60_000
+
+# The follow-up rule alone is quadratic: 16s on a 184KB body. Nothing useful
+# lives past the opening of a message for that particular rule.
+_FOLLOWUP_SCAN_CHARS = 8000
+
+# The two halves of a truncated message are joined with a NON-whitespace
+# sentinel. Every pattern here uses \s+, which matches a newline, so a plain
+# "\n" let the seam manufacture a phrase present in neither half - a head
+# ending "...for your  wrong" spliced onto a tail starting "size guide"
+# matched "wrong size" and paged the owner.
+_TRUNCATION_SENTINEL = "\n\u00b7\u00b7\u00b7\n"
 
 # Apple, Gmail and Outlook all substitute a curly apostrophe. Without this,
 # "didn't receive", "hasn't arrived" and "isn't what I ordered" silently fell
@@ -480,16 +498,19 @@ def _bound(text: str) -> str:
     if len(text) <= _MAX_SCAN_CHARS:
         return text
     head = _MAX_SCAN_CHARS * 3 // 4
-    tail = _MAX_SCAN_CHARS - head
-    return text[:head] + "\n" + text[-tail:]
+    tail = _MAX_SCAN_CHARS - head - len(_TRUNCATION_SENTINEL)
+    return text[:head] + _TRUNCATION_SENTINEL + text[-tail:]
 
 
 def _normalise_text(value: str, *, drop_quotes: bool = False) -> str:
     """Fold smart punctuation and bound the length before any regex sees it."""
     text = str(value or "")
-    # Quoted history is stripped BEFORE the cap, so a long thread cannot push
-    # the customer's own words out of scope.
-    if drop_quotes and len(text) > _MAX_SCAN_CHARS:
+    # ALWAYS, not only when the message is long. Gating this on the length cap
+    # meant that for every real-sized ticket the STORE's own quoted words were
+    # keyword-matched as if the customer had written them - so a customer
+    # replying "thanks!" under a support footer that says "if an item is
+    # missing from your parcel, reply to this email" paged the owner.
+    if drop_quotes:
         text = _strip_quoted_history(text)
     text = _bound(text)
     for fancy, plain in _SMART_QUOTES.items():
@@ -508,13 +529,33 @@ def _strip_quoted_history(message_text: str) -> str:
     """
     kept: list[str] = []
     seen_content = False
+    in_header = False        # a quote header seen before any customer text
+    marker_quoted = False    # ...whose body was ">"-prefixed
+    skipped_body = False     # ...or was an unprefixed paragraph we dropped
     for line in (message_text or "").splitlines():
         if _QUOTE_LINE_RE.match(line):
+            marker_quoted = True
             continue
         if _QUOTE_HEADER_RE.match(line):
             if seen_content:
-                break          # top-posted: everything below is the old thread
-            continue           # bottom-posted: skip the header, keep looking
+                break        # top-posted: everything below is the old thread
+            in_header, marker_quoted, skipped_body = True, False, False
+            continue         # bottom-posted: skip the header, keep looking
+        if in_header:
+            # In Outlook the quoted body under a From:/Subject: block carries
+            # no ">" prefix, so it reads as the customer's own words - a store
+            # promo ("FLASH SALE!!!") escalated the question sitting under it.
+            # Drop exactly one such paragraph. If the body WAS ">"-prefixed it
+            # has already gone, and the next paragraph is the customer again.
+            if not line.strip():
+                if marker_quoted or skipped_body:
+                    in_header = False
+                continue
+            if marker_quoted:
+                in_header = False       # the customer, writing below a quote
+            else:
+                skipped_body = True
+                continue
         kept.append(line)
         if line.strip():
             seen_content = True
@@ -527,11 +568,7 @@ def _is_shouting(message_text: str) -> bool:
     fresh = _strip_quoted_history(message_text or "")
     if not fresh:
         return False
-    # Caps-lock gratitude is not shouting. This vetoes BOTH paths below:
-    # "THANK YOU SO MUCH I AM SO HAPPY WITH MY ORDER" was reaching the
-    # sustained path, which has no grievance requirement of its own.
-    if _POSITIVE_RE.search(fresh) and not _NEGATIVE_RE.search(fresh):
-        return False
+    positive_only = bool(_POSITIVE_RE.search(fresh)) and not _NEGATIVE_RE.search(fresh)
 
     all_caps = _CAPS_WORD_RE.findall(fresh)
     all_words = _WORD_RE.findall(fresh)
@@ -548,6 +585,11 @@ def _is_shouting(message_text: str) -> bool:
     if (len(caps) >= _SHOUT_MIN_WORDS and words
             and (len(caps) / len(words)) >= _SHOUT_MIN_RATIO
             and any(w in _SHOUT_ANCHORS for w in caps)):
+        # Deliberately NOT vetoed by positive sentiment. Sarcasm supplies the
+        # positive word and, by definition, no grievance word - "AMAZING HOW
+        # FAST YOU TAKE THE MONEY" and "NICE ONE, THREE EMAILS AND NOT ONE
+        # REPLY" were both silenced by THANKS/NICE while shouting MONEY and
+        # REPLY. A shouted grievance word outranks a polite one.
         return True
 
     # Path 2 — sustained shouting with no single grievance word, e.g.
@@ -556,7 +598,11 @@ def _is_shouting(message_text: str) -> bool:
     # address in capitals has no pronouns or verbs), and to use a verb a
     # complaint uses. Without that last test every caps-lock shop enquiry
     # qualified.
-    if (len(all_caps) >= _SUSTAINED_MIN_CAPS
+    # The sustained path has no grievance word by construction, so caps-lock
+    # gratitude ("THANK YOU SO MUCH I AM SO HAPPY WITH MY ORDER") is vetoed
+    # here and only here.
+    if (not positive_only
+            and len(all_caps) >= _SUSTAINED_MIN_CAPS
             and (len(all_caps) / len(all_words)) >= _SUSTAINED_MIN_RATIO
             and sum(1 for w in all_caps if w in _SHOUT_GRAMMAR) >= _SUSTAINED_MIN_GRAMMAR
             and any(w in _SHOUT_COMPLAINT_VERBS for w in all_caps)):
@@ -753,7 +799,7 @@ def classify(
     # Check for repeated follow-ups (3+ messages with no reply is CRITICAL in
     # the LLM prompt, but we can't count messages here — we look for the
     # follow-up keyword pattern as a HIGH signal)
-    followup_match = _FOLLOWUP_PATTERN.search(combined_text)
+    followup_match = _FOLLOWUP_PATTERN.search(combined_text[:_FOLLOWUP_SCAN_CHARS])
 
     if high_hits > 0 or high_intent_hit or followup_match or exclaiming or shouting:
         high_sensitive = bool(intent_names & _HIGH_SENSITIVE_INTENTS) or bool(
