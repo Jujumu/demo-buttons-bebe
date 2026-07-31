@@ -174,11 +174,30 @@ _IMMEDIATE_KEYWORDS = _MAIN_IMMEDIATE_KEYWORDS + _PORT_IMMEDIATE_KEYWORDS
 # has been placed or delivered, and is not phrased as a browsing or care
 # question. A genuine complaint always carries that evidence; a pre-sale
 # question almost never does.
-# Damage evidence. Nobody says "arrived ripped" while browsing, so these need
-# order context but are NOT blocked by a browsing-shaped question: "Do you sell
-# a replacement bow? Mine arrived ripped." is a complaint.
+# Damage evidence in VERB form. Nobody says "arrived ripped" while browsing, so
+# these need order context but are NOT blocked by a browsing-shaped question:
+# "Do you sell a replacement bow? Mine arrived ripped." is a complaint.
 _WEAK_DAMAGE = [
     r"\bripped\b", r"\bstained\b",
+    r"\banother\s+customer\b",
+    r"\bsomeone\s+else'?s?\s+(order|name|items?|package|parcel|box)\b",
+]
+
+# Damage evidence in NOUN form. These read like the verbs above but they are
+# not: in a baby-clothes shop they are ordinary care and product vocabulary.
+# "How do I get a stain out of a cotton onesie?", "Is there a hole in the back
+# of the sleep bag for a car seat strap?", "Do you do a rip-resistant pram
+# liner?" are all questions about a parcel that arrived perfectly.
+#
+# Round 11 measured 410 of 1500 realistic post-delivery messages paging the
+# owner's phone on these two patterns, against 0 on main. The earlier corpus
+# missed it because it only ever tested care questions on their own; real
+# post-purchase mail says "my order came today AND how do I..." in one
+# message, which arms every rule that needs order context.
+#
+# So they stay - "there is a hole in the sleeve" is still an escalation - but
+# behind the browsing guard, exactly like the omission wording below.
+_WEAK_DAMAGE_NOUN = [
     # "(?!\s*(?:-\s*)?away)", NOT "(?!\s*-?\s*away)". Same quadratic as
     # _ORDER_CONTEXT_RE, hidden inside a lookahead: two \s* separated by an
     # optional "-" lets the engine split a whitespace run every possible way.
@@ -188,8 +207,6 @@ _WEAK_DAMAGE = [
     # hyphen and whitespace arrangement of "tear-away", 0 differences.
     r"\ba\s+(?:hole|rip|tear|stain)\b(?!\s*(?:-\s*)?away)",
     r"\b(?:hole|rip|tear|stain)\s+(?:in|on)\b",
-    r"\banother\s+customer\b",
-    r"\bsomeone\s+else'?s?\s+(order|name|items?|package|parcel|box)\b",
 ]
 
 # Omission wording. These ARE how customers word a purchase request - "can I
@@ -204,7 +221,7 @@ _WEAK_OMISSION = [
 ]
 
 # Kept as one name for the mutation tests and for anything that iterates them.
-_WEAK_IMMEDIATE = _WEAK_DAMAGE + _WEAK_OMISSION
+_WEAK_IMMEDIATE = _WEAK_DAMAGE + _WEAK_DAMAGE_NOUN + _WEAK_OMISSION
 
 # Evidence that this is about a real order, not a pre-sale question.
 _ORDER_CONTEXT_RE = re.compile(
@@ -274,10 +291,12 @@ _PROBLEM_CONTEXT_RE = re.compile(
 def _weak_matches(text: str) -> list[str]:
     """Weak triggers that are allowed to escalate for this message.
 
-    Both classes need evidence of a real order. Damage evidence then fires
-    regardless of how the sentence is shaped; omission wording additionally
-    has to survive the browsing guard, because "without the bow" and "a
-    different item" are how customers word a purchase request.
+    All three classes need evidence of a real order. Damage in verb form
+    ("arrived ripped") then fires regardless of how the sentence is shaped.
+    Damage in noun form ("a stain", "a hole in") and omission wording
+    ("without the bow", "a different item") additionally have to survive the
+    browsing guard, because both are also how customers word a care question
+    or a purchase request about a parcel that arrived perfectly.
     """
     if not _ORDER_CONTEXT_RE.search(text):
         return []
@@ -287,8 +306,9 @@ def _weak_matches(text: str) -> list[str]:
     browsing = (_BROWSING_QUESTION_RE.search(text)
                 and not _PROBLEM_CONTEXT_RE.search(text))
     if not browsing:
-        found.extend(m for m in _find_matches(text, _WEAK_OMISSION)
-                     if m not in found)
+        for table in (_WEAK_DAMAGE_NOUN, _WEAK_OMISSION):
+            found.extend(m for m in _find_matches(text, table)
+                         if m not in found)
     return found
 
 
@@ -459,7 +479,20 @@ _POSITIVE_RE = re.compile(
     # praise for baby clothes is not the vocabulary the first list assumed.
     r"worth|favourite|favorite|soft|softer|softest|comfy|cosy|cozy|snug|"
     r"cutest|recommended|glad|happier|happiest|adore|adored|stunning|"
-    r"well\s+spent|every\s+penny)\b",
+    r"well\s+spent|every\s+penny|"
+    # Round 11. The list above matched exact stems only, so "it fits
+    # PERFECTLY!!!" and "beautifully made!!!" carried no positive word at all
+    # and paged the owner's phone about a compliment. Praise is inflected;
+    # grievance words happen not to be, which is why _NEGATIVE_RE can stay
+    # literal. Each stem below is one where every \w* continuation is still
+    # praise - deliberately not "super\w*", which would swallow supermarket.
+    r"perfect\w*|beautiful\w*|gorgeous\w*|adorab\w*|amazing\w*|wonderful\w*|"
+    r"brilliant\w*|fantastic\w*|excellent\w*|delight\w*|impress\w*|"
+    r"appreciat\w*|stunning\w*|"
+    # How British customers actually say it. Every one of these came from a
+    # message that escalated with no grievance word in it.
+    r"chuffed|made\s+up|spot\s+on|top\s+notch|bang\s+on|smashing|"
+    r"over\s+the\s+moon|no\s+notes|well\s+made|well\s+packaged|quality)\b",
     re.IGNORECASE)
 # Grievance words only. The first version listed "not", "no" and "still", which
 # are in half of all English sentences - one stray "no notes!" re-armed the
@@ -839,7 +872,14 @@ def _find_matches(text: str, patterns: list[str]) -> list[str]:
     for pattern in patterns:
         m = re.search(pattern, text_lower)
         if m:
-            hit = m.group(0).strip()
+            # Collapse whitespace, do not just strip it. Every \s+ in the
+            # tables matches a NEWLINE, so a customer who presses return
+            # mid-phrase ("someone\nelse's order") puts a line break inside
+            # the matched text, and this string is written straight into the
+            # console log. One escalation then reads as several log lines,
+            # the second of which is attacker-chosen - grep and any log
+            # viewer will attribute it to whatever the customer typed.
+            hit = " ".join(m.group(0).split())
             if hit and hit not in found:
                 found.append(hit)
     return found
@@ -1076,7 +1116,10 @@ def classify(
             reason_parts.append(f"urgent intent ({intent_names & _HIGH_INTENTS})")
         if followup_match:
             reason_parts.append("follow-up pattern detected")
-            matched.append(followup_match.group(0).strip())
+            # Collapsed, not stripped - same reason as _find_matches: the
+            # \s+ inside the follow-up pattern matches a newline, and this
+            # string goes straight into the console log.
+            matched.append(" ".join(followup_match.group(0).split()))
         # Structural anger on its own is enough to reach HIGH. Main previously
         # let "WHERE IS MY STUFF!!!" through as NORMAL because it contains no
         # angry *word*.

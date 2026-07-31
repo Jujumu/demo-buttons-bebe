@@ -612,6 +612,54 @@ class AuditTrailTests(unittest.TestCase):
         self.assertTrue(captured["context"], "log carried no match context")
         self.assertTrue(any("damaged" in c for c in captured["context"]))
 
+    def test_the_audit_trail_never_carries_a_line_break(self):
+        """A newline inside `matched` splits one log entry into two.
+
+        Every \\s+ in the tables matches a newline, so pressing return
+        mid-phrase puts a line break inside the matched text - and that text
+        is written straight to the console. The second line is then entirely
+        customer-written and reads like a log entry the system produced.
+        The same hazard as the Hermes draft markers, in a quieter place.
+        """
+        messages = [
+            "My parcel is\n\nmissing\rthe hat and the box holds someone\nelse's order.",
+            "I have\nnot\nreceived my order and I want a\n\nrefund now.",
+            "This is my third\ttime\nfollowing\nup about my order.",
+            "The romper arrived\ndamaged\r\nand I want a refund.",
+        ]
+        for message in messages:
+            with self.subTest(message=message[:40]):
+                got = _c(message)
+                for hit in got["matched"]:
+                    self.assertNotRegex(
+                        hit, r"[\r\n\t]",
+                        f"audit trail entry {hit!r} carries a line break",
+                    )
+                for excerpt in (got.get("context") or []):
+                    self.assertNotRegex(excerpt, r"[\r\n\t]")
+
+    def test_the_logged_fields_never_carry_a_line_break(self):
+        """The same check at the log call itself, not just on the return
+        value - `context` is only ever built there."""
+        captured = {}
+
+        def spy(logger, level, message, **fields):
+            if message.startswith("Classifier: "):
+                captured.update(fields)
+
+        original = cls.log_event
+        cls.log_event = spy
+        try:
+            _c("The romper arrived\ndamaged\r\nand someone\nelse's order was in "
+               "the box, I want a\nrefund")
+        finally:
+            cls.log_event = original
+        for key in ("matched", "context"):
+            for value in (captured.get(key) or []):
+                self.assertNotRegex(str(value), r"[\r\n\t]",
+                                    f"logged {key} entry {value!r} has a break")
+        self.assertNotRegex(str(captured.get("reason", "")), r"[\r\n\t]")
+
 
 class BuiltInSelfTestTests(unittest.TestCase):
     """The self-test that `python classifier.py` runs must also pass in CI."""
@@ -751,7 +799,8 @@ class EveryNewRuleIsLoadBearingTests(unittest.TestCase):
     # pass while proving nothing. It did exactly that once already.
     _SPLIT_TABLES = {
         "_WEAK_IMMEDIATE": (
-            "_WEAK_IMMEDIATE", "_WEAK_DAMAGE", "_WEAK_OMISSION"),
+            "_WEAK_IMMEDIATE", "_WEAK_DAMAGE", "_WEAK_DAMAGE_NOUN",
+            "_WEAK_OMISSION"),
         "_IMMEDIATE_KEYWORDS": (
             "_IMMEDIATE_KEYWORDS", "_MAIN_IMMEDIATE_KEYWORDS",
             "_PORT_IMMEDIATE_KEYWORDS"),
@@ -803,7 +852,8 @@ class EveryNewRuleIsLoadBearingTests(unittest.TestCase):
             cls._HIGH_KEYWORDS,
             cls._MAIN_HIGH_KEYWORDS + cls._PORT_HIGH_KEYWORDS)
         self.assertEqual(
-            cls._WEAK_IMMEDIATE, cls._WEAK_DAMAGE + cls._WEAK_OMISSION)
+            cls._WEAK_IMMEDIATE,
+            cls._WEAK_DAMAGE + cls._WEAK_DAMAGE_NOUN + cls._WEAK_OMISSION)
 
     def test_removing_a_ported_high_rule_stops_its_exemplar_escalating(self):
         for pattern, message in PORTED_HIGH_EXEMPLARS.items():
@@ -949,6 +999,81 @@ class WeakRulesNeedContextTests(unittest.TestCase):
                         "How do I return this? It isn't what I ordered."]:
             with self.subTest(message=message):
                 self.assertEqual(_c(message)["priority"], IMMEDIATE)
+
+
+class PostDeliveryBenignTests(unittest.TestCase):
+    """Round 11. Care questions arrive WITH an order word, not instead of one.
+
+    WeakRulesNeedContextTests above tests "How do I get a stain out of a
+    cotton onesie?" on its own, and it passes. Real post-purchase mail never
+    looks like that. It looks like "My order arrived today and it's lovely.
+    How do I get a stain out of a cotton onesie?" - the same question with an
+    order word in front of it, which arms every rule that needs order context.
+
+    Measured on 1500 realistic combinations of an opener, a sentiment and a
+    question: 410 paged the owner's phone, against 0 on main. Two causes, one
+    fix each, both pinned below.
+    """
+
+    def test_a_care_question_after_a_delivery_is_still_a_care_question(self):
+        for message in [
+            "My order arrived today and it's lovely. How do I get a stain out "
+            "of a cotton onesie?",
+            "Received my order yesterday. Is there a hole in the back of the "
+            "sleep bag for a car seat strap?",
+            "My items arrived today. How do I stop a stain setting in on a muslin?",
+            "My parcel came in today. Do you do a rip-resistant version of the "
+            "pram liner?",
+            "The box arrived safely. Can I order the same one with a hole for "
+            "the car seat strap?",
+            "Just got my delivery. How do I stop a rip in the knee if she "
+            "crawls a lot?",
+        ]:
+            with self.subTest(message=message[:60]):
+                result = _c(message)
+                self.assertEqual(result["priority"], NORMAL, result["reason"])
+                self.assertFalse(result["should_notify_owner"])
+
+    def test_the_same_damage_noun_without_a_question_still_escalates(self):
+        """The guard must not have made the alarm deaf."""
+        for message in [
+            "My order arrived today and there is a hole in the sleeve.",
+            "Parcel came this morning, there is a stain on the front of the romper.",
+            "My order arrived with a rip in the seam.",
+            "Received my parcel and one of the sleepsuits has a tear in the back.",
+            "My order came today. Why is there a hole in the sleeve?",
+        ]:
+            with self.subTest(message=message[:60]):
+                self.assertEqual(_c(message)["priority"], IMMEDIATE)
+
+    def test_inflected_praise_vetoes_the_exclamation_rule(self):
+        """"perfect" was in the positive table; "perfectly" was not, so
+        "it fits perfectly!!!" read as structural anger and paged the owner."""
+        for message in [
+            "My parcel arrived today and it fits perfectly!!! Can I add a hat "
+            "to my next order?",
+            "Order received, spot on!!! Which size do I need for a 9 month old?",
+            "My order came and it is beautifully made!!!",
+            "Arrived today and I am absolutely delighted!!! Thank you!",
+            "Wonderfully packaged and adorably tiny!!!",
+            "Chuffed to bits with this!!!",
+            "Over the moon with my order!!!",
+            "The quality is amazing!!! Will order again.",
+        ]:
+            with self.subTest(message=message[:60]):
+                result = _c(message)
+                self.assertEqual(result["priority"], NORMAL, result["reason"])
+
+    def test_praise_words_do_not_veto_a_real_grievance(self):
+        """The widened positive table must still lose to a grievance word."""
+        for message in [
+            "The quality is appalling!!! I want a refund.",
+            "It was described as perfect and it arrived damaged!!!",
+            "Beautifully packaged and completely the wrong item!!!",
+            "I was delighted until I saw the stain!!! This is unacceptable.",
+        ]:
+            with self.subTest(message=message[:60]):
+                self.assertNotEqual(_c(message)["priority"], NORMAL)
 
 
 class SmartPunctuationTests(unittest.TestCase):
@@ -1339,17 +1464,125 @@ class ReDoSTests(unittest.TestCase):
             found.add(name)
         return found
 
+    # Enough to reach a pattern nested in a dict of lists of tuples. Bounded
+    # only so a cycle or a huge data structure cannot hang the test.
+    _WALK_DEPTH = 6
+
+    @classmethod
+    def _walk(cls_, label, value, depth=0, seen=None):
+        """Yield (label, value, pattern-string) for regexes anywhere inside.
+
+        The previous version enumerated exactly two shapes: a module-level
+        re.Pattern, and an UPPERCASE-named list whose FIRST element is a str.
+        Five containers were therefore unwatched - a tuple, a list of
+        compiled patterns, a dict, a lowercase-named list, and a list whose
+        first element happens not to be a string. No live pattern sat in one,
+        but _PORTED_HIGH_PATTERNS already establishes the tuple idiom, so the
+        first person to follow it would have had no guard at all.
+        """
+        seen = seen if seen is not None else set()
+        if id(value) in seen or depth > cls_._WALK_DEPTH:
+            return
+        seen.add(id(value))
+
+        if isinstance(value, re.Pattern):
+            yield label, value, value.pattern
+        elif isinstance(value, str):
+            # A bare module-level string is not necessarily a regex, but the
+            # cost of probing one that is not is a few milliseconds, and the
+            # cost of skipping one that is was six production bombs.
+            if cls_._looks_like_a_regex(value):
+                yield label, value, value
+        elif isinstance(value, dict):
+            for key, item in value.items():
+                yield from cls_._walk(f"{label}[{key!r}]", key, depth + 1, seen)
+                yield from cls_._walk(f"{label}[{key!r}]", item, depth + 1, seen)
+        elif isinstance(value, (list, tuple, set, frozenset)):
+            for i, item in enumerate(value):
+                yield from cls_._walk(f"{label}[{i}]", item, depth + 1, seen)
+
+    _REGEX_METACHARS = re.compile(r"\\[bswdWSDAZ]|\[[^\]]+\]|\(\?|[*+?]|\{\d")
+
+    @staticmethod
+    def _looks_like_a_regex(text: str) -> bool:
+        # Cheap filter so docstrings, log messages and file paths are not
+        # pumped. Deliberately generous: anything with a quantifier, a
+        # character class, a group modifier or a \\-escape counts.
+        return bool(text) and bool(ReDoSTests._REGEX_METACHARS.search(text))
+
+    @classmethod
+    def _patterns_built_inside_functions(cls_):
+        """Regex literals that never reach module scope.
+
+        hermes_runner builds its trusted-marker patterns per run, from a
+        token: `re.compile(r'JSON_RESULT\\[' + re.escape(token) + r'\\]:...')`.
+        Those strings exist only while the function runs, so the walk above
+        cannot see them. Two routes, because each misses what the other
+        catches:
+
+          * every string literal passed to an re.* call anywhere in the
+            source, found with ast - catches inline re.search(r"...", text);
+          * the known factories, called with a sample token - catches the
+            assembled pattern, including the joins between the fragments.
+        """
+        import ast
+        import inspect
+
+        re_funcs = {"compile", "search", "match", "fullmatch", "findall",
+                    "finditer", "sub", "subn", "split"}
+        for mod_name, module in cls_._guarded_modules():
+            try:
+                tree = ast.parse(inspect.getsource(module))
+            except (OSError, TypeError, SyntaxError):  # pragma: no cover
+                continue
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                func = node.func
+                is_re_call = (
+                    isinstance(func, ast.Attribute) and func.attr in re_funcs
+                    and isinstance(func.value, ast.Name) and func.value.id == "re"
+                )
+                if not is_re_call or not node.args:
+                    continue
+                for sub in ast.walk(node.args[0]):
+                    if (isinstance(sub, ast.Constant)
+                            and isinstance(sub.value, str)
+                            and cls_._looks_like_a_regex(sub.value)):
+                        yield (f"{mod_name}.<line {node.lineno}>",
+                               sub.value, sub.value)
+
+            # The factories, assembled. A quadratic can live in the JOIN
+            # between two fragments, which the literal-by-literal route above
+            # would never see.
+            for factory in ("_json_marker_re", "_draft_tag_re"):
+                fn = getattr(module, factory, None)
+                if not callable(fn):
+                    continue
+                for token in ("", "0123456789abcdef"):
+                    try:
+                        built = fn(token)
+                    except Exception:  # pragma: no cover - defensive
+                        continue
+                    yield from cls_._walk(f"{mod_name}.{factory}({token!r})",
+                                          built)
+
     @classmethod
     def _every_pattern(cls_):
         """(name, value, pattern-string) for every regex in every module."""
+        seen_patterns = set()
         for mod_name, module in cls_._guarded_modules():
             for name, value in vars(module).items():
-                if isinstance(value, re.Pattern):
-                    yield f"{mod_name}.{name}", value, value.pattern
-                elif (isinstance(value, list) and name.isupper()
-                      and value and isinstance(value[0], str)):
-                    for i, pattern in enumerate(value):
-                        yield f"{mod_name}.{name}[{i}]", pattern, pattern
+                if name.startswith("__"):
+                    continue
+                for item in cls_._walk(f"{mod_name}.{name}", value):
+                    if item[2] not in seen_patterns:
+                        seen_patterns.add(item[2])
+                        yield item
+        for item in cls_._patterns_built_inside_functions():
+            if item[2] not in seen_patterns:
+                seen_patterns.add(item[2])
+                yield item
 
     def test_the_guard_covers_every_module_that_reads_ticket_text(self):
         seen = {name.split(".")[0] for name, _v, _p in self._every_pattern()}
@@ -1357,6 +1590,108 @@ class ReDoSTests(unittest.TestCase):
                          "two of the six historical bombs were in "
                          "draft_cleaner; a guard that only reads the "
                          "classifier would not have seen them")
+
+    # One live quadratic, in every container someone might reasonably reach
+    # for. `\border\s*#?\s*\d` is the round-8 bug in the form it shipped in.
+    BOMB = r"\border\s*#?\s*\d"
+
+    def test_the_guard_finds_a_bomb_in_every_container_shape(self):
+        """The walk must not be shape-dependent.
+
+        Its predecessor recognised exactly two: a module-level re.Pattern and
+        an UPPERCASE list whose FIRST element is a str. Everything below
+        passed it silently. This test is the reason the walk is recursive
+        rather than a longer if/elif chain - it fails for any shape the walk
+        cannot reach, including ones nobody has thought of yet.
+        """
+        import types
+
+        shapes = {
+            "bare_compiled": re.compile(self.BOMB),
+            "BARE_STRING": self.BOMB,
+            "UPPER_LIST": [self.BOMB],
+            "lower_list": [self.BOMB],
+            "TUPLE": (self.BOMB,),
+            "SET": {self.BOMB},
+            "FROZEN": frozenset({self.BOMB}),
+            "LIST_OF_COMPILED": [re.compile(self.BOMB)],
+            "DICT_VALUES": {"a": self.BOMB},
+            "DICT_KEYS": {self.BOMB: "a"},
+            "STR_FIRST_IS_NOT_A_STR": [re.compile("x"), self.BOMB],
+            "NESTED": {"outer": [("inner", [self.BOMB])]},
+        }
+        for label, value in shapes.items():
+            with self.subTest(shape=label):
+                fake = types.ModuleType("fake_module")
+                setattr(fake, label, value)
+                original = ReDoSTests._guarded_modules
+                try:
+                    ReDoSTests._guarded_modules = staticmethod(
+                        lambda: [("fake", fake)])
+                    found = list(self._every_pattern())
+                finally:
+                    ReDoSTests._guarded_modules = original
+                self.assertTrue(
+                    any(p == self.BOMB for _n, _v, p in found),
+                    f"a quadratic hidden in a {label} is invisible to the guard")
+
+        # Reaching it and flagging it are two different failures, so prove the
+        # second one too - once. Measuring a deliberate bomb costs seconds, and
+        # _scan does not care which container the pattern arrived in.
+        self.assertTrue(
+            self._scan([("planted", self.BOMB, self.BOMB)]),
+            "the guard reached the bomb but did not flag it")
+
+    def test_the_guard_finds_a_bomb_built_inside_a_function(self):
+        """A pattern compiled per-call never reaches module scope.
+
+        hermes_runner builds its trusted-marker patterns from a per-run token
+        exactly this way, so `vars(module)` cannot see them and the walk above
+        is blind on its own.
+        """
+        import textwrap
+        import types
+
+        src = textwrap.dedent(f'''
+            import re
+
+            def build(token):
+                return re.compile(r"{self.BOMB}" + re.escape(token))
+
+            def inline(text):
+                return re.search(r"{self.BOMB}", text)
+        ''')
+        fake = types.ModuleType("fake_fn_module")
+        exec(compile(src, "<fake>", "exec"), fake.__dict__)
+
+        original_mods = ReDoSTests._guarded_modules
+        original_src = None
+        try:
+            ReDoSTests._guarded_modules = staticmethod(lambda: [("fake", fake)])
+            import inspect
+            original_src = inspect.getsource
+            inspect.getsource = lambda m: src if m is fake else original_src(m)
+            found = list(self._every_pattern())
+        finally:
+            ReDoSTests._guarded_modules = original_mods
+            if original_src is not None:
+                import inspect
+                inspect.getsource = original_src
+        self.assertTrue(
+            any(self.BOMB in p for _n, _v, p in found),
+            "a quadratic compiled inside a function is invisible to the guard")
+        self.assertTrue(self._scan(found),
+                        "the guard reached the in-function bomb but let it pass")
+
+    def test_the_regex_filter_does_not_swallow_a_real_pattern(self):
+        """_looks_like_a_regex is the one place a pattern can be dropped
+        silently, so pin both directions."""
+        for pattern in (self.BOMB, r"\s+", r"a{2,}", r"(?:x)?", r"[abc]+",
+                        r"\bwaiting\s+(?:for\s+)?(?:\d+|a)?\s*days?"):
+            self.assertTrue(self._looks_like_a_regex(pattern), pattern)
+        for prose in ("Classifier: IMMEDIATE", "deterministic", "",
+                      "processor/classifier.py"):
+            self.assertFalse(self._looks_like_a_regex(prose), prose)
 
     def test_the_literal_miner_reaches_every_shape(self):
         # Round 10 planted four quadratics that the miner could not reach, and
@@ -1864,10 +2199,60 @@ class AuditListTests(unittest.TestCase):
             self.assertIn(pattern, cls._HIGH_KEYWORDS)
 
     def test_the_weak_tables_are_not_empty(self):
-        self.assertGreaterEqual(len(cls._WEAK_DAMAGE), 5)
+        self.assertGreaterEqual(len(cls._WEAK_DAMAGE), 4)
+        self.assertGreaterEqual(len(cls._WEAK_DAMAGE_NOUN), 2)
         self.assertGreaterEqual(len(cls._WEAK_OMISSION), 7)
-        self.assertEqual(sorted(cls._WEAK_IMMEDIATE),
-                         sorted(cls._WEAK_DAMAGE + cls._WEAK_OMISSION))
+        self.assertEqual(
+            sorted(cls._WEAK_IMMEDIATE),
+            sorted(cls._WEAK_DAMAGE + cls._WEAK_DAMAGE_NOUN
+                   + cls._WEAK_OMISSION))
+
+    # Ordinary care and product questions. A customer writes these about a
+    # parcel that arrived perfectly, so nothing in the UNGUARDED table may
+    # match any of them - that table fires whatever shape the sentence is.
+    CARE_QUESTION_PHRASES = [
+        "how do i get a stain out of a cotton onesie",
+        "is there a hole in the back of the sleep bag for a car seat strap",
+        "do you do a rip-resistant version of the pram liner",
+        "how do i stop a rip in the knee if she crawls a lot",
+        "is there a tear-away label or a sewn-in one",
+        "what is the best way to get a stain on white muslin out",
+        "can i order the same one with a hole for the car seat strap",
+        "do you sell a spare bow, and how do i stop a tear in the seam",
+    ]
+
+    def test_the_unguarded_damage_table_matches_no_care_question(self):
+        """Round 11's fix, pinned as a property rather than a name.
+
+        _WEAK_DAMAGE fires regardless of how the sentence is shaped, so every
+        pattern in it must be wording that only ever appears in a complaint.
+        The noun forms were not - "a stain", "hole in" are how a customer asks
+        how to wash something - and 410 of 1500 realistic post-delivery
+        messages paged the owner's phone as a result, against 0 on main.
+        They now live in _WEAK_DAMAGE_NOUN, behind the browsing guard.
+
+        Written this way so it also catches the NEXT pattern someone adds to
+        the unguarded table without checking it against ordinary traffic.
+        """
+        for pattern in cls._WEAK_DAMAGE:
+            for phrase in self.CARE_QUESTION_PHRASES:
+                with self.subTest(pattern=pattern, phrase=phrase[:40]):
+                    self.assertIsNone(
+                        re.search(pattern, phrase),
+                        f"{pattern!r} fires on an ordinary care question and "
+                        f"the unguarded table ignores the browsing guard - it "
+                        f"belongs in _WEAK_DAMAGE_NOUN",
+                    )
+
+    def test_the_guarded_noun_table_is_still_the_one_that_matches_them(self):
+        """The counterpart: the nouns must still be live somewhere, or the
+        test above passes by having deleted the rules instead of moving
+        them."""
+        hits = sum(
+            1 for phrase in self.CARE_QUESTION_PHRASES
+            if any(re.search(p, phrase) for p in cls._WEAK_DAMAGE_NOUN)
+        )
+        self.assertGreaterEqual(hits, 6, "_WEAK_DAMAGE_NOUN was gutted, not moved")
 
 
 class NegationTests(unittest.TestCase):
