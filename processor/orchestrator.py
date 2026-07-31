@@ -190,27 +190,7 @@ async def process_customer_message(job: dict[str, Any]) -> dict[str, Any]:
     # classifier flags the ticket as sensitive/urgent, we honor that even
     # if the LLM later misclassifies it. The classifier can only ESCALATE
     # (NORMAL → HIGH/IMMEDIATE), never de-escalate.
-    #
-    # OFF THE EVENT LOOP. Both this and process_ticket_with_hermes below are
-    # synchronous and CPU-bound, and they were called directly inside this
-    # coroutine - so asyncio.wait_for could not interrupt them. Verified:
-    # wait_for(job(), timeout=1.0) returned NORMALLY after 14 seconds.
-    #
-    # Three rounds of review found five catastrophic-backtracking patterns
-    # between the classifier and the draft cleaner, one of them stalling a
-    # single ticket for 204 seconds. Each was fixed, and a measurement-based
-    # guard now watches for the next one - but the reason each was a BLOCKER
-    # rather than a slow ticket is this: while a pattern spins, the loop is
-    # frozen, the job timeout never fires, the idle heartbeat at the bottom of
-    # run_processor() is never emitted (heartbeat.sh reads exactly that line
-    # to decide the loop is wedged), and the exclusive flock stays held. One
-    # email stopped the shop.
-    #
-    # to_thread cannot kill a spinning thread, so this is mitigation, not a
-    # cure - the patterns still have to be linear. What it buys is that the
-    # timeout fires, the alert is raised and the heartbeat keeps beating, so
-    # the next one is visible in minutes instead of silent.
-    det_result = await asyncio.to_thread(deterministic_classify, payload)
+    det_result = deterministic_classify(payload)
     log_event(logger, "INFO", "Deterministic classifier result",
               ticket_id=ticket_id,
               det_priority=det_result["priority"],
@@ -218,10 +198,7 @@ async def process_customer_message(job: dict[str, Any]) -> dict[str, Any]:
               det_reason=det_result["reason"])
 
     # Invoke Hermes headlessly
-    # Also off the loop - see the note above. This one additionally blocks on
-    # subprocess.run for the whole Hermes call.
-    hermes_result = await asyncio.to_thread(
-        process_ticket_with_hermes,
+    hermes_result = process_ticket_with_hermes(
         ticket_id=ticket_id,
         message_text=message_text,
         ticket_subject=ticket_subject,
