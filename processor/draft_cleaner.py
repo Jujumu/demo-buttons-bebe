@@ -62,8 +62,23 @@ _SELF_TALK_MARKERS = [
     # instruction - "Note to the reviewer: do NOT send this, the customer was
     # already refunded twice and this may be fraud." Stripping it showed the
     # human a clean, sendable draft and threw the warning away.
-    # "End of response" / "[End of draft]"
-    r"\[?end of (?:response|reply|draft)\]?",
+    # "End of response" / "[End of draft]" / "-- end of the draft --"
+    r"[-\s]*\[?end of (?:the\s+)?(?:response|reply|draft)\]?",
+    # Round-8 review: these phrasings all reached the sendable draft body.
+    # "The response above is complete." / "The draft above is complete."
+    r"(?:the\s+)?(?:response|reply|draft)\s+above\s+(?:is|was)\s+"
+    r"(?:already\s+|now\s+)?complete",
+    # "Draft complete." / "[Draft complete]"
+    r"\[?(?:draft|response|reply)\s+complete\b",
+    # "I've completed the draft." / "I have written the response above."
+    r"i(?:'ve| have)\s+(?:completed|written|finished)\s+(?:the|this|my)\s+"
+    r"(?:response|reply|draft)",
+    # An internal note about the customer is not a reply TO the customer.
+    # _build_prompt asks for "AGENT NOTE" lines AFTER the verdict, but the
+    # model sometimes puts one inside the draft tags - and they carry things
+    # like "this customer has 3 prior chargebacks".
+    r"agent[\s-]note\b",
+    r"\(internal[:\s]",
     # "As an AI, I cannot ..." style refusals leaking into a draft.
     r"as an ai\b.*\bi (?:cannot|can't|am unable)",
 ]
@@ -71,6 +86,12 @@ _MARKER_RE = re.compile(
     r"^[\s>*#\-]*(?:" + "|".join(_SELF_TALK_MARKERS) + r")",
     re.IGNORECASE,
 )
+
+# Hard bounds on what should_draft() will scan. See the note in that function:
+# these are a second line of defence behind the patterns themselves, because
+# this gate runs synchronously on a single-process pipeline.
+_MAX_GATE_SUBJECT = 2_000
+_MAX_GATE_MESSAGE = 20_000
 
 # A repeated block must be at least this many normalised characters before we
 # treat it as a genuine duplication. Keeps short, legitimately-repeated content
@@ -385,9 +406,27 @@ _HAPPY_EMOTICON_RE = re.compile(r"[:;=8][-'~^]?[)\]>DdPpOo3*]+")
 # fired on essentially every real ticket ("Re: Your Buttons Bebe order
 # #10234"), so this gate never actually ran in production - measured at 0 of
 # 15 acknowledgements suppressed with a realistic subject line.
+#
+# "\border[\s#]*\d+", NOT "\border\s*#?\s*\d+". Two \s* separated by an
+# optional #? is quadratic: for a subject that is the word "order" followed by
+# a long whitespace run and no digit, the engine tries every way of splitting
+# the run between the two groups. Measured on the version with two groups:
+# 8 000 spaces 0.80 s, 16 000 2.93 s, 32 000 11.64 s, 128 000 ~3 minutes.
+#
+# That is not a slow request, it is a stopped shop. should_draft() runs
+# SYNCHRONOUSLY inside the job coroutine, so asyncio.wait_for cannot interrupt
+# it - verified: wait_for(job(), timeout=1.0) returned normally after 6.5 s -
+# and orchestrator.py holds an exclusive flock, so there is exactly one
+# processor. One email with a padded subject line freezes every ticket, every
+# owner alert and the heartbeat until it finishes.
+#
+# This is the SECOND time this file has had that bug. The note further down
+# describes the first (an exponential alternation, ~700 bytes never returned);
+# the fix for it left this quadratic behind in a pattern added afterwards.
+# A single character class cannot backtrack, so there is nothing left to split.
 _SUBJECT_NOISE_RE = re.compile(
     r"^\s*((re|fw|fwd|aw|sv)\s*:\s*)+|"
-    r"\border\s*#?\s*\d+|#\s*\d+|"
+    r"\border[\s#]*\d+|#\s*\d+|"
     r"\b(no\s+subject|message\s+from\s+(the\s+)?contact\s+form|"
     r"contact\s+form|order\s+confirmation|your\s+order|"
     r"buttons\s+bebe|customer\s+(service|support)|support\s+request|"
@@ -470,9 +509,24 @@ def should_draft(message: str, subject: str = "") -> ShouldDraft:
     Runs in linear time on the length of the input. Do not reintroduce a
     whole-message regex here — see the note above.
     """
+    # Bound the input as well as fixing the pattern.
+    #
+    # The regex fix removes the known quadratic, but this gate runs
+    # synchronously on the one processor the shop has, so a bug here stops the
+    # business rather than slowing it. Two independent defences, because this
+    # file has now had two catastrophic-backtracking bugs and the second was
+    # introduced by the fix for the first.
+    #
+    # Truncating cannot lose a decision: this function only ever decides "is
+    # there NOTHING to answer here". More text can only ever mean more
+    # content, so a truncated message is judged more conservatively (more
+    # likely to draft), never less. A real subject line is under 100 chars.
+    message = str(message or "")[:_MAX_GATE_MESSAGE]
+    subject = str(subject or "")[:_MAX_GATE_SUBJECT]
+
     if not _carries_no_content(message):
         return ShouldDraft(True)
-    if not _carries_no_content(_SUBJECT_NOISE_RE.sub(" ", str(subject or ""))):
+    if not _carries_no_content(_SUBJECT_NOISE_RE.sub(" ", subject)):
         return ShouldDraft(True)
 
     combined = f"{subject or ''} {message or ''}"

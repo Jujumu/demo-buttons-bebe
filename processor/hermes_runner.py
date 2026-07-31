@@ -72,8 +72,9 @@ def _draft_tag_re(token: str | None) -> re.Pattern:
     """<DRAFT:token> pattern for a run token, or the untagged legacy one."""
     if token:
         t = re.escape(token)
+        # No \s* either side of the body - see the note on _DRAFT_TAG_RE.
         return re.compile(
-            r'<DRAFT:' + t + r'>\s*((?:(?!</?DRAFT[:>]).)*?)\s*</DRAFT:' + t + r'>',
+            r'<DRAFT:' + t + r'>((?:(?!</?DRAFT[:>]).)*?)</DRAFT:' + t + r'>',
             re.DOTALL | re.IGNORECASE)
     return _DRAFT_TAG_RE
 
@@ -140,20 +141,42 @@ def _as_bool(value: Any) -> bool:
 # ticket - made the non-greedy match span from the attacker's tag all the way
 # to the model's own "</DRAFT>", prepending the attacker's text to the real
 # draft. One match, so no ambiguity check would have seen it.
+# No \s* around the body. A leading \s*, a lazy body and a trailing \s* give
+# the engine three places to backtrack, and it is quadratic on a whitespace
+# run: an unclosed "<DRAFT>" followed by 2 000 newlines took 3.9 s, 4 000 took
+# over 8 s. The customer supplies that text - they write "<DRAFT>" and a few
+# thousand blank lines in their email, and the Gorgias tool echoes it into
+# stdout mid-run, where _neutralise_markers cannot reach it.
+#
+# Dropping both is provably equivalent: _extract_draft already calls .strip()
+# on whatever it captures.
 _DRAFT_TAG_RE = re.compile(
-    r'<DRAFT>\s*((?:(?!</?DRAFT>).)*?)\s*</DRAFT>',
+    r'<DRAFT>((?:(?!</?DRAFT>).)*?)</DRAFT>',
     re.DOTALL | re.IGNORECASE,
 )
 
 # A "draft" this short is a fragment of the model narrating its own plan
 # ("I will put the reply between <DRAFT> and </DRAFT> tags" contains a
 # matching block whose body is the word "and"), not a reply to a customer.
+#
+# Applied ONLY to untagged blocks. A block carrying the run token is the
+# model's by construction, so length proves nothing about it - and dropping a
+# legitimate short reply ("You're welcome!") sent the ticket down the
+# missing-draft path: canned fallback, priority high, owner paged, on a
+# thank-you. Round 8 measured that.
 _MIN_DRAFT_WORDS = 3
 
 # Bound on how many JSON_RESULT markers are examined. Each unbalanced
 # candidate scans to end-of-output, so an output with thousands of markers is
 # quadratic. 50 is far above anything a real run produces.
 _MAX_VERDICT_CANDIDATES = 50
+
+# "reason" is shown on the dashboard AND sent to the owner's WhatsApp, so it
+# is bounded like any other model-authored string that leaves the process.
+_MAX_REASON = 300
+# ...and the appended "what the model wrote after its draft" note, which may
+# be the model quoting the CUSTOMER, so it is labelled and bounded too.
+_MAX_NOTE = 400
 
 
 def _normalise_for_echo(text: str) -> str:
@@ -252,6 +275,14 @@ def _valid_verdicts(
         # skipped rather than destroying the real answer.
         if str(parsed["priority"]).lower().strip() not in _PRIORITY_ORDER:
             continue
+        # "reason" is rendered on the dashboard and passed to send_whatsapp().
+        # Only "the key exists" was checked, so a dict or list reason survived
+        # all the way through json.dumps into the stored row - and then blew
+        # up in the notifier's string slicing, which the orchestrator turns
+        # into a retry AFTER the dashboard row is written. Net effect: a
+        # high-priority ticket on the console with no owner alert.
+        if not isinstance(parsed.get("reason"), str):
+            continue
         if token is None and _is_echo_of_customer(raw_json, customer_text):
             echoes += 1
             continue
@@ -338,10 +369,11 @@ def _extract_draft(
     pretending, and the caller fails closed.
     """
     survivors: list[str] = []
+    too_short: list[str] = []
     discarded = 0
     for match in _draft_tag_re(token).finditer(output):
         body = match.group(1).strip()
-        if len(body.split()) < _MIN_DRAFT_WORDS:
+        if not body:
             continue
         if token is None and _is_echo_of_customer(body, customer_text):
             log_event(logger, "WARNING",
@@ -349,7 +381,19 @@ def _extract_draft(
                       length=len(body))
             discarded += 1
             continue
+        if len(body.split()) < _MIN_DRAFT_WORDS:
+            too_short.append(body)
+            continue
         survivors.append(body)
+
+    # A short block is DEPRIORITISED, not discarded. Filtering it outright
+    # dropped legitimate short replies ("You're welcome!") into the
+    # missing-draft path - canned fallback, priority high, owner paged, on a
+    # thank-you ticket. Ranking keeps the narration fragment ("...between
+    # <DRAFT> and </DRAFT>..." captures the word "and") behind a real draft
+    # while still using a short one when it is all the model wrote.
+    if not survivors and too_short:
+        survivors = [max(too_short, key=len)]
 
     if not survivors:
         return None, discarded > 0
@@ -682,6 +726,10 @@ def _parse_json_result(output: str, customer_text: str | None = None,
     try:
         result["priority"] = str(result["priority"]).lower().strip()
 
+        # Bound it too. The model can emit any length, and this string is
+        # forwarded to WhatsApp and stored as JSON on every ticket.
+        result["reason"] = " ".join(str(result.get("reason", "")).split())[:_MAX_REASON]
+
         # "action" drives the orchestrator's sensitive gate and is written
         # straight to the console. Only the documented values are accepted;
         # anything else — including this module's own "no_draft_needed"
@@ -914,10 +962,15 @@ def process_ticket_with_hermes(
                     # the model wrote after its draft can be a warning ("the
                     # billing address does not match the shipping address"),
                     # so it has to travel on a field that is actually shown.
-                    note = " ".join(cleaned.removed_note.split())[:400]
+                    #
+                    # The provenance label is explicit, because the model may
+                    # be QUOTING the customer here and `reason` goes to the
+                    # owner's phone. "[removed from draft: ...]" read as the
+                    # system's own words; this cannot.
+                    note = " ".join(cleaned.removed_note.split())[:_MAX_NOTE]
                     parsed["reason"] = (
                         f"{parsed.get('reason', '')} "
-                        f"[removed from draft: {note}]"
+                        f"[model wrote after the draft, unverified: {note}]"
                     ).strip()
                 log_event(logger, "INFO", "Draft extracted from Hermes output",
                           ticket_id=ticket_id,
@@ -928,12 +981,23 @@ def process_ticket_with_hermes(
             # and the explanation with a generic "Hermes failed" - and, worse,
             # clear the no_draft flag, so the console would render the canned
             # fallback reply as though it were a real draft.
+            #
+            # The canned _FALLBACK_RESULT draft is right for "Hermes crashed":
+            # the reviewer gets a safe holding reply to send. It is NOT right
+            # here. Hermes ran, classified the ticket, and simply gave us no
+            # draft - so the card would show a sendable "we're reviewing your
+            # request" over a reason that says the draft is missing. Round 8
+            # flagged the contradiction. Keep the fail-closed verdict, drop
+            # the fabricated reply.
             log_event(logger, "WARNING", "Hermes output missing reviewable draft",
                       ticket_id=ticket_id)
             parsed = dict(_FALLBACK_RESULT)
             parsed["reason"] = (
-                "Hermes output omitted the customer draft — defaulting to high for safety"
+                "Hermes classified the ticket but produced no draft — "
+                "handle this one manually."
             )
+            parsed["draft_text"] = ""
+            parsed["no_draft"] = True
 
         log_event(logger, "INFO", "Hermes processing complete",
                   ticket_id=ticket_id,

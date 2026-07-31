@@ -26,6 +26,7 @@ import json
 import pathlib
 import re
 import sys
+import time
 import unittest
 
 PROCESSOR_DIR = pathlib.Path(__file__).resolve().parent
@@ -270,6 +271,108 @@ class EmptyDraftTests(unittest.TestCase):
         self.assertEqual(twice.reasons, [])
 
 
+class NoCatastrophicBacktrackingTests(unittest.TestCase):
+    """This gate must never be slow, because slow here means the shop stops.
+
+    should_draft() runs SYNCHRONOUSLY inside the job coroutine, so
+    asyncio.wait_for cannot interrupt it, and orchestrator.py holds an
+    exclusive flock so there is exactly one processor. A regex that takes
+    minutes on an attacker-supplied subject line freezes every ticket, every
+    owner alert and the heartbeat until it returns.
+
+    This file has now had TWO such bugs, and the second was introduced by the
+    fix for the first - an exponential whole-message alternation was replaced,
+    and the replacement's subject pattern carried a quadratic. Measured on it:
+    8 000 spaces 0.80 s, 16 000 2.93 s, 32 000 11.64 s.
+
+    Probe sizes are chosen so the broken version is slow but still RETURNS:
+    32 000 spaces took 2.67 s before the fix and 0.001 s after, a 2500x gap.
+    Bigger probes would be a stronger signal in principle and useless in
+    practice - the quadratic version simply never finishes, so the test hangs
+    instead of failing, and a hanging test reports nothing.
+
+    The budget is ~1000x the fixed timing, so this is a blowup detector rather
+    than a benchmark, and will not flake on a loaded machine.
+    """
+
+    BUDGET = 1.0
+    # Large enough that a quadratic is unmissable, small enough that it still
+    # completes and the assertion can fire.
+    BLOWUP_PROBE = 32_000
+
+    def _timed(self, fn, *args):
+        start = time.perf_counter()
+        fn(*args)
+        return time.perf_counter() - start
+
+    def test_a_padded_subject_does_not_blow_up(self):
+        # The exact shape: the bare word "order", a long whitespace run, and
+        # no digit to finish the match.
+        for pad in (8_000, self.BLOWUP_PROBE):
+            with self.subTest(pad=pad):
+                probe = "Order" + " " * pad
+                self.assertLess(
+                    self._timed(dc._SUBJECT_NOISE_RE.sub, " ", probe),
+                    self.BUDGET,
+                    "the subject-noise pattern is backtracking again")
+
+    def test_should_draft_is_fast_on_hostile_input(self):
+        for subject, message in [
+            ("Order" + " " * 200_000, ""),
+            ("Re: " * 20_000, ""),
+            ("#" + " " * 200_000, "thanks"),
+            ("", "thanks " + " " * 200_000),
+            ("Order  #  " * 20_000, ""),
+            ("Order" + " " * 1_000_000, ""),
+        ]:
+            with self.subTest(subject=subject[:20], message=message[:20]):
+                self.assertLess(self._timed(dc.should_draft, message, subject),
+                                self.BUDGET)
+
+    def test_the_gate_bounds_its_input(self):
+        # Second line of defence behind the pattern itself. Truncation cannot
+        # lose a decision here - this gate only ever asks "is there NOTHING to
+        # answer", and more text can only mean more content.
+        self.assertLessEqual(dc._MAX_GATE_SUBJECT, 4_000)
+        self.assertLessEqual(dc._MAX_GATE_MESSAGE, 50_000)
+
+    def test_no_pattern_ever_sees_more_than_the_cap(self):
+        # Structural, and it has to be: with the pattern itself fixed, the
+        # caps make no observable difference to any verdict or any timing, so
+        # nothing behavioural can tell whether they are still applied. They
+        # exist for the NEXT pattern someone adds to this file - which is not
+        # hypothetical, since that is exactly how the last one arrived.
+        seen: list[int] = []
+        real = dc._SUBJECT_NOISE_RE
+
+        class Spy:
+            pattern = real.pattern
+            search = staticmethod(real.search)
+
+            @staticmethod
+            def sub(repl, text, *args, **kwargs):
+                seen.append(len(text))
+                return real.sub(repl, text, *args, **kwargs)
+
+        dc._SUBJECT_NOISE_RE = Spy()
+        try:
+            # The BODY has to be contentless, or should_draft returns before
+            # it ever looks at the subject.
+            dc.should_draft("thanks", "Order" + " " * 500_000)
+        finally:
+            dc._SUBJECT_NOISE_RE = real
+        self.assertTrue(seen, "the subject pattern was never reached")
+        self.assertLessEqual(max(seen), dc._MAX_GATE_SUBJECT,
+                             "the subject cap is not being applied")
+
+    def test_bounding_does_not_change_any_real_verdict(self):
+        # A real question stays a real question, and padding does not turn an
+        # acknowledgement into one.
+        self.assertTrue(dc.should_draft("Where is my order?" + " " * 100_000).ok)
+        self.assertFalse(dc.should_draft("thanks" + " " * 100_000).ok)
+        self.assertTrue(dc.should_draft("x" * 30_000 + " where is my order?").ok)
+
+
 class SafetyNoteSurvivesTests(unittest.TestCase):
     """A warning to the reviewer must never be cut as self-talk.
 
@@ -337,6 +440,41 @@ class SafetyNoteSurvivesTests(unittest.TestCase):
                 result = dc.clean_draft(f"{self.GOOD}\n\n{chatter}")
                 self.assertEqual(result.text.strip(), self.GOOD)
                 self.assertTrue(result.reasons, "the cut was not reported")
+
+    # Round-8 review: every one of these reached the sendable draft body,
+    # i.e. the text a human clicks Send on. _SELF_TALK_MARKERS only knew a
+    # handful of exact phrasings.
+    LEAKED_IN_ROUND_8 = [
+        "The response above is complete.",
+        "The reply above is complete and ready.",
+        "The draft above is complete.",
+        "Draft complete.",
+        "[Draft complete]",
+        "I've completed the draft.",
+        "I have written the response above.",
+        "-- end of the draft --",
+        # These two matter most: the prompt asks the model for AGENT NOTE
+        # lines AFTER the verdict, but it sometimes puts one inside the draft
+        # tags - and they carry things the customer must never read.
+        "AGENT NOTE: this customer has 3 prior chargebacks.",
+        "(Internal: customer has 3 prior chargebacks.)",
+    ]
+
+    def test_the_round_8_leaks_are_cut_from_the_sendable_body(self):
+        for chatter in self.LEAKED_IN_ROUND_8:
+            with self.subTest(chatter=chatter):
+                result = dc.clean_draft(f"{self.GOOD}\n\n{chatter}")
+                self.assertEqual(result.text.strip(), self.GOOD,
+                                 "model self-commentary reached the draft body")
+                self.assertIn(chatter, result.removed_note,
+                              "...and was not reported to the reviewer either")
+
+    def test_an_internal_note_never_reaches_the_customer_text(self):
+        # The one with real consequences, stated on its own.
+        note = "AGENT NOTE: this customer has 3 prior chargebacks."
+        result = dc.clean_draft(f"{self.GOOD}\n\n{note}")
+        self.assertNotIn("chargeback", result.text)
+        self.assertIn("chargeback", result.removed_note)
 
     def test_a_cut_is_always_reported(self):
         # The reviewer has to be able to tell that text was removed.

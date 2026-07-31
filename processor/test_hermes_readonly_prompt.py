@@ -102,7 +102,15 @@ class HermesReadOnlyPromptTests(unittest.TestCase):
         self.assertEqual(result["priority"], "high")
         self.assertEqual(result["action"], "sensitive_draft")
         self.assertTrue(result["notify_owner"])
-        self.assertTrue(result["draft_text"].startswith("[SENSITIVE — REVIEW"))
+        # Round 8: the canned "[SENSITIVE — REVIEW…] we're reviewing your
+        # request" reply used to be stored here, contradicting the reason on
+        # the same card and handing the reviewer something sendable the model
+        # never wrote. That draft belongs to the Hermes-CRASHED path (see
+        # test_hermes_failure_still_uses_the_reviewable_fallback), where a
+        # holding reply is genuinely useful. Hermes ran here, so: no draft.
+        self.assertTrue(result["no_draft"])
+        self.assertEqual(result["draft_text"], "")
+        self.assertIn("no draft", result["reason"].lower())
 
     def test_documented_high_risk_topics_are_sensitive(self) -> None:
         for message in (
