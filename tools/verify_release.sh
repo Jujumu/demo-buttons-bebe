@@ -35,9 +35,38 @@ import ast
 import json
 
 roots = [Path("feedback"), Path("kb"), Path("processor"), Path("testing"), Path("tools"), Path("webhook"), Path("deploy")]
+
+# Installed dependencies are not ours to syntax-check, and checking them made
+# the gate's verdict depend on which interpreter happened to run it: a local
+# .venv holds 779 third-party files against our 66, and anyio's `match`
+# statement is a SyntaxError on the system python3 that this script defaults
+# to. `sh tools/verify_release.sh` therefore failed on a clean tree, with a
+# traceback pointing at site-packages and nothing to do with the change under
+# test. Skipping them is also 13x less work.
+SKIP_DIRS = {
+    ".venv", "venv", ".env", "env", "node_modules", "__pycache__", ".git",
+    "site-packages", "build", "dist", ".mypy_cache", ".pytest_cache",
+    ".tox", ".eggs",
+}
+
+checked = 0
 for root in roots:
     for path in root.rglob("*.py"):
+        if SKIP_DIRS & set(path.parts):
+            continue
         ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        checked += 1
+
+# A filter is how a check turns into a no-op. This gate has already shipped
+# one that "passed" while checking nothing at all, so the floor is asserted
+# rather than trusted: a typo in SKIP_DIRS that eats the whole tree fails
+# here instead of printing "release gate passed".
+if checked < 40:
+    raise SystemExit(
+        f"syntax check reached only {checked} files - the skip list is eating "
+        f"the source tree"
+    )
+print(f"syntax: parsed {checked} first-party Python files")
 
 scenarios = json.loads(Path("testing/scenarios.json").read_text(encoding="utf-8"))
 if len(scenarios) != 48:
