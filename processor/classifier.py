@@ -126,7 +126,19 @@ _PORT_IMMEDIATE_KEYWORDS = [
     # year and lost the code" is purchase history. Only the first is evidence,
     # so the verb needs a wrong/different object rather than sitting in
     # _ORDER_CONTEXT_RE where it unlocked the whole omission table.
-    r"\byou\s+(?:sent|shipped|packed)\s+(?:me\s+)?(?:a|an|the)?\s*"
+    # The whitespace goes INSIDE the optional group. "(?:a|an|the)?\s*" is
+    # quadratic, and this table runs on EVERY ticket with no gate in front of
+    # it: "you sent" + 59 000 spaces took 12.9s, and 52s with the subject
+    # amplifying it.
+    #
+    # "\s*" inside, not "\s+". The first attempt used \s+ and was NARROWER -
+    # it stopped matching "you sent me thewrong item", a typo form the old
+    # pattern caught, which is a de-escalation. 54 such strings turned up in
+    # the equivalence check. With \s* inside the group the language is
+    # identical (0 differences over 300 000 probes) and the backtracking is
+    # still gone, because after the first \s+ gives back a character the
+    # optional group either matches an article immediately or fails.
+    r"\byou\s+(?:sent|shipped|packed)\s+(?:me\s+)?(?:(?:a|an|the)\s*)?"
     r"(?:wrong|different|completely\s+different)\b",
 
     # Damage reported as a fact about a received item.
@@ -242,7 +254,17 @@ _PROBLEM_CONTEXT_RE = re.compile(
     # duration alternative turns them into an owner page. Waiting has to be
     # said out loud.
     r"still\s+(?:has\s?n'?t|have\s?n'?t|no|nothing)|"
-    r"(?:waiting|waited)\s+(?:for\s+)?(?:over\s+)?(?:\d+|a|two|three)?\s*"
+    # "(?:(?:\d+|a|two|three)\s*)?", NOT "(?:\d+|a|two|three)?\s*". The \s
+    # must be INSIDE the optional group, so a single-character decision
+    # follows the first \s+. Otherwise the engine splits a whitespace run
+    # every possible way: 128 000 chars took 227 SECONDS, and one ticket
+    # stalled classify() for 204s.
+    #
+    # This does not need an attacker. \s matches U+00A0, which is what every
+    # HTML-to-text converter emits for padded table cells, so an ordinary
+    # marketing-styled reply reproduces it: "I have been waiting" + 30 000
+    # non-breaking spaces + "for my order 10322" took 13.2s.
+    r"(?:waiting|waited)\s+(?:for\s+)?(?:over\s+)?(?:(?:\d+|a|two|three)\s*)?"
     r"(?:days?|weeks?|months?)|"
     r"been\s+(?:over\s+)?(?:\d+|two|three|four)\s*(?:days?|weeks?|months?))",
     re.IGNORECASE,

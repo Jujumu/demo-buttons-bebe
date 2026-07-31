@@ -1164,27 +1164,130 @@ class ReDoSTests(unittest.TestCase):
     guard; these timing probes are the specific one.
     """
 
-    QUADRATIC_SHAPE = re.compile(r"\\s\*[^\\]{0,4}\?\\s\*")
+    # MEASURE, do not pattern-match the source.
+    #
+    # The previous version of this guard was a regex over the regexes:
+    #     re.compile(r"\\s\*[^\\]{0,4}\?\\s\*")
+    # It was written to "catch the next one" and it did not. Round 9 found two
+    # live quadratics - one stalling classify() for 204 SECONDS - and this
+    # check flagged neither, because it required \s* (not \s+) on the left and
+    # a gap of at most four non-backslash characters. Four hand-written
+    # quadratic patterns passed it as well.
+    #
+    # There is no reliable syntactic test for catastrophic backtracking. So
+    # this one runs each pattern against input built FROM that pattern's own
+    # literals, at two sizes, and asserts the time does not grow with the
+    # square. That finds the shape whatever it looks like.
 
-    def test_no_pattern_has_the_quadratic_shape(self):
-        # Structural and exhaustive, so it catches the NEXT one rather than
-        # the last one. Both round-8 bugs would have failed this on the day
-        # they were written.
+    PUMP_N = 3_000          # small enough to stay fast when everything is fine
+    PUMP_GROWTH = 6.0       # 4x input; linear ~4x, quadratic ~16x
+    PUMP_FLOOR = 0.004      # ignore timings too small to divide meaningfully
+
+    @staticmethod
+    def _literals(pattern: str) -> list[str]:
+        """Every word-ish literal in a pattern, plus adjacent runs of them.
+
+        EVERY literal, not the first few. These patterns are big alternations,
+        and taking a prefix meant the probe only ever exercised the first
+        branch - so the live 204-second bomb, which sits in the "waiting ...
+        days" branch two thirds of the way down _PROBLEM_CONTEXT_RE, was never
+        reached and the check passed. That is how the previous guard failed
+        too, in a different way; the self-check below is what exposed both.
+
+        Adjacent runs matter as well: r"\\ba\\s+hole\\b(?!\\s*-?\\s*away)"
+        needs BOTH words before its lookahead runs, and a single-word probe
+        never gets there.
+        """
+        stripped = re.sub(r"\\[a-zA-Z]|\[[^\]]*\]|\(\?[a-zA-Z:!=<]*|[(){}|?*+^$]",
+                          " ", pattern)
+        words = re.findall(r"[a-zA-Z']+", stripped)[:60]
+        heads = list(dict.fromkeys(words))
+        for i in range(len(words) - 1):
+            heads.append(f"{words[i]} {words[i + 1]}")
+            if i + 2 < len(words):
+                heads.append(f"{words[i]} {words[i + 1]} {words[i + 2]}")
+        return list(dict.fromkeys(heads))[:120]
+
+    def _worst_time(self, compiled: re.Pattern, heads: list[str], pad: int) -> float:
+        import time
+        worst = 0.0
+        # The dangerous input is one of a pattern's own literals followed by a
+        # long run of something the NEXT element almost accepts.
+        for head in heads or [""]:
+            for filler in (" ", "-"):
+                probe = head + filler * pad
+                start = time.perf_counter()
+                compiled.search(probe)
+                worst = max(worst, time.perf_counter() - start)
+        return worst
+
+    def test_no_pattern_is_superlinear(self):
         offenders = []
+        for name, value, pattern in self._every_pattern():
+            literals = self._literals(pattern)
+            if not literals:
+                continue
+            try:
+                compiled = (value if isinstance(value, re.Pattern)
+                            else re.compile(pattern, re.IGNORECASE))
+            except re.error:
+                continue
+            small = self._worst_time(compiled, literals, self.PUMP_N)
+            if small < self.PUMP_FLOOR:
+                # Too fast to measure a ratio; pump harder before deciding.
+                small = self._worst_time(compiled, literals, self.PUMP_N * 4)
+                if small < self.PUMP_FLOOR:
+                    continue          # genuinely linear and fast
+                large = self._worst_time(compiled, literals, self.PUMP_N * 16)
+            else:
+                large = self._worst_time(compiled, literals, self.PUMP_N * 4)
+            # `large` is always assigned on every path that reaches here - the
+            # `continue` above skips the comparison rather than falling
+            # through to a stale value from the previous pattern.
+            if large > small * self.PUMP_GROWTH:
+                offenders.append(f"{name}: {small:.4f}s -> {large:.4f}s :: {pattern[:70]}")
+        self.assertEqual(
+            offenders, [],
+            "these patterns grow faster than linearly on their own input - "
+            "the usual cause is two unbounded whitespace quantifiers with "
+            "something optional between them; put the whitespace INSIDE the "
+            "optional group so a single-character decision follows the first")
+
+    @staticmethod
+    def _every_pattern():
+        """(name, value, pattern-string) for every regex in the module."""
         for name, value in vars(cls).items():
             if isinstance(value, re.Pattern):
-                if self.QUADRATIC_SHAPE.search(value.pattern):
-                    offenders.append(name)
+                yield name, value, value.pattern
             elif (isinstance(value, list) and name.isupper()
                   and value and isinstance(value[0], str)):
-                for pattern in value:
-                    if self.QUADRATIC_SHAPE.search(pattern):
-                        offenders.append(f"{name}: {pattern}")
-        self.assertEqual(offenders, [],
-                         r"two unbounded \s* separated by an optional atom is "
-                         r"quadratic on a whitespace run - use a character "
-                         r"class, or put a single-character decision after "
-                         r"the first \s*")
+                for i, pattern in enumerate(value):
+                    yield f"{name}[{i}]", pattern, pattern
+
+    def test_the_superlinear_check_actually_catches_a_planted_bomb(self):
+        # A guard that cannot fail is worse than no guard - which is exactly
+        # what the previous version of this test turned out to be. So: plant
+        # each historical shape and confirm the check fires.
+        import time
+        bombs = [
+            r"\bwaiting\s+(?:for\s+)?(?:\d+|a)?\s*(?:days?|weeks?)",   # round 9
+            r"\byou\s+sent\s+(?:a|an|the)?\s*(?:wrong|different)\b",   # round 9
+            r"\border\s*#?\s*\d",                                       # round 8
+            r"\ba\s+hole\b(?!\s*-?\s*away)",                            # round 8
+            r"\bfoo\s+(?:bar\s+)?\s*baz\b",                             # bypasses
+            r"\bfoo\s*(?:abcdefgh)?\s*baz\b",
+            r"\bfoo\s*(?:\d+)?\s*baz\b",
+        ]
+        for pattern in bombs:
+            with self.subTest(pattern=pattern):
+                compiled = re.compile(pattern, re.IGNORECASE)
+                literals = self._literals(pattern)
+                self.assertTrue(literals, f"no literals mined from {pattern}")
+                small = self._worst_time(compiled, literals, self.PUMP_N)
+                large = self._worst_time(compiled, literals, self.PUMP_N * 4)
+                self.assertGreater(
+                    large, small * self.PUMP_GROWTH,
+                    f"the superlinear check does NOT catch {pattern}")
 
     def test_an_order_word_before_a_whitespace_run_is_linear(self):
         import time
