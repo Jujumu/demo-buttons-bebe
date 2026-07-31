@@ -57,13 +57,31 @@ _SELF_TALK_MARKERS = [
     r"this (?:response|reply|draft) (?:above )?(?:is|was) (?:now )?complete",
     # "I have completed the response." / "I have now finished this draft."
     r"i have (?:now )?(?:completed|finished) (?:the|this|my) (?:response|reply|draft)",
-    # NOTE: "Note to the reviewer:" is deliberately NOT here. It reads like
-    # self-talk, but it is the one marker that can carry a safety-relevant
-    # instruction - "Note to the reviewer: do NOT send this, the customer was
-    # already refunded twice and this may be fraud." Stripping it showed the
-    # human a clean, sendable draft and threw the warning away.
+    # "Note to the reviewer:" USED to be excluded here, because stripping it
+    # showed the human a clean, sendable draft and threw away warnings like
+    # "do NOT send this, the customer was already refunded twice". That
+    # reasoning is now stale: _cut_self_talk RETURNS what it removed and
+    # hermes_runner puts it on `reason`, which the console renders. So the
+    # warning reaches the reviewer either way, and leaving these in the body
+    # meant "this customer has 3 prior chargebacks" sat in the text a human
+    # clicks Send on.
+    r"notes? (?:to|for) (?:the )?(?:reviewer|agent|human)\b",
+    r"^internal\b[:\s]",
+    r"for internal use\b",
+    r"confidence:\s",
     # "End of response" / "[End of draft]" / "-- end of the draft --"
-    r"[-\s]*\[?end of (?:the\s+)?(?:response|reply|draft)\]?",
+    #
+    # NO leading "[-\s]*" here. _MARKER_RE already prefixes every alternative
+    # with "^[\s>*#\-]*", and two adjacent greedy classes whose sets overlap
+    # on "-" and whitespace are quadratic: a draft containing a horizontal
+    # rule made _MARKER_RE.match take 0.94s at 16 000 dashes and 9.2s at
+    # 32 000, with clean_draft the same. That is the happy path - a
+    # well-formed, token-tagged model reply - on a synchronous single-process
+    # pipeline, so the whole queue stalls.
+    #
+    # This one was mine: the "[-\s]*" was added in round 8 to catch
+    # "-- end of the draft --", and the outer prefix already handled it.
+    r"\[?end of (?:the\s+)?(?:response|reply|draft)\]?",
     # Round-8 review: these phrasings all reached the sendable draft body.
     # "The response above is complete." / "The draft above is complete."
     r"(?:the\s+)?(?:response|reply|draft)\s+above\s+(?:is|was)\s+"
@@ -517,11 +535,23 @@ def should_draft(message: str, subject: str = "") -> ShouldDraft:
     # file has now had two catastrophic-backtracking bugs and the second was
     # introduced by the fix for the first.
     #
-    # Truncating cannot lose a decision: this function only ever decides "is
-    # there NOTHING to answer here". More text can only ever mean more
-    # content, so a truncated message is judged more conservatively (more
-    # likely to draft), never less. A real subject line is under 100 chars.
-    message = str(message or "")[:_MAX_GATE_MESSAGE]
+    # "Truncating cannot lose a decision" was WRONG, and it was my own
+    # justification. Truncation REMOVES content, so the reasoning runs the
+    # other way: an ack that fills the cap hides whatever follows it.
+    #
+    #     ("thanks " * 2857) + "Also, my parcel has been sitting at the depot
+    #     since Tuesday and nobody has called me back."
+    #
+    # was suppressed - empty console card, no send controls, no owner alert,
+    # Hermes never invoked, complaint never read.
+    #
+    # So: collapse whitespace FIRST, so padding cannot fill the budget, and
+    # then refuse to judge anything still over it. "I could not read all of
+    # this" is not the same as "there is nothing here", and only the second
+    # justifies silence.
+    message = " ".join(str(message or "").split())
+    if len(message) > _MAX_GATE_MESSAGE:
+        return ShouldDraft(True)
     subject = str(subject or "")[:_MAX_GATE_SUBJECT]
 
     if not _carries_no_content(message):

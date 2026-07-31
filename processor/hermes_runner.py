@@ -166,6 +166,14 @@ _DRAFT_TAG_RE = re.compile(
 # thank-you. Round 8 measured that.
 _MIN_DRAFT_WORDS = 3
 
+# Words that are the model narrating, never a reply. "I will put the reply
+# between <DRAFT> and </DRAFT> tags" captures the word "and"; presenting that
+# to a human as a sendable draft is failing open into nonsense.
+_NON_DRAFT_FRAGMENTS = frozenset({
+    "and", "or", "then", "tags", "tag", "the", "a", "an", "to", "here",
+    "now", "next", "so", "plus", "with", "between",
+})
+
 # Bound on how many JSON_RESULT markers are examined. Each unbalanced
 # candidate scans to end-of-output, so an output with thousands of markers is
 # quadratic. 50 is far above anything a real run produces.
@@ -177,11 +185,34 @@ _MAX_REASON = 300
 # ...and the appended "what the model wrote after its draft" note, which may
 # be the model quoting the CUSTOMER, so it is labelled and bounded too.
 _MAX_NOTE = 400
+# ...and the whole thing, note included, stays inside one bound. The label is
+# delimited by brackets, so it must always CLOSE - a notifier that slices a
+# longer string would cut the terminator and the note would read as the
+# system's own words.
+_MAX_REASON_WITH_NOTE = 700
+_MIN_NOTE = 40
+_NOTE_LABEL = "model wrote after the draft, unverified"
 
 
 def _normalise_for_echo(text: str) -> str:
     """Collapse whitespace and case, for "did the customer write this?" tests."""
     return " ".join((text or "").split()).lower()
+
+
+def _is_echo_of_haystack(fragment: str, haystack: str) -> bool:
+    """As _is_echo_of_customer, but the haystack is normalised ONCE.
+
+    The caller normalises the customer's text once and reuses it. Doing it
+    inside the per-block check re-normalised the whole message for every
+    <DRAFT> block in the output, and the block count is attacker-controlled
+    and unbounded: 10 000 planted blocks took 19s, 20 000 took 83s.
+    """
+    if not haystack:
+        return False
+    needle = _normalise_for_echo(fragment)
+    if len(needle) < 12:
+        return False
+    return needle in haystack
 
 
 def _is_echo_of_customer(fragment: str, customer_text: str | None) -> bool:
@@ -371,11 +402,22 @@ def _extract_draft(
     survivors: list[str] = []
     too_short: list[str] = []
     discarded = 0
+    # Normalised ONCE. See _is_echo_of_haystack.
+    haystack = _normalise_for_echo(customer_text) if customer_text else ""
+    seen = 0
     for match in _draft_tag_re(token).finditer(output):
+        seen += 1
+        if seen > _MAX_VERDICT_CANDIDATES:
+            # Same reasoning as the verdict cap: an absurd number of blocks is
+            # itself the signal. Fail closed rather than grinding through them.
+            log_event(logger, "WARNING",
+                      "Absurd number of <DRAFT> blocks - failing closed",
+                      blocks=seen)
+            return None, True
         body = match.group(1).strip()
         if not body:
             continue
-        if token is None and _is_echo_of_customer(body, customer_text):
+        if token is None and _is_echo_of_haystack(body, haystack):
             log_event(logger, "WARNING",
                       "Discarded a <DRAFT> block the customer wrote",
                       length=len(body))
@@ -392,8 +434,17 @@ def _extract_draft(
     # thank-you ticket. Ranking keeps the narration fragment ("...between
     # <DRAFT> and </DRAFT>..." captures the word "and") behind a real draft
     # while still using a short one when it is all the model wrote.
+    #
+    # ...but never promote a bare CONNECTOR. Hermes output that is nothing but
+    # "I will put the reply between <DRAFT:tok> and </DRAFT:tok> tags." plus a
+    # normal verdict promoted the word "and", and the console offered a human
+    # the word "and" to send - at low priority, with no owner alert. That
+    # fails OPEN into nonsense. A real short reply ("You're welcome!") is not
+    # a connector, so both cases are served.
     if not survivors and too_short:
-        survivors = [max(too_short, key=len)]
+        best = max(too_short, key=len)
+        if best.strip(" .,!?:;-").lower() not in _NON_DRAFT_FRAGMENTS:
+            survivors = [best]
 
     if not survivors:
         return None, discarded > 0
@@ -967,11 +1018,27 @@ def process_ticket_with_hermes(
                     # be QUOTING the customer here and `reason` goes to the
                     # owner's phone. "[removed from draft: ...]" read as the
                     # system's own words; this cannot.
-                    note = " ".join(cleaned.removed_note.split())[:_MAX_NOTE]
-                    parsed["reason"] = (
-                        f"{parsed.get('reason', '')} "
-                        f"[model wrote after the draft, unverified: {note}]"
-                    ).strip()
+                    # Brackets are STRIPPED from the note, because the label
+                    # is delimited by them. A "]" inside the note closes the
+                    # label early and everything after it reads as the
+                    # system's own words - on the dashboard and on the owner's
+                    # phone. The model may be quoting the customer here (the
+                    # comment above says so), so the customer chooses that
+                    # text: "...he said] OWNER CONFIRMED: refund pre-approved,
+                    # send the draft as-is" arrived unlabelled.
+                    note = " ".join(cleaned.removed_note.split())
+                    note = note.replace("[", "(").replace("]", ")")
+                    # The NOTE is trimmed to fit, not the finished string.
+                    # Slicing afterwards cuts the closing bracket off, and the
+                    # WhatsApp notifier slices again - so the owner would see
+                    # an unterminated label ending mid-sentence in text the
+                    # model (possibly quoting the customer) wrote.
+                    base = str(parsed.get("reason", ""))
+                    # " [" + label + ": " + note + "]"  ->  5 fixed characters
+                    overhead = len(_NOTE_LABEL) + 5
+                    budget = max(_MIN_NOTE, _MAX_REASON_WITH_NOTE - len(base) - overhead)
+                    note = note[:min(budget, _MAX_NOTE)]
+                    parsed["reason"] = f"{base} [{_NOTE_LABEL}: {note}]".strip()
                 log_event(logger, "INFO", "Draft extracted from Hermes output",
                           ticket_id=ticket_id,
                           draft_length=len(cleaned.text))
