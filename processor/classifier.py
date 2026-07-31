@@ -174,30 +174,33 @@ _IMMEDIATE_KEYWORDS = _MAIN_IMMEDIATE_KEYWORDS + _PORT_IMMEDIATE_KEYWORDS
 # has been placed or delivered, and is not phrased as a browsing or care
 # question. A genuine complaint always carries that evidence; a pre-sale
 # question almost never does.
-# Damage evidence in VERB form. Nobody says "arrived ripped" while browsing, so
-# these need order context but are NOT blocked by a browsing-shaped question:
-# "Do you sell a replacement bow? Mine arrived ripped." is a complaint.
-_WEAK_DAMAGE = [
-    r"\bripped\b", r"\bstained\b",
+# Wording that is a complaint whatever shape the sentence is. This table is
+# not guarded, so a pattern only belongs here if there is NO ordinary
+# post-purchase sentence that contains it. That is a much stronger claim than
+# it looks, and it has now been got wrong twice:
+#
+#   round 11 - "a stain", "hole in": "how do I get a stain out", "is there a
+#              hole in the back of the sleep bag for a car seat strap"
+#   round 12 - "ripped", "stained":  "I ripped the poly bag opening it", "my
+#              toddler stained the bib with carrot"
+#
+# Both times the fix moved the specific words and left the table. The rule
+# now is the other way round: everything weak is guarded, and this table
+# holds only wording that names ANOTHER PERSON'S order, which no care or
+# purchase question ever does.
+_WEAK_UNGUARDED = [
     r"\banother\s+customer\b",
     r"\bsomeone\s+else'?s?\s+(order|name|items?|package|parcel|box)\b",
 ]
 
-# Damage evidence in NOUN form. These read like the verbs above but they are
-# not: in a baby-clothes shop they are ordinary care and product vocabulary.
-# "How do I get a stain out of a cotton onesie?", "Is there a hole in the back
-# of the sleep bag for a car seat strap?", "Do you do a rip-resistant pram
-# liner?" are all questions about a parcel that arrived perfectly.
-#
-# Round 11 measured 410 of 1500 realistic post-delivery messages paging the
-# owner's phone on these two patterns, against 0 on main. The earlier corpus
-# missed it because it only ever tested care questions on their own; real
-# post-purchase mail says "my order came today AND how do I..." in one
-# message, which arms every rule that needs order context.
-#
-# So they stay - "there is a hole in the sleeve" is still an escalation - but
-# behind the browsing guard, exactly like the omission wording below.
-_WEAK_DAMAGE_NOUN = [
+# Damage wording. Every one of these is also ordinary baby-clothes
+# vocabulary, so all of them sit behind the browsing guard, and the guard is
+# lifted by the damage SHAPES in _PROBLEM_CONTEXT_RE below - "arrived
+# ripped", "a stained romper", "the hole in the sleeve" - rather than by the
+# words alone. Subject matters: the item being ripped is a complaint, the
+# customer ripping the mailer is not.
+_WEAK_DAMAGE = [
+    r"\bripped\b", r"\bstained\b",
     # "(?!\s*(?:-\s*)?away)", NOT "(?!\s*-?\s*away)". Same quadratic as
     # _ORDER_CONTEXT_RE, hidden inside a lookahead: two \s* separated by an
     # optional "-" lets the engine split a whitespace run every possible way.
@@ -221,7 +224,7 @@ _WEAK_OMISSION = [
 ]
 
 # Kept as one name for the mutation tests and for anything that iterates them.
-_WEAK_IMMEDIATE = _WEAK_DAMAGE + _WEAK_DAMAGE_NOUN + _WEAK_OMISSION
+_WEAK_IMMEDIATE = _WEAK_UNGUARDED + _WEAK_DAMAGE + _WEAK_OMISSION
 
 # Evidence that this is about a real order, not a pre-sale question.
 _ORDER_CONTEXT_RE = re.compile(
@@ -250,7 +253,45 @@ _ORDER_CONTEXT_RE = re.compile(
 _BROWSING_QUESTION_RE = re.compile(
     r"\b(can\s+i|could\s+i|do\s+you|does\s+the|does\s+it|is\s+there|are\s+there|"
     r"am\s+i|how\s+do\s+i|how\s+can\s+i|how\s+to|how\s+would\s+i|"
-    r"what'?s?\s+the\s+best\s+way|any\s+tips|is\s+it\s+possible|would\s+it\s+be)\b",
+    r"what'?s?\s+the\s+best\s+way|any\s+tips|is\s+it\s+possible|would\s+it\s+be|"
+    # Round 12. The list above knew "can I" but not "could you", so
+    # "I lost the discount code, could you resend it?" was not a question to
+    # this classifier and the whole omission table fired on it. Asking the
+    # SHOP to do something is at least as common a phrasing as asking whether
+    # you may - and neither is a complaint.
+    r"can\s+you|could\s+you|would\s+you|will\s+you|do\s+i\s+need|"
+    r"where\s+do\s+i|what\s+do\s+i|which\s+(?:size|one|colour|color)|"
+    # "is the mailer recyclable", "are these ok for sensitive skin",
+    # "was the free bib supposed to include a muslin". English inverts the
+    # auxiliary to ask a question, and that inversion is the signal: "was THE
+    # bib supposed to include" is a query, "MY ORDER was supposed to include"
+    # is a complaint, and only the first matches.
+    r"is\s+(?:the|this|that|it)\b|are\s+(?:the|these|those|they)\b|"
+    r"was\s+(?:the|this|that|it)\b|were\s+(?:the|these|those|they)\b|"
+    r"did\s+(?:the|this|that|it|you|they)\b)",
+    re.IGNORECASE,
+)
+
+# Wording that asks for something to be PUT RIGHT. On its own it is ordinary
+# - "can I swap the bundle for the one without the hat" is a purchase request
+# - and on its own a damage word is ordinary too - "is there a hole for the
+# car seat strap". Together they are a damage report worded politely, which
+# is how a lot of customers write, and the browsing guard was swallowing all
+# of them: "How do I claim for a stain on a brand new sleepsuit?" reached the
+# owner as NORMAL. Neither half lifts the guard alone; both together do.
+# Only words that name the REMEDY. "faulty" and "defective" belong in the
+# damage list below and nowhere else: putting them in both made every
+# sentence containing one satisfy the whole rule on its own, which promptly
+# escalated "is there a hole in the front for the popper, or have I got a
+# faulty one? Actually it looks intentional."
+_REMEDY_RE = re.compile(
+    r"\b(claim|guarantee|warranty|replace\w*|swap|"
+    r"send\s+(?:it\s+)?back|sen[dt]\s+me\s+another|cover(?:ed)?\s+under)\b",
+    re.IGNORECASE,
+)
+_DAMAGE_WORD_RE = re.compile(
+    r"\b(hole|holes|rip|rips|ripped|tear|tears|torn|stain|stains|stained|"
+    r"damaged?|faulty|broken)\b",
     re.IGNORECASE,
 )
 
@@ -259,7 +300,27 @@ _BROWSING_QUESTION_RE = re.compile(
 # parcel? Tracking stopped 8 days ago." opens with a browsing marker but is
 # plainly a delivery problem, so these indicators lift the browsing guard.
 _PROBLEM_CONTEXT_RE = re.compile(
-    r"\b(tracking|courier|carrier|still\s+waiting|still\s+not|no\s+update|"
+    # Damage SHAPES, not damage words. Who or what is the subject decides it:
+    # "mine arrived ripped" and "a stained romper" are the item; "I ripped the
+    # poly bag opening it" and "my toddler stained the bib" are the customer,
+    # and both of those paged the owner's phone before round 12.
+    r"\b((?:arrived|came|turned\s+up|delivered|showed\s+up)\s+"
+    r"(?:(?:completely|totally|badly|slightly|already|all|absolutely)\s+)?"
+    r"(?:ripped|stained|torn|damaged|open|soaked|filthy|dirty)|"
+    r"(?:a|an|the|one|another)\s+(?:ripped|stained|torn|damaged)\s+\w|"
+    # THE hole, not A hole. "the hole in the sleeve" is damage we are already
+    # talking about; "is there a hole in the back for the car seat strap?" is
+    # a question about the design. The "in|on" is required so that "how do I
+    # get the stain out" - no location, so still a care question - stays out.
+    r"the\s+(?:hole|rip|tear|stain)\s+(?:in|on)\s+(?:the|my|it|this|that)|"
+    # Bare "tracking" and "courier" used to lift the guard, and "tracking says
+    # my order was delivered on Thursday" is the commonest benign opener there
+    # is. They now have to be said as a problem.
+    r"(?:tracking|courier|carrier|parcel|package)\s+"
+    r"(?:has\s?n'?t|have\s?n'?t|has\s+not|is\s+stuck|stopped|shows\s+nothing|"
+    r"says\s+nothing|never|is\s+lost|went\s+missing|has\s+vanished)|"
+    r"no\s+tracking|tracking\s+number\s+does\s?n'?t|"
+    r"still\s+waiting|still\s+not|no\s+update|"
     r"has\s?n'?t\s+moved|has\s+not\s+moved|"
     r"where\s+is|where\s+are|chasing|chase\s+this|follow(?:ing)?\s?up|"
     r"never\s+(?:came|arrived|turned\s+up)|"
@@ -291,22 +352,28 @@ _PROBLEM_CONTEXT_RE = re.compile(
 def _weak_matches(text: str) -> list[str]:
     """Weak triggers that are allowed to escalate for this message.
 
-    All three classes need evidence of a real order. Damage in verb form
-    ("arrived ripped") then fires regardless of how the sentence is shaped.
-    Damage in noun form ("a stain", "a hole in") and omission wording
-    ("without the bow", "a different item") additionally have to survive the
-    browsing guard, because both are also how customers word a care question
-    or a purchase request about a parcel that arrived perfectly.
+    Everything here needs evidence of a real order. Beyond that there are
+    only two tiers, and the split is not "damage vs omission" - that was
+    round 11's mistake, and it cost the same bug twice.
+
+    _WEAK_UNGUARDED is wording no care or purchase question ever contains,
+    which in practice means naming someone else's order. Everything else -
+    damage words and omission words alike - is also ordinary baby-clothes
+    vocabulary, so it waits behind the browsing guard, and the guard is
+    lifted by the damage SHAPES in _PROBLEM_CONTEXT_RE rather than by the
+    words: "mine arrived ripped" is the item, "I ripped the poly bag opening
+    it" is the customer, and only the first is a complaint.
     """
     if not _ORDER_CONTEXT_RE.search(text):
         return []
 
-    found = _find_matches(text, _WEAK_DAMAGE)
+    found = _find_matches(text, _WEAK_UNGUARDED)
 
-    browsing = (_BROWSING_QUESTION_RE.search(text)
-                and not _PROBLEM_CONTEXT_RE.search(text))
+    problem = bool(_PROBLEM_CONTEXT_RE.search(text)) or bool(
+        _DAMAGE_WORD_RE.search(text) and _REMEDY_RE.search(text))
+    browsing = bool(_BROWSING_QUESTION_RE.search(text)) and not problem
     if not browsing:
-        for table in (_WEAK_DAMAGE_NOUN, _WEAK_OMISSION):
+        for table in (_WEAK_DAMAGE, _WEAK_OMISSION):
             found.extend(m for m in _find_matches(text, table)
                          if m not in found)
     return found
@@ -491,9 +558,25 @@ _POSITIVE_RE = re.compile(
     r"appreciat\w*|stunning\w*|"
     # How British customers actually say it. Every one of these came from a
     # message that escalated with no grievance word in it.
-    r"chuffed|made\s+up|spot\s+on|top\s+notch|bang\s+on|smashing|"
-    r"over\s+the\s+moon|no\s+notes|well\s+made|well\s+packaged|quality)\b",
+    #
+    # Round 12 cut three of them back. A word here is a VETO on the
+    # structural-anger rules, so a word that appears in complaints as often
+    # as in praise silences real anger: "the quality is not what I paid
+    # for!!!", "you MADE UP a delivery date!!!" and "three emails and NO
+    # NOTES back from anybody!!!" all went from an owner ping to nothing.
+    # "quality", "made up" and "no notes" therefore need their praising
+    # sense spelled out rather than being taken on the bare word.
+    r"chuffed|spot\s+on|top\s+notch|bang\s+on|smashing|"
+    r"over\s+the\s+moon|well\s+made|well\s+packaged|"
+    r"made\s+up\s+(?:with|about)|"
+    r"(?:great|good|lovely|excellent|amazing|fantastic|superb|top)\s+quality|"
+    r"quality\s+is\s+(?:great|good|lovely|excellent|amazing|fantastic|"
+    r"superb|spot\s+on|there))\b",
     re.IGNORECASE)
+# "no notes" is gone entirely rather than narrowed: as praise it is one
+# person in a thousand, and "three emails and no notes back from anybody" is
+# how an ignored customer writes. There is no wording that separates them
+# cheaply, and the cost of guessing wrong is a silenced complaint.
 # Grievance words only. The first version listed "not", "no" and "still", which
 # are in half of all English sentences - one stray "no notes!" re-armed the
 # exclamation rule and paged the owner about a compliment.
@@ -519,6 +602,11 @@ _NEGATIVE_RE = re.compile(
     # "not worth it" and "waste of money" are not.
     r"n[o']?t\s+worth|waste|wasted|poor\s+quality|bad\s+quality|"
     r"cheap\s+quality|falling\s+apart|"
+    # Round 12, balancing the praise words: these are the shapes a complaint
+    # uses that contain no single angry word at all.
+    r"n[o']?t\s+(?:what|as)\s+(?:i|we)\s+(?:paid|expected|ordered|wanted)|"
+    r"state\s+of\s+(?:this|it|these)|"
+    r"n[o']?t\s+(?:impress\w*|acceptable|happy|good\s+enough)|"
     # Round 6: 13 of 20 realistic all-caps complaints stayed NORMAL because
     # this list had no word for how people actually express annoyance. None
     # of them was a regression against main - main misses them too - but the
@@ -875,14 +963,58 @@ def _find_matches(text: str, patterns: list[str]) -> list[str]:
             # Collapse whitespace, do not just strip it. Every \s+ in the
             # tables matches a NEWLINE, so a customer who presses return
             # mid-phrase ("someone\nelse's order") puts a line break inside
-            # the matched text, and this string is written straight into the
-            # console log. One escalation then reads as several log lines,
-            # the second of which is attacker-chosen - grep and any log
-            # viewer will attribute it to whatever the customer typed.
+            # the matched text, and `reason` - which is a bare string, not a
+            # list - carries it into the console log, turning one escalation
+            # into several log lines the second of which is attacker-chosen.
             hit = " ".join(m.group(0).split())
             if hit and hit not in found:
                 found.append(hit)
     return found
+
+
+# The excerpt lookup below walks the message once per reported match, and
+# classify() reports at most five. A cap keeps that bounded on a pasted
+# thread; beyond it the log falls back to the phrase alone, which is what it
+# did for every awkwardly spaced match before round 12 anyway.
+_MAX_CONTEXT_SCAN = 100_000
+
+
+def _find_collapsed(text: str, phrase: str) -> tuple[int, int]:
+    """Span in `text` matching a whitespace-collapsed `phrase`, or (-1, -1).
+
+    Single pass, no regex: a regex built from customer text is how you get a
+    ReDoS in the logging path.
+    """
+    if not phrase or not text:
+        return -1, -1
+    hay = text[:_MAX_CONTEXT_SCAN].lower()
+    needle = phrase.lower()
+
+    # Fast path - nothing odd in the whitespace, which is almost always.
+    idx = hay.find(needle)
+    if idx >= 0:
+        return idx, idx + len(needle)
+
+    chars: list[str] = []
+    offsets: list[int] = []
+    prev_space = True
+    for i, ch in enumerate(hay):
+        if ch.isspace():
+            if prev_space:
+                continue
+            chars.append(" ")
+            offsets.append(i)
+            prev_space = True
+        else:
+            chars.append(ch)
+            offsets.append(i)
+            prev_space = False
+
+    j = "".join(chars).find(needle)
+    if j < 0:
+        return -1, -1
+    last = offsets[min(j + len(needle), len(offsets)) - 1]
+    return offsets[j], last + 1
 
 
 def _match_context(text: str, phrase: str, window: int = 30) -> str:
@@ -890,12 +1022,20 @@ def _match_context(text: str, phrase: str, window: int = 30) -> str:
 
     `matched=['missing']` on its own tells a reader nothing. The surrounding
     words are what let someone explain a surprising escalation in seconds.
+
+    The phrase arrives whitespace-collapsed from _find_matches, so a plain
+    `find` misses it whenever the customer's text had a newline, a tab, a
+    double space or a U+00A0 inside the phrase - and U+00A0 is what every
+    HTML-to-text converter emits for a padded table cell, so this is ordinary
+    marketing-styled mail, not an attack. Round 12 measured 66 of 77 matches
+    silently losing their excerpt. Search a collapsed copy of the haystack
+    and map the offset back, so the excerpt is cut from the ORIGINAL text.
     """
-    idx = text.lower().find(phrase.lower())
+    idx, stop = _find_collapsed(text, phrase)
     if idx < 0:
         return phrase
     start = max(0, idx - window)
-    end = min(len(text), idx + len(phrase) + window)
+    end = min(len(text), stop + window)
     excerpt = " ".join(text[start:end].split())
     return f"...{excerpt}..." if (start or end < len(text)) else excerpt
 
