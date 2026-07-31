@@ -137,7 +137,7 @@ _PORT_IMMEDIATE_KEYWORDS = [
     # and never match the compound "tear-away".
     r"\b(?:there\s?'?s|there\s+is|it\s+has|it\s+had|came\s+with|"
     r"arrived\s+with|turned\s+up\s+with|found)\s+(?:a\s+)?(?:big\s+|small\s+|"
-    r"large\s+|huge\s+|tiny\s+)?(?:hole|rip|tear|stain|snag)\b(?!\s*-?\s*away)",
+    r"large\s+|huge\s+|tiny\s+)?(?:hole|rip|tear|stain|snag)\b(?!\s*(?:-\s*)?away)",
 
     # Missing / undelivered, phrased unambiguously
     r"\b(?:did\s+not|didn'?t)\s+come\s+with\b",
@@ -167,7 +167,14 @@ _IMMEDIATE_KEYWORDS = _MAIN_IMMEDIATE_KEYWORDS + _PORT_IMMEDIATE_KEYWORDS
 # a replacement bow? Mine arrived ripped." is a complaint.
 _WEAK_DAMAGE = [
     r"\bripped\b", r"\bstained\b",
-    r"\ba\s+(?:hole|rip|tear|stain)\b(?!\s*-?\s*away)",
+    # "(?!\s*(?:-\s*)?away)", NOT "(?!\s*-?\s*away)". Same quadratic as
+    # _ORDER_CONTEXT_RE, hidden inside a lookahead: two \s* separated by an
+    # optional "-" lets the engine split a whitespace run every possible way.
+    # "a hole" + 100 000 spaces took 17.6s. Rewritten so the first \s* is
+    # followed by a single-character decision, it is 0.0013s - and 0.028s on
+    # 2 MB. Exactly equivalent: checked over 300 000 random probes plus every
+    # hyphen and whitespace arrangement of "tear-away", 0 differences.
+    r"\ba\s+(?:hole|rip|tear|stain)\b(?!\s*(?:-\s*)?away)",
     r"\b(?:hole|rip|tear|stain)\s+(?:in|on)\b",
     r"\banother\s+customer\b",
     r"\bsomeone\s+else'?s?\s+(order|name|items?|package|parcel|box)\b",
@@ -194,7 +201,17 @@ _ORDER_CONTEXT_RE = re.compile(
     r"parcel|parcels|package|packages|shipment|the\s+box|my\s+box|in\s+the\s+box|"
     r"tracking|courier|dispatched|"
     r"my\s+(?:order|purchase|item|items|delivery|parcel|package)|"
-    r"order\s*#?\s*\d|#\s*\d{3,}"
+    # "order[\s#]*\d", NOT "order\s*#?\s*\d". Two \s* separated by an optional
+    # #? is quadratic: for "order" followed by a long whitespace run and no
+    # digit, the engine tries every way of splitting the run between the two
+    # groups. Measured: 3.1s on a 40 000-char message, and classify() took
+    # 4.05s end to end. The classifier runs synchronously on the single
+    # processor, so that is a stalled queue - no drafts, no owner alerts -
+    # for as long as such emails keep arriving.
+    #
+    # The identical bug was found in draft_cleaner._SUBJECT_NOISE_RE in the
+    # same review. A single character class cannot backtrack.
+    r"order[\s#]*\d|#\s*\d{3,}"
     r")\b",
     re.IGNORECASE,
 )

@@ -686,7 +686,7 @@ WEAK_EXEMPLARS = {
     r"\binstead\s+of\s+the\b": "My parcel held the gown instead of the romper.",
     r"\bripped\b": "The parcel held a ripped bodysuit.",
     r"\bstained\b": "My order held a stained bib.",
-    r"\ba\s+(?:hole|rip|tear|stain)\b(?!\s*-?\s*away)": "My parcel held a top with a stain.",
+    r"\ba\s+(?:hole|rip|tear|stain)\b(?!\s*(?:-\s*)?away)": "My parcel held a top with a stain.",
     r"\b(?:hole|rip|tear|stain)\s+(?:in|on)\b": "My parcel held a top with holes, hole in the arm.",
     r"\banother\s+customer\b": "The box is labelled for another customer.",
     r"\bsomeone\s+else'?s?\s+(order|name|items?|package|parcel|box)\b":
@@ -1148,7 +1148,55 @@ class BottomPostedTests(unittest.TestCase):
 
 class ReDoSTests(unittest.TestCase):
     """Ticket bodies are attacker-influenced and arrive before any human sees
-    them. Every pattern applied to them must be linear."""
+    them. Every pattern applied to them must be linear.
+
+    Round 8 found TWO more, both the same shape and both missed by the probes
+    below because those probe the patterns that were slow LAST time. The shape
+    is two unbounded \\s* separated by something optional - the engine then
+    tries every way of splitting a whitespace run between them:
+
+      _ORDER_CONTEXT_RE   "order\\s*#?\\s*\\d"      3.1s on 40 000 chars
+      _WEAK_DAMAGE        "(?!\\s*-?\\s*away)"    17.6s on 100 000 chars
+
+    classify() runs synchronously on the single processor, so that is a
+    stalled queue - no drafts, no owner alerts, no heartbeat - not a slow
+    ticket. test_no_pattern_has_the_quadratic_shape below is the general
+    guard; these timing probes are the specific one.
+    """
+
+    QUADRATIC_SHAPE = re.compile(r"\\s\*[^\\]{0,4}\?\\s\*")
+
+    def test_no_pattern_has_the_quadratic_shape(self):
+        # Structural and exhaustive, so it catches the NEXT one rather than
+        # the last one. Both round-8 bugs would have failed this on the day
+        # they were written.
+        offenders = []
+        for name, value in vars(cls).items():
+            if isinstance(value, re.Pattern):
+                if self.QUADRATIC_SHAPE.search(value.pattern):
+                    offenders.append(name)
+            elif (isinstance(value, list) and name.isupper()
+                  and value and isinstance(value[0], str)):
+                for pattern in value:
+                    if self.QUADRATIC_SHAPE.search(pattern):
+                        offenders.append(f"{name}: {pattern}")
+        self.assertEqual(offenders, [],
+                         r"two unbounded \s* separated by an optional atom is "
+                         r"quadratic on a whitespace run - use a character "
+                         r"class, or put a single-character decision after "
+                         r"the first \s*")
+
+    def test_an_order_word_before_a_whitespace_run_is_linear(self):
+        import time
+        for probe in ("order" + " " * 40_000,
+                      "a hole" + " " * 40_000,
+                      "there is a rip" + " " * 40_000,
+                      "#" + " " * 40_000):
+            with self.subTest(probe=probe[:12]):
+                start = time.perf_counter()
+                _c(probe)
+                self.assertLess(time.perf_counter() - start, 2.0,
+                                "a classifier pattern is backtracking")
 
     def test_the_quote_header_pattern_is_bounded(self):
         import time
