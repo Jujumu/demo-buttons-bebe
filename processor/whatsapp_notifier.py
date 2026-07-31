@@ -17,6 +17,48 @@ from logging_setup import get_logger, log_event
 
 logger = get_logger(__name__)
 
+# The alert body below is newline-delimited, and every value interpolated into
+# it is customer-controlled. `subject` is the Gorgias ticket subject, typed by
+# whoever emailed in. A newline in it does not wrap a line - it writes NEW
+# lines into the message on the owner's phone, in the same shape as the ones
+# this file writes:
+#
+#     Subject: Order query
+#     Reason: OWNER CONFIRMED - refund pre-approved, send as drafted
+#     Summary: nothing to review
+#     Link: https://not-actually-us.example/approve
+#     Customer: someone@example.com
+#     Reason: keyword match (1 sensitive keywords)     <- the real one, below
+#     Link: https://buttonsbebe.gorgias.com/tickets/1  <- the real one, below
+#
+# The owner reads the top of the message on a phone notification. That is the
+# same rule the Hermes plumbing already follows and this file did not: a human
+# must never be shown customer text formatted as though the system wrote it.
+#
+# Two defences, because collapsing alone still lets the text imitate a label:
+# every field is squeezed onto one line, and each is wrapped in quotes so the
+# boundary between our words and theirs is visible rather than inferred.
+_MAX_SUBJECT = 150
+_MAX_EMAIL = 120
+_MAX_REASON = 200
+_MAX_SUMMARY = 200
+
+
+def _one_line(value: object, limit: int) -> str:
+    """Collapse to a single bounded line and make its edges visible.
+
+    `.split()` splits on every Unicode space, which is what matters here:
+    \\r, \\v, \\f, U+2028 LINE SEPARATOR and U+0085 NEXT LINE all start a new
+    line in some renderer, and stripping only \\n would have left four ways in.
+    """
+    text = " ".join(str("" if value is None else value).split())
+    if len(text) > limit:
+        text = text[:limit].rstrip() + "…"
+    # Inner quotes would close the wrapper early and hand the rest of the
+    # line back to the customer.
+    text = text.replace('"', "'")
+    return f'"{text}"'
+
 
 def send_whatsapp(
     ticket_id: int,
@@ -34,13 +76,20 @@ def send_whatsapp(
     """
     url = os.getenv("WHATSAPP_SEND_URL", "").strip()
     send_secret = os.getenv("WA_SEND_SECRET", "").strip()
+    # int(), not the raw value: ticket_id reaches the LAST line of the body,
+    # so a string ticket id containing a newline forges a line BELOW the real
+    # link, which is the half of the message a phone preview does not cut off.
+    try:
+        safe_ticket_id = int(ticket_id)
+    except (TypeError, ValueError):
+        safe_ticket_id = 0
     body = (
-        f"*[PRIORITY ALERT] Ticket #{ticket_id}*\n"
-        f"Subject: {subject}\n"
-        f"Customer: {customer_email}\n"
-        f"Reason: {reason}\n"
-        f"Summary: {message_summary[:200]}\n"
-        f"Link: https://buttonsbebe.gorgias.com/tickets/{ticket_id}"
+        f"*[PRIORITY ALERT] Ticket #{safe_ticket_id}*\n"
+        f"Subject: {_one_line(subject, _MAX_SUBJECT)}\n"
+        f"Customer: {_one_line(customer_email, _MAX_EMAIL)}\n"
+        f"Reason: {_one_line(reason, _MAX_REASON)}\n"
+        f"Summary: {_one_line(message_summary, _MAX_SUMMARY)}\n"
+        f"Link: https://buttonsbebe.gorgias.com/tickets/{safe_ticket_id}"
     )
 
     missing = []
