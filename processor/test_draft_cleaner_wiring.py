@@ -969,6 +969,32 @@ class NoCatastrophicBacktrackingTests(unittest.TestCase):
                              "the whole customer message is being re-normalised "
                              "for every <DRAFT> block")
 
+    def test_fifty_unbalanced_markers_do_not_scan_the_whole_output(self):
+        # Round-10 LOW. The marker COUNT is capped at 50; the output length is
+        # not, and each unbalanced candidate scanned to end-of-output in pure
+        # Python - 50x amplification of whatever the model printed. 200KB cost
+        # 0.6s, 1MB 3.1s, 4MB 12.2s, and _parse_json_result runs it again.
+        from hermes_runner import _valid_verdicts
+
+        planted = "JSON_RESULT: {\n" * 50
+        for size in (200_000, 1_000_000):
+            with self.subTest(size=size):
+                output = planted + "x" * size
+                self.assertLess(self._timed(_valid_verdicts, output, None),
+                                self.BUDGET)
+
+    def test_a_real_verdict_still_parses_after_the_scan_bound(self):
+        from hermes_runner import _MAX_JSON_BLOCK, _parse_json_result
+
+        self.assertGreaterEqual(_MAX_JSON_BLOCK, 2_000,
+                                "a verdict with a long reason must still fit")
+        verdict = ('JSON_RESULT: {"priority":"high","reason":"' + "A" * 250 +
+                   '","action":"sensitive_draft","notify_owner":true,'
+                   '"nested":{"a":{"b":{"c":1}}}}')
+        result = _parse_json_result("x" * 300_000 + "\n" + verdict, None)
+        self.assertEqual(result["priority"], "high")
+        self.assertTrue(result["notify_owner"])
+
     def test_an_absurd_number_of_blocks_fails_closed(self):
         from hermes_runner import _MAX_VERDICT_CANDIDATES, _extract_draft
 

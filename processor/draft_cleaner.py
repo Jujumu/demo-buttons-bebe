@@ -552,7 +552,16 @@ def should_draft(message: str, subject: str = "") -> ShouldDraft:
     message = " ".join(str(message or "").split())
     if len(message) > _MAX_GATE_MESSAGE:
         return ShouldDraft(True)
-    subject = str(subject or "")[:_MAX_GATE_SUBJECT]
+    # The SUBJECT gets the same treatment, three lines after declaring that
+    # reasoning wrong. Round 10: the body was fixed and this slice was not, so
+    #   subject = ("thanks " * 286) + "Why has my refund still not arrived?"
+    # was suppressed at 2 038 characters and drafted at 1 996 - the question
+    # fell off the end of the slice. The classifier still escalates and pages
+    # the owner from the raw subject, so the blast radius is a missing draft
+    # rather than a missing alert, but it is the same mistake.
+    subject = " ".join(str(subject or "").split())
+    if len(subject) > _MAX_GATE_SUBJECT:
+        return ShouldDraft(True)
 
     if not _carries_no_content(message):
         return ShouldDraft(True)

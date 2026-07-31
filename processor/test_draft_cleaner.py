@@ -372,6 +372,21 @@ class NoCatastrophicBacktrackingTests(unittest.TestCase):
         self.assertTrue(dc.should_draft(padded).ok,
                         "a complaint past the cap was silently dropped")
 
+    def test_a_padded_subject_cannot_hide_a_question_either(self):
+        # Round-10 MEDIUM. The BODY got the refuse-to-judge fix and the
+        # subject kept its hard slice, three lines below the comment saying
+        # why that reasoning is wrong. The question fell off the end.
+        padded = ("thanks " * 286) + "Why has my refund still not arrived?"
+        self.assertGreater(len(padded), dc._MAX_GATE_SUBJECT)
+        self.assertTrue(dc.should_draft("thanks", padded).ok,
+                        "a question past the subject cap was dropped")
+        # ...and the same subject just under the cap always worked.
+        self.assertTrue(dc.should_draft("thanks", padded[:1_996]).ok)
+
+    def test_a_padded_subject_alone_is_still_an_acknowledgement(self):
+        self.assertFalse(dc.should_draft("thanks", "Re: " + " " * 100_000).ok)
+        self.assertFalse(dc.should_draft("thanks", "  Thanks!  " * 5).ok)
+
     def test_padding_alone_is_still_an_acknowledgement(self):
         # ...and the fix must not have disabled the gate. Whitespace is
         # collapsed BEFORE the length check, so padding cannot fill the budget.

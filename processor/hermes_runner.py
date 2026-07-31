@@ -97,7 +97,13 @@ def _extract_json_block(text: str, start_pos: int) -> str | None:
     depth = 0
     in_string = False
     escape = False
-    for i in range(start_pos, len(text)):
+    # BOUNDED. The marker COUNT is capped at 50, the output length is not, and
+    # each unbalanced candidate scanned to end-of-output in pure Python: 50
+    # unbalanced markers cost 0.6s on 200KB, 3.1s on 1MB and 12.2s on 4MB, and
+    # _parse_json_result runs the whole thing again. A verdict is four fields;
+    # it is never megabytes.
+    end = min(len(text), start_pos + _MAX_JSON_BLOCK)
+    for i in range(start_pos, end):
         ch = text[i]
         if escape:
             escape = False
@@ -178,6 +184,11 @@ _NON_DRAFT_FRAGMENTS = frozenset({
 # candidate scans to end-of-output, so an output with thousands of markers is
 # quadratic. 50 is far above anything a real run produces.
 _MAX_VERDICT_CANDIDATES = 50
+
+# A verdict is four fields. Scanning further for a balanced brace is pure
+# waste, and with 50 candidates it is 50x the whole output. See
+# _extract_json_block.
+_MAX_JSON_BLOCK = 8_000
 
 # "reason" is shown on the dashboard AND sent to the owner's WhatsApp, so it
 # is bounded like any other model-authored string that leaves the process.
