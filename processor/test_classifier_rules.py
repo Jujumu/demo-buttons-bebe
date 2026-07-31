@@ -1197,36 +1197,84 @@ class ReDoSTests(unittest.TestCase):
         Adjacent runs matter as well: r"\\ba\\s+hole\\b(?!\\s*-?\\s*away)"
         needs BOTH words before its lookahead runs, and a single-word probe
         never gets there.
+
+        Round 10 found four ways this dropped the literals it needed, each of
+        which let a planted quadratic pass. All four are fixed here and pinned
+        by test_the_literal_miner_reaches_every_shape:
+
+          * r"\\(\\?[a-zA-Z:!=<]*" ate the first alternative of every "(?:"
+            group and every lookbehind body, so r"\\b(?:order)\\s*#?\\s*\\d"
+            mined NOTHING and was skipped entirely;
+          * r"\\[[^\\]]*\\]" ate character-class contents, so
+            r"\\b[Oo]rder\\s*#?\\s*\\d" mined "rder" and the probe never
+            matched;
+          * the [:60] / [:120] caps re-created the exact bug the paragraph
+            above says they fixed - _NEGATIVE_RE mines only as far as
+            "nobody", so a quadratic appended to its tail passed;
+          * the fillers were only " " and "-", so a digit-driven pattern like
+            r"\\bcase\\d*x?\\d*[a-z]\\b" was never pumped.
         """
-        stripped = re.sub(r"\\[a-zA-Z]|\[[^\]]*\]|\(\?[a-zA-Z:!=<]*|[(){}|?*+^$]",
-                          " ", pattern)
-        words = re.findall(r"[a-zA-Z']+", stripped)[:60]
+        # A character class becomes ONE representative member, not a gap:
+        # "[Oo]rder" must mine "Order", and deleting the class split it into
+        # "oo" and "rder", neither of which appears in matching input.
+        def one_of(match: re.Match) -> str:
+            body = match.group(1)
+            if body.startswith("^"):
+                return " "                      # negated: no representative
+            for char in re.sub(r"\\[a-zA-Z]", "", body):
+                if char.isalnum():
+                    return char
+            return " "
+
+        stripped = re.sub(r"\[((?:[^\]\\]|\\.)*)\]", one_of, pattern)
+        # Strip the SYNTAX of a group opener, not its first alternative.
+        stripped = re.sub(r"\\[a-zA-Z]|\(\?[:=!<>P]*|[(){}|?*+^$-]", " ", stripped)
+        words = re.findall(r"[a-zA-Z']+", stripped)
         heads = list(dict.fromkeys(words))
         for i in range(len(words) - 1):
             heads.append(f"{words[i]} {words[i + 1]}")
             if i + 2 < len(words):
                 heads.append(f"{words[i]} {words[i + 1]} {words[i + 2]}")
-        return list(dict.fromkeys(heads))[:120]
+        # NO CAP. A cap is how the previous two versions of this failed.
+        return list(dict.fromkeys(heads))
 
     def _worst_time(self, compiled: re.Pattern, heads: list[str], pad: int) -> float:
         import time
         worst = 0.0
         # The dangerous input is one of a pattern's own literals followed by a
         # long run of something the NEXT element almost accepts.
-        for head in heads or [""]:
-            for filler in (" ", "-"):
+        # Digits and word characters as well as whitespace and hyphens: a
+        # pattern like r"\bcase\d*x?\d*[a-z]\b" is quadratic on a run of
+        # DIGITS and was never pumped by a whitespace-only probe.
+        # "" is ALWAYS probed, not just when no literal was mined: a pattern
+        # can be quadratic in its own LEADING quantifiers, reaching no literal
+        # at all. _MARKER_RE's "^[\\s>*#\\-]*[-\\s]*..." blows up on a bare run
+        # of dashes, and every probe here used to be prefixed with a literal.
+        for head in list(heads) + [""]:
+            for filler in (" ", "-", "0", "x", "\t", "\u00a0"):
                 probe = head + filler * pad
                 start = time.perf_counter()
                 compiled.search(probe)
                 worst = max(worst, time.perf_counter() - start)
         return worst
 
-    def test_no_pattern_is_superlinear(self):
+    def _scan(self, patterns) -> list[str]:
+        """The guard body. ONE implementation, used by the guard AND its
+        self-check.
+
+        Round 10: the self-check had its own copy of this loop, so it never
+        touched PUMP_FLOOR or the module enumeration. Setting PUMP_FLOOR to
+        1e9 (which makes every real pattern `continue` and disables the guard
+        completely) left the whole suite GREEN with a live quadratic planted.
+        A guard whose self-check does not exercise it is not a self-check.
+        """
         offenders = []
-        for name, value, pattern in self._every_pattern():
+        for name, value, pattern in patterns:
+            # A pattern with no minable literal is still SCANNED, not skipped:
+            # _worst_time always probes the empty head, which is how a pattern
+            # quadratic in its own leading quantifiers gets caught. Skipping
+            # here is what let r"\b(?:order)\s*#?\s*\d" through.
             literals = self._literals(pattern)
-            if not literals:
-                continue
             try:
                 compiled = (value if isinstance(value, re.Pattern)
                             else re.compile(pattern, re.IGNORECASE))
@@ -1246,48 +1294,130 @@ class ReDoSTests(unittest.TestCase):
             # through to a stale value from the previous pattern.
             if large > small * self.PUMP_GROWTH:
                 offenders.append(f"{name}: {small:.4f}s -> {large:.4f}s :: {pattern[:70]}")
+        return offenders
+
+    def test_no_pattern_is_superlinear(self):
         self.assertEqual(
-            offenders, [],
+            self._scan(self._every_pattern()), [],
             "these patterns grow faster than linearly on their own input - "
             "the usual cause is two unbounded whitespace quantifiers with "
             "something optional between them; put the whitespace INSIDE the "
             "optional group so a single-character decision follows the first")
 
     @staticmethod
-    def _every_pattern():
-        """(name, value, pattern-string) for every regex in the module."""
-        for name, value in vars(cls).items():
-            if isinstance(value, re.Pattern):
-                yield name, value, value.pattern
-            elif (isinstance(value, list) and name.isupper()
-                  and value and isinstance(value[0], str)):
-                for i, pattern in enumerate(value):
-                    yield f"{name}[{i}]", pattern, pattern
+    def _guarded_modules():
+        """Every module whose regexes run on attacker-controlled ticket text.
+
+        THREE modules, not one. The previous version read only the classifier,
+        and TWO of the six historical bombs lived in draft_cleaner - so
+        appending a quadratic to _SUBJECT_NOISE_RE left the whole suite green.
+        """
+        import importlib
+
+        modules = [("classifier", cls)]
+        for name in ("draft_cleaner", "hermes_runner"):
+            try:
+                modules.append((name, importlib.import_module(name)))
+            except ImportError:
+                # These live on sibling task branches; on a branch where one is
+                # absent there is nothing of its to scan. The coverage test
+                # below asserts that everything IMPORTABLE is scanned, so a
+                # module quietly dropping out of the guard still fails.
+                continue
+        return modules
+
+    @staticmethod
+    def _importable_guarded_modules() -> set:
+        import importlib
+
+        found = {"classifier"}
+        for name in ("draft_cleaner", "hermes_runner"):
+            try:
+                importlib.import_module(name)
+            except ImportError:
+                continue
+            found.add(name)
+        return found
+
+    @classmethod
+    def _every_pattern(cls_):
+        """(name, value, pattern-string) for every regex in every module."""
+        for mod_name, module in cls_._guarded_modules():
+            for name, value in vars(module).items():
+                if isinstance(value, re.Pattern):
+                    yield f"{mod_name}.{name}", value, value.pattern
+                elif (isinstance(value, list) and name.isupper()
+                      and value and isinstance(value[0], str)):
+                    for i, pattern in enumerate(value):
+                        yield f"{mod_name}.{name}[{i}]", pattern, pattern
+
+    def test_the_guard_covers_every_module_that_reads_ticket_text(self):
+        seen = {name.split(".")[0] for name, _v, _p in self._every_pattern()}
+        self.assertEqual(seen, self._importable_guarded_modules(),
+                         "two of the six historical bombs were in "
+                         "draft_cleaner; a guard that only reads the "
+                         "classifier would not have seen them")
+
+    def test_the_literal_miner_reaches_every_shape(self):
+        # Round 10 planted four quadratics that the miner could not reach, and
+        # all four passed. Each shape is pinned here by the property that
+        # matters: the miner must produce a literal that actually appears in
+        # matching input.
+        for pattern, needed in [
+            (r"\border\s*#?\s*\d", "order"),            # plain (the control)
+            (r"\b[Oo]rder\s*#?\s*\d", "order"),         # char class
+            (r"\b(?:order)\s*#?\s*\d", "order"),        # (?: group
+            (r"(?<=order)\s*#?\s*\d", "order"),         # lookbehind
+            (r"\bcase\d*x?\d*[a-z]\b", "case"),         # digit-driven
+            (r"\b(?i:Order)\s*#?\s*\d", "order"),       # inline flag group
+        ]:
+            with self.subTest(pattern=pattern):
+                mined = [h.lower() for h in self._literals(pattern)]
+                self.assertIn(needed, mined,
+                              f"the miner cannot build input reaching {pattern}")
+
+    def test_the_miner_does_not_cap_its_output(self):
+        # A cap is how the previous TWO versions of this failed: a quadratic
+        # appended to the tail of a long alternation was never probed.
+        import string
+
+        words = [f"word{a}{b}" for a in string.ascii_lowercase
+                 for b in string.ascii_lowercase][:200]
+        self.assertGreaterEqual(len(self._literals("|".join(words))), 200)
 
     def test_the_superlinear_check_actually_catches_a_planted_bomb(self):
         # A guard that cannot fail is worse than no guard - which is exactly
         # what the previous version of this test turned out to be. So: plant
         # each historical shape and confirm the check fires.
-        import time
         bombs = [
-            r"\bwaiting\s+(?:for\s+)?(?:\d+|a)?\s*(?:days?|weeks?)",   # round 9
-            r"\byou\s+sent\s+(?:a|an|the)?\s*(?:wrong|different)\b",   # round 9
+            # All six live bugs, in the form they shipped in.
             r"\border\s*#?\s*\d",                                       # round 8
             r"\ba\s+hole\b(?!\s*-?\s*away)",                            # round 8
-            r"\bfoo\s+(?:bar\s+)?\s*baz\b",                             # bypasses
+            r"^[\s>*#\-]*[-\s]*\[?end of (?:response|draft)\]?",        # round 8
+            r"\bwaiting\s+(?:for\s+)?(?:\d+|a)?\s*(?:days?|weeks?)",    # round 9
+            r"\byou\s+sent\s+(?:a|an|the)?\s*(?:wrong|different)\b",    # round 9
+            r"\bsubject\s*#?\s*\d",                                     # round 8
+            # Shapes that got PAST the previous two versions of this guard.
+            r"\bfoo\s+(?:bar\s+)?\s*baz\b",
             r"\bfoo\s*(?:abcdefgh)?\s*baz\b",
             r"\bfoo\s*(?:\d+)?\s*baz\b",
+            r"\bfoo[ \t]*x?[ \t]*baz\b",
+            # ...and the four round-10 bypasses of the literal miner.
+            r"\b[Oo]rder\s*#?\s*\d",           # literal inside a char class
+            r"\b(?:order)\s*#?\s*\d",          # literal inside a (?: group
+            r"(?<=order)\s*#?\s*\d",           # literal inside a lookbehind
+            r"\bcase\d*x?\d*[a-z]\b",          # quadratic on DIGITS, not spaces
         ]
+        # Driven through the REAL guard body, not a copy of it. The previous
+        # version had its own loop, so it never touched PUMP_FLOOR or the
+        # module enumeration - and setting PUMP_FLOOR to 1e9, which disables
+        # the guard entirely, left the suite green with a live bomb planted.
         for pattern in bombs:
             with self.subTest(pattern=pattern):
-                compiled = re.compile(pattern, re.IGNORECASE)
-                literals = self._literals(pattern)
-                self.assertTrue(literals, f"no literals mined from {pattern}")
-                small = self._worst_time(compiled, literals, self.PUMP_N)
-                large = self._worst_time(compiled, literals, self.PUMP_N * 4)
-                self.assertGreater(
-                    large, small * self.PUMP_GROWTH,
-                    f"the superlinear check does NOT catch {pattern}")
+                offenders = self._scan([(f"planted::{pattern}", pattern, pattern)])
+                self.assertTrue(
+                    offenders,
+                    f"the guard does NOT catch {pattern} - it would ship")
 
     def test_an_order_word_before_a_whitespace_run_is_linear(self):
         import time
