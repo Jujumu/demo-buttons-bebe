@@ -136,3 +136,25 @@ cd "/root/Buttonsbebe Agent/KB" && ./search.sh "do you ship to canada"
 sqlite3 "/root/Buttonsbebe Agent/webhook/data/webhook.db" \
   "select status,count(*) from job_queue group by status"
 ```
+
+## Background reading
+
+Ported from the `Fable_buttonsbebe` branch on 2026-07-29. **Track A** in these
+documents is the live system described above; **Track B** is Fable, a
+standalone help-desk prototype that stayed on its branch and is not part of
+`main`. Treat Track B material as background, not as planned work.
+
+| Document | What it is |
+|---|---|
+| `PORTFROMFABLETASKLIST.md` | The port itself — what came across from Fable, what deliberately did not, and the status of each task. Start here. |
+| `IMPROVEMENT-PLAN.md` | The reasoning behind the reliability and quality work (draft cleaner, heartbeat, classifier coverage, one `.env`). |
+| `DESIGN-CRITIQUE.md` | Code-level review of the console and the old dashboard. |
+| `TESTING-READINESS.md` | Defines "ready to ship": a clean 48-scenario run is the gate before any live change. |
+| `Buttons-Bebe-Competitive-Brief.html` | Point-in-time market snapshot. Background only. |
+| `testing/TEST-PLAN.md` · `testing/HOW-TO-RUN.md` | The 48 scenarios, the A–E rubric, and how to run them against the live model. |
+| `deploy/HEARTBEAT-INSTALL.md` | Installing the dead-man's switch on the VPS. |
+| `deploy/ENV-CONSOLIDATION-RUNBOOK.md` | Merging the two `.env` files and rotating secrets. VPS work, not yet done. |
+
+Deliberately **not** ported: `SPRINT-2-PLAN.md` and `CONTINUE-HERE.md` are
+finished-sprint logs specific to the Fable branch — on `main` they would read
+as current work.
