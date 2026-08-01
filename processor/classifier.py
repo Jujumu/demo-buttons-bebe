@@ -104,20 +104,34 @@ _PORT_IMMEDIATE_KEYWORDS = [
     r"\bunauthorized\s+transaction\b",
     # Fraud / theft accusations
     r"\bfraudulent\b", r"\bscamm(?:ed|er)\b",
-    # "rip off" the NOUN, not the verb. Main has the bare string too, but
-    # only inside _ANGRY_KEYWORDS, which needs two hits and cannot escalate
-    # on its own - so the port's copy is the one that turned
-    # "What is the tear in the label for, is it meant to rip off?" into an
-    # IMMEDIATE and a phone call, on a message main scores NORMAL. In a
-    # clothes shop things rip off: labels, tags, stickers, tear-away tabs.
-    # The accusation is a noun phrase or takes an object pronoun.
-    r"\b(?:a|an|the|total|complete|absolute|utter|proper|what\s+a|such\s+a|"
-    r"is\s+a|was\s+a|be\s+a)\s+rip[\s-]?off\b",
+    # "rip off" the NOUN in a predicate, not the verb and not an adjective.
+    # Main has the bare string too, but only inside _ANGRY_KEYWORDS, which
+    # needs two hits and cannot escalate on its own - so the port's copy is
+    # the one that turned "What is the tear in the label for, is it meant to
+    # rip off?" into an IMMEDIATE and a phone call, on a message main scores
+    # NORMAL. In a clothes shop things rip off: labels, tags, stickers, tabs.
+    #
+    # Round 13's first attempt at this was a WIDENING, not a narrowing:
+    # "ripp?(?:ed|ing)?\s+(?:me|us|him|her|them|people|customers)\s+off" is a
+    # bigger language than "ripped me off", and it escalated 1188 ordinary
+    # messages - "I just rip them off, is that ok?", "can you rip them off
+    # before posting?". A bare article did the same for the noun form:
+    # "a rip-off label" is a product, "a rip-off" on its own is an
+    # accusation, so the article now has to come with a verb or an
+    # intensifier that makes it a predicate.
+    r"\b(?:is|was|are|were|be|what)\s+(?:a|an)\s+rip[\s-]?off\b",
+    r"\b(?:total|complete|absolute|utter|proper|such\s+a)\s+rip[\s-]?off\b",
     r"\brip[\s-]?off\s+(?:price|prices|merchant|merchants|company|site|shop)\b",
-    r"\bripp?(?:ed|ing)?\s+(?:me|us|him|her|them|people|customers)\s+off\b",
+    r"\bripped\s+(?:me|us)\s+off\b",
     r"\bstole\s+my\s+money\b",
     r"\b(?:want|give\s+me|return)\s+my\s+money\b",
-    r"\byou\s+stole\b", r"\btheft\b",
+    r"\byou\s+stole\b",
+    # "theft" as an accusation, not as a fact of life. "Do you require a
+    # signature, we have had parcel theft here?" is a delivery question and
+    # it was an owner phone call.
+    r"\b(?:this|that|it)\s+is\s+theft\b",
+    r"\breport(?:ing)?\s+(?:this\s+)?(?:as\s+)?theft\b",
+    r"\byou\s+(?:have\s+)?stolen\b",
     # Legal / regulatory variants
     r"\bsuing\b", r"\blegal\s+counsel\b", r"\bcease\s+and\s+desist\b",
     r"\bfile\s+a\s+complaint\b",
@@ -125,13 +139,27 @@ _PORT_IMMEDIATE_KEYWORDS = [
     # Wrong item — phrasings that contain no literal "wrong"
     r"\b(?:is\s?n'?t|was\s?n'?t|not)\s+what\s+i\s+ordered\b",
     r"\b(?:got|sent|received)\s+the\s+wrong\b",
-    r"\bnot\s+mine\b", r"\bnot\s+as\s+described\b",
+    # "not mine" needs to be about a PARCEL. "The email on my account is not
+    # mine, can you change it?" is an account-details question and it was an
+    # owner phone call: 756 of 36 144 ordinary messages in one review corpus.
+    # The bounded window keeps it linear.
+    r"\b(?:items?|parcel|package|box|order|name|address|label)\b"
+    r"[^.!?]{0,30}\bnot\s+mine\b",
+    r"\bnot\s+as\s+described\b",
     r"\blooks?\s+nothing\s+like\b",
     r"\bnothing\s+like\s+the\s+(photo|picture|listing|description|website)\b",
     # NB the article is REQUIRED. With it optional, "but got" matched
     # "it shipped late but got here safely" — a compliment.
-    r"\bbut\s+(?:i\s+)?got\s+(?:a|an|the)\s",
-    r"\bbut\s+received\s+(?:a|an|the)\s",
+    # The lookahead is for what you get INSTEAD of a parcel: an error at
+    # checkout, an email, a discount code. "I tried to place an order but got
+    # an error at checkout" was an owner phone call, 1008 times in one review
+    # corpus, on a message main scores NORMAL.
+    r"\bbut\s+(?:i\s+)?got\s+(?:a|an|the)\s"
+    r"(?!error|message|email|reply|response|notification|code|discount|"
+    r"confirmation|receipt|voucher|refund|call|text)",
+    r"\bbut\s+received\s+(?:a|an|the)\s"
+    r"(?!error|message|email|reply|response|notification|code|discount|"
+    r"confirmation|receipt|voucher|refund|call|text)",
     r"\binstead\s+i\s+got\b",
     # "You sent a different item" is a shipment claim; "I ordered from you last
     # year and lost the code" is purchase history. Only the first is evidence,
@@ -199,10 +227,23 @@ _IMMEDIATE_KEYWORDS = _MAIN_IMMEDIATE_KEYWORDS + _PORT_IMMEDIATE_KEYWORDS
 # now is the other way round: everything weak is guarded, and this table
 # holds only wording that names ANOTHER PERSON'S order, which no care or
 # purchase question ever does.
-_WEAK_UNGUARDED = [
-    r"\banother\s+customer\b",
-    r"\bsomeone\s+else'?s?\s+(order|name|items?|package|parcel|box)\b",
-]
+_WEAK_UNGUARDED: list[str] = []
+# Round 14 emptied it. It held two rules about someone ELSE'S order, on the
+# theory that no ordinary message names one. Two do, constantly, in a shop
+# that sells presents:
+#
+#   "Can I put someone else's name on the gift note?"          1077 cases
+#   "Another customer recommended you for gifts?"              1302 cases
+#   "Is it ok to use someone else's box to send the return?"    191 cases
+#
+# all NORMAL on main. The two rules moved into _WEAK_DAMAGE below, behind the
+# browsing guard, and tightened so they describe a DELIVERY rather than a
+# person: "the box is labelled for another customer" still escalates.
+#
+# The list stays, empty, because the property test and the mutation test both
+# read it - and because an empty unguarded table is the honest end point of
+# three rounds of this. Anything added here fires on every ticket regardless
+# of shape, and nothing has yet earned that.
 
 # Damage wording. Every one of these is also ordinary baby-clothes
 # vocabulary, so all of them sit behind the browsing guard, and the guard is
@@ -212,6 +253,14 @@ _WEAK_UNGUARDED = [
 # customer ripping the mailer is not.
 _WEAK_DAMAGE = [
     r"\bripped\b", r"\bstained\b",
+    # Someone else's order. "for another customer" is a delivery; "another
+    # customer recommended you" is word of mouth, and only the first is a
+    # complaint. Same for a name on a gift note versus a name on a parcel.
+    r"\b(?:for|to|belongs?\s+to|addressed\s+to|labell?ed\s+(?:for|to)|"
+    r"meant\s+for)\s+another\s+customer\b",
+    r"\banother\s+customer'?s\s+"
+    r"(?:order|name|parcel|package|box|address|details|items?)\b",
+    r"\bsomeone\s+else'?s?\s+(order|items?|package|parcel|box)\b",
     # "(?!\s*(?:-\s*)?away)", NOT "(?!\s*-?\s*away)". Same quadratic as
     # _ORDER_CONTEXT_RE, hidden inside a lookahead: two \s* separated by an
     # optional "-" lets the engine split a whitespace run every possible way.
@@ -219,8 +268,13 @@ _WEAK_DAMAGE = [
     # followed by a single-character decision, it is 0.0013s - and 0.028s on
     # 2 MB. Exactly equivalent: checked over 300 000 random probes plus every
     # hyphen and whitespace arrangement of "tear-away", 0 differences.
-    r"\ba\s+(?:hole|rip|tear|stain)\b(?!\s*(?:-\s*)?away)",
-    r"\b(?:hole|rip|tear|stain)\s+(?:in|on)\b",
+    # ...and "(?!-)" as well. A hyphen straight after the noun makes it a
+    # compound modifier, not a noun: rip-off label, tear-away tab,
+    # stain-proof bib, stain-resistant liner, hole-punched tag. The pattern
+    # already had a special case for "tear-away"; the hyphen IS the rule, and
+    # writing it that way covers the ones nobody has thought of.
+    r"\ba\s+(?:hole|rip|tear|stain)\b(?!-)(?!\s*(?:-\s*)?away)",
+    r"\b(?:hole|rip|tear|stain)\b(?!-)\s+(?:in|on)\b",
 ]
 
 # Omission wording. These ARE how customers word a purchase request - "can I
@@ -402,6 +456,26 @@ _MANAGER_DEMAND_KEYWORDS = [
     r"\b(?:owner|manager|supervisor)'?s?\s+(?:personal\s+)?"
     r"(?:phone|number|cell|mobile|email|address)\b",
 ]
+
+# Asking for the owner is not always a demand. Wholesale, stockist, press and
+# collaboration mail asks for the owner by definition - "Can I speak to the
+# owner about stocking your range?", "Could I have the owner's email to
+# discuss a wholesale account?" - and both were IMMEDIATE plus a phone call,
+# 1392 times in one review corpus, on messages main scores NORMAL. This is a
+# small independent shop; that mail arrives every week and it is good news.
+#
+# Narrow and specific on purpose: it vetoes ONLY the manager-demand table, so
+# an angry customer who also says "wholesale" still escalates on every other
+# rule, and the table's own "i demand" / "get me your manager" wording is
+# nothing a trade enquiry contains.
+_TRADE_ENQUIRY_RE = re.compile(
+    r"\b(wholesale|stockist|stock\s+your|stocking\s+your|trade\s+(?:account|"
+    r"price|pricing|enquiry|inquiry)|reseller|retail\s+account|bulk\s+order|"
+    r"collab|collaboration|brand\s+partnership|press\s+(?:sample|enquiry|"
+    r"inquiry|pack)|pr\s+(?:sample|enquiry|inquiry)|influencer|"
+    r"gifting\s+opportunity|media\s+pack)\b",
+    re.IGNORECASE,
+)
 
 # "please don't escalate this, I just have a quick question" is the opposite
 # of an escalation demand, so this one needs a negation guard.
@@ -1167,7 +1241,10 @@ def classify(
     weak_matches = _weak_matches(combined_text)
     immediate_matches.extend(m for m in weak_matches if m not in immediate_matches)
 
-    manager_matches = _find_matches(combined_text, _MANAGER_DEMAND_KEYWORDS)
+    manager_matches = (
+        [] if _TRADE_ENQUIRY_RE.search(combined_text)
+        else _find_matches(combined_text, _MANAGER_DEMAND_KEYWORDS)
+    )
     if (_ESCALATE_RE.search(combined_text)
             and not _ESCALATE_NEGATED_RE.search(combined_text)):
         manager_matches.append("escalate this")
