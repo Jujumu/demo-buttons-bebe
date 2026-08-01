@@ -689,8 +689,12 @@ STRONG_EXEMPLARS = {
     r"\bunauthorized\s+transaction\b": "There is an unauthorized transaction.",
     r"\bfraudulent\b": "This looks fraudulent.",
     r"\bscamm(?:ed|er)\b": "I have been scammed.",
-    r"\brip\s?off\b": "What a ripoff.",
-    r"\bripped\s+me\s+off\b": "You ripped me off.",
+    '\\b(?:a|an|the|total|complete|absolute|utter|proper|what\\s+a|such\\s+a|is\\s+a|was\\s+a|be\\s+a)\\s+rip[\\s-]?off\\b':
+        "What a ripoff.",
+    '\\brip[\\s-]?off\\s+(?:price|prices|merchant|merchants|company|site|shop)\\b':
+        "Rip off merchants, the lot of you.",
+    '\\bripp?(?:ed|ing)?\\s+(?:me|us|him|her|them|people|customers)\\s+off\\b':
+        "You ripped me off.",
     r"\bstole\s+my\s+money\b": "They stole my money.",
     r"\b(?:want|give\s+me|return)\s+my\s+money\b": "I want my money.",
     r"\byou\s+stole\b": "You stole from me.",
@@ -1075,6 +1079,100 @@ class PostDeliveryBenignTests(unittest.TestCase):
             with self.subTest(message=message[:60]):
                 self.assertNotEqual(_c(message)["priority"], NORMAL)
 
+    def test_things_rip_off_in_a_clothes_shop(self):
+        """Round 13. "rip off" is a fraud accusation as a NOUN and an
+        ordinary verb otherwise, and the port escalated both.
+
+        Main carries the bare string too, but only in _ANGRY_KEYWORDS, which
+        needs two hits and cannot escalate on its own - so these were NORMAL
+        on main and an owner phone call on the port.
+        """
+        for message in [
+            "What's the tear in the label for, is it meant to rip off?",
+            "Does the label rip off or do I cut it?",
+            "My order arrived. Can you rip off the price tag before sending?",
+            "Do the size stickers rip off cleanly?",
+        ]:
+            with self.subTest(message=message[:60]):
+                got = _c(message)
+                self.assertEqual(got["priority"], NORMAL, got["reason"])
+
+    def test_the_fraud_sense_of_rip_off_still_escalates(self):
+        for message in [
+            "This is a rip off and I want my money back.",
+            "What a ripoff!!!",
+            "Total rip-off.",
+            "You ripped me off.",
+            "Absolute ripoff, never again.",
+            "Rip off merchants, the lot of you.",
+            "It was a rip off, £40 for that.",
+        ]:
+            with self.subTest(message=message[:60]):
+                self.assertEqual(_c(message)["priority"], IMMEDIATE)
+
+    def test_the_location_of_a_stain_is_not_a_complaint(self):
+        """Round 13 removed a "the hole in the sleeve" guard-lift.
+
+        The theory was that a definite article means damage already under
+        discussion. People name the location of a stain they are asking how
+        to wash out, and they ask what a design feature is for: 1344 of 5760
+        care questions escalated, against 0 on main.
+        """
+        for message in [
+            "My order arrived today. How do I get the stain in the collar "
+            "out? It's carrot puree.",
+            "My parcel came. What is the hole in the back of the sleep bag for?",
+            "Order 10322 arrived. Is the hole in the front for a dummy clip?",
+            "My delivery came. How do I get the stain on the cuff out without "
+            "bleach?",
+        ]:
+            with self.subTest(message=message[:60]):
+                got = _c(message)
+                self.assertEqual(got["priority"], NORMAL, got["reason"])
+
+    def test_a_purchase_request_that_names_damage_is_not_a_complaint(self):
+        """Round 13 removed a "damage word + remedy word" guard-lift.
+
+        Both halves are ordinary vocabulary in a baby shop and together they
+        escalated 320 of 1320 purchase requests.
+        """
+        for message in [
+            "My order arrived. Can I swap the sleep bag for the one without "
+            "the arm holes?",
+            "My parcel came. Do you replace the tear-away labels with sewn-in "
+            "ones?",
+            "Order delivered. Can I claim the free stain remover, I lost the "
+            "code in the email?",
+            "My order arrived. Is the stain-proof bib covered by the "
+            "guarantee if she chews it?",
+        ]:
+            with self.subTest(message=message[:60]):
+                got = _c(message)
+                self.assertEqual(got["priority"], NORMAL, got["reason"])
+
+    def test_british_praise_is_not_shouting(self):
+        """Round 13 put "quality" and "made up" back into the positive table.
+
+        Narrowing them to spelled-out praising senses paged the owner about
+        12 of 14 ordinary compliments. A word in that table only suppresses
+        a rule main does not have, so losing one costs a complaint main also
+        misses - and Hermes still reads the ticket. Getting it wrong the
+        other way costs a phone call about a compliment.
+        """
+        for message in [
+            "Made up!!!",
+            "Cannot fault the quality!!!",
+            "Unreal quality!!!",
+            "Quality!!! Will be back.",
+            "Made up with this, thank you!!!",
+            "Absolutely not what I expected!!! In the best possible way, "
+            "gorgeous.",
+            "The state of this!!! In a good way, she is obsessed.",
+        ]:
+            with self.subTest(message=message[:60]):
+                got = _c(message)
+                self.assertEqual(got["priority"], NORMAL, got["reason"])
+
 
 class SmartPunctuationTests(unittest.TestCase):
     """Apple, Gmail and Outlook all substitute a curly apostrophe."""
@@ -1310,6 +1408,7 @@ class ReDoSTests(unittest.TestCase):
     PUMP_REPEATS = 5        # noise-free second look, candidates only
     PUMP_RETIME = 4         # slowest probes re-timed to remove scheduler noise
     PUMP_NOISE_FLOOR = 0.02  # above this, one sample is already unambiguous
+    PUMP_CEILING = 2.0      # one probe this slow is the answer; stop measuring
     # Linear growth on 4x input is ALREADY 4x, so "comfortably linear" has to
     # be measured against the threshold, not against 1. Setting this to
     # GROWTH/3 sent every single pattern down the expensive path and took the
@@ -1402,7 +1501,14 @@ class ReDoSTests(unittest.TestCase):
                 probe = head + filler * pad
                 start = time.perf_counter()
                 compiled.search(probe)
-                timings.append((time.perf_counter() - start, probe))
+                elapsed = time.perf_counter() - start
+                if elapsed > self.PUMP_CEILING:
+                    # Already catastrophic on one probe. Measuring the other
+                    # 1300 proves nothing and a cubic pattern at the largest
+                    # size runs for HOURS - which reads as a hung suite, not
+                    # a failing one, and gets the guard deleted.
+                    return elapsed
+                timings.append((elapsed, probe))
 
         timings.sort(key=lambda t: t[0], reverse=True)
         for first, probe in timings[:self.PUMP_RETIME]:
@@ -1598,10 +1704,59 @@ class ReDoSTests(unittest.TestCase):
                 return False
         return True
 
-    # An unknown fragment. Optional, so the folded pattern shows the worst
-    # case: "\border\s*" + something + r"\s*\d" is quadratic exactly when the
-    # something can be empty, and a guard must assume it can.
-    _UNKNOWN = "(?:)?"
+    # An unknown fragment, modelled as "may be empty, may eat whitespace".
+    #
+    # Round 12 used "(?:)?" here, reasoning that an unknown piece should be
+    # optional so the join around it stays visible. That REMOVES the danger
+    # instead of preserving it: when the unresolvable piece is the one
+    # carrying the quantifiers - sep = r"\s*#?\s*", then rf"\border{sep}\d" -
+    # the folded pattern is "\border(?:)?\d", which is linear, and the guard
+    # went green on 11 of 15 live bombs.
+    #
+    # r"\s*" is the honest stand-in: an unknown fragment might be empty and
+    # might be a whitespace quantifier, and next to another r"\s*" that is
+    # exactly the shape being hunted. It is not itself quadratic, so it does
+    # not cry wolf when the fragment turns out to be a literal.
+    #
+    # For most real cases the answer is _live_value() below, which resolves
+    # the fragment against the module's actual namespace. This placeholder is
+    # what is left when even that cannot.
+    _UNKNOWN = r"\s*"
+
+    @staticmethod
+    def _live_value(node, module):
+        """Evaluate a pattern expression against the module's real namespace.
+
+        Static folding cannot see through a dict lookup, a list or tuple
+        index, a class attribute, or a name bound more than once - and each
+        of those hid a planted bomb. The module is already imported, so the
+        value exists; read it.
+
+        Only calls that cannot have side effects are evaluated - re.escape
+        and the pure string methods join/format - so this never runs module
+        code. `"".join(_PARTS)` where _PARTS is a module-level list was the
+        one shape static folding and a stricter whitelist both missed.
+        """
+        import ast
+
+        pure = {"escape", "join", "format", "lower", "upper", "strip"}
+        for sub in ast.walk(node):
+            if isinstance(sub, ast.Call):
+                func = sub.func
+                if not (isinstance(func, ast.Attribute) and func.attr in pure):
+                    return None
+        try:
+            source = ast.unparse(node)
+            value = eval(source, dict(vars(module)),          # noqa: S307
+                         {"token": "0123456789abcdef", "text": "",
+                          "message": "", "subject": "", "pattern": ""})
+        except Exception:
+            return None
+        if isinstance(value, str):
+            return value
+        if isinstance(value, re.Pattern):
+            return value.pattern
+        return None
 
     @staticmethod
     def _constant_names(tree):
@@ -1755,9 +1910,10 @@ class ReDoSTests(unittest.TestCase):
                             arg = kw.value
                 if arg is None:
                     continue
-                folded = cls_._fold(arg, const_names)
-                if folded and cls_._looks_like_a_regex(folded):
-                    yield (f"{mod_name}.<line {node.lineno}>", folded, folded)
+                for built in (cls_._fold(arg, const_names),
+                              cls_._live_value(arg, module)):
+                    if built and cls_._looks_like_a_regex(built):
+                        yield (f"{mod_name}.<line {node.lineno}>", built, built)
 
             # The factories, assembled. re.escape() of a real value is not
             # something static folding can reproduce.
@@ -1922,7 +2078,7 @@ class ReDoSTests(unittest.TestCase):
         # The whole point of the placeholder: an unresolvable fragment must
         # be treated as possibly-empty, or "\\s*" + X + "\\s*\\d" reads as safe.
         folded = self._fold_source(
-            f'return re.compile(r"{self.HEAD}\\s*" + unknown_thing + r"\\s*{self.TAIL}")')
+            f'return re.compile(r"{self.HEAD}\\s*" + unknown_thing + r"{self.TAIL}")')
         self.assertIn(self._UNKNOWN, folded)
         self.assertTrue(self._scan([("folded", folded, folded)]),
                         "an unknown middle fragment hid a quadratic join")
@@ -1967,14 +2123,19 @@ class ReDoSTests(unittest.TestCase):
     def test_the_filter_never_drops_a_pattern_the_modules_actually_use(self):
         """The filter is the only silent drop in the guard, so check it
         against the real tables rather than hand-picked examples."""
+        # NO `startswith("\\")` precondition. The first version had one, and
+        # the prose branch it was meant to police tests `^[^\\]*$` - a string
+        # with a backslash in it can never reach that branch, so the test
+        # could not observe the thing it was written to observe. Five live
+        # patterns in draft_cleaner._SELF_TALK_MARKERS are prose-shaped and
+        # were invisible to it.
         dropped = []
         for _mod_name, module in self._guarded_modules():
             for name, value in vars(module).items():
-                if not isinstance(value, list) or not name.isupper():
+                if not isinstance(value, (list, tuple)) or not name.isupper():
                     continue
                 for pattern in value:
                     if (isinstance(pattern, str)
-                            and pattern.startswith("\\")
                             and not self._looks_like_a_regex(pattern)):
                         dropped.append(f"{name}: {pattern}")
         self.assertEqual(dropped, [], "the filter dropped live patterns")
@@ -2582,6 +2743,93 @@ class AuditListTests(unittest.TestCase):
                    for p in cls._WEAK_DAMAGE + cls._WEAK_OMISSION)
         )
         self.assertGreaterEqual(hits, 15, "the weak tables were gutted")
+
+    # The sentences above are only ever fed to re.search against the tables.
+    # That checks which table a word is in and NOTHING about what classify()
+    # does with it - so reverting the whole browsing-guard expansion, or the
+    # problem-context changes, or the damage-plus-remedy lift, left the entire
+    # suite green. Three of round 12's four classifier changes had no failing
+    # test at all. Everything below runs the real classify().
+    ORDER_PREFIXES = [
+        "My order arrived today.",
+        "My parcel came yesterday and it's lovely.",
+        "Order 10322 was delivered on Friday, thank you!",
+        "Tracking says my order was delivered on Thursday.",
+        "Just got my delivery.",
+    ]
+
+    def test_no_benign_sentence_escalates_with_an_order_word_in_front(self):
+        """The shape real post-purchase mail arrives in.
+
+        Every one of these is ordinary in a baby shop, and every one of them
+        is NORMAL on main. An order word in the same message arms every rule
+        that needs order context, which is exactly what makes this the shape
+        that keeps breaking.
+        """
+        for phrase in self.BENIGN_PHRASES:
+            for prefix in self.ORDER_PREFIXES:
+                message = f"{prefix} {phrase}?"
+                with self.subTest(prefix=prefix[:22], phrase=phrase[:40]):
+                    result = _c(message)
+                    self.assertEqual(result["priority"], NORMAL,
+                                     f"{result['reason']} :: {message}")
+                    self.assertFalse(result["should_notify_owner"])
+
+    def test_no_benign_sentence_escalates_on_its_own_either(self):
+        for phrase in self.BENIGN_PHRASES:
+            with self.subTest(phrase=phrase[:40]):
+                self.assertEqual(_c(phrase + "?")["priority"], NORMAL)
+
+    def test_every_browsing_marker_actually_suppresses_a_weak_hit(self):
+        """One classify()-level case per alternative in the guard.
+
+        Adding a marker with no case here is how the round-12 expansion
+        shipped untested; removing one is how it would silently regress.
+        """
+        probes = {
+            "can i": "My order arrived. Can I order the set without the hat?",
+            "could i": "My order arrived. Could I order the set without the hat?",
+            "can you": "My order arrived. Can you resend the code I lost?",
+            "could you": "My order arrived. Could you resend the code I lost?",
+            "would you": "My order arrived. Would you send the set without the bow?",
+            "will you": "My order arrived. Will you do the set without the bow?",
+            "do you": "My order arrived. Do you sell the set without the bow?",
+            "is there": "My order arrived. Is there a set without the bow?",
+            "how do i": "My order arrived. How do I order it without the bow?",
+            "is the": "My order arrived. Is the set sold without the bow?",
+            "are the": "My order arrived. Are the sets sold without the bow?",
+            "was the": "My order arrived. Was the bib supposed to include a muslin?",
+            "were the": "My order arrived. Were the socks supposed to include a bib?",
+            "did you": "My order arrived. Did you ever do the set without the bow?",
+            "do i need": "My order arrived. Do I need the set without the bow?",
+            "where do i": "My order arrived. Where do I find it without the bow?",
+            "what do i": "My order arrived. What do I order for it without the bow?",
+            "which size": "My order arrived. Which size comes without the bow?",
+        }
+        for marker, message in probes.items():
+            with self.subTest(marker=marker):
+                got = _c(message)
+                self.assertEqual(got["priority"], NORMAL,
+                                 f"{marker!r} no longer suppresses: "
+                                 f"{got['reason']}")
+
+    def test_every_problem_marker_actually_lifts_the_guard(self):
+        """The other direction, at classify() level: a polite complaint must
+        still get through the guard the test above relies on."""
+        probes = {
+            "arrived ripped": "Do you sell a replacement bow? Mine arrived ripped.",
+            "a stained X": "Am I able to swap this? The parcel had a stained romper in it.",
+            "why": "Can I ask why my order came without the hat?",
+            "tracking stopped": "Is it possible the courier lost my parcel? Tracking stopped 8 days ago.",
+            "still waiting": "Can you help? My order is missing and I am still waiting.",
+            "chasing": "Do you know where it is? I am chasing my missing parcel.",
+        }
+        for marker, message in probes.items():
+            with self.subTest(marker=marker):
+                got = _c(message)
+                self.assertNotEqual(
+                    got["priority"], NORMAL,
+                    f"{marker!r} no longer lifts the guard: {message}")
 
 
 class NegationTests(unittest.TestCase):

@@ -103,8 +103,19 @@ _PORT_IMMEDIATE_KEYWORDS = [
     r"\bunauthoris(?:ed|ing)\s+(charge|transaction|payment)\b",
     r"\bunauthorized\s+transaction\b",
     # Fraud / theft accusations
-    r"\bfraudulent\b", r"\bscamm(?:ed|er)\b", r"\brip\s?off\b",
-    r"\bripped\s+me\s+off\b", r"\bstole\s+my\s+money\b",
+    r"\bfraudulent\b", r"\bscamm(?:ed|er)\b",
+    # "rip off" the NOUN, not the verb. Main has the bare string too, but
+    # only inside _ANGRY_KEYWORDS, which needs two hits and cannot escalate
+    # on its own - so the port's copy is the one that turned
+    # "What is the tear in the label for, is it meant to rip off?" into an
+    # IMMEDIATE and a phone call, on a message main scores NORMAL. In a
+    # clothes shop things rip off: labels, tags, stickers, tear-away tabs.
+    # The accusation is a noun phrase or takes an object pronoun.
+    r"\b(?:a|an|the|total|complete|absolute|utter|proper|what\s+a|such\s+a|"
+    r"is\s+a|was\s+a|be\s+a)\s+rip[\s-]?off\b",
+    r"\brip[\s-]?off\s+(?:price|prices|merchant|merchants|company|site|shop)\b",
+    r"\bripp?(?:ed|ing)?\s+(?:me|us|him|her|them|people|customers)\s+off\b",
+    r"\bstole\s+my\s+money\b",
     r"\b(?:want|give\s+me|return)\s+my\s+money\b",
     r"\byou\s+stole\b", r"\btheft\b",
     # Legal / regulatory variants
@@ -272,30 +283,28 @@ _BROWSING_QUESTION_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Wording that asks for something to be PUT RIGHT. On its own it is ordinary
-# - "can I swap the bundle for the one without the hat" is a purchase request
-# - and on its own a damage word is ordinary too - "is there a hole for the
-# car seat strap". Together they are a damage report worded politely, which
-# is how a lot of customers write, and the browsing guard was swallowing all
-# of them: "How do I claim for a stain on a brand new sleepsuit?" reached the
-# owner as NORMAL. Neither half lifts the guard alone; both together do.
-# Only words that name the REMEDY. "faulty" and "defective" belong in the
-# damage list below and nowhere else: putting them in both made every
-# sentence containing one satisfy the whole rule on its own, which promptly
-# escalated "is there a hole in the front for the popper, or have I got a
-# faulty one? Actually it looks intentional."
-_REMEDY_RE = re.compile(
-    r"\b(claim|guarantee|warranty|replace\w*|swap|"
-    r"send\s+(?:it\s+)?back|sen[dt]\s+me\s+another|cover(?:ed)?\s+under)\b",
-    re.IGNORECASE,
-)
-_DAMAGE_WORD_RE = re.compile(
-    r"\b(hole|holes|rip|rips|ripped|tear|tears|torn|stain|stains|stained|"
-    r"damaged?|faulty|broken)\b",
-    re.IGNORECASE,
-)
-
-
+# Round 12 added a "damage word + remedy word lifts the guard" rule here, so
+# that "How do I claim for a stain on a brand new sleepsuit?" would reach the
+# owner. Round 13 removed it. Both halves turned out to be everyday vocabulary
+# in a baby shop - "stain-proof", "stain guard", "tear-away label", "arm
+# holes", "torn between two sizes" on one side; "swap", "claim the free gift",
+# "guarantee" on the other - and together they escalated 320 of 1320 ordinary
+# purchase requests that main scores NORMAL:
+#
+#   "Can I swap the sleep bag for the one without the arm holes?"
+#   "Do you replace the tear-away labels with sewn-in ones?"
+#   "Can I claim the free stain remover, I lost the code in the email?"
+#
+# The rule it broke is worth writing down, because this is the third time the
+# same trade has come up. The deterministic classifier is ESCALATE-ONLY on top
+# of the LLM's own verdict (orchestrator.py, "Deterministic classifier
+# enforcement"): a miss here is not a silent loss, because Hermes classifies
+# the same ticket independently and its answer stands. A false alarm here
+# overrides the LLM unconditionally and rings the owner's phone.
+#
+# So: a change that only recovers a complaint MAIN ALSO MISSES is not worth
+# any new false-alarm risk. That is the whole of round 12's damage-plus-remedy
+# rule, its "the hole in the sleeve" lift, and its _POSITIVE_RE narrowing.
 # A polite complaint is still a complaint. "Is it possible the courier lost my
 # parcel? Tracking stopped 8 days ago." opens with a browsing marker but is
 # plainly a delivery problem, so these indicators lift the browsing guard.
@@ -308,11 +317,14 @@ _PROBLEM_CONTEXT_RE = re.compile(
     r"(?:(?:completely|totally|badly|slightly|already|all|absolutely)\s+)?"
     r"(?:ripped|stained|torn|damaged|open|soaked|filthy|dirty)|"
     r"(?:a|an|the|one|another)\s+(?:ripped|stained|torn|damaged)\s+\w|"
-    # THE hole, not A hole. "the hole in the sleeve" is damage we are already
-    # talking about; "is there a hole in the back for the car seat strap?" is
-    # a question about the design. The "in|on" is required so that "how do I
-    # get the stain out" - no location, so still a care question - stays out.
-    r"the\s+(?:hole|rip|tear|stain)\s+(?:in|on)\s+(?:the|my|it|this|that)|"
+    # No "the hole in the sleeve" lift. Round 12 added one on the theory that
+    # a definite article means damage already under discussion, and that "how
+    # do I get the stain out" would stay out because it names no location.
+    # People name the location: "how do I get the stain in the collar out? It
+    # is carrot puree" escalated to IMMEDIATE, as did "what is the hole in the
+    # back of the sleep bag for?" - which is the exact design question the
+    # round-11 fix existed to protect. 1344 of 5760 care questions, against 0
+    # on main.
     # Bare "tracking" and "courier" used to lift the guard, and "tracking says
     # my order was delivered on Thursday" is the commonest benign opener there
     # is. They now have to be said as a problem.
@@ -369,9 +381,8 @@ def _weak_matches(text: str) -> list[str]:
 
     found = _find_matches(text, _WEAK_UNGUARDED)
 
-    problem = bool(_PROBLEM_CONTEXT_RE.search(text)) or bool(
-        _DAMAGE_WORD_RE.search(text) and _REMEDY_RE.search(text))
-    browsing = bool(_BROWSING_QUESTION_RE.search(text)) and not problem
+    browsing = (_BROWSING_QUESTION_RE.search(text)
+                and not _PROBLEM_CONTEXT_RE.search(text))
     if not browsing:
         for table in (_WEAK_DAMAGE, _WEAK_OMISSION):
             found.extend(m for m in _find_matches(text, table)
@@ -559,24 +570,24 @@ _POSITIVE_RE = re.compile(
     # How British customers actually say it. Every one of these came from a
     # message that escalated with no grievance word in it.
     #
-    # Round 12 cut three of them back. A word here is a VETO on the
-    # structural-anger rules, so a word that appears in complaints as often
-    # as in praise silences real anger: "the quality is not what I paid
-    # for!!!", "you MADE UP a delivery date!!!" and "three emails and NO
-    # NOTES back from anybody!!!" all went from an owner ping to nothing.
-    # "quality", "made up" and "no notes" therefore need their praising
-    # sense spelled out rather than being taken on the bare word.
-    r"chuffed|spot\s+on|top\s+notch|bang\s+on|smashing|"
-    r"over\s+the\s+moon|well\s+made|well\s+packaged|"
-    r"made\s+up\s+(?:with|about)|"
-    r"(?:great|good|lovely|excellent|amazing|fantastic|superb|top)\s+quality|"
-    r"quality\s+is\s+(?:great|good|lovely|excellent|amazing|fantastic|"
-    r"superb|spot\s+on|there))\b",
+    # Round 12 narrowed "quality" and "made up" to their spelled-out praising
+    # senses, so that "the quality is not what I paid for!!!" and "you MADE
+    # UP a delivery date!!!" would escalate. Round 13 put them back, because
+    # the narrowing paged the owner about 12 of 14 ordinary compliments -
+    # "Made up!!!", "Cannot fault the quality!!!", "Unreal quality!!!",
+    # "Quality!!! Will be back." - all NORMAL on main.
+    #
+    # A word in THIS table only ever suppresses a rule main does not have, so
+    # losing one costs a complaint main also misses, and Hermes still reads
+    # the ticket. Widening the table wrongly costs a phone call about a
+    # compliment, which nothing downstream can undo. The two are not
+    # symmetric and this table should stay generous.
+    r"chuffed|spot\s+on|top\s+notch|bang\s+on|smashing|quality|made\s+up|"
+    r"over\s+the\s+moon|well\s+made|well\s+packaged|cannot\s+fault)\b",
     re.IGNORECASE)
-# "no notes" is gone entirely rather than narrowed: as praise it is one
-# person in a thousand, and "three emails and no notes back from anybody" is
-# how an ignored customer writes. There is no wording that separates them
-# cheaply, and the cost of guessing wrong is a silenced complaint.
+# "no notes" stays out. As praise it is one customer in a thousand, and
+# "three emails and no notes back from anybody" is how an ignored customer
+# writes - so unlike the words above, the benign reading is the rare one.
 # Grievance words only. The first version listed "not", "no" and "still", which
 # are in half of all English sentences - one stray "no notes!" re-armed the
 # exclamation rule and paged the owner about a compliment.
@@ -602,11 +613,14 @@ _NEGATIVE_RE = re.compile(
     # "not worth it" and "waste of money" are not.
     r"n[o']?t\s+worth|waste|wasted|poor\s+quality|bad\s+quality|"
     r"cheap\s+quality|falling\s+apart|"
-    # Round 12, balancing the praise words: these are the shapes a complaint
-    # uses that contain no single angry word at all.
-    r"n[o']?t\s+(?:what|as)\s+(?:i|we)\s+(?:paid|expected|ordered|wanted)|"
-    r"state\s+of\s+(?:this|it|these)|"
-    r"n[o']?t\s+(?:impress\w*|acceptable|happy|good\s+enough)|"
+    # Round 12 added "not what I expected" and "state of this" here to
+    # balance the praise words. Round 13 removed them: an entry here CANCELS
+    # the positive veto, and both are used the other way round often enough
+    # to matter - "absolutely not what I expected!!! In the best possible
+    # way, gorgeous" and "the state of this!!! In a good way, she is
+    # obsessed" both became owner pings. "not impressed" stays, because
+    # there is no praising reading of it.
+    r"n[o']?t\s+(?:impress\w*|acceptable|good\s+enough)|"
     # Round 6: 13 of 20 realistic all-caps complaints stayed NORMAL because
     # this list had no word for how people actually express annoyance. None
     # of them was a regression against main - main misses them too - but the
