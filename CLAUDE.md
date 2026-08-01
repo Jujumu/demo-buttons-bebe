@@ -97,7 +97,9 @@ purgeable.
 
 - `/root/Buttonsbebe Agent/.env`: Gorgias/Shopify/Redo credentials for server
   modules and maintenance scripts.
-- `/root/Buttonsbebe Agent/webhook/.env`: webhook/processor configuration.
+- `/root/Buttonsbebe Agent/webhook/.env`: **legacy**. The webhook and processor
+  both read the root `.env` now; this file is pending removal on the VPS
+  (`deploy/ENV-CONSOLIDATION-RUNBOOK.md`).
 - Hermes skills must never read either file. The authenticated MCP services are
   the only runtime data path for Hermes.
 
@@ -107,7 +109,13 @@ purgeable.
   also classifies, and the processor can only raise sensitive priority.
 - `processor/feedback_collector.py` is a fail-closed retired poller. The live
   learning path is console action capture in `webhook/.../learning.py`.
-- Environment values are still split across two files.
+- Environment values: the CODE is consolidated — `processor/config.py` and
+  `webhook/src/bb_webhook/config.py` both read the single root `.env` (since
+  2026-07-08). What remains is the VPS-side merge of the leftover
+  `webhook/.env` and rotating the credentials that sit in plaintext in
+  `_VPS-FULL-BACKUP-20260706/`. Step-by-step:
+  `deploy/ENV-CONSOLIDATION-RUNBOOK.md`. No secret has ever been committed to
+  git (full-history prefix scan, 2026-07-29).
 - Hermes runs with an explicit tool allow-list, not `--yolo`. The processor
   passes `-t mcp-buttonsbebe_kb,mcp-buttonsbebe_redo,mcp-buttonsbebe_gorgias`
   (see `build_hermes_command()` in `processor/hermes_runner.py`), so the
