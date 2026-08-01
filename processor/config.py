@@ -62,6 +62,23 @@ class ProcessorSettings(BaseSettings):
     # PROCESSOR_STALE_MINUTES). Set to 0 to disable the idle heartbeat.
     heartbeat_seconds: float = Field(default=120.0, alias="PROCESSOR_HEARTBEAT_SECONDS")
 
+    # ── Hermes tool policy ────────────────────────────────
+    # Comma-separated toolsets passed to `hermes -t`. Each configured MCP
+    # server exposes itself as a toolset named "mcp-<server key>", so this
+    # list is exactly the three read-only Buttons Bebe servers and nothing
+    # else - in particular NOT the `terminal` or `file` toolsets that
+    # ~/.hermes/config.yaml grants the CLI platform by default.
+    # Set to "" to fall back to whatever config.yaml grants (NOT recommended).
+    hermes_toolsets: str = Field(
+        default="mcp-buttonsbebe_kb,mcp-buttonsbebe_redo,mcp-buttonsbebe_gorgias",
+        alias="HERMES_TOOLSETS",
+    )
+    # Escape hatch. --yolo skips Hermes' approval prompts; with the toolset
+    # locked down there is nothing dangerous left to approve, so it is off.
+    # Turn it on ONLY as a temporary unblock if a run starts hanging on an
+    # approval prompt, and open an issue - see DEV-ISSUES.md #8.
+    hermes_skip_approval: bool = Field(default=False, alias="HERMES_SKIP_APPROVAL")
+
     # ── Logging ───────────────────────────────────────────
     log_format: str = Field(default="json", alias="LOG_FORMAT")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")

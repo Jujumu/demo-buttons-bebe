@@ -108,8 +108,14 @@ purgeable.
 - `processor/feedback_collector.py` is a fail-closed retired poller. The live
   learning path is console action capture in `webhook/.../learning.py`.
 - Environment values are still split across two files.
-- Hermes runs with `--yolo`; this is acceptable only while the registered tools
-  and installed skills remain strictly read-only. Re-audit before adding a tool.
+- Hermes runs with an explicit tool allow-list, not `--yolo`. The processor
+  passes `-t mcp-buttonsbebe_kb,mcp-buttonsbebe_redo,mcp-buttonsbebe_gorgias`
+  (see `build_hermes_command()` in `processor/hermes_runner.py`), so the
+  `terminal` and `file` toolsets are out of scope and there is nothing
+  dangerous left to auto-approve. Override with `HERMES_TOOLSETS`;
+  `HERMES_SKIP_APPROVAL=1` puts `--yolo` back as a temporary unblock only.
+  Run `tools/verify_hermes_toolset.sh` on the VPS after changing either — a
+  misspelled toolset name silently drops the tool instead of erroring.
 
 ## Verification
 

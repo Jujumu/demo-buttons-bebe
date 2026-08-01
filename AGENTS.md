@@ -62,7 +62,7 @@ Customer message
       • polls the queue every ~2s; per job runs the brain once:
       │
       ▼
-  HERMES  (hermes --yolo -z "process ticket …", one-shot per ticket)
+  HERMES  (hermes -t mcp-buttonsbebe_{kb,redo,gorgias} -z "process ticket …", one-shot)
       guided by  ~/.hermes/SOUL.md  +  the "buttonsbebe" Hermes skill,
       using three READ-ONLY MCP tools:
         ├─ buttonsbebe_kb      (:8077)  search_kb → policies · FAQ · 22 intents · 4,246 products · tickets   [LanceDB]
@@ -206,8 +206,9 @@ sqlite3 "/root/Buttonsbebe Agent/webhook/data/webhook.db" "select status,count(*
   reads a static token field, not the client-cred keys — only matters if the webhook ever
   calls Shopify directly (it doesn't today).
 - Confirm the exact **systemd unit for the :8000 webhook receiver**.
-- The processor runs Hermes with **`--yolo`** (auto-approves tool calls). Safe today because
-  the only write is a staff-only internal note, but worth knowing.
+- The processor runs Hermes with an **explicit toolset allow-list** — the three read-only
+  MCP servers and nothing else — instead of `--yolo`. Verify names with
+  `tools/verify_hermes_toolset.sh` before restarting the processor.
 ```
 
 ## Imported Claude Cowork project instructions

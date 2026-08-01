@@ -51,6 +51,18 @@ GORGIAS_AUTH = (GORGIAS_API_EMAIL, GORGIAS_API_KEY)
 # Live reads are opt-in. Never keep production ticket IDs in source.
 TEST_TICKET_ID = int(os.environ.get("TEST_TICKET_ID", "0"))
 
+# Hermes invocation. Mirrors processor/hermes_runner.build_hermes_command():
+# an explicit read-only toolset allow-list, and no --yolo (DEV-ISSUES #8).
+HERMES_TOOLSETS = os.environ.get(
+    "HERMES_TOOLSETS",
+    "mcp-buttonsbebe_kb,mcp-buttonsbebe_redo,mcp-buttonsbebe_gorgias",
+)
+HERMES_BASE_CMD = ["hermes"]
+if HERMES_TOOLSETS:
+    HERMES_BASE_CMD += ["-t", HERMES_TOOLSETS]
+if os.environ.get("HERMES_SKIP_APPROVAL", "").strip().lower() in ("1", "true", "yes"):
+    HERMES_BASE_CMD.append("--yolo")
+
 # MCP server URLs
 KB_MCP_URL = "http://127.0.0.1:8077/mcp"
 REDO_MCP_URL = "http://127.0.0.1:8078/mcp"
@@ -135,7 +147,7 @@ def test_kb_search() -> None:
     # Use Hermes in one-shot mode to call search_kb via MCP
     try:
         result = subprocess.run(
-            ["hermes", "--yolo", "-z",
+            [*HERMES_BASE_CMD, "-z",
              "Call the search_kb tool from the buttonsbebe_kb MCP server with "
              'query "return policy" and k 3. Print the results. '
              "Do not do anything else."],
@@ -436,7 +448,7 @@ def test_live_hermes() -> None:
         )
 
         result = subprocess.run(
-            ["hermes", "--yolo", "-z", prompt],
+            [*HERMES_BASE_CMD, "-z", prompt],
             capture_output=True, text=True, timeout=120,
             env={**dict(os.environ), "HOME": "/root",
                  "PATH": "/root/.local/bin:/usr/local/bin:/usr/bin:/bin"},

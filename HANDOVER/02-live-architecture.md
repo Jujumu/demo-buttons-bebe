@@ -87,7 +87,7 @@ Reproduced faithfully from `CLAUDE.md` §2, with a short explanation of each rul
         • polls the queue every ~2s; per job runs the brain once
                                 │
                                 ▼
-   🔴 HERMES  (hermes --yolo -z "process ticket …", one-shot per ticket)
+   🔴 HERMES  (hermes -t mcp-buttonsbebe_{kb,redo,gorgias} -z "process ticket …", one-shot)
         guided by  ~/.hermes/SOUL.md  +  the "buttonsbebe" Hermes skill
         using three READ-ONLY MCP tools:
           ├─ 🟢 buttonsbebe_kb      (:8077)  search_kb → policies·FAQ·22 intents·~4,246 products·tickets  [LanceDB]
@@ -118,7 +118,7 @@ Reproduced faithfully from `CLAUDE.md` §2, with a short explanation of each rul
 2. **Gorgias fires a webhook** on the new ticket/message to `POST /webhook/gorgias/{tenant}` on the **webhook receiver** (🔴 `bb_webhook`, FastAPI, `127.0.0.1:8000`).
 3. **Receiver verifies + enqueues.** It verifies the HMAC signature (`WEBHOOK_SECRET`), **dedupes**, and enqueues a job into a **SQLite queue** (`webhook/data/webhook.db`, WAL mode).
 4. **Processor picks it up.** The **processor/orchestrator** (🔴 systemd `buttonsbebe-processor`, `python -m orchestrator`) polls the queue **every ~2 s** and, per job, runs the brain **once** via `hermes_runner.py`.
-5. **Hermes runs one-shot.** It launches `hermes --yolo -z "process ticket …"` (🔴 Nous Hermes Agent CLI, model **`glm-5.2` via Ollama Cloud**), guided by `~/.hermes/SOUL.md` + the **`buttonsbebe`** skill. It calls the **three read-only MCP tools**: reads the ticket/customer/order (`buttonsbebe_gorgias` :8079), searches the KB (`buttonsbebe_kb` :8077), and checks returns/refunds (`buttonsbebe_redo` :8078).
+5. **Hermes runs one-shot.** It launches `hermes -t mcp-buttonsbebe_kb,mcp-buttonsbebe_redo,mcp-buttonsbebe_gorgias -z "process ticket …"` (an explicit read-only tool allow-list — `--yolo` was removed, see DEV-ISSUES #8) (🔴 Nous Hermes Agent CLI, model **`glm-5.2` via Ollama Cloud**), guided by `~/.hermes/SOUL.md` + the **`buttonsbebe`** skill. It calls the **three read-only MCP tools**: reads the ticket/customer/order (`buttonsbebe_gorgias` :8079), searches the KB (`buttonsbebe_kb` :8077), and checks returns/refunds (`buttonsbebe_redo` :8078).
 6. **Classify → act.** Hermes classifies risk. **Low risk →** it drafts a grounded reply that cites the KB source. **Sensitive →** it escalates: a draft is still produced but clearly flagged, and the owner can be alerted over WhatsApp.
 7. **Write-back (conditional).** `processor/gorgias_writer.py` (🔴) can **POST the draft as an internal note** (`channel=internal`) to Gorgias — the system's **only** write. Whether this happens automatically is governed by the Console's **"Post drafts to Gorgias"** toggle (see §2 note / §10).
 8. **Human review in the Console.** A human opens the draft in the **Console Ticket feed** (🟢 `console-src/index.html`, served at `:8000`) and either **Send reply** (customer-facing email, confirm required), **Draft as internal note** (staff-only), or **Request edit** (Hermes rewrites per an instruction).
@@ -141,7 +141,7 @@ SQLite database at `/root/Buttonsbebe Agent/webhook/data/webhook.db` (WAL mode).
 `sqlite3 "…/webhook/data/webhook.db" "select status,count(*) from jobs group by status"`. The DB is a runtime artifact, not source.
 
 ### 4.4 Processor / orchestrator  🔴 **Source NOT in repo — ⚠️ see doc 06 for the VPS pull procedure**
-`/root/Buttonsbebe Agent/processor`, systemd **`buttonsbebe-processor`**, runs `python -m orchestrator`. Polls the queue (~2 s), runs Hermes once per job via `hermes_runner.py`, records the outcome, and triggers escalation. Contains: `orchestrator.py`, `hermes_runner.py`, `gorgias_writer.py`, `kb_client.py`, the `whatsapp_notifier.py` caller, and the stubs `classifier.py`, `feedback_collector.py` (§7). Reads config from `webhook/.env` via `processor/config.py`. Runs Hermes with **`--yolo`** (auto-approves tool calls) — safe today because the only write is a staff-only internal note.
+`/root/Buttonsbebe Agent/processor`, systemd **`buttonsbebe-processor`**, runs `python -m orchestrator`. Polls the queue (~2 s), runs Hermes once per job via `hermes_runner.py`, records the outcome, and triggers escalation. Contains: `orchestrator.py`, `hermes_runner.py`, `gorgias_writer.py`, `kb_client.py`, the `whatsapp_notifier.py` caller, and the stubs `classifier.py`, `feedback_collector.py` (§7). Reads config from `webhook/.env` via `processor/config.py`. Runs Hermes with an **explicit toolset allow-list** (`-t mcp-buttonsbebe_kb,mcp-buttonsbebe_redo,mcp-buttonsbebe_gorgias`) and **no `--yolo`**, so the `terminal`/`file` toolsets are out of scope. Verify with `tools/verify_hermes_toolset.sh` before restarting.
 
 ### 4.5 Hermes — the brain  🔴 **Source/config NOT in repo — ⚠️ see doc 06 for the VPS pull procedure**
 Nous **Hermes Agent** CLI, home at `~/.hermes/`. Model **`glm-5.2` via Ollama Cloud** (`~/.hermes/config.yaml`). Behaviour is steered by:
@@ -313,7 +313,7 @@ sqlite3 "/root/Buttonsbebe Agent/webhook/data/webhook.db" "select status,count(*
 - **Doc drift:** many repo docs describe the RETIRED design; `CLAUDE.md` is the current truth and this doc reconciles it against the actual files.
 - **`.env` duplication** across two files. Shopify "code half": `webhook/config.py` still reads a static token field, not the client-cred keys — only matters if the webhook ever calls Shopify directly (it does not today).
 - Confirm the exact systemd unit for the :8000 receiver (`CLAUDE.md` names it `buttonsbebe-webhook`).
-- The processor runs Hermes with **`--yolo`** (auto-approves tool calls) — safe only because the sole write is a staff-only internal note.
+- The processor runs Hermes with an **explicit read-only toolset allow-list** and **no `--yolo`** (DEV-ISSUES #8), so shell and filesystem tools are out of scope. The sole write remains a staff-only internal note.
 
 ---
 

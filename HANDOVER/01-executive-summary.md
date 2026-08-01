@@ -78,8 +78,10 @@ send or external write capabilities.
 3. **The live system is Hermes on `main`.** `glm-5.2` via Ollama Cloud, guided by `SOUL.md` + a Hermes skill, using three read‑only MCP tools (knowledge base :8077, Redo returns :8078, Gorgias :8079). The webhook receiver + dashboard run on :8000.
 4. **There's a second, offline codebase (Fable) on another branch** you must make a decision about.
 5. **Current limitations are listed in `CLAUDE.md`.** They include split runtime
-   environment files, the advisory classifier, a retired poll-based feedback
-   collector, and Hermes `--yolo` requiring a strictly read-only tool set.
+   environment files, the advisory classifier, and a retired poll-based feedback
+   collector. Hermes' `--yolo` flag has been replaced with an explicit read-only
+   toolset allow-list (DEV-ISSUES #8) — verify it on the VPS with
+   `tools/verify_hermes_toolset.sh` before the next processor restart.
 
 ## Where the system runs
 

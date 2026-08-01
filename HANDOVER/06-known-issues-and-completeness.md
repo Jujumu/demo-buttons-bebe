@@ -46,8 +46,9 @@ the current code and live services before scheduling work.
    purgeable, and the promotion tests must stay in the release gate.
 3. The deterministic classifier can only raise priority. Preserve that
    escalation-only behavior and continue testing its coverage.
-4. Hermes runs with `--yolo`. This is acceptable only while installed skills
-   and registered MCP tools remain strictly read-only.
+4. Hermes runs with an explicit toolset allow-list instead of `--yolo` — only
+   the three read-only MCP servers are in scope. Keep it that way: adding a
+   toolset here is the one change that could give the model write access.
 5. Do not restore the retired poll-based feedback path or retired architecture
    from the full backup.
 

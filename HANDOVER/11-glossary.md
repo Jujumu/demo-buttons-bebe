@@ -22,7 +22,8 @@
 - **`glm-5.2`** — the specific **large language model** Hermes uses, served via Ollama Cloud. (A future task is to evaluate a cheaper/less‑verbose model.)
 - **SOUL.md** — the **instruction file** that tells Hermes how to behave (its persona, rules, and the ticket workflow). Lives in `~/.hermes/` on the server. A partial addition is in the repo at `kb/hermes-SOUL-buttonsbebe-addition.md`.
 - **Hermes skill (`buttonsbebe`)** — a packaged **workflow** that guides Hermes through the ticket‑handling steps. Lives in `~/.hermes/skills/buttonsbebe/` on the server (**not in this repo**).
-- **`--yolo`** — the flag the processor uses when running Hermes; it **auto‑approves the AI's tool calls**. Safe today only because the sole write is a staff‑only internal note. Restricting this is a Phase 2 task.
+- **`--yolo`** — a Hermes flag that **auto‑approves the AI's tool calls**. The processor **no longer uses it** (DEV-ISSUES #8): it passes `-t mcp-buttonsbebe_kb,mcp-buttonsbebe_redo,mcp-buttonsbebe_gorgias` instead, so only the three read‑only MCP servers are in scope. `HERMES_SKIP_APPROVAL=1` restores it as a temporary unblock and logs a warning every run.
+- **toolset** — Hermes' unit of tool permission. Each MCP server registers one named `mcp-<server key>`. Passing `-t` names exactly which ones a run may use.
 - **Brain (Fable)** — in the Fable rebuild, a **"brain"** is a swappable component behind one interface (`base.py`), with implementations for `mock`, `anthropic`, and a `hermes` stub. Lets you change the AI without touching the pipeline.
 
 ## System components (the moving parts)

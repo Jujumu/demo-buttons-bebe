@@ -48,7 +48,7 @@ Every service listens on loopback only; the public surface is fronted by Caddy (
 | `buttonsbebe-whatsapp-connect` | `/bin/bash -c 'exec __NODE__ ".../whatsapp-connect/server.js"'` (WorkingDirectory `.../whatsapp-connect`) | reads `whatsapp-connect/.env` for `WA_TOKEN`, `WA_PASSWORD`, `WA_SEND_SECRET`; sets `WA_PORT=8085`, `WA_AUTH_DIR=.../whatsapp-connect/auth`, `HERMES_BIN=__HERMES_BIN__` | `whatsapp-connect/buttonsbebe-whatsapp-connect.service` |
 | `buttonsbebe-kb-admin` | `/bin/bash -c 'exec __NODE__ ".../kb-admin/server.js"'` | `KB_ADMIN_PORT=8087`, `KB_DIR=/root/Buttonsbebe Agent/KB` | `kb-admin/buttonsbebe-kb-admin.service` |
 | `buttonsbebe-webhook` | uvicorn serving `bb_webhook` on `:8000` (per `CLAUDE.md`) | — (reads `webhook/.env`) | ⚠️ **VPS‑only** |
-| `buttonsbebe-processor` | `python -m orchestrator` — polls the queue ~every 2s, runs `hermes --yolo` once per ticket (per `CLAUDE.md §4`) | — (reads `webhook/.env`) | ⚠️ **VPS‑only** |
+| `buttonsbebe-processor` | `python -m orchestrator` — polls the queue ~every 2s, runs `hermes -t mcp-buttonsbebe_{kb,redo,gorgias}` once per ticket, no `--yolo` (per `CLAUDE.md §4`) | — (reads `webhook/.env`) | ⚠️ **VPS‑only** |
 
 > **`__PLACEHOLDER__` substitution:** the WhatsApp and KB‑admin unit files ship with `__NODE__` and `__HERMES_BIN__` tokens. These are substituted with real absolute paths at deploy time on the VPS (Node lives at a non‑fixed path; the `Buttonsbebe Agent` folder name contains a space). WhatsApp secrets come from `whatsapp-connect/.env` and are never substituted into the unit.
 >
