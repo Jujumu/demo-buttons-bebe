@@ -1679,30 +1679,43 @@ class ReDoSTests(unittest.TestCase):
     # failure mode this guard exists to prevent.
     _REGEX_METACHARS = re.compile(
         r"\\[bswdWSDAZ]|\[[^\]]+\]|\(\?|[*+?]|\{\s*,?\s*\d")
-    _PROSE = re.compile(r"^[^\\]*$")
+    # Syntax English does not have. A string containing any of these is a
+    # pattern whatever else it looks like - which matters, because five live
+    # markers in draft_cleaner._SELF_TALK_MARKERS are plain-English phrases
+    # built out of (?:...) groups and no backslashes at all, and the first
+    # version of the prose test threw all five away.
+    _REGEX_SYNTAX = re.compile(r"\\|\(\?|\[[^\]]+\]|\{\s*,?\s*\d|\||\^|\$")
     _WORDS = re.compile(r"[A-Za-z']+")
 
     @staticmethod
     def _looks_like_a_regex(text: str) -> bool:
         """Cheap filter so prose is not compiled and pumped as a pattern.
 
-        Generous in the regex direction - anything with a quantifier, a
-        character class, a group modifier or a backslash-escape counts -
-        because a dropped pattern is invisible and a pumped sentence only
-        costs milliseconds.
+        Generous in the regex direction - a dropped pattern is invisible and
+        a pumped sentence only costs milliseconds - so anything with syntax
+        English does not have counts, unconditionally.
 
-        But not unboundedly generous: "?" alone made 26 of the classifier's
-        own English self-test sentences look like patterns, which is both
-        wasted work and a source of spurious timing failures. A run of five
-        or more plain words with no escape in the whole string is a sentence.
+        The only strings rejected are ones whose ONLY regex-ish character is
+        a bare "?", "*" or "+", which is ordinary punctuation - and which
+        additionally READ as a sentence: five or more words, and either a
+        capital letter at the start or a full stop, question mark or
+        exclamation mark at the end.
+
+        That last condition is what separates the classifier's 26 English
+        self-test cases ("Is it possible the courier lost my parcel?") from
+        a live pattern that happens to be a plain phrase
+        ("the response above was complete" in draft_cleaner). Word count
+        alone threw the pattern away.
         """
         if not text or not ReDoSTests._REGEX_METACHARS.search(text):
             return False
-        if ReDoSTests._PROSE.match(text):
-            words = ReDoSTests._WORDS.findall(text)
-            if len(words) >= 5 and len(text) > 30:
-                return False
-        return True
+        if ReDoSTests._REGEX_SYNTAX.search(text):
+            return True
+        words = ReDoSTests._WORDS.findall(text)
+        if len(words) < 5 or len(text) <= 30:
+            return True
+        reads_as_a_sentence = text[:1].isupper() or text.rstrip()[-1:] in ".?!"
+        return not reads_as_a_sentence
 
     # An unknown fragment, modelled as "may be empty, may eat whitespace".
     #
@@ -2122,13 +2135,20 @@ class ReDoSTests(unittest.TestCase):
 
     def test_the_filter_never_drops_a_pattern_the_modules_actually_use(self):
         """The filter is the only silent drop in the guard, so check it
-        against the real tables rather than hand-picked examples."""
-        # NO `startswith("\\")` precondition. The first version had one, and
-        # the prose branch it was meant to police tests `^[^\\]*$` - a string
-        # with a backslash in it can never reach that branch, so the test
-        # could not observe the thing it was written to observe. Five live
-        # patterns in draft_cleaner._SELF_TALK_MARKERS are prose-shaped and
-        # were invisible to it.
+        against the real tables rather than hand-picked examples.
+
+        The property is not "nothing is ever dropped" - a pattern with no
+        quantifier in it cannot backtrack at all, so dropping one is free.
+        It is "nothing DROPPED can be superlinear". Anything with a *, +, ?
+        or {n,m} in it has to reach the scan.
+
+        NO `startswith("\\\\")` precondition. The first version had one, and
+        the prose branch it was meant to police only fires on strings with
+        no backslash - so the test could not observe the thing it was written
+        to observe, and five prose-shaped live patterns in
+        draft_cleaner._SELF_TALK_MARKERS were invisible to it.
+        """
+        quantifier = re.compile(r"(?<!\\)[*+?]|\{\s*,?\s*\d")
         dropped = []
         for _mod_name, module in self._guarded_modules():
             for name, value in vars(module).items():
@@ -2136,9 +2156,54 @@ class ReDoSTests(unittest.TestCase):
                     continue
                 for pattern in value:
                     if (isinstance(pattern, str)
+                            and quantifier.search(pattern)
                             and not self._looks_like_a_regex(pattern)):
                         dropped.append(f"{name}: {pattern}")
-        self.assertEqual(dropped, [], "the filter dropped live patterns")
+        self.assertEqual(
+            dropped, [],
+            "the filter dropped live patterns that contain a quantifier")
+
+    def test_a_dropped_string_really_cannot_backtrack(self):
+        """The escape hatch above is only safe if it is true.
+
+        Compile every string the filter rejects and assert the engine finds
+        no repeat operator in it - that is what makes dropping it free.
+        """
+        import sre_parse
+
+        def has_repeat(parsed):
+            for op, arg in parsed:
+                name = str(op)
+                if "REPEAT" in name or "MAX_REPEAT" in name or "MIN_REPEAT" in name:
+                    return True
+                if isinstance(arg, sre_parse.SubPattern) and has_repeat(arg):
+                    return True
+                if isinstance(arg, tuple):
+                    for item in arg:
+                        if isinstance(item, sre_parse.SubPattern) and has_repeat(item):
+                            return True
+                        if isinstance(item, list):
+                            for alt in item:
+                                if isinstance(alt, sre_parse.SubPattern) and has_repeat(alt):
+                                    return True
+            return False
+
+        for _mod_name, module in self._guarded_modules():
+            for name, value in vars(module).items():
+                if not isinstance(value, (list, tuple)) or not name.isupper():
+                    continue
+                for pattern in value:
+                    if not isinstance(pattern, str) or self._looks_like_a_regex(pattern):
+                        continue
+                    try:
+                        parsed = sre_parse.parse(pattern)
+                    except re.error:
+                        continue
+                    with self.subTest(name=name, pattern=pattern[:50]):
+                        self.assertFalse(
+                            has_repeat(parsed),
+                            f"{name} entry {pattern!r} was dropped by the "
+                            f"filter but contains a repeat operator")
 
     def test_the_literal_miner_reaches_every_shape(self):
         # Round 10 planted four quadratics that the miner could not reach, and
