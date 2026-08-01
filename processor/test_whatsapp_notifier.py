@@ -211,6 +211,29 @@ def test_a_normal_subject_still_reads_normally() -> None:
     assert "Customer: \"test@example.com\"" in body
 
 
+def test_display_control_characters_are_dropped() -> None:
+    # U+202E reverses the display of everything after it, so a subject can
+    # make the real Link line read backwards on the owner's phone. Zero-width
+    # characters hide word boundaries from a reader. Neither belongs in a
+    # support subject.
+    for ch in ("\u202e", "\u202d", "\u200b", "\u200e", "\u2066", "\u0000", "\u0007"):
+        body = _sent_body(subject=f"Order{ch}query")
+        assert ch not in body, (repr(ch), body)
+        assert len(body.split("\n")) == 6, (repr(ch), body)
+
+
+def test_a_huge_ticket_id_cannot_bloat_the_alert() -> None:
+    # The id lands in the body twice - header and link.
+    body = _sent_body(ticket_id=10 ** 40)
+    assert len(body) < 500, len(body)
+    assert body.rstrip().endswith("/tickets/0")
+
+
+def test_a_negative_ticket_id_is_rejected() -> None:
+    body = _sent_body(ticket_id=-1)
+    assert body.rstrip().endswith("/tickets/0")
+
+
 def load_tests(_loader, _tests, _pattern):
     """Expose the function-style cases to the repository's unittest gate."""
     names = [name for name in globals() if name.startswith("test_")]

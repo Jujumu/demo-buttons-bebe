@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import time
+import unicodedata
 import urllib.error
 import urllib.request
 
@@ -52,6 +53,13 @@ def _one_line(value: object, limit: int) -> str:
     line in some renderer, and stripping only \\n would have left four ways in.
     """
     text = " ".join(str("" if value is None else value).split())
+    # Format and control characters are not whitespace, so .split() leaves
+    # them. U+202E RIGHT-TO-LEFT OVERRIDE reverses the display of everything
+    # after it, so a subject can make the real Link line read backwards on
+    # the owner's phone; zero-width joiners and U+200B hide word boundaries
+    # from a reader while leaving them visible to a regex. Neither belongs in
+    # a support subject, so drop the whole Cf/Cc class.
+    text = "".join(ch for ch in text if unicodedata.category(ch) not in ("Cf", "Cc"))
     if len(text) > limit:
         text = text[:limit].rstrip() + "…"
     # Inner quotes would close the wrapper early and hand the rest of the
@@ -82,6 +90,12 @@ def send_whatsapp(
     try:
         safe_ticket_id = int(ticket_id)
     except (TypeError, ValueError):
+        safe_ticket_id = 0
+    # Bounded as well as numeric. int() accepts arbitrarily many digits, and
+    # a million-digit id lands in the body TWICE - in the header and in the
+    # link - which is a 2 MB WhatsApp message and a truncated notification
+    # with the real link nowhere in it.
+    if not 0 <= safe_ticket_id < 10 ** 12:
         safe_ticket_id = 0
     body = (
         f"*[PRIORITY ALERT] Ticket #{safe_ticket_id}*\n"
