@@ -1901,6 +1901,11 @@ class ReDoSTests(unittest.TestCase):
                 return cls_._UNKNOWN
         return cls_._UNKNOWN
 
+    # Functions that build a pattern from a per-run value. They are called
+    # with a sample token rather than read statically, so a site inside one
+    # is covered exactly and must not also be reported as unreadable.
+    _FACTORIES = ("_json_marker_re", "_draft_tag_re")
+
     @classmethod
     def _patterns_built_inside_functions(cls_):
         """Regex literals that never reach module scope.
@@ -1940,6 +1945,17 @@ class ReDoSTests(unittest.TestCase):
             # `import re as _r` and `from re import search` both hide the
             # call from a check that insists on the name "re".
             const_names = cls_._constant_names(tree)
+            # Line ranges of the token factories. A pattern assembled inside
+            # one of them is resolved exactly, by CALLING it, further down -
+            # re.escape() of a real value is not something static folding can
+            # reproduce. Reporting the folded reading as well would name the
+            # same site as unresolvable while it is in fact the best-covered
+            # site in the file.
+            factory_lines = [
+                (fn.lineno, getattr(fn, "end_lineno", fn.lineno))
+                for fn in ast.walk(tree)
+                if isinstance(fn, ast.FunctionDef) and fn.name in cls_._FACTORIES
+            ]
             re_names = {"re"}
             bare_re_funcs = set()
             for node in ast.walk(tree):
@@ -1972,14 +1988,18 @@ class ReDoSTests(unittest.TestCase):
                             arg = kw.value
                 if arg is None:
                     continue
-                for built in (cls_._fold(arg, const_names),
-                              cls_._live_value(arg, module)):
+                in_factory = any(lo <= node.lineno <= hi
+                                 for lo, hi in factory_lines)
+                readings = [cls_._live_value(arg, module)]
+                if not in_factory:
+                    readings.insert(0, cls_._fold(arg, const_names))
+                for built in readings:
                     if built and cls_._looks_like_a_regex(built):
                         yield (f"{mod_name}.<line {node.lineno}>", built, built)
 
             # The factories, assembled. re.escape() of a real value is not
             # something static folding can reproduce.
-            for factory in ("_json_marker_re", "_draft_tag_re"):
+            for factory in cls_._FACTORIES:
                 fn = getattr(module, factory, None)
                 if not callable(fn):
                     continue
@@ -2000,10 +2020,17 @@ class ReDoSTests(unittest.TestCase):
         assume it is a whitespace quantifier - are a false negative and a
         false positive respectively, and round 13 shipped one of each. So it
         is reported as a failure and the code is asked to be readable.
+        A site yields up to two readings - the statically folded one and the
+        live one - so it counts as unresolvable only when EVERY reading of it
+        still has a hole in it. Reporting the folded reading on its own
+        flagged three sites that _live_value had already read perfectly.
         """
+        by_site: dict = {}
         for label, _value, pattern in cls_._patterns_built_inside_functions():
-            if cls_._UNKNOWN in pattern:
-                yield label, pattern
+            by_site.setdefault(label, []).append(pattern)
+        for label, patterns in by_site.items():
+            if all(cls_._UNKNOWN in p for p in patterns):
+                yield label, patterns[0]
 
     def test_every_pattern_expression_is_resolvable(self):
         unresolved = ["%s :: %s" % (label, pattern.replace(self._UNKNOWN, "<?>"))
