@@ -1,214 +1,196 @@
-# AGENTS.md — Buttons Bebe AI Support Agent — Architecture Map
+# AGENTS.md — Buttons Bebe AI Support Agent
 
-> **Read this first.** Reflects the LIVE system on the VPS as of **2026-07-07**.
->
-> ⚠️ This supersedes all earlier architecture notes. The pre-2026-07-06 design
-> (a `/root/gorgias-webhook` pipeline, "shadow mode", a Supermemory/ChromaDB KB,
-> WhatsApp/Baileys, an 8-tool `hermes-tools-mcp`, the "Mimo" model) was **retired**
-> when the box was wiped and rebuilt. A full backup of the old system is in
-> `_VPS-FULL-BACKUP-20260706/`. Do **not** trust the older docs (`GOAL.md`,
-> old `PROJECT-SOURCE-OF-TRUTH.md`, `kb/README.md`, `docs/hermes-rearchitecture/`)
-> for the current architecture — they describe the retired design.
+> Reflects the live system as of **2026-07-14**. `CLAUDE.md` is the co-source of
+> truth for deep architecture; this file is the operational map for agents.
+> Any doc describing `/root/gorgias-webhook`, "shadow mode", Supermemory/ChromaDB,
+> an 8-tool `hermes-tools-mcp`, or the "Mimo" model describes a **retired** system
+> (box wiped & rebuilt 2026-07-06). `_VPS-FULL-BACKUP-20260706/` holds plaintext
+> secrets — gitignored, never commit or restore from it.
 
 ## 1. What & why
 
-An AI support agent for **Buttons Bebe** (a Shopify store, ~2,000 tickets/month in
-**Gorgias**). For each incoming ticket it reads the message, pulls order/return/product
-context, searches a knowledge base, and drafts a first-pass reply **as an internal note**
-in Gorgias for a human to review and send. Client: **Chaim**.
+AI support agent for **Buttons Bebe** (Shopify store, ~2k tickets/month in
+**Gorgias**). Per incoming ticket: read message → pull order/return/product
+context → search KB → draft a reply **into the review console** (not into
+Gorgias) where a human sends / notes / edits / discards. Client: **Chaim**.
 
 ## 2. Safety model (never violate)
 
-1. **The AI never auto-sends.** The agent itself only ever *drafts*; it never sends a
-   customer-facing message on its own. Drafts appear in the console Ticket feed for a human.
-2. **Customer sends are human-initiated only.** From the console a human can edit a draft and
-   then **Send reply** (customer-facing), **Draft as internal note** (staff-only), or
-   **Request edit** (Hermes rewrites to an instruction). Send always requires a confirm click;
-   sensitive tickets show a warning. Nothing goes to a customer without a human clicking Send.
-3. **Sensitive tickets are flagged, not auto-handled.** Refunds, chargebacks, disputes,
-   damaged/wrong/missing items, angry customers → flagged sensitive (warning in the UI); the
-   human decides. (Older builds suppressed the draft entirely — now a draft is shown but
-   clearly marked.)
-4. **External data is READ-ONLY except Gorgias writes.** Shopify read, Redo read, Gorgias read.
-   Writes to Gorgias (internal note, and now human-initiated public reply) are the only writes.
-5. **Everything is logged.**
-
-   > NOTE (2026-07-09): the earlier feedback/learning "review console" is superseded by the
-   > per-ticket action buttons in the console Ticket feed. Endpoints:
-   > `POST /dashboard/api/ticket/{id}/send|note|rewrite` (webhook app :8000). No internal note
-   > is posted automatically anymore — drafts are shown in the console for review.
+1. Hermes never sends a customer reply and never writes to Gorgias — it only
+   returns draft text.
+2. Hermes + its three MCP tools are strictly READ-ONLY (Gorgias read, Redo
+   read, KB search). No credential loading, no direct API/curl fallbacks.
+3. The only external writes are human-triggered console actions:
+   `POST /dashboard/api/ticket/{id}/send|note|rewrite` on the webhook app
+   (:8000). Publicly reached via Caddy Basic-Auth as `/console/api/*`; direct
+   public `/dashboard*` access is denied. Send requires a confirm click;
+   rewrite returns text to the console and never sends it.
+4. Every ticket gets a draft. Sensitive tickets (refunds, chargebacks,
+   disputes, damaged/wrong/missing items, cancellations, angry customers) get
+   a clearly prefixed sensitive draft, HIGH/CRITICAL priority, and an owner
+   alert. The human remains the safety gate.
+5. Jobs, results, alerts, and learning actions are all logged.
 
 ## 3. Where it runs
 
-VPS **`srv1766050`** (2.25.137.77), Ubuntu. Everything lives under
-**`/root/Buttonsbebe Agent/`**. The "brain" is **Hermes Agent** (Nous Research), running the
-model **`glm-5.2` via Ollama Cloud** (`~/.hermes/config.yaml`).
+- Production: VPS **`srv1766050`** (2.25.137.77), Ubuntu, everything under
+  `/root/Buttonsbebe Agent/`. This repo mirrors that tree.
+- Brain: **Hermes Agent** CLI (Nous Research), model **`glm-5.2`** via Ollama
+  Cloud (`~/.hermes/config.yaml`).
+- **A push to `main` that passes CI auto-deploys to production** — see §8.
 
-## 4. End-to-end flow (the map)
+## 4. End-to-end flow
 
-```
-Customer message
-      │
-      ▼
-  GORGIAS (help desk)
-      │  webhook on new ticket / message
-      ▼
-  WEBHOOK RECEIVER  (bb_webhook, FastAPI, 127.0.0.1:8000)      ── also serves /dashboard
-      • verifies HMAC (WEBHOOK_SECRET), dedupes
-      • enqueues a job  ──►  SQLite queue (webhook/data/webhook.db, WAL)
-      │
-      ▼
-  PROCESSOR / ORCHESTRATOR   (systemd: buttonsbebe-processor)
-      • polls the queue every ~2s; per job runs the brain once:
-      │
-      ▼
-  HERMES  (hermes -t mcp-buttonsbebe_{kb,redo,gorgias} -z "process ticket …", one-shot)
-      guided by  ~/.hermes/SOUL.md  +  the "buttonsbebe" Hermes skill,
-      using three READ-ONLY MCP tools:
-        ├─ buttonsbebe_kb      (:8077)  search_kb → policies · FAQ · 22 intents · 4,246 products · tickets   [LanceDB]
-        ├─ buttonsbebe_redo    (:8078)  returns / refunds status
-        └─ buttonsbebe_gorgias (:8079)  read ticket, messages, customer / order
-      Hermes: read ticket → search KB → check returns → classify →
-        • LOW risk  → draft a reply
-        • SENSITIVE → escalate (no customer draft)
-      │
-      ▼
-  WRITE-BACK   (processor/gorgias_writer.py → POST /api/tickets/{id}/messages, channel=internal)
-      • posts the draft as an INTERNAL NOTE (staff-only) — the ONLY write in the system
-      │
-      ▼
-  HUMAN reviews the note in Gorgias and sends / edits.
-
-  (Escalation notify via Twilio WhatsApp, and the feedback/learning loop, are wired but STUBBED — see §8.)
+```text
+Gorgias webhook
+  → bb_webhook FastAPI :8000        HMAC verify (WEBHOOK_SECRET), dedupe
+  → SQLite job_queue                webhook/data/webhook.db (WAL)
+  → buttonsbebe-processor           polls ~every 2s, one Hermes run per job
+  → hermes -t mcp-buttonsbebe_kb,mcp-buttonsbebe_redo,mcp-buttonsbebe_gorgias -z "…"
+       ├─ buttonsbebe_gorgias :8079   ticket / messages / customer (read-only)
+       ├─ buttonsbebe_redo    :8078   return & refund status (read-only)
+       └─ buttonsbebe_kb      :8077   LanceDB hybrid search: policies · faq ·
+                                      intents · products · tickets
+  → <DRAFT:{token}>…</DRAFT> extracted, cleaned (draft_cleaner.py), stored in
+    ticket_results, shown in the console Ticket feed
+  → HUMAN clicks Send reply / Draft as internal note / Request edit (or ignores)
 ```
 
-## 5. Components
+- Hermes always reports `gorgias_priority_set=false`, `note_posted=false`. The
+  processor may WhatsApp-alert the owner for HIGH/CRITICAL work but never
+  writes Gorgias.
+- `processor/gorgias_writer.py` still defines `post_internal_note()` but
+  nothing calls it — dormant. Do not re-wire without revisiting the safety
+  model.
+- Prompt-injection hardening lives in `hermes_runner.py`: run-token
+  `<DRAFT:token>` tags prove the draft is Hermes'; customer-supplied
+  `<DRAFT>` blocks are neutralised and fail closed. Don't loosen casually.
+- Toolsets are an explicit allow-list (`HERMES_TOOLSETS` in
+  `processor/config.py`, built in `build_hermes_command()`), never `--yolo`
+  (`HERMES_SKIP_APPROVAL=1` is a temporary unblock only). A misspelled
+  toolset name silently drops the tool instead of erroring — run
+  `tools/verify_hermes_toolset.sh` on the VPS after changing either.
 
-- **Gorgias** — help desk. Source of tickets + customer/order context; destination for
-  internal-note drafts.
-- **Webhook receiver** — `/root/Buttonsbebe Agent/webhook` (FastAPI/`bb_webhook`, port 8000).
-  Receives Gorgias webhooks (`POST /webhook/gorgias/{tenant}`), verifies the HMAC signature
-  (`WEBHOOK_SECRET`), dedupes, enqueues jobs. Also serves a small `/dashboard`.
-- **Job queue** — SQLite at `webhook/data/webhook.db`.
-- **Processor / orchestrator** — `/root/Buttonsbebe Agent/processor` (systemd
-  `buttonsbebe-processor`, runs `python -m orchestrator`). Polls the queue and runs Hermes
-  once per ticket via `hermes_runner.py`; records the outcome; would trigger escalation.
-- **Hermes (the brain)** — Nous Hermes Agent CLI. Model `glm-5.2` via Ollama Cloud. Guided
-  by `SOUL.md` + the **`buttonsbebe`** Hermes skill (`~/.hermes/skills/buttonsbebe`).
-- **Three MCP tool modules** (read-only, always-on HTTP services on localhost; each its own
-  systemd service + port). See `tools/README.md` and `KB/SEARCH-ENGINE.md`.
-- **Knowledge base** — `/root/Buttonsbebe Agent/KB`. Markdown content
-  (`intents/ faq/ policies/ tickets/ products/`) indexed into **LanceDB hybrid search**
-  (keyword + local multilingual embeddings). `products/` is **auto-synced from Shopify every
-  3 days** (`sync-products.sh`, timer `buttonsbebe-kb-sync`). `learned/` is not indexed.
-- **Write path** — `processor/gorgias_writer.py` posts the internal note (the only write).
-- **Escalation → WhatsApp** — `processor/twilio_notifier.py` POSTs IMMEDIATE-ticket alerts
-  to the owner's WhatsApp via the **whatsapp-connect** service (Node + Baileys, port 8085).
-  The owner links their WhatsApp by scanning a QR at `https://srv1766050.hstgr.cloud/connect-whatsapp/<token>/`
-  (auto-refreshing QR page). That same service also bridges the owner's WhatsApp messages to
-  Hermes (2-way). Live once the owner scans; delivery URL is `WHATSAPP_SEND_URL` (processor drop-in).
-- **Feedback loop** — `processor/feedback_collector.py` (store the human's real reply into
-  `KB/learned/`). **STUB.**
+## 5. Components (repo dirs)
 
-## 6. Services & ports (all bound to 127.0.0.1)
+| Dir | What |
+|---|---|
+| `webhook/` | FastAPI receiver + queue DB + console API (`src/bb_webhook/app.py`). uv package. |
+| `processor/` | Orchestrator loop; `hermes_runner.py` (prompt, command build, draft extraction); `draft_cleaner.py`; `whatsapp_notifier.py`; `heartbeat.sh`. uv package. |
+| `kb/` | KB markdown (`intents/ faq/ policies/ tickets/ products/`), LanceDB index/sync scripts, MCP server, systemd units/timers, `search.sh`. |
+| `tools/` | Read-only Redo + Gorgias MCP modules, `run-gorgias.sh` / `run-redo.sh`, `verify_release.sh`, `verify_hermes_toolset.sh`. |
+| `kb-admin/` | KB editor API (Node, :8087) with auth-safety tests. |
+| `whatsapp-connect/` | Node + Baileys: QR pairing page, owner alerts, 2-way Hermes bridge (:8085). |
+| `console-src/index.html` | **THE** console SPA source (includes Notice Board tab); deployed to the web root by CD. |
+| `dashboard/index.html` | Older console snapshot without Notice Board — superseded, kept for reference. |
+| `deploy/` | Only supported Caddy config (`caddy/Caddyfile.redacted`), CD receive script (`cd/`), systemd units, ENV-consolidation + heartbeat runbooks, tests. |
+| `testing/` | 48-scenario suite (`scenarios.json`), TEST-PLAN, judging rubric, HOW-TO-RUN. |
+| `feedback/` | PII masking library + retired-poller tests. |
+| `fable/` + branch `Fable_buttonsbebe` | Track B standalone prototype — quarantined background, **not** planned work. |
+| `hermes/` | In-repo copies of `SOUL.md` + `skills/buttonsbebe`; `config.example.yaml` is a template (real `config.yaml` is gitignored). |
 
-| Port | What | systemd unit |
+## 6. Services & ports (all bind localhost)
+
+| Port | Service | systemd unit |
 |---|---|---|
-| 8000 | Webhook receiver + dashboard (uvicorn) | `buttonsbebe-webhook` |
+| 8000 | Webhook receiver + console API (uvicorn) | `buttonsbebe-webhook` |
 | 8077 | KB MCP — `search_kb` | `buttonsbebe-kb-mcp` |
-| 8078 | Redo MCP — returns | `buttonsbebe-redo-mcp` |
-| 8079 | Gorgias MCP — read tickets/customers | `buttonsbebe-gorgias-mcp` |
-| 8085 | WhatsApp connect (QR pairing + Hermes bridge) | `buttonsbebe-whatsapp-connect` |
-| — | Job processor (the loop) | `buttonsbebe-processor` |
-| — | Product sync (every 3 days) | `buttonsbebe-kb-sync` (+ `.timer`) |
+| 8078 | Redo MCP | `buttonsbebe-redo-mcp` |
+| 8079 | Gorgias MCP | `buttonsbebe-gorgias-mcp` |
+| 8085 | WhatsApp connect (QR + alerts + bridge) | `buttonsbebe-whatsapp-connect` |
+| 8087 | KB admin API | `buttonsbebe-kb-admin` |
+| — | Job processor | `buttonsbebe-processor` |
+| — | Timers: product sync (3d) / notices GC / nightly learn (03:30) | `buttonsbebe-kb-sync` / `-notices-gc` / `-kb-learn` |
 
-Public entry (Caddy, HTTPS on `srv1766050.hstgr.cloud`): `/connect-whatsapp/*` → :8085,
-everything else → :8000.
+Caddy (`deploy/caddy/Caddyfile.redacted` is the only supported source;
+`webhook/Caddyfile` is marked RETIRED): Basic-Auth console at `/console/*`
+(rewritten internally to `/dashboard/api/*`; `/console/kbapi` → :8087,
+`/console/waapi` → :8085); public allowlist is only `/webhook/gorgias/*`,
+`/health`, `/ready`, `/connect-whatsapp/*`; everything else 404s.
 
-Hermes registers the three tools by URL in `~/.hermes/config.yaml` (`hermes mcp list`).
+## 7. Credentials
 
-## 7. Credentials (.env) — note the split
+One root `.env` (consolidated 2026-07-08): both `processor/config.py` and
+`webhook/src/bb_webhook/config.py` load it. `webhook/.env` is legacy, pending
+removal on the VPS — do not add values there; see
+`deploy/ENV-CONSOLIDATION-RUNBOOK.md`.
 
-Two env files (a known wart; see §11):
+Shopify = client-credentials grant (`SHOPIFY_CLIENT_ID/SECRET`, mint 24h Admin
+token); Gorgias = Basic (email + API key); Redo = Bearer. Never commit `.env*`
+or anything from `_VPS-FULL-BACKUP-*/`. Hermes skills never read env files —
+the authenticated MCP services are their only runtime data path.
 
-- **`/root/Buttonsbebe Agent/.env` (MAIN)** — `GORGIAS_*`, `SHOPIFY_SHOP` +
-  `SHOPIFY_CLIENT_ID` + `SHOPIFY_CLIENT_SECRET` (client-credentials grant),
-  `REDO_API_KEY`, `REDO_STORE_ID`. **Read by the 3 MCP tool modules.**
-- **`/root/Buttonsbebe Agent/webhook/.env`** — `GORGIAS_*`, `WEBHOOK_SECRET`, `WEBHOOK_*`,
-  `SHOPIFY_*`, `LOG_*`. **Read by the webhook app + processor** (`processor/config.py`).
+## 8. Verify before pushing — CI auto-deploys `main`
 
-Gorgias creds are duplicated across both files (kept in sync). **Redo lives only in MAIN** —
-the processor reaches Redo *through the `buttonsbebe_redo` MCP tool* (which reads MAIN), so it
-does not read Redo from its own `.env`.
+Pushing to `main` runs the `verify` workflow and, on success,
+**auto-deploys that commit to production**
+(`.github/workflows/deploy-production.yml`). Run the identical offline gate
+first:
 
-Shopify auth = **client-credentials** (mint a 24h Admin API token from client id+secret).
-Gorgias auth = **Basic** (email + API key). Redo auth = **Bearer** token.
-
-## 8. LIVE vs STUB (what actually works today)
-
-**LIVE & verified:**
-- Webhook receiver → queue → processor loop.
-- Hermes runs per ticket and uses all three MCP tools (proven end-to-end).
-- KB hybrid search incl. **4,246 products** (auto-refreshed every 3 days).
-- Gorgias **read** (tools) and **write** (internal note via `gorgias_writer`).
-
-**LIVE (added 2026-07-07):**
-- WhatsApp escalation channel — `whatsapp-connect` (port 8085) + the rewritten
-  `twilio_notifier.py` POST to it. Owner links WhatsApp via the QR page; alerts then deliver.
-
-**LIVE (added 2026-07-09) — learning loop:**
-- Every console action (Send / internal Note / Request-edit) records a *lesson* to
-  `KB/learned/lesson-*.md` via `webhook/src/bb_webhook/learning.py` (situation + AI draft +
-  human's final text + kind + edited flag; a `_ledger.json` tracks totals). Endpoint:
-  `GET /dashboard/api/learning` (shown as the console "Learning" card).
-- Nightly (`buttonsbebe-kb-learn.timer`, 03:30) `KB/scripts/auto_promote_learned.py` masks
-  PII (emails/phones/orders/addresses via `feedback/pii.py`, plus the known customer name) and
-  promotes each lesson into an indexed `KB/tickets/exemplar-learned-*.md` (`status: confirmed`,
-  `source: learned-auto`), then `learn-nightly.sh` rebuilds the index. SOUL tells Hermes to
-  mirror these "Approved reply" exemplars while grounding facts in policy/faq/products.
-
-**STUB / not yet implemented (planned):**
-- `classifier.py` — returns NORMAL for everything. Risk classification is currently done by
-  **Hermes (the LLM)**, not the deterministic code gate.
-- `processor/feedback_collector.py` (the old poll-based capture) is superseded by the
-  console-action capture above (`learning.py` + `auto_promote_learned.py`).
-
-## 9. Key locations
-
-- `KB/` — knowledge base + search engine (`KB/SEARCH-ENGINE.md`, `KB/README.md`, `scripts/`).
-- `tools/` — Redo + Gorgias MCP modules (`tools/README.md`, `redo_mcp.py`, `gorgias_mcp.py`).
-- `webhook/` — FastAPI receiver + queue DB (`src/bb_webhook/`).
-- `processor/` — `orchestrator.py`, `hermes_runner.py`, `gorgias_writer.py`,
-  `classifier.py`(stub), `twilio_notifier.py`(stub), `feedback_collector.py`(stub), `kb_client.py`.
-- `~/.hermes/` — Hermes home: `config.yaml` (model + MCP registrations), `SOUL.md`
-  (instructions), `skills/buttonsbebe/` (ticket workflow).
-- Space-free launchers: `/root/kb-mcp-run.sh`, `/root/redo-mcp-run.sh`, `/root/gorgias-mcp-run.sh`.
-
-## 10. Operate & verify
-
+```bash
+bash tools/verify_release.sh   # needs ripgrep + node; set PYTHON/PROCESSOR_PYTHON to prepared venvs
 ```
-hermes mcp list                       # the 3 tools, all enabled
-hermes mcp test buttonsbebe_kb        # (or _redo / _gorgias) → Connected, N tools
-systemctl status buttonsbebe-processor buttonsbebe-kb-mcp buttonsbebe-redo-mcp buttonsbebe-gorgias-mcp
+
+Gate facts (each exists because something slipped once):
+
+- Syntax-checks first-party Python under `feedback kb processor testing tools
+  webhook deploy` and asserts ≥40 files parsed, so a broken skip-list fails
+  loudly instead of passing on nothing.
+- Auto-discovers every `processor/test_*.py`; exclude a live-VPS diagnostic
+  with the marker line `# offline-gate: skip` (`test_e2e.py` hits a real VPS
+  this way).
+- Runs unittest suites in `kb/tests`, `deploy/tests`, `tools.test_tool_contracts`,
+  webhook notification tests, feedback tests; `node --test` for
+  whatsapp-connect security tests and kb-admin.
+- **Fails on any active `twilio` reference** — escalation is the local
+  WhatsApp bridge now; do not reintroduce Twilio.
+- Enforces exactly **48** unique-id scenarios in `testing/scenarios.json`.
+
+Focused runs:
+
+```bash
+(cd processor && uv run python -m unittest test_draft_cleaner -v)
+(cd processor && uv run python -m unittest discover -p 'test_*.py' -v)
+(cd whatsapp-connect && npm test)
+```
+
+Python ≥ 3.12, uv-managed (`uv.lock` in `processor/`, `webhook/`); Node 20 for
+JS services. A clean 48-scenario live-model run is the release-quality gate —
+see `testing/HOW-TO-RUN.md` before any behavior-changing deploy.
+
+## 9. Operate on the VPS
+
+```bash
+hermes mcp list && hermes mcp test buttonsbebe_kb
+systemctl status buttonsbebe-processor buttonsbebe-kb-mcp buttonsbebe-redo-mcp \
+  buttonsbebe-gorgias-mcp buttonsbebe-kb-admin
 journalctl -u buttonsbebe-processor -n 50
-cd "/root/Buttonsbebe Agent/KB" && ./search.sh "do you ship to canada"   # test KB
-./sync-products.sh                    # manual product refresh (else every 3 days)
-sqlite3 "/root/Buttonsbebe Agent/webhook/data/webhook.db" "select status,count(*) from jobs group by status"
+cd "/root/Buttonsbebe Agent/KB" && ./search.sh "do you ship to canada"
+./sync-products.sh                     # manual product refresh (else every 3 days)
+sqlite3 "/root/Buttonsbebe Agent/webhook/data/webhook.db" \
+  "select status,count(*) from job_queue group by status"   # table is job_queue, not jobs
 ```
 
-## 11. Known gaps (from the 2026-07-07 audit — see `INCONSISTENCIES.md`)
+## 10. Live vs retired code, and which docs to trust
 
-- The three **stubs** in §8 (classifier / Twilio escalation / feedback loop).
-- **Doc drift:** many local files describe the retired design; **this file is the current truth.**
-  Old `PROJECT-SOURCE-OF-TRUTH.md`, `kb/README.md`, `GOAL.md`, `docs/hermes-rearchitecture/`,
-  `build/` should be archived or rewritten.
-- **`.env` duplication** across two files. Shopify "code half": `webhook/config.py` still
-  reads a static token field, not the client-cred keys — only matters if the webhook ever
-  calls Shopify directly (it doesn't today).
-- Confirm the exact **systemd unit for the :8000 webhook receiver**.
-- The processor runs Hermes with an **explicit toolset allow-list** — the three read-only
-  MCP servers and nothing else — instead of `--yolo`. Verify names with
-  `tools/verify_hermes_toolset.sh` before restarting the processor.
-```
+**Live:** the whole pipeline above; learning loop (every console action →
+`KB/learned/lesson-*.md` via `webhook/src/bb_webhook/learning.py`; nightly
+PII-masked promotion to indexed `KB/tickets/exemplar-learned-*.md` + index
+rebuild); Notice Board override layer (immediate effect, no reindex; GC timer
+purges expired notices); heartbeat dead-man's switch (`processor/heartbeat.sh`,
+`deploy/HEARTBEAT-INSTALL.md`); KB admin (:8087).
 
-## Imported Claude Cowork project instructions
+**Retired but present — fail-closed; don't "fix" them back to life:**
+
+- `processor/classifier.py` — advisory deterministic rules only; Hermes also
+  classifies; the processor can raise priority but never lower it.
+- `processor/feedback_collector.py` — superseded poller; rollback only via
+  `FEEDBACK_LEGACY_OPT_IN=1` for a bounded test.
+- `processor/gorgias_writer.py` — dormant (§4).
+
+**Doc trust order:** `CLAUDE.md` ≈ this file → `HANDOVER/` (good onboarding,
+but dated 2026-07-13 *before* the Fable port: its "webhook/processor source is
+not in the repo" claims are outdated) → `PORTFROMFABLETASKLIST.md`,
+`IMPROVEMENT-PLAN.md`, `TESTING-READINESS.md` (context). **Superseded — do not
+implement from:** `INCONSISTENCIES.md`, `DEV-ISSUES.md`. **Stale layout:**
+root `README.md` (describes the retired `gorgias-webhook/` + `teddy/` design).
