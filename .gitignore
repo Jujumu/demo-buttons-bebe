@@ -63,3 +63,6 @@ _VPS-FULL-BACKUP-*/
 .DS_Store
 .idea/
 .vscode/
+
+# foglamp scan (contains a secret edit token)
+.foglamp/
