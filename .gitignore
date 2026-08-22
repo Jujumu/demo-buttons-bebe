@@ -66,3 +66,6 @@ _VPS-FULL-BACKUP-*/
 
 # foglamp scan (contains a secret edit token)
 .foglamp/
+
+# Generated agent-session artifacts (review rounds, diffs, scratch)
+output/
