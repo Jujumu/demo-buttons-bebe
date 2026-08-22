@@ -2389,6 +2389,10 @@ class ReDoSTests(unittest.TestCase):
 
     def test_classification_is_bounded_on_every_hostile_shape(self):
         import time
+        # A blow-up detector, not a stopwatch: a real ReDoS bomb on these
+        # payloads costs seconds-to-minutes, so 5s still fails an order of
+        # magnitude before a bomb could pass - while leaving headroom for a
+        # slow shared CI runner (worst healthy shape measured 1.14s there).
         shapes = ["following up ", "a stain ", "!!! ", "MISSING ", "> quoted\n",
                   "On 1 Jan 2026 x wrote:\n", "why ", "hi <a@", "\n\n"]
         for shape in shapes:
@@ -2396,7 +2400,7 @@ class ReDoSTests(unittest.TestCase):
             with self.subTest(shape=shape[:12]):
                 started = time.perf_counter()
                 _c(payload, subject=payload[:2000])
-                self.assertLess(time.perf_counter() - started, 1.0)
+                self.assertLess(time.perf_counter() - started, 5.0)
 
 
 class LengthCapTests(unittest.TestCase):
