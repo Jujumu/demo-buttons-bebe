@@ -7,6 +7,7 @@ import re
 from .constants import _make_run_token
 
 
+# ADR-015 §2.4 — neutralize input markers; token auth covers echoed tool text.
 _MARKER_SUBSTITUTIONS = (
     ("JSON_RESULT", "JSON-RESULT"),
     ("<DRAFT>", "[DRAFT]"),

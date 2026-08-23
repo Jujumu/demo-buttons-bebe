@@ -70,6 +70,7 @@ def draft_for_console(hermes_result: dict[str, Any]) -> str:
     return draft or str(_FALLBACK_RESULT["draft_text"])
 
 
+# ADR-015 §2.3 — auth anomalies are non-sendable; runner failures fall back.
 def _authentication_failure(reason: str) -> dict[str, Any]:
     """Log and return the distinct non-sendable authentication result."""
 

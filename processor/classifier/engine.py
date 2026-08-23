@@ -26,6 +26,7 @@ def classify(
     kb_results: list[dict] | None = None,
     order_data: dict | None = None,
 ) -> dict[str, Any]:
+    # ADR-014 §3 — this screen is escalate-only; sensitive always alerts.
     """Classify a ticket while preserving the legacy three-view contract."""
     raw_subject_text = str(payload.get("ticket_subject") or "")
     raw_message_text = str(payload.get("message_text") or "")
