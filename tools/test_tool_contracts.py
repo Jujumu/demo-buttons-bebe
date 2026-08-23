@@ -1,6 +1,11 @@
 from __future__ import annotations
 
 import ast
+import os
+import stat
+import subprocess
+import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -82,6 +87,136 @@ class ToolContractTests(unittest.TestCase):
                 "search_customer",
             },
         )
+
+
+class DemoReleaseGateTests(unittest.TestCase):
+    """Exercise the release gate's demo branch without running the full gate."""
+
+    ROOT = TOOLS_DIR.parent
+    VERIFY_RELEASE = TOOLS_DIR / "verify_release.sh"
+    DEMO_VERIFY = ROOT / "demo" / "verify_config.py"
+    DEMO_ENV = ROOT / "demo" / ".env.example"
+
+    def _fake_toolchain(
+        self,
+        directory: Path,
+        demo_exit_code: int | None = None,
+    ) -> tuple[Path, Path, Path]:
+        """Return fake Python, node, and rg commands for the shell gate.
+
+        The release gate is intentionally broad and its real test suites are
+        covered elsewhere. These fakes let this contract test execute the
+        actual shell branch quickly while recording whether the demo verifier
+        was invoked.
+        """
+
+        log_path = directory / "python-invocations.log"
+        python_path = directory / "python"
+        demo_action = (
+            f"    raise SystemExit({demo_exit_code})\n"
+            if demo_exit_code is not None
+            else "    os.execv(sys.executable, [sys.executable, *sys.argv[1:]])\n"
+        )
+        python_path.write_text(
+            "#!/usr/bin/env python3\n"
+            "import os\n"
+            "import pathlib\n"
+            "import sys\n"
+            f"log = pathlib.Path({str(log_path)!r})\n"
+            "with log.open('a', encoding='utf-8') as handle:\n"
+            "    handle.write(repr(sys.argv[1:]) + '\\n')\n"
+            "if sys.argv[1:] == ['demo/verify_config.py', 'demo/.env.example']:\n"
+            + demo_action
+            + "raise SystemExit(0)\n",
+            encoding="utf-8",
+        )
+        node_path = directory / "node"
+        node_path.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        rg_path = directory / "rg"
+        rg_path.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+        for path in (python_path, node_path, rg_path):
+            path.chmod(path.stat().st_mode | stat.S_IXUSR)
+        return python_path, node_path, log_path
+
+    def _run_gate(
+        self,
+        demo_mode: str | None,
+        demo_exit_code: int | None = None,
+    ) -> tuple[subprocess.CompletedProcess[str], str]:
+        with tempfile.TemporaryDirectory(prefix="release-gate-demo-") as temp_dir:
+            temp = Path(temp_dir)
+            fake_python, _node, log_path = self._fake_toolchain(temp, demo_exit_code)
+            env = os.environ.copy()
+            env.pop("DEMO_MODE", None)
+            if demo_mode is not None:
+                env["DEMO_MODE"] = demo_mode
+            env["PYTHON"] = str(fake_python)
+            env["PROCESSOR_PYTHON"] = str(fake_python)
+            env["PATH"] = f"{temp}:{env['PATH']}"
+            result = subprocess.run(
+                ["bash", str(self.VERIFY_RELEASE)],
+                cwd=self.ROOT,
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            invocations = log_path.read_text(encoding="utf-8") if log_path.exists() else ""
+            return result, invocations
+
+    def test_default_release_gate_does_not_run_demo_verifier(self) -> None:
+        result, invocations = self._run_gate(demo_mode=None)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("demo/verify_config.py", invocations)
+
+    def test_demo_mode_runs_checked_in_profile(self) -> None:
+        result, invocations = self._run_gate(demo_mode="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("demo/verify_config.py", invocations)
+        self.assertIn("demo/.env.example", invocations)
+
+    def test_demo_verifier_failure_blocks_release_gate(self) -> None:
+        result, invocations = self._run_gate(demo_mode="1", demo_exit_code=17)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("demo/verify_config.py", invocations)
+        self.assertIn("demo isolation verification failed", result.stderr)
+
+    def test_invalid_demo_mode_is_rejected_before_gate(self) -> None:
+        for invalid_mode in ("0", "true", "yes"):
+            with self.subTest(invalid_mode=invalid_mode):
+                result, invocations = self._run_gate(demo_mode=invalid_mode)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("DEMO_MODE must be unset or 1", result.stderr)
+                self.assertNotIn("demo/verify_config.py", invocations)
+
+    def test_release_gate_uses_only_canonical_profile_without_sourcing(self) -> None:
+        script = self.VERIFY_RELEASE.read_text(encoding="utf-8")
+        self.assertIn('demo_env="demo/.env.example"', script)
+        self.assertEqual(script.count("demo/.env.example"), 1)
+        self.assertIn("unset DEMO_MODE", script)
+        self.assertNotIn("DEMO_ENV_FILE", script)
+        self.assertNotIn("demo/.env", script.replace("demo/.env.example", ""))
+        self.assertNotRegex(script, r"(?:^|[;&|])\s*(?:source|\.)\s+[^\n]*demo/\.env(?:[\"'\s]|$)")
+        self.assertNotIn('"demo/.env"', script)
+
+    def test_demo_verifier_rejects_non_demo_database_path(self) -> None:
+        valid_profile = self.DEMO_ENV.read_text(encoding="utf-8")
+        invalid_profile = valid_profile.replace(
+            "WEBHOOK_DB_PATH=./data/cute-things-demo-webhook.db",
+            "WEBHOOK_DB_PATH=./data/webhook.db",
+        )
+        with tempfile.TemporaryDirectory(prefix="invalid-demo-profile-") as temp_dir:
+            profile = Path(temp_dir) / ".env"
+            profile.write_text(invalid_profile, encoding="utf-8")
+            result = subprocess.run(
+                [sys.executable, str(self.DEMO_VERIFY), str(profile)],
+                cwd=self.ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("WEBHOOK_DB_PATH", result.stdout)
 
 
 if __name__ == "__main__":

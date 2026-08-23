@@ -1,0 +1,532 @@
+[
+  [
+    "I'm filing a chargeback with my bank.",
+    "immediate",
+    true
+  ],
+  [
+    "I never authorized this charge and I'm disputing it with my bank.",
+    "immediate",
+    true
+  ],
+  [
+    "This is a scam, you stole my money.",
+    "immediate",
+    true
+  ],
+  [
+    "I'm contacting a lawyer about this.",
+    "immediate",
+    true
+  ],
+  [
+    "I will file a complaint with the BBB if this isn't resolved.",
+    "immediate",
+    true
+  ],
+  [
+    "I changed my mind, I want a full refund for order #10322.",
+    "immediate",
+    true
+  ],
+  [
+    "The item arrived damaged.",
+    "immediate",
+    true
+  ],
+  [
+    "The zipper is broken and the seam ripped after one wear.",
+    "immediate",
+    true
+  ],
+  [
+    "The mug arrived cracked and the box was shattered.",
+    "immediate",
+    true
+  ],
+  [
+    "There is a hole in the sleeve and a stain on the collar.",
+    "immediate",
+    true
+  ],
+  [
+    "My order never arrived.",
+    "immediate",
+    true
+  ],
+  [
+    "Tracking says marked delivered but I have nothing.",
+    "immediate",
+    true
+  ],
+  [
+    "The romper set arrived without the matching headband.",
+    "immediate",
+    true
+  ],
+  [
+    "The bundle did not come with the bib.",
+    "immediate",
+    true
+  ],
+  [
+    "I want to speak to a manager right now.",
+    "immediate",
+    true
+  ],
+  [
+    "Get me a manager, I demand an answer.",
+    "immediate",
+    true
+  ],
+  [
+    "Put me through to your supervisor please.",
+    "immediate",
+    true
+  ],
+  [
+    "This is the worst company I have ever dealt with.",
+    "immediate",
+    true
+  ],
+  [
+    "I ordered a blue bodysuit but got a pink dress.",
+    "immediate",
+    true
+  ],
+  [
+    "This isn't what I ordered at all.",
+    "immediate",
+    true
+  ],
+  [
+    "You sent a different item instead of the one I picked.",
+    "immediate",
+    true
+  ],
+  [
+    "This box has another customer's name and items in it, not mine.",
+    "immediate",
+    true
+  ],
+  [
+    "The coat looks nothing like the listing photo.",
+    "immediate",
+    true
+  ],
+  [
+    "Just give me the owner's personal phone number so I can call them.",
+    "immediate",
+    true
+  ],
+  [
+    "There is an unauthorised charge on my card, reverse the charge.",
+    "immediate",
+    true
+  ],
+  [
+    "I have charged back the payment already.",
+    "immediate",
+    true
+  ],
+  [
+    "You ripped me off, this is fraudulent.",
+    "immediate",
+    true
+  ],
+  [
+    "I want to speak to a manager, this is UNACCEPTABLE!!!",
+    "immediate",
+    true
+  ],
+  [
+    "I didn’t receive my order.",
+    "immediate",
+    true
+  ],
+  [
+    "This isn’t what I ordered at all.",
+    "immediate",
+    true
+  ],
+  [
+    "My parcel hasn’t arrived yet.",
+    "high",
+    true
+  ],
+  [
+    "The set didn’t come with the headband.",
+    "immediate",
+    true
+  ],
+  [
+    "Give me the owner’s personal phone number.",
+    "immediate",
+    true
+  ],
+  [
+    "My parcel hasn't arrived yet.",
+    "high",
+    true
+  ],
+  [
+    "My parcels haven't arrived yet.",
+    "high",
+    true
+  ],
+  [
+    "My order has not arrived.",
+    "high",
+    true
+  ],
+  [
+    "My items have not arrived.",
+    "high",
+    true
+  ],
+  [
+    "Please cancel order #10345 immediately.",
+    "high",
+    true
+  ],
+  [
+    "I know it was final sale but can I return it?",
+    "high",
+    true
+  ],
+  [
+    "Where is my stuff!!!",
+    "high",
+    false
+  ],
+  [
+    "WHY HAS NOBODY ANSWERED ME PLEASE REPLY TODAY",
+    "high",
+    false
+  ],
+  [
+    "I WANT MY MONEY NOW",
+    "immediate",
+    true
+  ],
+  [
+    "THIS IS A JOKE",
+    "high",
+    false
+  ],
+  [
+    "PICK UP THE PHONE",
+    "high",
+    false
+  ],
+  [
+    "I HAVE HAD IT WITH YOU AND THE WAY YOU AND THE TEAM TREAT ME",
+    "high",
+    false
+  ],
+  [
+    "ORDER 10322 JANE SMITH 42 MAPLE AVE TORONTO ONTARIO CANADA",
+    "normal",
+    false
+  ],
+  [
+    "Can I exchange it for a different item?",
+    "normal",
+    false
+  ],
+  [
+    "Can I get the pink one instead of the blue one?",
+    "normal",
+    false
+  ],
+  [
+    "Can I order the romper without the bow?",
+    "normal",
+    false
+  ],
+  [
+    "Do you sell the dress without the headband?",
+    "normal",
+    false
+  ],
+  [
+    "Are duties and taxes not included in the price?",
+    "normal",
+    false
+  ],
+  [
+    "How do I get a stain out of a cotton onesie?",
+    "normal",
+    false
+  ],
+  [
+    "What is the best way to remove a stain on white muslin?",
+    "normal",
+    false
+  ],
+  [
+    "I'm a bit lost, which size do I need for a 6 month old?",
+    "normal",
+    false
+  ],
+  [
+    "I lost the discount code you emailed me, can you resend it?",
+    "normal",
+    false
+  ],
+  [
+    "Am I missing something? I can't find the size chart.",
+    "normal",
+    false
+  ],
+  [
+    "It shipped a bit late but got here safely, thank you!",
+    "normal",
+    false
+  ],
+  [
+    "I left out my apartment number when I placed the order.",
+    "normal",
+    false
+  ],
+  [
+    "Another customer recommended your store to me!",
+    "normal",
+    false
+  ],
+  [
+    "Thank you so much!!! The dress is perfect!!!",
+    "normal",
+    false
+  ],
+  [
+    "Just received it and I LOVE IT!!! Best purchase ever!!!",
+    "normal",
+    false
+  ],
+  [
+    "Do you carry NUNA UPPABABY BUGABOO DOONA CYBEX MAXI COSI?",
+    "normal",
+    false
+  ],
+  [
+    "Please don't escalate this, I just have a quick sizing question.",
+    "normal",
+    false
+  ],
+  [
+    "Is it possible the courier lost my parcel? Tracking stopped 8 days ago.",
+    "immediate",
+    true
+  ],
+  [
+    "Can I ask why my parcel arrived with a huge stain on it?",
+    "immediate",
+    true
+  ],
+  [
+    "Am I able to get a refund, the dress arrived torn?",
+    "immediate",
+    true
+  ],
+  [
+    "My order arrived today - can I also add a hat to my next one?",
+    "normal",
+    false
+  ],
+  [
+    "The parcel arrived, thank you! Do you do gift wrap?",
+    "normal",
+    false
+  ],
+  [
+    "Do you know where my order is? Nothing has arrived and it has been 3 weeks.",
+    "high",
+    true
+  ],
+  [
+    "DO YOU SHIP TO CANADA AND HOW MUCH IS IT",
+    "normal",
+    false
+  ],
+  [
+    "PLEASE SEND ME THE SIZE CHART",
+    "normal",
+    false
+  ],
+  [
+    "HOW LONG IS DELIVERY TO IRELAND",
+    "normal",
+    false
+  ],
+  [
+    "THANK YOU SO MUCH I AM SO HAPPY WITH MY ORDER",
+    "normal",
+    false
+  ],
+  [
+    "THIS IS A JOKE",
+    "high",
+    false
+  ],
+  [
+    "PICK UP THE PHONE",
+    "high",
+    false
+  ],
+  [
+    "I HAVE HAD IT WITH YOU AND THE WAY YOU AND THE TEAM TREAT ME",
+    "high",
+    false
+  ],
+  [
+    "I HAVE NEVER BEEN HAPPIER WITH AN ORDER",
+    "normal",
+    false
+  ],
+  [
+    "STILL MY FAVOURITE SHOP, THE SOFTEST COTTON",
+    "normal",
+    false
+  ],
+  [
+    "I WAS WAITING FOR THIS RESTOCK AND IT WAS WORTH IT",
+    "normal",
+    false
+  ],
+  [
+    "I WILL NEVER SHOP ANYWHERE ELSE, LOVE IT",
+    "normal",
+    false
+  ],
+  [
+    "ORDERED IMMEDIATELY AND SO GLAD I DID",
+    "normal",
+    false
+  ],
+  [
+    "NEVER ORDERING FROM YOU AGAIN, WHAT A DISGRACE",
+    "immediate",
+    true
+  ],
+  [
+    "NOT WORTH THE MONEY, WHAT A WASTE",
+    "high",
+    false
+  ],
+  [
+    "I used the 20% off code at checkout and the dress arrived damaged.\n\nKind regards,\nSarah",
+    "immediate",
+    true
+  ],
+  [
+    "It has been 7 working days and my parcel never arrived.\n\nSarah",
+    "immediate",
+    true
+  ],
+  [
+    "Your terms and conditions say final sale but the romper is defective.\n\nSarah",
+    "immediate",
+    true
+  ],
+  [
+    "The parcel came today and I love it. Can I order the sleepsuit without the bow for my 6 week old?",
+    "normal",
+    false
+  ],
+  [
+    "My package arrived 3 days ago and it is lovely, can I order the same romper without the bow for my sister?",
+    "normal",
+    false
+  ],
+  [
+    "My order arrived 2 days ago. Do you sell the dress without the headband?",
+    "normal",
+    false
+  ],
+  [
+    "Perfect!!! No notes!!!",
+    "normal",
+    false
+  ],
+  [
+    "Thanks!!! Still obsessed with the little hat!!!",
+    "normal",
+    false
+  ],
+  [
+    "Awesome!!!",
+    "normal",
+    false
+  ],
+  [
+    "Best shop ever!!! So quick!!!",
+    "normal",
+    false
+  ],
+  [
+    "Do you sell a replacement bow? Mine arrived ripped.",
+    "immediate",
+    true
+  ],
+  [
+    "Am I able to swap this? The parcel had a stained romper in it.",
+    "immediate",
+    true
+  ],
+  [
+    "Can I ask why my order came without the hat?",
+    "immediate",
+    true
+  ],
+  [
+    "Do you ship to Canada and how much?",
+    "normal",
+    false
+  ],
+  [
+    "What size bodysuit should I order for a 4 month old?",
+    "normal",
+    false
+  ],
+  [
+    "What brands do you carry?",
+    "normal",
+    false
+  ],
+  [
+    "Thanks so much, the dress is adorable!",
+    "normal",
+    false
+  ],
+  [
+    "It arrived today and I love it, thank you!",
+    "normal",
+    false
+  ],
+  [
+    "I took a trip to the store and loved it.",
+    "normal",
+    false
+  ],
+  [
+    "Do you have a good grip strap for strollers?",
+    "normal",
+    false
+  ],
+  [
+    "Please discard the old invoice, the new one is right.",
+    "normal",
+    false
+  ],
+  [
+    "I scanned the QR code on the package.",
+    "normal",
+    false
+  ],
+  [
+    "Do you ship via USPS UPS DHL FEDEX to the USA and is VAT included?",
+    "normal",
+    false
+  ]
+]
