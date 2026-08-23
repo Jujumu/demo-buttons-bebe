@@ -25,6 +25,7 @@ if _AGENT_ROOT not in _sys.path:
 
 from .config import get_settings
 from .database import (
+    dashboard_ticket_exists,
     enqueue_job,
     get_dashboard_tickets,
     get_parsed_messages,
@@ -41,6 +42,7 @@ from .database import (
 from .logging_utils import get_logger, log_event, setup_logging
 from .notifications import dashboard_notifications
 from .webhook_handler import (
+    is_event_in_future,
     is_event_too_old,
     parse_event,
     verify_signature,
@@ -50,6 +52,7 @@ logger = get_logger(__name__)
 
 # ── Rate limiter (simple sliding-window per IP) ───────────
 _MAX_REQUESTS_PER_MINUTE = 60
+_MAX_WEBHOOK_BODY_BYTES = 1_048_576
 _rate_window: deque[tuple[float, str]] = deque()
 
 
@@ -141,8 +144,8 @@ async def dashboard_messages(
 ) -> JSONResponse:
     """API endpoint for the dashboard — returns parsed messages as JSON."""
     msgs = await get_parsed_messages(
-        limit=min(limit, 200),
-        offset=offset,
+        limit=max(1, min(limit, 200)),
+        offset=max(0, offset),
         customer_only=customer_only,
     )
     return JSONResponse(content=msgs)
@@ -162,8 +165,8 @@ async def dashboard_tickets_api(
 ) -> JSONResponse:
     """API endpoint — customer messages joined with AI processing results."""
     tickets = await get_dashboard_tickets(
-        limit=min(limit, 500),
-        offset=offset,
+        limit=max(1, min(limit, 500)),
+        offset=max(0, offset),
     )
     return JSONResponse(content=tickets)
 
@@ -258,6 +261,8 @@ async def record_result_api(request: Request) -> JSONResponse:
         body = await request.json()
     except Exception:
         return JSONResponse(status_code=400, content={"error": "invalid_json"})
+    if not isinstance(body, dict):
+        return JSONResponse(status_code=400, content={"error": "invalid_json_object"})
 
     required = {"ticket_id", "message_id", "priority", "action"}
     if not required.issubset(body.keys()):
@@ -266,17 +271,62 @@ async def record_result_api(request: Request) -> JSONResponse:
             content={"error": "missing_fields", "required": list(required)},
         )
 
+    ticket_id = body.get("ticket_id")
+    message_id_raw = body.get("message_id")
+    job_id = body.get("job_id")
+    priority = body.get("priority")
+    action = body.get("action")
+    reason = body.get("reason", "")
+    draft_text = body.get("draft_text")
+    if (
+        not isinstance(ticket_id, int)
+        or isinstance(ticket_id, bool)
+        or ticket_id <= 0
+        or ticket_id > 9_223_372_036_854_775_807
+    ):
+        return JSONResponse(status_code=400, content={"error": "invalid_ticket_id"})
+    if (
+        isinstance(message_id_raw, bool)
+        or not isinstance(message_id_raw, (str, int))
+        or not str(message_id_raw).strip()
+        or len(str(message_id_raw)) > 128
+    ):
+        return JSONResponse(status_code=400, content={"error": "invalid_message_id"})
+    if job_id is not None and (
+        not isinstance(job_id, int) or isinstance(job_id, bool) or job_id <= 0
+    ):
+        return JSONResponse(status_code=400, content={"error": "invalid_job_id"})
+    if not isinstance(priority, str) or priority not in {"critical", "high", "normal", "low"}:
+        return JSONResponse(status_code=400, content={"error": "invalid_priority"})
+    if not isinstance(action, str) or action not in {
+        "drafted",
+        "sensitive_draft",
+        "escalated",
+        "no_kb_match",
+        "no_draft_needed",
+    }:
+        return JSONResponse(status_code=400, content={"error": "invalid_action"})
+    if not isinstance(reason, str) or len(reason) > 2_000:
+        return JSONResponse(status_code=400, content={"error": "invalid_reason"})
+    if draft_text is not None and (
+        not isinstance(draft_text, str) or len(draft_text) > 100_000
+    ):
+        return JSONResponse(status_code=400, content={"error": "invalid_draft_text"})
+    for field in ("notify_owner", "gorgias_priority_set", "note_posted"):
+        if field in body and not isinstance(body[field], bool):
+            return JSONResponse(status_code=400, content={"error": f"invalid_{field}"})
+
     await record_ticket_result(
-        ticket_id=body["ticket_id"],
-        message_id=str(body["message_id"]),
-        job_id=body.get("job_id"),
-        priority=body.get("priority", ""),
-        action=body.get("action", ""),
-        reason=body.get("reason", ""),
+        ticket_id=ticket_id,
+        message_id=str(message_id_raw),
+        job_id=job_id,
+        priority=priority,
+        action=action,
+        reason=reason,
         notify_owner=bool(body.get("notify_owner", False)),
         gorgias_priority_set=bool(body.get("gorgias_priority_set", False)),
         note_posted=bool(body.get("note_posted", False)),
-        draft_text=body.get("draft_text"),
+        draft_text=draft_text,
     )
 
     return JSONResponse(content={"status": "ok"})
@@ -344,7 +394,31 @@ async def receive_gorgias_webhook(
     8. Enqueue job for orchestrator (only for customer-authored messages)
     9. Return 202 Accepted (or 200 if skipped)
     """
-    raw_body = await request.body()
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > _MAX_WEBHOOK_BODY_BYTES:
+                return JSONResponse(
+                    status_code=413,
+                    content={"error": "payload_too_large"},
+                )
+        except ValueError:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "invalid_content_length"},
+            )
+
+    chunks: list[bytes] = []
+    body_size = 0
+    async for chunk in request.stream():
+        body_size += len(chunk)
+        if body_size > _MAX_WEBHOOK_BODY_BYTES:
+            return JSONResponse(
+                status_code=413,
+                content={"error": "payload_too_large"},
+            )
+        chunks.append(chunk)
+    raw_body = b"".join(chunks)
 
     # 1. Verify authenticity FIRST (reject unauthenticated before rate-limiting)
     sig_header = request.headers.get("X-Gorgias-Signature")
@@ -422,9 +496,17 @@ async def receive_gorgias_webhook(
             status_code=410,
             content={"error": "event_expired"},
         )
+    if is_event_in_future(event.get("created_at")):
+        log_event(logger, "WARNING", "Webhook event is future-dated — rejecting",
+                  message_id=message_id_str,
+                  created_at=event.get("created_at"))
+        return JSONResponse(
+            status_code=400,
+            content={"error": "event_in_future"},
+        )
 
     # 6. Persist ALL events for audit/dedup (agent + customer)
-    await record_event(
+    inserted = await record_event(
         message_id=message_id_str,
         tenant_id=tenant_id,
         ticket_id=ticket_id,
@@ -432,6 +514,14 @@ async def receive_gorgias_webhook(
         author_type=event["author_type"],
         raw_payload=raw_body.decode("utf-8", errors="replace"),
     )
+    if not inserted:
+        log_event(logger, "INFO", "Concurrent duplicate webhook — skipping",
+                  message_id=message_id_str,
+                  ticket_id=ticket_id)
+        return JSONResponse(
+            status_code=200,
+            content={"status": "duplicate", "message_id": message_id_str},
+        )
 
     # 6b. Store parsed message for the dashboard (all messages)
     await record_parsed_message(
@@ -520,7 +610,16 @@ import asyncio as _asyncio
 from .gorgias_client import GorgiasClient as _GClient
 from .learning import record_lesson as _record_lesson, ledger as _ledger
 
-_HERMES_BIN = "/usr/local/bin/hermes"
+_HERMES_BIN = _os.environ.get("HERMES_BIN", "/usr/local/bin/hermes")
+_HERMES_HOME = _os.environ.get("HERMES_OS_HOME", "/root")
+_HERMES_PROFILE = _os.environ.get("HERMES_PROFILE", "").strip()
+_HERMES_REWRITE_TOOLSETS = _os.environ.get("HERMES_REWRITE_TOOLSETS", "todo").strip()
+_HERMES_IGNORE_RULES = _os.environ.get("HERMES_IGNORE_RULES", "").strip().lower() in {
+    "1", "true", "yes", "on",
+}
+_SUPPORT_STORE_NAME = " ".join(
+    _os.environ.get("SUPPORT_STORE_NAME", "Buttons Bebe").split()
+)[:80] or "Buttons Bebe"
 
 
 @app.post("/dashboard/api/ticket/{ticket_id}/send")
@@ -529,10 +628,19 @@ async def action_send(ticket_id: int, request: Request) -> JSONResponse:
     try:
         body = await request.json()
     except Exception:
-        body = {}
-    text = str(body.get("text", "")).strip()
-    if not text:
+        return JSONResponse(status_code=400, content={"error": "invalid_json"})
+    if not isinstance(body, dict):
+        return JSONResponse(status_code=400, content={"error": "invalid_json_object"})
+    if not await dashboard_ticket_exists(ticket_id):
+        return JSONResponse(status_code=404, content={"error": "ticket_not_in_console"})
+    raw_text = body.get("text", "")
+    if not isinstance(raw_text, str):
+        return JSONResponse(status_code=400, content={"error": "invalid_reply"})
+    text = raw_text.strip()
+    if not text or len(text) > 50_000:
         return JSONResponse(status_code=400, content={"error": "empty reply"})
+    if body.get("confirmed") is not True:
+        return JSONResponse(status_code=409, content={"error": "confirmation_required"})
     res = await _GClient().send_public_reply(ticket_id, text)
     if not res.get("ok"):
         log_event(logger, "ERROR", "Public reply failed", ticket_id=ticket_id,
@@ -552,9 +660,16 @@ async def action_note(ticket_id: int, request: Request) -> JSONResponse:
     try:
         body = await request.json()
     except Exception:
-        body = {}
-    text = str(body.get("text", "")).strip()
-    if not text:
+        return JSONResponse(status_code=400, content={"error": "invalid_json"})
+    if not isinstance(body, dict):
+        return JSONResponse(status_code=400, content={"error": "invalid_json_object"})
+    if not await dashboard_ticket_exists(ticket_id):
+        return JSONResponse(status_code=404, content={"error": "ticket_not_in_console"})
+    raw_text = body.get("text", "")
+    if not isinstance(raw_text, str):
+        return JSONResponse(status_code=400, content={"error": "invalid_note"})
+    text = raw_text.strip()
+    if not text or len(text) > 50_000:
         return JSONResponse(status_code=400, content={"error": "empty note"})
     res = await _GClient().post_internal_note(ticket_id, text)
     if not res.get("ok"):
@@ -575,27 +690,44 @@ async def action_rewrite(ticket_id: int, request: Request) -> JSONResponse:
     try:
         body = await request.json()
     except Exception:
-        body = {}
-    draft = str(body.get("draft", "")).strip()
-    instruction = str(body.get("instruction", "")).strip()
-    customer_msg = str(body.get("message_text", "")).strip()
+        return JSONResponse(status_code=400, content={"error": "invalid_json"})
+    if not isinstance(body, dict):
+        return JSONResponse(status_code=400, content={"error": "invalid_json_object"})
+    if not await dashboard_ticket_exists(ticket_id):
+        return JSONResponse(status_code=404, content={"error": "ticket_not_in_console"})
+    for field in ("draft", "instruction", "message_text", "customer_name"):
+        if field in body and not isinstance(body[field], str):
+            return JSONResponse(status_code=400, content={"error": f"invalid_{field}"})
+    draft = body.get("draft", "").strip()
+    instruction = body.get("instruction", "").strip()
+    customer_msg = body.get("message_text", "").strip()
     if not instruction:
         return JSONResponse(status_code=400, content={"error": "no instruction"})
+    if max(len(draft), len(instruction), len(customer_msg)) > 50_000:
+        return JSONResponse(status_code=413, content={"error": "rewrite_input_too_large"})
     prompt = (
-        "You are rewriting a customer-support reply for Buttons Bebe (a baby "
-        "clothing Shopify store). Output ONLY the final customer-facing reply "
+        f"You are rewriting a customer-support reply for {_SUPPORT_STORE_NAME}. "
+        "Output ONLY the final customer-facing reply "
         "text - no preamble, no quotes, no commentary, no sign-off notes.\n\n"
         "CUSTOMER MESSAGE:\n" + customer_msg + "\n\n"
         "CURRENT DRAFT REPLY:\n" + draft + "\n\n"
         "REWRITE INSTRUCTION FROM THE HUMAN AGENT:\n" + instruction + "\n\n"
-        "Rewrite the reply to follow the instruction. Stay accurate to Buttons "
-        "Bebe policy; do not invent facts, prices, or promises."
+        f"Rewrite the reply to follow the instruction. Stay accurate to "
+        f"{_SUPPORT_STORE_NAME} policy; do not invent facts, prices, or promises."
     )
     try:
         env = dict(_os.environ)
-        env["HOME"] = "/root"
+        env["HOME"] = _HERMES_HOME
+        command = [_HERMES_BIN]
+        if _HERMES_PROFILE:
+            command.extend(["-p", _HERMES_PROFILE])
+        if _HERMES_IGNORE_RULES:
+            command.append("--ignore-rules")
+        if _HERMES_REWRITE_TOOLSETS:
+            command.extend(["-t", _HERMES_REWRITE_TOOLSETS])
+        command.extend(["-z", prompt])
         proc = await _asyncio.create_subprocess_exec(
-            _HERMES_BIN, "-z", prompt,
+            *command,
             stdout=_asyncio.subprocess.PIPE,
             stderr=_asyncio.subprocess.PIPE,
             env=env,

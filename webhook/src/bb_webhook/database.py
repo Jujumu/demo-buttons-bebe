@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS ticket_results (
     message_id      TEXT NOT NULL,
     job_id           INTEGER,
     priority         TEXT,              -- critical | high | normal | low
-    action           TEXT,              -- drafted | sensitive_draft | escalated | no_kb_match
+    action           TEXT,              -- drafted | sensitive_draft | escalated | no_kb_match | no_draft_needed
     reason           TEXT,
     notify_owner     INTEGER NOT NULL DEFAULT 0,
     gorgias_priority_set INTEGER NOT NULL DEFAULT 0,
@@ -132,6 +132,7 @@ async def _with_retry(
     db_path: Path,
     *,
     fetch: bool = False,
+    return_rowcount: bool = False,
 ) -> Any | None:  # noqa: F401 -- Any imported via aiosqlite.Row
     """Execute *sql* with retry-on-locked."""
     for attempt in range(_LOCK_RETRY_ATTEMPTS):
@@ -146,10 +147,11 @@ async def _with_retry(
                     return result
                 else:
                     cursor = await conn.execute(sql, params)
-                    await conn.commit()
+                    affected = cursor.rowcount
                     row = cursor.lastrowid
+                    await conn.commit()
                     await cursor.close()
-                    return row
+                    return affected if return_rowcount else row
         except aiosqlite.OperationalError as exc:
             if "locked" in str(exc).lower() and attempt < _LOCK_RETRY_ATTEMPTS - 1:
                 logger.warning("DB locked on %s — retry %d/%d", operation, attempt + 1, _LOCK_RETRY_ATTEMPTS)
@@ -182,14 +184,18 @@ async def record_event(
     author_type: str,
     raw_payload: str,
     db_path: Path | None = None,
-) -> None:
-    """Persist a webhook event for dedup and audit."""
+) -> bool:
+    """Persist a webhook event for dedup and audit.
+
+    Returns ``True`` only for the request that inserted the idempotency row.
+    Concurrent duplicate deliveries therefore have one unambiguous winner.
+    """
     if db_path is None:
         db_path = get_settings().db_path_absolute
 
     now = datetime.now(timezone.utc).isoformat()
 
-    await _with_retry(
+    inserted = await _with_retry(
         "record_event",
         """INSERT OR IGNORE INTO webhook_events
            (message_id, tenant_id, ticket_id, event_type,
@@ -198,7 +204,9 @@ async def record_event(
         (message_id, tenant_id, ticket_id, event_type,
          author_type, raw_payload, now),
         db_path,
+        return_rowcount=True,
     )
+    return inserted == 1
 
 
 async def enqueue_job(
@@ -222,13 +230,26 @@ async def enqueue_job(
         """INSERT INTO job_queue
            (tenant_id, ticket_id, message_id, event_type,
             author_type, is_customer_message, status, payload, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+           WHERE NOT EXISTS (
+               SELECT 1 FROM job_queue WHERE message_id = ?
+           )""",
         (tenant_id, ticket_id, message_id, event_type,
-         author_type, int(is_customer_message), "pending", json.dumps(payload), now),
+         author_type, int(is_customer_message), "pending", json.dumps(payload), now,
+         message_id),
         db_path,
     )
+    if job_id:
+        return int(job_id)
 
-    return job_id or 0
+    rows = await _with_retry(
+        "enqueue_job_existing",
+        "SELECT id FROM job_queue WHERE message_id = ? ORDER BY id LIMIT 1",
+        (message_id,),
+        db_path,
+        fetch=True,
+    )
+    return int(rows[0]["id"]) if rows else 0
 
 
 async def get_pending_jobs(
@@ -288,26 +309,16 @@ async def claim_job(
         db_path = get_settings().db_path_absolute
 
     now = datetime.now(timezone.utc).isoformat()
-    result = await _with_retry(
+    affected = await _with_retry(
         "claim_job",
         """UPDATE job_queue
            SET status = 'processing', started_at = ?
            WHERE id = ? AND status = 'pending'""",
         (now, job_id),
         db_path,
+        return_rowcount=True,
     )
-    # _with_retry returns lastrowid for non-fetch; we need rowsaffected
-    # Check by re-reading the job
-    rows = await _with_retry(
-        "claim_job_verify",
-        "SELECT status FROM job_queue WHERE id = ?",
-        (job_id,),
-        db_path,
-        fetch=True,
-    )
-    if rows and rows[0]["status"] == "processing":
-        return True
-    return False
+    return affected == 1
 
 
 async def complete_job(
@@ -365,7 +376,7 @@ async def requeue_stale_jobs(
     now = datetime.now(timezone.utc).isoformat()
     rows = await _with_retry(
         "requeue_stale_jobs_select",
-        """SELECT id FROM job_queue
+        """SELECT id, started_at FROM job_queue
            WHERE status = 'processing'
              AND started_at < ?""",
         (now,),
@@ -379,16 +390,19 @@ async def requeue_stale_jobs(
             started = datetime.fromisoformat(row["started_at"].replace("Z", "+00:00"))
             age_min = (datetime.now(timezone.utc) - started).total_seconds() / 60
             if age_min > max_age_minutes:
-                await _with_retry(
+                affected = await _with_retry(
                     "requeue_stale_job",
                     """UPDATE job_queue
                        SET status = 'pending', started_at = NULL,
                            retry_count = retry_count + 1
-                       WHERE id = ?""",
-                    (row["id"],),
+                       WHERE id = ? AND status = 'processing'
+                         AND started_at = ?""",
+                    (row["id"], row["started_at"]),
                     db_path,
+                    return_rowcount=True,
                 )
-                count += 1
+                if affected == 1:
+                    count += 1
         except (ValueError, TypeError):
             continue
     return count
@@ -594,6 +608,24 @@ async def get_dashboard_tickets(
         fetch=True,
     )
     return [dict(row) for row in (rows or [])]
+
+
+async def dashboard_ticket_exists(
+    ticket_id: int,
+    db_path: Path | None = None,
+) -> bool:
+    """Return whether a customer ticket is present in the review console."""
+    if db_path is None:
+        db_path = get_settings().db_path_absolute
+    rows = await _with_retry(
+        "dashboard_ticket_exists",
+        """SELECT 1 FROM parsed_messages
+           WHERE ticket_id = ? AND is_customer_message = 1 LIMIT 1""",
+        (ticket_id,),
+        db_path,
+        fetch=True,
+    )
+    return bool(rows)
 
 
 async def get_result_stats(db_path: Path | None = None) -> dict:

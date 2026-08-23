@@ -452,7 +452,7 @@ async function sendReply(){
  const warn=isEsc(t)?"This ticket is flagged SENSITIVE.\n\n":"";
  if(!confirm(warn+"Send this reply directly to "+(t.customer_email||"the customer")+"?"))return;
  actBusy=true;actMsg="Sending…";render();
- const meta={text:actDraft,message_text:t.message_text||"",ai_draft:cleanDraft(t.draft_text||""),customer_name:nameOf(t)};
+ const meta={text:actDraft,confirmed:true,message_text:t.message_text||"",ai_draft:cleanDraft(t.draft_text||""),customer_name:nameOf(t)};
  try{const r=await fetch(API+"/ticket/"+t.ticket_id+"/send",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(meta)});const j=await r.json();actMsg=r.ok?"✅ Sent to the customer":("Send failed: "+(j.error||r.status));}catch(e){actMsg="Send failed.";}
  actBusy=false;render();
 }

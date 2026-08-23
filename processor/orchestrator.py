@@ -52,6 +52,7 @@ from bb_webhook.database import (  # noqa: E402
 
 from config import get_settings  # noqa: E402
 from classifier import classify as deterministic_classify, IMMEDIATE, HIGH, NORMAL  # noqa: E402
+from demo_safety import demo_mode_enabled, demo_url_allowed  # noqa: E402
 from hermes_runner import draft_for_console, process_ticket_with_hermes  # noqa: E402
 from logging_setup import get_logger, setup_logging, log_event  # noqa: E402
 from whatsapp_notifier import send_whatsapp  # noqa: E402
@@ -72,7 +73,22 @@ def _save_result_to_webhook(
     """
     import urllib.request
 
-    url = "http://127.0.0.1:8000/dashboard/api/results"
+    url = os.environ.get(
+        "DASHBOARD_RESULT_URL",
+        "http://127.0.0.1:8000/dashboard/api/results",
+    ).strip()
+    if demo_mode_enabled() and not demo_url_allowed(
+        url,
+        port=8100,
+        exact_path="/dashboard/api/results",
+    ):
+        log_event(
+            logger,
+            "ERROR",
+            "Demo result persistence blocked: destination is not the local demo webhook",
+            ticket_id=ticket_id,
+        )
+        return
     payload = json.dumps({
         "ticket_id": ticket_id,
         "message_id": str(message_id),

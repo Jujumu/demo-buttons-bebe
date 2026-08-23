@@ -1,0 +1,30 @@
+{
+  "identity": {
+    "owner_jid": "demo-owner@whatsapp.local",
+    "display_name": "Cute Things Demo Owner",
+    "state": "connected"
+  },
+  "inbound": [
+    {
+      "id": "demo-wa-in-001",
+      "from": "demo-owner@whatsapp.local",
+      "text": "Where is my order #1002?",
+      "timestamp": "2026-08-23T10:15:00Z",
+      "synthetic": true
+    },
+    {
+      "id": "demo-wa-in-002",
+      "from": "demo-owner@whatsapp.local",
+      "text": "Please check the refund request for order #1001.",
+      "timestamp": "2026-08-23T10:16:00Z",
+      "synthetic": true
+    },
+    {
+      "id": "demo-wa-in-003",
+      "from": "demo-owner@whatsapp.local",
+      "text": "This is a fake WhatsApp message for a local smoke test.",
+      "timestamp": "2026-08-23T10:17:00Z",
+      "synthetic": true
+    }
+  ]
+}

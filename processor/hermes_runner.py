@@ -546,7 +546,8 @@ def _neutralise_markers(text: str) -> str:
 
 
 def _build_prompt(ticket_id: int, message_text: str, ticket_subject: str,
-                  customer_email: str, intents: list, token: str = "") -> str:
+                  customer_email: str, intents: list, token: str = "",
+                  store_name: str = "Buttons Bebe") -> str:
     """Build the one-shot prompt for Hermes.
 
     Truncates very long messages to avoid prompt overflow, and flags
@@ -556,6 +557,8 @@ def _build_prompt(ticket_id: int, message_text: str, ticket_subject: str,
     the console; only a human-triggered console endpoint may send or post it.
     """
     intents_str = ", ".join(intents) if intents else "none"
+    store_name = " ".join(str(store_name or "Buttons Bebe").split())[:80]
+    store_name = _neutralise_markers(store_name) or "Buttons Bebe"
 
     # The customer's text is untrusted and is echoed inside the prompt, so a
     # ticket containing "JSON_RESULT: {...}" or "<DRAFT>...</DRAFT>" could put
@@ -610,7 +613,7 @@ def _build_prompt(ticket_id: int, message_text: str, ticket_subject: str,
     )
 
     return (
-        f"Process Buttons Bebe support ticket {ticket_id} autonomously.\n\n"
+        f"Process {store_name} support ticket {ticket_id} autonomously.\n\n"
         f"Ticket context from webhook:\n"
         f"- Ticket ID: {ticket_id}\n"
         f"- Subject: {ticket_subject}\n"
@@ -682,7 +685,7 @@ def _build_prompt(ticket_id: int, message_text: str, ticket_subject: str,
         f"- Do NOT repeat information the customer already knows. If they asked "
         f"about order 12345678, don't restate 'regarding your order 12345678'.\n"
         f"- Do NOT add filler closings like 'Let me know if there's anything else I "
-        f"can help with' or 'Thanks for shopping with Buttons Bebe' unless it "
+        f"can help with' or 'Thanks for shopping with {store_name}' unless it "
         f"fits naturally in 1 short sentence.\n"
         f"- For 'thank you' / 'got it' messages: 1 sentence max. Example: 'You're "
         f"welcome! Let us know if you need anything else.'\n"
@@ -857,7 +860,14 @@ def build_hermes_command(prompt: str, settings: Any) -> list[str]:
     error; Hermes just silently loses the tool and drafts quietly get worse.
     Run tools/verify_hermes_toolset.sh on the VPS first.
     """
-    cmd = ["hermes"]
+    cmd = [str(getattr(settings, "hermes_bin", "hermes") or "hermes")]
+
+    profile = str(getattr(settings, "hermes_profile", "") or "").strip()
+    if profile:
+        cmd += ["-p", profile]
+
+    if bool(getattr(settings, "hermes_ignore_rules", False)):
+        cmd.append("--ignore-rules")
 
     toolsets = str(getattr(settings, "hermes_toolsets", "") or "").strip()
     if toolsets:
@@ -923,8 +933,15 @@ def process_ticket_with_hermes(
     # Minted here, AFTER the ticket arrived, from the OS CSPRNG. Never shown
     # to the customer, never stored, different on every run.
     run_token = _make_run_token()
-    prompt = _build_prompt(ticket_id, message_text, ticket_subject,
-                           customer_email, intents, run_token)
+    prompt = _build_prompt(
+        ticket_id,
+        message_text,
+        ticket_subject,
+        customer_email,
+        intents,
+        run_token,
+        getattr(settings, "support_store_name", "Buttons Bebe"),
+    )
 
     cmd = build_hermes_command(prompt, settings)
 
@@ -937,17 +954,28 @@ def process_ticket_with_hermes(
               timeout=settings.job_timeout)
 
     try:
+        hermes_env = dict(__import__("os").environ)
+        hermes_home = str(getattr(settings, "hermes_home", "/root") or "").strip()
+        hermes_path = str(
+            getattr(
+                settings,
+                "hermes_path",
+                "/root/.local/bin:/usr/local/bin:/usr/bin:/bin",
+            )
+            or ""
+        ).strip()
+        if hermes_home:
+            hermes_env["HOME"] = hermes_home
+        if hermes_path:
+            hermes_env["PATH"] = hermes_path
+
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
             timeout=settings.job_timeout,
             # Ensure Hermes can find its config and skills
-            env={
-                **dict(__import__("os").environ),
-                "HOME": "/root",
-                "PATH": "/root/.local/bin:/usr/local/bin:/usr/bin:/bin",
-            },
+            env=hermes_env,
         )
 
         stdout = result.stdout.strip()
