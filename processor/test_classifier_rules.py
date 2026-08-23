@@ -18,9 +18,14 @@ The 48-scenario regression at the bottom skips until the Task 1 harness merges.
 from __future__ import annotations
 
 import json
+import dataclasses
+import importlib
+import inspect
+import pkgutil
 import re
 import sys
 import unittest
+from collections.abc import Mapping, Sequence, Set
 from pathlib import Path
 
 PROCESSOR_DIR = Path(__file__).resolve().parent
@@ -29,6 +34,177 @@ sys.path[:0] = [str(PROCESSOR_DIR), str(WEBHOOK_SRC)]
 
 import classifier as cls  # noqa: E402
 from classifier import HIGH, IMMEDIATE, NORMAL, classify  # noqa: E402
+
+# T-FIX-3 deliberately keeps the old import spelling while making the package
+# facade the real module.  Private objects are read through the facade for
+# compatibility, but mutation tests must write to the module whose function
+# globals actually consume them.  Assigning to a re-export on ``classifier``
+# only changes the facade and leaves ``classifier.engine`` running unchanged.
+if not hasattr(cls, "__path__"):
+    raise ImportError(
+        "T-FIX-3 classifier tests require processor/classifier/__init__.py; "
+        "the flat module is only a direct-execution shim"
+    )
+
+_ENGINE = importlib.import_module("classifier.engine")
+_VIEWS = importlib.import_module("classifier.views")
+_ENGINE_GLOBAL_SEAMS = frozenset({"log_event"})
+
+
+def _classifier_package_module_names() -> tuple[str, ...]:
+    """Return every Python submodule under the classifier package.
+
+    ``pkgutil`` does not report every namespace-package shape consistently, so
+    the filesystem walk supplements it.  Names remain fully qualified: a
+    coverage assertion for ``classifier.guards.problem`` must not collapse to
+    the misleading top-level label ``classifier``.
+    """
+    names = {cls.__name__}
+    for package_root in getattr(cls, "__path__", ()):
+        root = Path(package_root)
+        if not root.is_dir():
+            continue
+        for path in root.rglob("*.py"):
+            relative = path.relative_to(root)
+            if "__pycache__" in relative.parts:
+                continue
+            parts = list(relative.with_suffix("").parts)
+            if parts and parts[-1] == "__init__":
+                parts.pop()
+            if parts:
+                names.add(f"{cls.__name__}." + ".".join(parts))
+        for module in pkgutil.walk_packages((str(root),), prefix=cls.__name__ + "."):
+            names.add(module.name)
+    return tuple(sorted(names))
+
+
+def _classifier_package_modules() -> tuple[object, ...]:
+    """Import the package and each discovered submodule exactly once."""
+    modules = []
+    for name in _classifier_package_module_names():
+        try:
+            module = importlib.import_module(name)
+        except ImportError as exc:  # a new classifier module must be guarded
+            raise AssertionError(f"classifier submodule {name} is not importable") from exc
+        if module not in modules:
+            modules.append(module)
+    return tuple(modules)
+
+
+def _canonical_owner(name: str):
+    """Find the package module whose globals the classifier actually reads."""
+    modules = _classifier_package_modules()
+
+    # log_event is imported directly into engine.py and called from there;
+    # patching logging_setup.py would not reach that canonical seam.
+    if name in _ENGINE_GLOBAL_SEAMS and name in vars(_ENGINE):
+        return _ENGINE
+
+    # The split modules publish their canonical compatibility names in
+    # ``__all__``. This distinguishes a views.py constant wildcard-imported
+    # into engine.py from the namespace whose helper actually owns it.
+    for module in modules:
+        if module is not cls and name in getattr(module, "__all__", ()):
+            return module
+
+    # Prefer the module that defines the symbol over an engine wildcard alias.
+    # This is what makes a table mutation reach the canonical data object and
+    # makes a caps/length mutation reach views.py, whose helper owns the global.
+    for module in modules:
+        namespace = vars(module)
+        if name not in namespace:
+            continue
+        for value in namespace.values():
+            if getattr(value, "__module__", None) == module.__name__:
+                if inspect.isfunction(value) or inspect.isclass(value):
+                    return module
+
+    # A function's globals dictionary is the next-strongest ownership signal.
+    # It handles imported helpers such as log_event, which have no local
+    # definition in the engine but are consumed by classify() there.
+    for module in modules:
+        namespace = vars(module)
+        if name not in namespace:
+            continue
+        for value in namespace.values():
+            if inspect.isfunction(value) and value.__globals__ is namespace:
+                if name in value.__globals__:
+                    return module
+
+    # For objects only consumed indirectly, prefer a real submodule over the
+    # facade.  The object identity is preserved; this merely identifies its
+    # canonical namespace for mutation and identity assertions.
+    for module in modules:
+        if module is not cls and name in vars(module):
+            return module
+    if name in vars(cls):
+        return cls
+    raise AttributeError(f"classifier has no canonical symbol {name!r}")
+
+
+def _canonical_value(name: str):
+    owner = _canonical_owner(name)
+    return getattr(owner, name)
+
+
+def _set_canonical(name: str, value):
+    """Set a test seam in its canonical owner and return (owner, old_value)."""
+    owner = _canonical_owner(name)
+    old_value = getattr(owner, name)
+    setattr(owner, name, value)
+    return owner, old_value
+
+
+class ClassifierFacadeCompatibilityTests(unittest.TestCase):
+    def test_facade_and_canonical_owner_rebinds_stay_synchronised(self):
+        name = "_find_matches_any"
+        owner = _canonical_owner(name)
+        original = getattr(owner, name)
+
+        def from_owner(*_args):
+            return []
+
+        def from_facade(*_args):
+            return []
+
+        try:
+            setattr(owner, name, from_owner)
+            self.assertIs(getattr(cls, name), from_owner)
+            setattr(cls, name, from_facade)
+            self.assertIs(getattr(owner, name), from_facade)
+            self.assertIs(getattr(cls, name), from_facade)
+        finally:
+            setattr(cls, name, original)
+
+
+def _contains_pattern(value, pattern: str, depth: int = 0, seen=None) -> bool:
+    """Find an exact rule pattern inside legacy or dataclass-backed tables."""
+    if depth > 8:
+        return False
+    seen = seen if seen is not None else set()
+    if id(value) in seen:
+        return False
+    seen.add(id(value))
+    if isinstance(value, str):
+        return value == pattern
+    if isinstance(value, re.Pattern):
+        return value.pattern == pattern
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        return any(
+            _contains_pattern(getattr(value, field.name), pattern, depth + 1, seen)
+            for field in dataclasses.fields(value)
+        )
+    if isinstance(value, Mapping):
+        return any(
+            _contains_pattern(key, pattern, depth + 1, seen)
+            or _contains_pattern(item, pattern, depth + 1, seen)
+            for key, item in value.items()
+        )
+    if isinstance(value, (Sequence, Set, frozenset)) and not isinstance(
+        value, (str, bytes, bytearray)
+    ):
+        return any(_contains_pattern(item, pattern, depth + 1, seen) for item in value)
+    return False
 
 SCENARIOS = PROCESSOR_DIR.parent / "testing" / "scenarios.json"
 _RANK = {NORMAL: 0, HIGH: 1, IMMEDIATE: 2}
@@ -156,19 +332,23 @@ class MainsRulesArePreservedTests(unittest.TestCase):
     """
 
     def test_the_immediate_table_is_mains_verbatim(self):
-        self.assertEqual(tuple(cls._MAIN_IMMEDIATE_KEYWORDS), _MAIN_IMMEDIATE_FROZEN)
+        self.assertEqual(
+            tuple(_canonical_value("_MAIN_IMMEDIATE_KEYWORDS")),
+            _MAIN_IMMEDIATE_FROZEN,
+        )
 
     def test_the_angry_table_is_mains_verbatim(self):
-        self.assertEqual(tuple(cls._ANGRY_KEYWORDS), _MAIN_ANGRY_FROZEN)
+        self.assertEqual(tuple(_canonical_value("_ANGRY_KEYWORDS")), _MAIN_ANGRY_FROZEN)
 
     def test_the_intent_sets_are_mains_verbatim(self):
-        self.assertEqual(cls._SENSITIVE_INTENTS, _MAIN_SENSITIVE_INTENTS_FROZEN)
-        self.assertEqual(cls._HIGH_INTENTS, _MAIN_HIGH_INTENTS_FROZEN)
-        self.assertEqual(cls._HIGH_SENSITIVE_INTENTS,
+        self.assertEqual(_canonical_value("_SENSITIVE_INTENTS"),
+                         _MAIN_SENSITIVE_INTENTS_FROZEN)
+        self.assertEqual(_canonical_value("_HIGH_INTENTS"), _MAIN_HIGH_INTENTS_FROZEN)
+        self.assertEqual(_canonical_value("_HIGH_SENSITIVE_INTENTS"),
                          _MAIN_HIGH_SENSITIVE_INTENTS_FROZEN)
 
     def test_the_high_sensitive_pattern_is_mains_verbatim(self):
-        self.assertEqual(cls._MAIN_HIGH_SENSITIVE_PATTERN.pattern,
+        self.assertEqual(_canonical_value("_MAIN_HIGH_SENSITIVE_PATTERN").pattern,
                          _MAIN_HIGH_SENSITIVE_FROZEN)
 
     def test_the_high_table_is_mains_verbatim_but_for_the_followup_rule(self):
@@ -176,9 +356,10 @@ class MainsRulesArePreservedTests(unittest.TestCase):
         # - the only super-linear pattern in main's whole table - and it moved
         # to _FOLLOWUP_PATTERN, which has none. That is only safe if the
         # replacement is a strict superset; the next test proves it is.
-        missing = [p for p in _MAIN_HIGH_FROZEN if p not in cls._MAIN_HIGH_KEYWORDS]
+        main_high = _canonical_value("_MAIN_HIGH_KEYWORDS")
+        missing = [p for p in _MAIN_HIGH_FROZEN if p not in main_high]
         self.assertEqual(missing, [_MAIN_FOLLOWUP_KEYWORD_FROZEN])
-        added = [p for p in cls._MAIN_HIGH_KEYWORDS if p not in _MAIN_HIGH_FROZEN]
+        added = [p for p in main_high if p not in _MAIN_HIGH_FROZEN]
         self.assertEqual(added, [], "main's HIGH table gained a rule it never had")
 
     def test_the_ported_followup_rule_subsumes_mains(self):
@@ -198,7 +379,7 @@ class MainsRulesArePreservedTests(unittest.TestCase):
                     if mains.search(text):
                         checked += 1
                         self.assertIsNotNone(
-                            cls._FOLLOWUP_PATTERN.search(text),
+                            _canonical_value("_FOLLOWUP_PATTERN").search(text),
                             f"main's follow-up rule fires on {text!r} and the "
                             f"replacement does not")
         self.assertGreater(checked, 50, "the subsumption probe matched nothing")
@@ -206,7 +387,7 @@ class MainsRulesArePreservedTests(unittest.TestCase):
     def test_the_followup_replacement_has_no_star(self):
         # The reason the swap was allowed at all. Main's ".*" is what made the
         # length cap look necessary in the first place.
-        self.assertNotIn(".*", cls._FOLLOWUP_PATTERN.pattern)
+        self.assertNotIn(".*", _canonical_value("_FOLLOWUP_PATTERN").pattern)
 
 
 class MainViewIsNeverNarrowedTests(unittest.TestCase):
@@ -238,7 +419,7 @@ class MainViewIsNeverNarrowedTests(unittest.TestCase):
             for offset in (cut - 200, cut, cut + 5_000):
                 msg = f"{body[:offset]}\n\n{complaint}\n\n{body[offset:]}"
                 with self.subTest(complaint=complaint, offset=offset):
-                    self.assertGreater(len(msg), cls._MAX_SCAN_CHARS,
+                    self.assertGreater(len(msg), _canonical_value("_MAX_SCAN_CHARS"),
                                        "probe must exceed the cap to prove anything")
                     self.assertEqual(_c(msg)["priority"], want)
 
@@ -251,22 +432,24 @@ class MainViewIsNeverNarrowedTests(unittest.TestCase):
     def test_mains_view_is_built_from_the_payload_not_the_bounded_text(self):
         # Structural, so it survives any rewording of the probes above.
         seen = {}
-        original = cls._find_matches_any
+        owner = _canonical_owner("_find_matches_any")
+        original = getattr(owner, "_find_matches_any")
 
         def spy(views, patterns):
-            if patterns is cls._MAIN_IMMEDIATE_KEYWORDS:
+            if patterns is _canonical_value("_MAIN_IMMEDIATE_KEYWORDS"):
                 seen["views"] = views
             return original(views, patterns)
 
-        cls._find_matches_any = spy
+        setattr(owner, "_find_matches_any", spy)
         try:
             body = "x" * (cls._MAX_SCAN_CHARS + 5_000)
             _c(body + " damaged")
         finally:
-            cls._find_matches_any = original
+            setattr(owner, "_find_matches_any", original)
         self.assertTrue(seen["views"])
-        self.assertNotIn(cls._TRUNCATION_SENTINEL, seen["views"][0])
-        self.assertGreater(len(seen["views"][0]), cls._MAX_SCAN_CHARS)
+        self.assertNotIn(_canonical_value("_TRUNCATION_SENTINEL"), seen["views"][0])
+        self.assertGreater(
+            len(seen["views"][0]), _canonical_value("_MAX_SCAN_CHARS"))
 
     def test_a_word_char_apostrophe_does_not_lose_a_main_match(self):
         # U+02BC is a \w character, "'" is not, so folding it BREAKS main's
@@ -393,15 +576,18 @@ class MainRuleReadSitesTests(unittest.TestCase):
         ]
         seen: list[list[str]] = []
         labels: set[str] = set()
-        orig_find, orig_search = cls._find_matches_any, cls._search_any
+        find_owner = _canonical_owner("_find_matches_any")
+        search_owner = _canonical_owner("_search_any")
+        orig_find = getattr(find_owner, "_find_matches_any")
+        orig_search = getattr(search_owner, "_search_any")
         main_tables = {
-            id(cls._MAIN_IMMEDIATE_KEYWORDS): "immediate",
-            id(cls._MAIN_HIGH_KEYWORDS): "high",
-            id(cls._ANGRY_KEYWORDS): "angry",
+            id(_canonical_value("_MAIN_IMMEDIATE_KEYWORDS")): "immediate",
+            id(_canonical_value("_MAIN_HIGH_KEYWORDS")): "high",
+            id(_canonical_value("_ANGRY_KEYWORDS")): "angry",
         }
         main_patterns = {
-            id(cls._FOLLOWUP_PATTERN): "followup",
-            id(cls._MAIN_HIGH_SENSITIVE_PATTERN): "high_sensitive",
+            id(_canonical_value("_FOLLOWUP_PATTERN")): "followup",
+            id(_canonical_value("_MAIN_HIGH_SENSITIVE_PATTERN")): "high_sensitive",
         }
 
         def find_spy(views, patterns):
@@ -418,12 +604,14 @@ class MainRuleReadSitesTests(unittest.TestCase):
                 seen.append(views)
             return orig_search(views, pattern)
 
-        cls._find_matches_any, cls._search_any = find_spy, search_spy
+        setattr(find_owner, "_find_matches_any", find_spy)
+        setattr(search_owner, "_search_any", search_spy)
         try:
             for probe in probes:
                 _c(probe)
         finally:
-            cls._find_matches_any, cls._search_any = orig_find, orig_search
+            setattr(find_owner, "_find_matches_any", orig_find)
+            setattr(search_owner, "_search_any", orig_search)
 
         self.assertEqual(
             labels,
@@ -488,12 +676,22 @@ class MixedCaseShoutingTests(unittest.TestCase):
                 self.assertGreaterEqual(_RANK[_c(message)["priority"]], _RANK[HIGH])
 
     def test_tightening_the_ratio_breaks_partial_shouting(self):
-        original = cls._SHOUT_MIN_RATIO
+        # Keep this seam probe free of ordinary classifier keywords. The
+        # broader PARTIAL corpus intentionally contains real complaint words,
+        # but those would remain HIGH/IMMEDIATE after the shout threshold is
+        # tightened and would make the mutation test vacuous.
+        ratio_only = [
+            "this is SHOCKING I WANT HELP NOW PLEASE",
+            "this is RIDICULOUS I WANT HELP NOW PLEASE",
+            "this is FUMING I WANT HELP NOW PLEASE",
+        ]
+        for message in ratio_only:
+            self.assertGreaterEqual(_RANK[_c(message)["priority"]], _RANK[HIGH])
+        owner, original = _set_canonical("_SHOUT_MIN_RATIO", 0.95)
         try:
-            cls._SHOUT_MIN_RATIO = 0.95
-            tightened = [_c(m)["priority"] for m in self.PARTIAL]
+            tightened = [_c(m)["priority"] for m in ratio_only]
         finally:
-            cls._SHOUT_MIN_RATIO = original
+            setattr(owner, "_SHOUT_MIN_RATIO", original)
         self.assertIn(NORMAL, tightened,
                       "the ratio is not load-bearing in the tightening "
                       "direction - every probe here must be 100% caps")
@@ -602,12 +800,13 @@ class AuditTrailTests(unittest.TestCase):
             if message == "Classifier: IMMEDIATE":
                 captured.update(fields)
 
-        original = cls.log_event
-        cls.log_event = spy
+        owner = _canonical_owner("log_event")
+        original = getattr(owner, "log_event")
+        setattr(owner, "log_event", spy)
         try:
             _c("The romper arrived damaged and I want a refund")
         finally:
-            cls.log_event = original
+            setattr(owner, "log_event", original)
         self.assertIn("context", captured)
         self.assertTrue(captured["context"], "log carried no match context")
         self.assertTrue(any("damaged" in c for c in captured["context"]))
@@ -647,13 +846,14 @@ class AuditTrailTests(unittest.TestCase):
             if message.startswith("Classifier: "):
                 captured.update(fields)
 
-        original = cls.log_event
-        cls.log_event = spy
+        owner = _canonical_owner("log_event")
+        original = getattr(owner, "log_event")
+        setattr(owner, "log_event", spy)
         try:
             _c("The romper arrived\ndamaged\r\nand someone\nelse's order was in "
                "the box, I want a\nrefund")
         finally:
-            cls.log_event = original
+            setattr(owner, "log_event", original)
         for key in ("matched", "context"):
             for value in (captured.get(key) or []):
                 self.assertNotRegex(str(value), r"[\r\n\t]",
@@ -668,125 +868,6 @@ class BuiltInSelfTestTests(unittest.TestCase):
         ok, total = cls._selftest()
         self.assertTrue(ok, "classifier self-test reported failures")
         self.assertGreater(total, 50)
-
-
-# Every pattern this port adds, paired with a message that exercises it.
-# The mutation test below removes each pattern in turn and asserts its exemplar
-# stops escalating - so a rule that is already covered by a pre-existing
-# pattern, or an exemplar that fires some OTHER rule, both fail loudly.
-# Code review of the first version found 31 of 62 new patterns were deletable
-# with the whole suite still green.
-STRONG_EXEMPLARS = {
-    r"\bcharge\s?-?\s?back\b": "I will charge back the payment.",
-    r"\bcharged\s+back\b": "I have charged back the payment.",
-    r"\breverse\s+the\s+(charge|payment)\b": "Please reverse the charge.",
-    r"\bdisput(?:ing|ed)\b": "I am disputing this with my bank.",
-    r"\bcontest\s+the\s+charge\b": "I will contest the charge.",
-    r"\b(?:did\s+not|didn'?t|never|have\s+not|haven'?t)\s+authoris?z?e\w*\b":
-        "I never authorised this payment.",
-    r"\bunauthoris(?:ed|ing)\s+(charge|transaction|payment)\b":
-        "There is an unauthorised transaction on my card.",
-    r"\bunauthorized\s+transaction\b": "There is an unauthorized transaction.",
-    r"\bfraudulent\b": "This looks fraudulent.",
-    r"\bscamm(?:ed|er)\b": "I have been scammed.",
-    '\\b(?:is|was|are|were|be|what)\\s+(?:a|an)\\s+rip[\\s-]?off\\b':
-        "This is a rip off.",
-    '\\b(?:total|complete|absolute|utter|proper|such\\s+a)\\s+rip[\\s-]?off\\b':
-        "Total rip-off.",
-    '\\brip[\\s-]?off\\s+(?:price|prices|merchant|merchants|company|site|shop)\\b':
-        "Rip off merchants, the lot of you.",
-    '\\bripped\\s+(?:me|us)\\s+off\\b':
-        "You ripped me off.",
-    r"\bstole\s+my\s+money\b": "They stole my money.",
-    r"\b(?:want|give\s+me|return)\s+my\s+money\b": "I want my money.",
-    r"\byou\s+stole\b": "You stole from me.",
-    '\\b(?:this|that|it)\\s+is\\s+theft\\b':
-        "This is theft.",
-    '\\breport(?:ing)?\\s+(?:this\\s+)?(?:as\\s+)?theft\\b':
-        "I am reporting this as theft.",
-    '\\byou\\s+(?:have\\s+)?stolen\\b':
-        "You have stolen from me.",
-    r"\bsuing\b": "I am suing.",
-    r"\blegal\s+counsel\b": "I have retained legal counsel.",
-    r"\bcease\s+and\s+desist\b": "Consider this a cease and desist.",
-    r"\bfile\s+a\s+complaint\b": "I will file a complaint.",
-    r"\b(?:is\s?n'?t|was\s?n'?t|not)\s+what\s+i\s+ordered\b":
-        "This isn't what I ordered.",
-    r"\b(?:got|sent|received)\s+the\s+wrong\b": "She received the wrong bag.",
-    '\\b(?:items?|parcel|package|box|order|name|address|label)\\b[^.!?]{0,30}\\bnot\\s+mine\\b':
-        "The items in the box are not mine.",
-    r"\bnot\s+as\s+described\b": "It is not as described.",
-    r"\blooks?\s+nothing\s+like\b": "It looks nothing like it.",
-    r"\bnothing\s+like\s+the\s+(photo|picture|listing|description|website)\b":
-        "Nothing like the photo.",
-    '\\bbut\\s+(?:i\\s+)?got\\s+(?:a|an|the)\\s(?!error|message|email|reply|response|notification|code|discount|confirmation|receipt|voucher|refund|call|text)':
-        "I picked blue but got a pink one.",
-    '\\bbut\\s+received\\s+(?:a|an|the)\\s(?!error|message|email|reply|response|notification|code|discount|confirmation|receipt|voucher|refund|call|text)':
-        "I picked blue but received a pink one.",
-    r"\binstead\s+i\s+got\b": "Instead I got the gown.",
-    r"\bcracked\b": "It is cracked.",
-    r"\bshattered\b": "It is shattered.",
-    r"\bfrayed\b": "The hem is frayed.",
-    r"\bfell\s+apart\b": "It fell apart.",
-    r"\bseam\s+ripped\b": "The seam ripped.",
-    r"\b(?:did\s+not|didn'?t)\s+come\s+with\b": "It didn't come with the bib.",
-    r"\b(?:marked|says|shows|tracking\s+says)\s+(?:it\s+was\s+|as\s+)?delivered\s+but\b":
-        "It is marked delivered but I have not seen it.",
-    r"\bnothing\s+(?:is\s+)?here\b": "The courier says delivered, nothing is here.",
-}
-
-# Weak rules need order/delivery context, so every exemplar supplies some.
-WEAK_EXEMPLARS = {
-    r"\bmissing\b": "One item is missing from the parcel.",
-    r"\blost\b": "My parcel seems lost.",
-    r"\bwithout\s+the\b": "The set arrived without the headband.",
-    r"\bnot\s+included\b": "The hat was not included in my order.",
-    r"\bwas\s?n'?t\s+included\b": "The hat wasn't included in my order.",
-    r"\bleft\s+out\b": "The socks were left out of the box.",
-    r"\bsupposed\s+to\s+include\b": "My order was supposed to include a bib.",
-    r"\bdifferent\s+item\b": "My parcel held a completely different item.",
-    r"\binstead\s+of\s+the\b": "My parcel held the gown instead of the romper.",
-    r"\bripped\b": "The parcel held a ripped bodysuit.",
-    r"\bstained\b": "My order held a stained bib.",
-    '\\ba\\s+(?:hole|rip|tear|stain)\\b(?!-)(?!\\s*(?:-\\s*)?away)':
-        "My parcel held a top with a stain.",
-    '\\b(?:hole|rip|tear|stain)\\b(?!-)\\s+(?:in|on)\\b':
-        "My parcel held a top with holes, hole in the arm.",
-    '\\b(?:for|to|belongs?\\s+to|addressed\\s+to|labell?ed\\s+(?:for|to)|meant\\s+for)\\s+another\\s+customer\\b':
-        "The box is labelled for another customer.",
-    "\\banother\\s+customer'?s\\s+(?:order|name|parcel|package|box|address|details|items?)\\b":
-        "The parcel has another customer's name on it.",
-    "\\bsomeone\\s+else'?s?\\s+(order|items?|package|parcel|box)\\b":
-        "The box holds someone else's order.",
-}
-
-# The HIGH-tier rules this port added. Non-delivery sits at HIGH rather than
-# IMMEDIATE on purpose: "I still haven't received it" is the commonest WISMO
-# wording, and every one of those would otherwise page the owner.
-PORTED_HIGH_EXEMPLARS = {
-    r"\b(?:has\s?n'?t|has\s+not|have\s+not|have\s?n'?t)\s+(?:arrived|turned\s+up|shown\s+up)\b":
-        "My parcels haven't arrived.",
-    r"\bstill\s+(?:has\s?n'?t|have\s?n'?t|not)\s+(?:arrived|come|received)\b":
-        "It still hasn't come.",
-    r"\bnot\s+(?:been\s+)?delivered\b": "It was not delivered.",
-    r"\bnothing\s+(?:has\s+|had\s+)?(?:arrived|come|turned\s+up|showed\s+up|been\s+delivered)\b":
-        "Nothing has arrived.",
-    r"\bwhere\s+my\s+(?:order|parcel|package|delivery|items?|stuff)\s+(?:is|are)\b":
-        "Do you know where my parcel is?",
-}
-
-MANAGER_EXEMPLARS = {
-    r"\b(?:speak|talk)\s+to\s+(?:a|your|the)\s+(?:manager|supervisor|owner)\b":
-        "Let me talk to a manager.",
-    r"\bget\s+me\s+(?:a|your|the)\s+(?:manager|supervisor|owner)\b":
-        "Get me a manager.",
-    r"\bwant\s+(?:a|to\s+speak\s+to\s+a)\s+manager\b": "I want a manager.",
-    r"\byour\s+supervisor\b": "Put me through to your supervisor.",
-    r"\bi\s+demand\b": "I demand an answer.",
-    r"\b(?:owner|manager|supervisor)'?s?\s+(?:personal\s+)?"
-    r"(?:phone|number|cell|mobile|email|address)\b":
-        "Give me the owner's personal phone number.",
-}
 
 
 class SelfTestCorpusTests(unittest.TestCase):
@@ -805,131 +886,140 @@ class SelfTestCorpusTests(unittest.TestCase):
 
 
 class EveryNewRuleIsLoadBearingTests(unittest.TestCase):
-    """Mutation test: remove one new rule, its exemplar must stop escalating.
+    """Every labelled rule has evidence, with narrow legacy exceptions."""
 
-    This is what stops the suite drifting into vacuity. Adding a pattern
-    without an exemplar fails `test_every_new_pattern_has_an_exemplar`;
-    adding one that some other rule already covers fails the mutation check.
-    """
-
-    # Several tables are split in two at runtime - main's original rules and
-    # the ones this port added read DIFFERENT views of the ticket - so
-    # patching only the combined name is a no-op, and the mutation test would
-    # pass while proving nothing. It did exactly that once already.
-    _SPLIT_TABLES = {
-        "_WEAK_IMMEDIATE": (
-            "_WEAK_IMMEDIATE", "_WEAK_UNGUARDED", "_WEAK_DAMAGE",
-            "_WEAK_OMISSION"),
-        "_IMMEDIATE_KEYWORDS": (
-            "_IMMEDIATE_KEYWORDS", "_MAIN_IMMEDIATE_KEYWORDS",
-            "_PORT_IMMEDIATE_KEYWORDS"),
-        "_HIGH_KEYWORDS": (
-            "_HIGH_KEYWORDS", "_MAIN_HIGH_KEYWORDS", "_PORT_HIGH_KEYWORDS"),
+    _FLAT_TABLE_NAMES = {
+        "immediate.main": "_MAIN_IMMEDIATE_KEYWORDS",
+        "immediate.port": "_PORT_IMMEDIATE_KEYWORDS",
+        "weak.damage": "_WEAK_DAMAGE",
+        "weak.omission": "_WEAK_OMISSION",
+        "high.main": "_MAIN_HIGH_KEYWORDS",
+        "high.port": "_PORT_HIGH_KEYWORDS",
+        "manager": "_MANAGER_DEMAND_KEYWORDS",
+        "angry": "_ANGRY_KEYWORDS",
     }
 
-    # Tables classify() never consults. A pattern surviving in one of these is
-    # harmless, so the leak guard below ignores them.
-    _NOT_READ_BY_CLASSIFY = frozenset({"_PORTED_HIGH_PATTERNS"})
+    # These are the only rules whose removal cannot lower the exemplar. The
+    # first three are explicit frozen-main lexical/context overlaps: the
+    # ported ``charge back`` regex also accepts ``chargeback``, ``refund`` is
+    # nested in ``issue a refund``, and the contextual weak ``lost`` rule
+    # remains live for a ``lost package``. The anger table is an auxiliary
+    # signal: it contributes to the angry count but never starts escalation,
+    # so its truthful exemplars include a primary sensitive signal.
+    _FROZEN_RULE_EXCEPTIONS = {
+        "immediate.main": frozenset({
+            r"\bchargeback\b",
+            r"\bissue\s+a\s+refund\b",
+            r"\blost\s+(package|parcel|order|shipment)\b",
+        }),
+        "angry": frozenset({
+            r"\b(angry|furious|outraged|disgusted|appalled|unacceptable)\b",
+            r"\b(terrible|horrible|awful|worst)\b",
+            r"\bnever\s+(shopping|buying|ordering)\s+(here|from\s+you)\b",
+            r"\b(bbb|better\s+business\s+bureau|consumer\s+protection|small\s+claims)\b",
+            r"\b(lawsuit|sue|legal\s+action|attorney|lawyer)\b",
+            r"\b(scam|fraud|rip\s?off|robbed)\b",
+        }),
+    }
 
-    def _classify_without(self, attr: str, pattern: str, message: str) -> str:
-        targets = list(self._SPLIT_TABLES.get(attr, (attr,)))
-        originals = {name: getattr(cls, name) for name in targets}
+    def _rules(self):
+        tables = _canonical_value("RULE_TABLES")
+        flat_tables = _canonical_value("RULE_PATTERN_TABLES")
+        self.assertEqual(set(tables), set(self._FLAT_TABLE_NAMES))
+        self.assertEqual(set(flat_tables), set(tables))
+        for table_name, rules in tables.items():
+            with self.subTest(table=table_name):
+                self.assertIsInstance(rules, list)
+                self.assertIs(flat_tables[table_name],
+                              _canonical_value(self._FLAT_TABLE_NAMES[table_name]))
+                self.assertEqual([rule.pattern for rule in rules], flat_tables[table_name])
+        return tables
+
+    def _classify_without(self, table_name: str, index: int) -> str:
+        tables = self._rules()
+        rules = tables[table_name]
+        patterns = _canonical_value("RULE_PATTERN_TABLES")[table_name]
+        original_rules = rules[:]
+        original_patterns = patterns[:]
+        rule = rules[index]
+        rules.pop(index)
+        patterns.pop(index)
         try:
-            for name, original in originals.items():
-                setattr(cls, name, [p for p in original if p != pattern])
-
-            # Leak guard. If the pattern is still reachable from any table
-            # classify() reads, the mutation did nothing and the caller's
-            # assertion proves nothing. This fires the moment someone splits
-            # another table without adding it to _SPLIT_TABLES above.
-            leaked = sorted(
-                name for name in dir(cls)
-                if name.startswith("_") and name not in self._NOT_READ_BY_CLASSIFY
-                and isinstance(getattr(cls, name, None), (list, tuple))
-                and pattern in getattr(cls, name)
-            )
-            self.assertEqual(
-                leaked, [],
-                f"mutation of {attr} is a no-op: {pattern!r} is still live in "
-                f"{leaked} - add them to _SPLIT_TABLES",
-            )
-            return _c(message)["priority"]
+            return _c(rule.exemplar)["priority"]
         finally:
-            for name, original in originals.items():
-                setattr(cls, name, original)
+            rules[:] = original_rules
+            patterns[:] = original_patterns
 
     def test_ported_high_tuple_is_derived_not_retyped(self):
-        # _PORTED_HIGH_PATTERNS is exempt from the leak guard above, so pin it
-        # to the real table instead - a hand-copied version drifted once.
-        self.assertEqual(cls._PORTED_HIGH_PATTERNS, tuple(cls._PORT_HIGH_KEYWORDS))
-
-    def test_split_tables_still_compose_the_combined_ones(self):
+        # Keep this legacy tuple as a derived compatibility view, not a second
+        # source of ported HIGH metadata.
         self.assertEqual(
-            cls._IMMEDIATE_KEYWORDS,
-            cls._MAIN_IMMEDIATE_KEYWORDS + cls._PORT_IMMEDIATE_KEYWORDS)
+            _canonical_value("_PORTED_HIGH_PATTERNS"),
+            tuple(_canonical_value("_PORT_HIGH_KEYWORDS")),
+        )
+
+    def test_flattened_tables_still_compose_the_combined_ones(self):
         self.assertEqual(
-            cls._HIGH_KEYWORDS,
-            cls._MAIN_HIGH_KEYWORDS + cls._PORT_HIGH_KEYWORDS)
+            _canonical_value("_IMMEDIATE_KEYWORDS"),
+            _canonical_value("_MAIN_IMMEDIATE_KEYWORDS")
+            + _canonical_value("_PORT_IMMEDIATE_KEYWORDS"))
         self.assertEqual(
-            cls._WEAK_IMMEDIATE,
-            cls._WEAK_UNGUARDED + cls._WEAK_DAMAGE + cls._WEAK_OMISSION)
+            _canonical_value("_HIGH_KEYWORDS"),
+            _canonical_value("_MAIN_HIGH_KEYWORDS")
+            + _canonical_value("_PORT_HIGH_KEYWORDS"))
+        self.assertEqual(
+            _canonical_value("_WEAK_IMMEDIATE"),
+            _canonical_value("_WEAK_UNGUARDED")
+            + _canonical_value("_WEAK_DAMAGE")
+            + _canonical_value("_WEAK_OMISSION"))
 
-    def test_removing_a_ported_high_rule_stops_its_exemplar_escalating(self):
-        for pattern, message in PORTED_HIGH_EXEMPLARS.items():
-            with self.subTest(pattern=pattern):
-                self.assertEqual(_c(message)["priority"], HIGH, message)
-                self.assertLess(
-                    _RANK[self._classify_without("_HIGH_KEYWORDS", pattern, message)],
-                    _RANK[HIGH],
-                    f"{pattern!r} is dead code - {message!r} is unchanged without it",
-                )
+    def test_every_rule_has_metadata_and_a_truthful_exemplar(self):
+        tables = self._rules()
+        for table_name, rules in tables.items():
+            for rule in rules:
+                with self.subTest(table=table_name, pattern=rule.pattern):
+                    self.assertTrue(rule.pattern.strip())
+                    self.assertTrue(rule.exemplar.strip())
+                    self.assertIn(rule.view, {"filtered", "unfiltered"})
+                    self.assertIn(rule.tier, {HIGH, IMMEDIATE})
+                    self.assertIsNotNone(
+                        re.search(rule.pattern, rule.exemplar, re.IGNORECASE),
+                        f"exemplar does not exercise {rule.pattern!r}",
+                    )
+                    got = _c(rule.exemplar)["priority"]
+                    self.assertGreaterEqual(
+                        _RANK[got], _RANK[rule.tier],
+                        f"{table_name} exemplar classified {got}: {rule.exemplar!r}",
+                    )
 
-    def test_every_new_pattern_has_an_exemplar(self):
-        covered = (set(STRONG_EXEMPLARS) | set(WEAK_EXEMPLARS)
-                   | set(MANAGER_EXEMPLARS) | set(PORTED_HIGH_EXEMPLARS))
-        for pattern in cls._PORTED_HIGH_PATTERNS:
-            self.assertIn(pattern, covered, f"ported HIGH rule has no exemplar: {pattern}")
-            self.assertIn(pattern, cls._HIGH_KEYWORDS,
-                          f"exemplar names a HIGH pattern not in the table: {pattern}")
-        # Only the patterns this port added need exemplars. Main's originals
-        # start above the ported block; compare against the known lists.
-        for pattern in cls._WEAK_IMMEDIATE:
-            self.assertIn(pattern, covered, f"weak rule has no exemplar: {pattern}")
-        for pattern in cls._MANAGER_DEMAND_KEYWORDS:
-            self.assertIn(pattern, covered, f"manager rule has no exemplar: {pattern}")
-        for pattern in STRONG_EXEMPLARS:
-            self.assertIn(pattern, cls._IMMEDIATE_KEYWORDS,
-                          f"exemplar names a pattern that is not in the table: {pattern}")
+    def test_every_non_exception_rule_is_load_bearing(self):
+        tables = self._rules()
+        exceptions = self._FROZEN_RULE_EXCEPTIONS
+        for table_name, rules in tables.items():
+            for index, rule in enumerate(rules):
+                with self.subTest(table=table_name, pattern=rule.pattern):
+                    before = _c(rule.exemplar)["priority"]
+                    after = self._classify_without(table_name, index)
+                    if rule.pattern in exceptions.get(table_name, ()):
+                        self.assertGreaterEqual(_RANK[after], _RANK[rule.tier])
+                    else:
+                        self.assertLess(
+                            _RANK[after], _RANK[before],
+                            f"{table_name} rule is not load-bearing: {rule.pattern!r}",
+                        )
 
-    def test_removing_a_strong_rule_stops_its_exemplar_escalating(self):
-        for pattern, message in STRONG_EXEMPLARS.items():
-            with self.subTest(pattern=pattern):
-                self.assertEqual(_c(message)["priority"], IMMEDIATE, message)
-                self.assertLess(
-                    _RANK[self._classify_without("_IMMEDIATE_KEYWORDS", pattern, message)],
-                    _RANK[IMMEDIATE],
-                    f"{pattern!r} is dead code - {message!r} is unchanged without it",
-                )
-
-    def test_removing_a_weak_rule_stops_its_exemplar_escalating(self):
-        for pattern, message in WEAK_EXEMPLARS.items():
-            with self.subTest(pattern=pattern):
-                self.assertEqual(_c(message)["priority"], IMMEDIATE, message)
-                self.assertLess(
-                    _RANK[self._classify_without("_WEAK_IMMEDIATE", pattern, message)],
-                    _RANK[IMMEDIATE],
-                    f"{pattern!r} is dead code - {message!r} is unchanged without it",
-                )
-
-    def test_removing_a_manager_rule_stops_its_exemplar_escalating(self):
-        for pattern, message in MANAGER_EXEMPLARS.items():
-            with self.subTest(pattern=pattern):
-                self.assertEqual(_c(message)["priority"], IMMEDIATE, message)
-                self.assertLess(
-                    _RANK[self._classify_without("_MANAGER_DEMAND_KEYWORDS", pattern, message)],
-                    _RANK[IMMEDIATE],
-                    f"{pattern!r} is dead code - {message!r} is unchanged without it",
-                )
+    def test_frozen_exceptions_are_exactly_documented(self):
+        tables = self._rules()
+        actual: dict[str, set[str]] = {}
+        for table_name, rules in tables.items():
+            for index, rule in enumerate(rules):
+                before = _c(rule.exemplar)["priority"]
+                after = self._classify_without(table_name, index)
+                if _RANK[after] >= _RANK[before]:
+                    actual.setdefault(table_name, set()).add(rule.pattern)
+        actual = {table_name: frozenset(patterns)
+                  for table_name, patterns in actual.items()}
+        self.assertEqual(actual, self._FROZEN_RULE_EXCEPTIONS)
 
 
 class WeakRulesNeedContextTests(unittest.TestCase):
@@ -992,6 +1082,18 @@ class WeakRulesNeedContextTests(unittest.TestCase):
         ]:
             with self.subTest(message=message[:50]):
                 self.assertEqual(_c(message)["priority"], NORMAL)
+
+    def test_demonstrative_were_questions_do_not_hide_missing_or_lost(self):
+        """T-FIX-3 must preserve the pre-split browsing-guard grammar."""
+        for message in (
+            "Were this missing from my order?",
+            "Were that lost in my parcel?",
+        ):
+            with self.subTest(message=message):
+                result = _c(message)
+                self.assertEqual(result["priority"], IMMEDIATE)
+                self.assertTrue(result["sensitive"])
+                self.assertTrue(result["should_notify_owner"])
 
     def test_a_politely_phrased_complaint_still_escalates(self):
         """The browsing guard must yield to a real delivery problem."""
@@ -1648,13 +1750,17 @@ class ReDoSTests(unittest.TestCase):
     def _guarded_modules():
         """Every module whose regexes run on attacker-controlled ticket text.
 
-        THREE modules, not one. The previous version read only the classifier,
-        and TWO of the six historical bombs lived in draft_cleaner - so
-        appending a quadratic to _SUBJECT_NOISE_RE left the whole suite green.
+        The classifier is a package now, so every fully-qualified classifier
+        submodule is included. The previous version read only the facade, and
+        two historical bombs lived in draft_cleaner - so appending a quadratic
+        to a helper module left the whole suite green.
         """
         import importlib
 
-        modules = [("classifier", cls)]
+        modules = [
+            (name, importlib.import_module(name))
+            for name in _classifier_package_module_names()
+        ]
         for name in ("draft_cleaner", "hermes_runner"):
             try:
                 modules.append((name, importlib.import_module(name)))
@@ -1670,7 +1776,15 @@ class ReDoSTests(unittest.TestCase):
     def _importable_guarded_modules() -> set:
         import importlib
 
-        found = {"classifier"}
+        found = set(_classifier_package_module_names())
+        # Import each discovered classifier module here too. This makes a new
+        # file fail as an import/coverage error rather than silently dropping
+        # out of the scan.
+        for name in sorted(found):
+            try:
+                importlib.import_module(name)
+            except ImportError as exc:
+                raise AssertionError(f"classifier submodule {name} is not importable") from exc
         for name in ("draft_cleaner", "hermes_runner"):
             try:
                 importlib.import_module(name)
@@ -1708,11 +1822,18 @@ class ReDoSTests(unittest.TestCase):
             # cost of skipping one that is was six production bombs.
             if cls_._looks_like_a_regex(value):
                 yield label, value, value
-        elif isinstance(value, dict):
+        elif dataclasses.is_dataclass(value) and not isinstance(value, type):
+            for field in dataclasses.fields(value):
+                yield from cls_._walk(
+                    f"{label}.{field.name}", getattr(value, field.name),
+                    depth + 1, seen)
+        elif isinstance(value, Mapping):
             for key, item in value.items():
                 yield from cls_._walk(f"{label}[{key!r}]", key, depth + 1, seen)
                 yield from cls_._walk(f"{label}[{key!r}]", item, depth + 1, seen)
-        elif isinstance(value, (list, tuple, set, frozenset)):
+        elif isinstance(value, (Sequence, Set, frozenset)) and not isinstance(
+            value, (str, bytes, bytearray)
+        ):
             for i, item in enumerate(value):
                 yield from cls_._walk(f"{label}[{i}]", item, depth + 1, seen)
 
@@ -2045,6 +2166,10 @@ class ReDoSTests(unittest.TestCase):
     def _every_pattern(cls_):
         """(name, value, pattern-string) for every regex in every module."""
         seen_patterns = set()
+        scanned_modules = {
+            name for name, _module in cls_._guarded_modules()
+        }
+        cls_._last_scanned_modules = scanned_modules
         for mod_name, module in cls_._guarded_modules():
             for name, value in vars(module).items():
                 if name.startswith("__"):
@@ -2057,13 +2182,18 @@ class ReDoSTests(unittest.TestCase):
             if item[2] not in seen_patterns:
                 seen_patterns.add(item[2])
                 yield item
+        # The coverage test checks the exact module identities visited even
+        # when a module currently has no regex.
 
     def test_the_guard_covers_every_module_that_reads_ticket_text(self):
-        seen = {name.split(".")[0] for name, _v, _p in self._every_pattern()}
-        self.assertEqual(seen, self._importable_guarded_modules(),
-                         "two of the six historical bombs were in "
-                         "draft_cleaner; a guard that only reads the "
-                         "classifier would not have seen them")
+        list(self._every_pattern())
+        seen = self._last_scanned_modules
+        self.assertEqual(
+            seen,
+            self._importable_guarded_modules(),
+            "the ReDoS guard did not visit every fully-qualified classifier "
+            "submodule and sibling text-processing module",
+        )
 
     # One live quadratic, in every container someone might reasonably reach
     # for. `\border\s*#?\s*\d` is the round-8 bug in the form it shipped in.
@@ -2426,7 +2556,7 @@ class LengthCapTests(unittest.TestCase):
         self.assertEqual(_c(body)["priority"], IMMEDIATE)
 
     def test_the_cap_is_big_enough_to_be_useful(self):
-        self.assertGreaterEqual(cls._MAX_SCAN_CHARS, 4000)
+        self.assertGreaterEqual(_canonical_value("_MAX_SCAN_CHARS"), 4000)
 
 
 class QuotedStoreTextTests(unittest.TestCase):
@@ -2527,20 +2657,28 @@ class BoilerplateFilterNeverDeescalatesTests(unittest.TestCase):
     def test_main_rules_read_the_unfiltered_text(self):
         # Direct structural check, so this survives a rewording of the cases.
         seen = {}
-        original = cls._find_matches
+        any_owner = _canonical_owner("_find_matches_any")
+        find_owner = _canonical_owner("_find_matches")
+        original_any = getattr(any_owner, "_find_matches_any")
+        original_find = getattr(find_owner, "_find_matches")
 
-        def spy(text, patterns):
-            if patterns is cls._MAIN_IMMEDIATE_KEYWORDS:
-                seen["main"] = text
-            elif patterns is cls._PORT_IMMEDIATE_KEYWORDS:
+        def any_spy(views, patterns):
+            if patterns is _canonical_value("_MAIN_IMMEDIATE_KEYWORDS"):
+                seen["main"] = views[0]
+            return original_any(views, patterns)
+
+        def find_spy(text, patterns):
+            if patterns is _canonical_value("_PORT_IMMEDIATE_KEYWORDS"):
                 seen["port"] = text
-            return original(text, patterns)
+            return original_find(text, patterns)
 
-        cls._find_matches = spy
+        setattr(any_owner, "_find_matches_any", any_spy)
+        setattr(find_owner, "_find_matches", find_spy)
         try:
             _c("I used the 20% off code and the dress arrived damaged.\n\nSarah")
         finally:
-            cls._find_matches = original
+            setattr(any_owner, "_find_matches_any", original_any)
+            setattr(find_owner, "_find_matches", original_find)
         self.assertIn("20% off", seen["main"])
         self.assertNotIn("20% off", seen["port"])
 
@@ -2695,12 +2833,11 @@ class TuningConstantTests(unittest.TestCase):
         probe = ("hello i am WAITING on a REPLY about one small thing and "
                  "otherwise it is all completely ok")
         self.assertEqual(_c(probe)["priority"], NORMAL)
-        original = cls._SHOUT_MIN_RATIO
+        owner, original = _set_canonical("_SHOUT_MIN_RATIO", 0.01)
         try:
-            cls._SHOUT_MIN_RATIO = 0.01
             loosened = _c(probe)["priority"]
         finally:
-            cls._SHOUT_MIN_RATIO = original
+            setattr(owner, "_SHOUT_MIN_RATIO", original)
         self.assertNotEqual(loosened, NORMAL,
                             "_SHOUT_MIN_RATIO can be dropped to 0.01 with no effect")
 
@@ -2709,12 +2846,11 @@ class TuningConstantTests(unittest.TestCase):
                  "THE WAY YOU TREAT ME but otherwise it is all ok and there is "
                  "nothing else i would change about any of it at the moment")
         self.assertEqual(_c(probe)["priority"], NORMAL)
-        original = cls._SUSTAINED_MIN_RATIO
+        owner, original = _set_canonical("_SUSTAINED_MIN_RATIO", 0.01)
         try:
-            cls._SUSTAINED_MIN_RATIO = 0.01
             loosened = _c(probe)["priority"]
         finally:
-            cls._SUSTAINED_MIN_RATIO = original
+            setattr(owner, "_SUSTAINED_MIN_RATIO", original)
         self.assertNotEqual(loosened, NORMAL,
                             "_SUSTAINED_MIN_RATIO can be dropped with no effect")
 
@@ -2739,7 +2875,7 @@ class TuningConstantTests(unittest.TestCase):
     def test_the_scan_window_covers_a_realistic_ticket(self):
         # 8000 was small enough to lose anything written in the MIDDLE of a
         # long thread, which was a strict de-escalation against main.
-        self.assertGreaterEqual(cls._MAX_SCAN_CHARS, 50_000)
+        self.assertGreaterEqual(_canonical_value("_MAX_SCAN_CHARS"), 50_000)
         body = ("Hi there, hope you are well. " * 250
                 + "The romper you sent arrived damaged and I would like a refund. "
                 + "Anyway, do you restock the sage range? " * 250)
@@ -2795,12 +2931,11 @@ class TuningConstantTests(unittest.TestCase):
 
     def test_the_negative_word_list_is_load_bearing(self):
         angry = "This is a disgrace!!! I am furious!!!"
-        original = cls._NEGATIVE_RE
+        owner, original = _set_canonical("_NEGATIVE_RE", re.compile(r"(?!x)x"))
         try:
-            cls._NEGATIVE_RE = re.compile(r"(?!x)x")   # never matches
             stubbed = _c("Lovely shop but this is a disgrace!!!")["priority"]
         finally:
-            cls._NEGATIVE_RE = original
+            setattr(owner, "_NEGATIVE_RE", original)
         self.assertNotEqual(stubbed, _c("Lovely shop but this is a disgrace!!!")["priority"],
                             "_NEGATIVE_RE can be stubbed out with no effect")
 
@@ -2836,7 +2971,7 @@ class AuditListTests(unittest.TestCase):
         six had, so make adding to it a decision rather than an edit.
         """
         self.assertEqual(
-            cls._WEAK_UNGUARDED, [],
+            _canonical_value("_WEAK_UNGUARDED"), [],
             "a rule here bypasses the browsing guard entirely - measure it "
             "against ordinary post-purchase traffic before adding it")
 

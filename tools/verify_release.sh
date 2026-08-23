@@ -119,7 +119,7 @@ esac
 "$PYTHON" -c 'import sys,types,unittest; requests=types.ModuleType("requests"); requests.get=lambda *a,**k: None; requests.post=lambda *a,**k: None; sys.modules["requests"]=requests; names=["feedback.tests.test_all","feedback.tests.test_retirement"]; suite=unittest.TestSuite(unittest.defaultTestLoader.loadTestsFromName(n) for n in names); result=unittest.TextTestRunner(verbosity=1).run(suite); raise SystemExit(not result.wasSuccessful())'
 "$PYTHON" -m unittest discover -s kb/tests -v
 "$PYTHON" -m unittest discover -s deploy/tests -v
-"$PYTHON" -m unittest tools.test_tool_contracts -v
+"$PYTHON" -m unittest tools.test_tool_contracts tools.test_compare_classifier -v
 PYTHONPATH="$ROOT_DIR/webhook/src${PYTHONPATH:+:$PYTHONPATH}" \
   "$PYTHON" -m unittest discover -s webhook -p 'test_notifications.py' -v
 if "$PYTHON" -c 'import aiosqlite' >/dev/null 2>&1; then
@@ -146,6 +146,20 @@ if [[ ${#processor_tests[@]} -eq 0 ]]; then
 fi
 echo "release gate: processor tests -> ${processor_tests[*]}"
 "$PROCESSOR_PYTHON" -m unittest "${processor_tests[@]}" -v
+
+# T-FIX-3 parity is a structural safety gate. Before the split lands there is
+# no new package to compare, so keep the pre-split tree explicitly green; once
+# processor/classifier/__init__.py exists, the fixed 10,000-case comparison is
+# mandatory and uses the processor interpreter's isolated workers.
+if [[ -f processor/classifier/__init__.py ]]; then
+  echo "release gate: classifier parity -> 10000 synthetic samples"
+  "$PROCESSOR_PYTHON" tools/compare_classifier.py \
+    --old processor/classifier.py \
+    --new processor/classifier/__init__.py \
+    --samples 10000
+else
+  echo "release gate: classifier parity skipped (T-FIX-3 package not present)"
+fi
 
 node --check whatsapp-connect/server.js
 node --test whatsapp-connect/test/security.test.js

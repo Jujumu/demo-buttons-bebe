@@ -1,0 +1,30 @@
+{
+  "sensitive": [
+    "refund/request",
+    "order/wrong",
+    "cancellation",
+    "payment-error",
+    "chargeback",
+    "dispute",
+    "refund",
+    "order/damaged",
+    "cancel",
+    "address-change",
+    "payment-dispute",
+    "order/missing"
+  ],
+  "high": [
+    "rush",
+    "urgent",
+    "cancel",
+    "cancellation",
+    "address-change",
+    "final-sale-exception"
+  ],
+  "high_sensitive": [
+    "cancel",
+    "cancellation",
+    "address-change",
+    "final-sale-exception"
+  ]
+}

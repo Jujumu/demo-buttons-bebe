@@ -1,0 +1,116 @@
+[
+  {
+    "pattern": "\\burgent\\b",
+    "exemplar": "This order is urgent and I need help.",
+    "tier": "high",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\basap\\b",
+    "exemplar": "Please send an update ASAP.",
+    "tier": "high",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\brush\\b",
+    "exemplar": "Please rush this order.",
+    "tier": "high",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\bexpress\\b",
+    "exemplar": "Can you ship this by express delivery?",
+    "tier": "high",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\bneed\\s+(it|them)\\s+(by|before|tomorrow|today|monday|tuesday|wednesday|thursday|friday)\\b",
+    "exemplar": "I need it by Friday for the party.",
+    "tier": "high",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\bdeadline\\b",
+    "exemplar": "I have a deadline for this order.",
+    "tier": "high",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\btime\\s+sensitive\\b",
+    "exemplar": "This request is time sensitive.",
+    "tier": "high",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\bchange\\s+(my\\s+)?(shipping\\s+)?address\\b",
+    "exemplar": "Please change my shipping address before dispatch.",
+    "tier": "high",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\bwrong\\s+address\\b",
+    "exemplar": "The delivery is going to the wrong address.",
+    "tier": "high",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\bupdate\\s+(my\\s+)?address\\b",
+    "exemplar": "Please update my address before shipping.",
+    "tier": "high",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\bnew\\s+address\\b",
+    "exemplar": "I have a new address for this order.",
+    "tier": "high",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\bcancel\\s+(my\\s+)?(order|item|purchase)\\b",
+    "exemplar": "Please cancel my order before it ships.",
+    "tier": "high",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\bcancellation\\b",
+    "exemplar": "I need help with an order cancellation.",
+    "tier": "high",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\bfinal\\s+sale\\b",
+    "exemplar": "Is this item final sale?",
+    "tier": "high",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\bno\\s+returns?\\b",
+    "exemplar": "Does this item have no returns?",
+    "tier": "high",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\bwhere\\s+is\\s+my\\s+(order|package|parcel)\\b",
+    "exemplar": "Where is my order?",
+    "tier": "high",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\b(haven'?t|have\\s+not)\\s+(received|gotten|seen)\\b",
+    "exemplar": "I haven't received my order yet.",
+    "tier": "high",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\bnot\\s+yet\\s+(received|arrived|delivered)\\b",
+    "exemplar": "My order is not yet delivered.",
+    "tier": "high",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\blast\\s+(chance|warning)\\b",
+    "exemplar": "This is my last chance to get the gift.",
+    "tier": "high",
+    "view": "unfiltered"
+  }
+]

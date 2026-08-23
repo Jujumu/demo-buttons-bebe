@@ -1,0 +1,56 @@
+[
+  {
+    "pattern": "\\bmissing\\b",
+    "exemplar": "One item is missing from the parcel.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\blost\\b",
+    "exemplar": "My parcel seems lost.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\bwithout\\s+the\\b",
+    "exemplar": "The set arrived without the headband.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\bnot\\s+included\\b",
+    "exemplar": "The hat was not included in my order.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\bwas\\s?n'?t\\s+included\\b",
+    "exemplar": "The hat wasn't included in my order.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\bleft\\s+out\\b",
+    "exemplar": "The socks were left out of the box.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\bsupposed\\s+to\\s+include\\b",
+    "exemplar": "My order was supposed to include a bib.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\bdifferent\\s+item\\b",
+    "exemplar": "My parcel held a completely different item.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\binstead\\s+of\\s+the\\b",
+    "exemplar": "My parcel held the gown instead of the romper.",
+    "tier": "immediate",
+    "view": "filtered"
+  }
+]
