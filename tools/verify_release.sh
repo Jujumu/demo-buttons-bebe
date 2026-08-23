@@ -17,6 +17,23 @@ fail() {
 
 cd "$ROOT_DIR"
 
+demo_mode="${DEMO_MODE:-}"
+if [[ -n "$demo_mode" && "$demo_mode" != "1" ]]; then
+  fail "DEMO_MODE must be unset or 1"
+fi
+
+if [[ "$demo_mode" == "1" ]]; then
+  demo_config="demo/verify_config.py"
+  demo_env="demo/.env.example"
+  [[ -f "$demo_config" ]] || fail "missing demo verifier: $demo_config"
+  [[ -f "$demo_env" ]] || fail "missing checked-in demo profile: $demo_env"
+  "$PYTHON" "$demo_config" "$demo_env" || \
+    fail "demo isolation verification failed for $demo_env"
+  # DEMO_MODE is a release-gate selector, not test-suite configuration. Keeping
+  # it exported would silently switch processor/webhook imports into demo mode.
+  unset DEMO_MODE
+fi
+
 for required in \
   "processor/pyproject.toml" \
   "processor/uv.lock" \
