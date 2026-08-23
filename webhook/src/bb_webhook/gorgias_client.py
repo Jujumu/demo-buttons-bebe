@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -24,13 +25,30 @@ class GorgiasClient:
         subdomain: str | None = None,
         email: str | None = None,
         api_key: str | None = None,
+        base_url: str | None = None,
     ):
         settings = get_settings()
         self.subdomain = subdomain or settings.gorgias_subdomain
         self.email = email or settings.gorgias_api_email
         self.api_key = api_key or settings.gorgias_api_key
-        self.base_url = f"https://{self.subdomain}.gorgias.com"
+        self.base_url = (base_url or settings.gorgias_base_url).rstrip("/")
         self._auth = (self.email, self.api_key) if self.email and self.api_key else None
+        if settings.demo_mode:
+            try:
+                parsed = urlsplit(self.base_url)
+                local_demo = (
+                    parsed.scheme == "http"
+                    and parsed.hostname in {"127.0.0.1", "localhost", "::1"}
+                    and parsed.port == 8190
+                    and parsed.username is None
+                    and parsed.password is None
+                    and not parsed.path.rstrip("/")
+                )
+            except (TypeError, ValueError):
+                local_demo = False
+            if not local_demo:
+                logger.error("Demo Gorgias request blocked: base URL is not localhost:8190")
+                self._auth = None
 
     # ── Public methods ─────────────────────────────────────
 
@@ -192,7 +210,7 @@ class GorgiasClient:
         if base is None and msgs_sorted:
             base = msgs_sorted[-1]
         base = base or {}
-        channel = base.get("channel") or ticket.get("channel") or "email"
+        channel = base.get("channel") or "email"
         src = base.get("source") or {}
         cust_from = src.get("from") or {}
         our_to = src.get("to") or []

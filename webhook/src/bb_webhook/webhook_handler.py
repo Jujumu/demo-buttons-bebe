@@ -21,6 +21,8 @@ logger = get_logger(__name__)
 
 # Max age for a webhook event to prevent replay attacks (seconds)
 MAX_EVENT_AGE = 600  # 10 minutes
+MAX_FUTURE_SKEW = 300  # tolerate modest clock drift, not future-dated replays
+MAX_SQLITE_INTEGER = 9_223_372_036_854_775_807
 
 
 # ── Helpers ────────────────────────────────────────────────
@@ -35,17 +37,24 @@ def _coerce_bool(val: Any) -> bool | None:
     if isinstance(val, bool):
         return val
     if isinstance(val, str):
-        return val.strip().lower() in ("true", "1", "yes")
+        normalized = val.strip().lower()
+        if normalized in ("true", "1", "yes"):
+            return True
+        if normalized in ("false", "0", "no"):
+            return False
     return None
 
 
 def _coerce_int(val: Any) -> int | None:
     """Coerce a string/int to int, or None if not possible."""
+    result: int | None = None
     if isinstance(val, int) and not isinstance(val, bool):
-        return val
-    if isinstance(val, str) and val.strip().isdigit():
-        return int(val.strip())
-    return None
+        result = val
+    elif isinstance(val, str) and val.strip().isdigit():
+        result = int(val.strip())
+    if result is None or result <= 0 or result > MAX_SQLITE_INTEGER:
+        return None
+    return result
 
 
 def _maybe_json_parse(val: Any) -> Any:
@@ -84,14 +93,19 @@ def _extract_email(val: Any) -> str | None:
 
 
 def _normalize_timestamp(val: Any) -> str | None:
-    """Return an ISO timestamp string, accepting Gorgias field names."""
-    if isinstance(val, str) and val.strip():
-        # Replace trailing 'Z' for fromisoformat compatibility
-        ts = val.strip()
-        if ts.endswith("Z"):
-            ts = ts[:-1] + "+00:00"
-        return ts
-    return None
+    """Return a validated, timezone-aware ISO timestamp string."""
+    if not isinstance(val, str) or not val.strip():
+        return None
+    ts = val.strip()
+    if ts.endswith("Z"):
+        ts = ts[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(ts)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed.isoformat()
 
 
 # ── Signature verification ─────────────────────────────────
@@ -183,8 +197,26 @@ def parse_event(raw_body: bytes) -> dict[str, Any] | None:
         log_event(logger, "ERROR", "Failed to parse webhook body as JSON")
         return None
 
-    ticket = payload.get("ticket") or payload.get("data", {}).get("ticket", {})
-    message = payload.get("message") or payload.get("data", {}).get("message", {})
+    if not isinstance(payload, dict):
+        log_event(logger, "WARNING", "Webhook payload must be a JSON object")
+        return None
+
+    data = payload.get("data", {})
+    if data is None:
+        data = {}
+    if not isinstance(data, dict):
+        log_event(logger, "WARNING", "Webhook data field must be an object")
+        return None
+
+    ticket = payload.get("ticket", data.get("ticket", {}))
+    message = payload.get("message", data.get("message", {}))
+    if ticket is None:
+        ticket = {}
+    if message is None:
+        message = {}
+    if not isinstance(ticket, dict) or not isinstance(message, dict):
+        log_event(logger, "WARNING", "Webhook ticket/message fields must be objects")
+        return None
 
     if not ticket and not message:
         log_event(logger, "WARNING", "Webhook payload missing ticket/message data")
@@ -205,6 +237,9 @@ def parse_event(raw_body: bytes) -> dict[str, Any] | None:
     # ── Author type ────────────────────────────────────────
     # Gorgias renders from_agent as string "True"/"False".
     from_agent = _coerce_bool(message.get("from_agent")) if message else None
+    if message and "from_agent" in message and from_agent is None:
+        log_event(logger, "WARNING", "Webhook from_agent value is invalid")
+        return None
     if from_agent is True:
         author_type = "agent"
     elif from_agent is False:
@@ -241,7 +276,8 @@ def parse_event(raw_body: bytes) -> dict[str, Any] | None:
         created_at = _normalize_timestamp(ticket.get("created_datetime")) \
             or _normalize_timestamp(ticket.get("created_at"))
     if not created_at:
-        created_at = datetime.now(timezone.utc).isoformat()
+        log_event(logger, "WARNING", "Webhook timestamp is missing or invalid")
+        return None
 
     # ── Message text ───────────────────────────────────────
     message_text = None
@@ -313,3 +349,17 @@ def is_event_too_old(created_at: str | None, max_age: int = MAX_EVENT_AGE) -> bo
         return age > max_age
     except (ValueError, TypeError, AttributeError):
         return False  # can't parse, allow it
+
+
+def is_event_in_future(
+    created_at: str | None,
+    max_future_skew: int = MAX_FUTURE_SKEW,
+) -> bool:
+    """Return whether a validated event timestamp is implausibly future-dated."""
+    if not created_at:
+        return False
+    try:
+        event_time = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+        return (event_time - datetime.now(timezone.utc)).total_seconds() > max_future_skew
+    except (ValueError, TypeError, AttributeError):
+        return False

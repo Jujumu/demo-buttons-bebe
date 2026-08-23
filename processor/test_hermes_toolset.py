@@ -13,6 +13,7 @@ Nothing here executes Hermes. build_hermes_command() is a pure function.
 
 from __future__ import annotations
 
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -25,8 +26,28 @@ sys.path[:0] = [str(PROCESSOR_DIR), str(WEBHOOK_SRC)]
 
 from config import ProcessorSettings  # noqa: E402
 from hermes_runner import build_hermes_command, process_ticket_with_hermes  # noqa: E402
+from hermes_runner import runner  # noqa: E402
 
 DEFAULT_TOOLSETS = "mcp-buttonsbebe_kb,mcp-buttonsbebe_redo,mcp-buttonsbebe_gorgias"
+TOKEN = "0123456789abcdef"
+
+
+def tagged_output() -> str:
+    return (
+        f"<DRAFT:{TOKEN}>Hi! Your order ships in 24-48 hours.</DRAFT:{TOKEN}>\n"
+        f"JSON_RESULT[{TOKEN}]: "
+        + json.dumps(
+            {
+                "priority": "normal",
+                "reason": "ok",
+                "action": "drafted",
+                "notify_owner": False,
+                "gorgias_priority_set": False,
+                "note_posted": False,
+            },
+            separators=(",", ":"),
+        )
+    )
 
 
 def _settings(**overrides):
@@ -85,7 +106,7 @@ class EscapeHatchTests(unittest.TestCase):
         self.assertEqual(cmd[cmd.index("-t") + 1], DEFAULT_TOOLSETS)
 
     def test_enabling_the_escape_hatch_is_logged_as_a_warning(self):
-        with patch("hermes_runner.log_event") as log_event:
+        with patch.object(runner, "log_event") as log_event:
             build_hermes_command("hi", _settings(hermes_skip_approval=True))
         self.assertTrue(log_event.called)
         level = log_event.call_args[0][1]
@@ -102,20 +123,25 @@ class DefaultsTests(unittest.TestCase):
 
 
 class RunnerIntegrationTests(unittest.TestCase):
-    @patch("hermes_runner.subprocess.run")
-    @patch("hermes_runner.get_settings")
-    def test_the_runner_actually_uses_the_allow_list(self, get_settings, run):
-        get_settings.return_value = _settings()
-        run.return_value = SimpleNamespace(
-            returncode=0, stderr="",
-            stdout=('JSON_RESULT: {"priority":"normal","reason":"ok",'
-                    '"action":"drafted","notify_owner":false,'
-                    '"gorgias_priority_set":false,"note_posted":false}\n'
-                    "<DRAFT>Hi! Your order ships in 24-48 hours.</DRAFT>"),
-        )
-        process_ticket_with_hermes(
-            ticket_id=1, message_text="Where is my order?",
-            ticket_subject="WISMO", customer_email="c@example.com", intents=[])
+    def test_the_runner_actually_uses_the_allow_list(self):
+        with patch.object(
+            runner, "get_settings", return_value=_settings()
+        ), patch.object(
+            runner, "_make_run_token", return_value=TOKEN
+        ), patch.object(
+            runner.subprocess,
+            "run",
+            return_value=SimpleNamespace(
+                returncode=0, stderr="", stdout=tagged_output()
+            ),
+        ) as run:
+            process_ticket_with_hermes(
+                ticket_id=1,
+                message_text="Where is my order?",
+                ticket_subject="WISMO",
+                customer_email="c@example.com",
+                intents=[],
+            )
         cmd = run.call_args[0][0]
         self.assertEqual(cmd[0], "hermes")
         self.assertNotIn("--yolo", cmd)

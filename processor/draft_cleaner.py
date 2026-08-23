@@ -1,52 +1,14 @@
-"""Draft cleaner — last-mile safety pass over the AI's output.
+"""Last-mile AI-draft cleaning and customer acknowledgement gating.
 
-Two functions, imported by processor/hermes_runner.py:
-
-    clean_draft(text: str) -> CleanResult     # runs on the AI DRAFT
-    should_draft(message: str) -> ShouldDraft # runs on the CUSTOMER MESSAGE
-
-Ported from the Fable branch (fable/server/app/draft_cleaner.py) unchanged
-below this docstring, so the two copies stay diffable.
-
-Fixes the real QA failures:
-  QA #01/#04/#10 — the model appends self-commentary ("The response above was
-                   complete...") or repeats the entire draft twice (sometimes
-                   separated by a blank line, sometimes just a newline).
-  QA #19         — an empty customer message got a fabricated reply.
-
-Design notes (why it is built this way):
-  * clean_draft() runs on the AI DRAFT, in two conservative passes:
-      1. cut trailing self-commentary from the first "self-talk" marker line on;
-      2. collapse a draft that is the same content repeated 2x or 3x back to one.
-    Both passes are deliberately hard to trigger by accident so a NORMAL reply
-    (even one that says the word "complete" or "note" in the middle of a
-    sentence) passes through UNCHANGED — see processor/test_draft_cleaner.py.
-  * should_draft() runs on the CUSTOMER MESSAGE and returns ok=False when there
-    is simply nothing to answer (empty / whitespace / a bare "thanks" / an
-    emoji / punctuation). The pipeline must then create NO draft — not a
-    fallback one.
-
-Stdlib only (re, dataclasses) so there is nothing new to install on the VPS.
-
-Safety invariant unchanged: this module can only SHORTEN or SUPPRESS a draft.
-It can never write, send, or lengthen anything, and a human still clicks send.
+This standard-library-only module can shorten or suppress a draft, never send
+or lengthen one. See ADR-015 §2.4 for the safety and bounded-work rationale.
 """
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
 
-# ---------------------------------------------------------------------------
-# Self-talk markers.
-#
-# Each pattern is anchored to the START of a (stripped) line. When a line begins
-# with one of these, that line and EVERYTHING AFTER IT is treated as the model
-# talking to itself / the reviewer and is cut. The patterns require the tell-tale
-# phrase at the line start, so ordinary prose that merely contains the words
-# "complete" or "note" somewhere in a sentence is never affected.
-#
-# Extend this list as new leak patterns show up in QA.
-# ---------------------------------------------------------------------------
+# ADR-015 §2.4 — anchored self-talk may only shorten or suppress; tails stay visible.
 _SELF_TALK_MARKERS = [
     # "The response above was complete..."  (QA #01/#04/#10)
     r"the response above was complete",
@@ -57,33 +19,14 @@ _SELF_TALK_MARKERS = [
     r"this (?:response|reply|draft) (?:above )?(?:is|was) (?:now )?complete",
     # "I have completed the response." / "I have now finished this draft."
     r"i have (?:now )?(?:completed|finished) (?:the|this|my) (?:response|reply|draft)",
-    # "Note to the reviewer:" USED to be excluded here, because stripping it
-    # showed the human a clean, sendable draft and threw away warnings like
-    # "do NOT send this, the customer was already refunded twice". That
-    # reasoning is now stale: _cut_self_talk RETURNS what it removed and
-    # hermes_runner puts it on `reason`, which the console renders. So the
-    # warning reaches the reviewer either way, and leaving these in the body
-    # meant "this customer has 3 prior chargebacks" sat in the text a human
-    # clicks Send on.
+    # Internal notes leave the sendable body but are returned to the reviewer.
     r"notes? (?:to|for) (?:the )?(?:reviewer|agent|human)\b",
     r"^internal\b[:\s]",
     r"for internal use\b",
     r"confidence:\s",
-    # "End of response" / "[End of draft]" / "-- end of the draft --"
-    #
-    # NO leading "[-\s]*" here. _MARKER_RE already prefixes every alternative
-    # with "^[\s>*#\-]*", and two adjacent greedy classes whose sets overlap
-    # on "-" and whitespace are quadratic: a draft containing a horizontal
-    # rule made _MARKER_RE.match take 0.94s at 16 000 dashes and 9.2s at
-    # 32 000, with clean_draft the same. That is the happy path - a
-    # well-formed, token-tagged model reply - on a synchronous single-process
-    # pipeline, so the whole queue stalls.
-    #
-    # This one was mine: the "[-\s]*" was added in round 8 to catch
-    # "-- end of the draft --", and the outer prefix already handled it.
+    # ADR-015 §2.4 — the shared prefix handles dashes; overlapping classes do not.
     r"\[?end of (?:the\s+)?(?:response|reply|draft)\]?",
-    # Round-8 review: these phrasings all reached the sendable draft body.
-    # "The response above is complete." / "The draft above is complete."
+    # Completion variants observed in model output.
     r"(?:the\s+)?(?:response|reply|draft)\s+above\s+(?:is|was)\s+"
     r"(?:already\s+|now\s+)?complete",
     # "Draft complete." / "[Draft complete]"
@@ -91,10 +34,7 @@ _SELF_TALK_MARKERS = [
     # "I've completed the draft." / "I have written the response above."
     r"i(?:'ve| have)\s+(?:completed|written|finished)\s+(?:the|this|my)\s+"
     r"(?:response|reply|draft)",
-    # An internal note about the customer is not a reply TO the customer.
-    # _build_prompt asks for "AGENT NOTE" lines AFTER the verdict, but the
-    # model sometimes puts one inside the draft tags - and they carry things
-    # like "this customer has 3 prior chargebacks".
+    # An internal agent note is not customer-facing text.
     r"agent[\s-]note\b",
     r"\(internal[:\s]",
     # "As an AI, I cannot ..." style refusals leaking into a draft.
@@ -122,10 +62,7 @@ class CleanResult:
     text: str
     no_draft: bool = False
     reasons: list[str] = field(default_factory=list)
-    # The text that was cut, verbatim. It has to reach the reviewer: some of
-    # what the model writes after its draft is a warning ("the billing address
-    # does not match the shipping address on this order"), and deciding which
-    # by keyword was wrong in both directions.
+    # The cut tail, returned without semantic filtering so warnings reach review.
     removed_note: str = ""
 
 
@@ -136,25 +73,9 @@ class ShouldDraft:
 
 
 def _cut_self_talk(text: str) -> tuple[str, str]:
-    """Cut everything from the first self-talk marker line onward.
+    """Cut from the first self-talk line and return body plus removed tail.
 
-    Returns (trimmed text, the removed tail) - the tail rather than a bare
-    flag, because it has to be shown to the reviewer.
-
-    A keyword veto used to try to KEEP lines that carried a warning
-    ("do not send", "fraud", "escalate"). Review broke it in both directions:
-    it kept ordinary chatter that happened to contain "careful", and it still
-    deleted real warnings that used none of the listed words -
-
-        "The above draft assumes the customer is who they say they are; the
-         billing address does not match the shipping address on this order."
-        "The above reply promises a replacement we have no stock for - the
-         SKU is discontinued."
-
-    There is no keyword list that gets this right, because the property is
-    semantic. So the cut is unconditional and the removed text is RETURNED
-    instead, to be surfaced next to the draft. Nothing is lost and nothing
-    self-congratulatory ends up in the sendable body.
+    ADR-015 §2.4 explains why the tail is surfaced instead of keyword-filtered.
     """
     lines = text.splitlines()
     for i, line in enumerate(lines):
@@ -224,7 +145,7 @@ def _raw_prefix_for_norm(raw: str, base: str) -> str | None:
 
 
 def _dedupe_repeats(text: str) -> tuple[str, bool]:
-    """If the whole draft is the same content repeated 2x or 3x, keep one copy.
+    """If the whole draft is the same content repeated at least twice, keep one.
 
     Works no matter how the copies are separated (blank line, single newline, or
     a single space) because it compares the whitespace-normalised whole text.
@@ -235,13 +156,7 @@ def _dedupe_repeats(text: str) -> tuple[str, bool]:
     if len(norm) < _MIN_DUP_CHARS:
         return stripped, False
 
-    # Every multiple, not just 2x and 3x. The original tried k in (2, 3) and
-    # relied on repeated passes, which reaches 4, 6, 8 and 9 but never a prime
-    # multiple: a draft the model wrote five times came out still fivefold.
-    # k is bounded by the length floor, so this stays cheap.
-    # Largest k first. Returning at the smallest meant each pass only divided
-    # the copy count by its smallest prime factor, so 32 copies came out as 2
-    # and 64 as 4 even after four passes.
+    # ADR-015 §2.4 — test every bounded copy count, largest first.
     max_k = max(2, len(norm) // _MIN_DUP_CHARS)
     for k in range(max_k, 1, -1):
         base = _repeated_unit(norm, k)
@@ -269,11 +184,7 @@ def clean_draft(text: str) -> CleanResult:
     reasons: list[str] = []
     removed: list[str] = []
 
-    # Iterate to a fixed point. _dedupe_repeats only understands 2x and 3x, so
-    # a draft the model wrote four times used to come out still doubled. Four
-    # passes collapses any repetition the function can see; the loop always
-    # terminates because every pass that changes anything makes `out` strictly
-    # shorter.
+    # Four shortening-only passes reach a bounded fixed point.
     for _ in range(4):
         out, cut = _cut_self_talk(out)
         if cut:
@@ -300,29 +211,7 @@ def clean_draft(text: str) -> CleanResult:
                        removed_note=note)
 
 
-# --- customer-message gate (QA #19) ----------------------------------------
-#
-# REWRITTEN after code review. The original was a single regex alternation
-# matched against the WHOLE message. It had two serious defects:
-#
-#   1. Exponential backtracking. Multi-word alternatives ("much appreciated",
-#      "appreciate it") could also be read as separate tokens, so a failing
-#      match explored 2^n paths. A ~350-byte email took over a second; ~700
-#      bytes never returned. should_draft() runs synchronously before the
-#      first await, so the job timeout could not interrupt it — one email
-#      would have frozen the processor permanently.
-#   2. It suppressed real messages. Every filler word was its own alternative
-#      with no requirement that an actual "thanks" be present, so
-#      "So much for the help!" — an angry customer — matched and was silently
-#      dropped with no draft and no owner alert.
-#
-# The replacement is a linear token scan with no backtracking at all, and it
-# suppresses ONLY when both conditions hold:
-#   * every word is a known acknowledgement or filler word, AND
-#   * at least one of them is a real acknowledgement anchor.
-# Anything else — any question mark, any unknown word, any angry emoji —
-# drafts. When in doubt, draft: a needless draft costs one human glance, a
-# silently dropped complaint costs a customer.
+# ADR-015 §2.4 — acknowledgement suppression is a bounded token allow-list.
 
 # A genuine "this conversation is finished" signal. One of these must be
 # present before anything is suppressed.
@@ -333,15 +222,7 @@ _ACK_ANCHORS = frozenset({
     "perfect", "great", "awesome", "excellent", "brilliant", "amazing",
 })
 
-# Words that may accompany an acknowledgement without adding a question.
-#
-# DELIBERATELY SHORT. The previous version listed "there", "problem", "do",
-# "yes", "no", "have", "is", "was", "been", "take", "care", "everything" and
-# more, so whole complaints and instructions were suppressed: "Ok there is a
-# problem", "Yes thanks" (after "shall we cancel?"), "Have you received it".
-# The two directions are not symmetric — drafting a reply to a thank-you costs
-# one glance, silently dropping a complaint costs a customer — so anything
-# that could carry meaning stays OUT of this set.
+# Deliberately short: any word that could carry a complaint or decision stays out.
 _ACK_FILLER = frozenset({
     "a", "again", "all", "and", "at", "bye", "dear", "everyone", "folks",
     "for", "from", "guys", "hello", "hey", "hi", "in", "it", "its", "lot",
@@ -406,13 +287,7 @@ def _strip_decoration(text: str) -> str:
     return _HAPPY_EMOTICON_RE.sub(" ", text)
 
 
-# ASCII emoticons. ":", "-", "(", ")", "'" and "/" are all inert punctuation,
-# so ":(" and ":-(" used to dissolve to nothing and be read as an
-# acknowledgement — while the emoji 🙁 was correctly treated as content.
-# The (?!/) keeps "https://" out of it.
-# Only the SAD mouths count as content. The first version included ")", "D",
-# "P", "o" and "3", so every happy sign-off - "thanks :)", "thank you :D" -
-# was forced to draft.
+# Sad ASCII emoticons are content; (?!/) keeps URL schemes out of the match.
 _EMOTICON_RE = re.compile(r"[:;=8][-'~^]?(?:[(\[|\\<]|/(?!/))")
 
 # ...and the happy ones are stripped like an emoji, so their mouth character
@@ -420,28 +295,7 @@ _EMOTICON_RE = re.compile(r"[:;=8][-'~^]?(?:[(\[|\\<]|/(?!/))")
 _HAPPY_EMOTICON_RE = re.compile(r"[:;=8][-'~^]?[)\]>DdPpOo3*]+")
 
 
-# Noise every email subject carries. Without stripping it the subject veto
-# fired on essentially every real ticket ("Re: Your Buttons Bebe order
-# #10234"), so this gate never actually ran in production - measured at 0 of
-# 15 acknowledgements suppressed with a realistic subject line.
-#
-# "\border[\s#]*\d+", NOT "\border\s*#?\s*\d+". Two \s* separated by an
-# optional #? is quadratic: for a subject that is the word "order" followed by
-# a long whitespace run and no digit, the engine tries every way of splitting
-# the run between the two groups. Measured on the version with two groups:
-# 8 000 spaces 0.80 s, 16 000 2.93 s, 32 000 11.64 s, 128 000 ~3 minutes.
-#
-# That is not a slow request, it is a stopped shop. should_draft() runs
-# SYNCHRONOUSLY inside the job coroutine, so asyncio.wait_for cannot interrupt
-# it - verified: wait_for(job(), timeout=1.0) returned normally after 6.5 s -
-# and orchestrator.py holds an exclusive flock, so there is exactly one
-# processor. One email with a padded subject line freezes every ticket, every
-# owner alert and the heartbeat until it finishes.
-#
-# This is the SECOND time this file has had that bug. The note further down
-# describes the first (an exponential alternation, ~700 bytes never returned);
-# the fix for it left this quadratic behind in a pattern added afterwards.
-# A single character class cannot backtrack, so there is nothing left to split.
+# ADR-015 §2.4 — subject noise uses one whitespace class to stay linear.
 _SUBJECT_NOISE_RE = re.compile(
     r"^\s*((re|fw|fwd|aw|sv)\s*:\s*)+|"
     r"\border[\s#]*\d+|#\s*\d+|"
@@ -495,16 +349,7 @@ def _carries_no_content(value: str | None) -> bool:
             and any(t in _ACK_ANCHORS for t in tokens)):
         return False
 
-    # A DECISION word is content however much gratitude surrounds it.
-    #
-    # "ok", "noted", "received", "got it" are answers to a question the agent
-    # just asked - "shall I cancel order #10234 before it ships?" - and
-    # suppressing them stores an empty card and ships the order. The first
-    # version of this guard was length-based ("<= 2 tokens without gratitude"),
-    # which review broke in one word: "ok thanks" has a gratitude anchor so
-    # the guard never fired, and "got it thanks" is three tokens so it did not
-    # apply at all. Both were suppressed. The property has nothing to do with
-    # length, so it is no longer expressed as a length.
+    # A decision word remains content regardless of surrounding gratitude.
     if any(t in _DECISION_ANCHORS for t in tokens):
         return False
 
@@ -527,38 +372,11 @@ def should_draft(message: str, subject: str = "") -> ShouldDraft:
     Runs in linear time on the length of the input. Do not reintroduce a
     whole-message regex here — see the note above.
     """
-    # Bound the input as well as fixing the pattern.
-    #
-    # The regex fix removes the known quadratic, but this gate runs
-    # synchronously on the one processor the shop has, so a bug here stops the
-    # business rather than slowing it. Two independent defences, because this
-    # file has now had two catastrophic-backtracking bugs and the second was
-    # introduced by the fix for the first.
-    #
-    # "Truncating cannot lose a decision" was WRONG, and it was my own
-    # justification. Truncation REMOVES content, so the reasoning runs the
-    # other way: an ack that fills the cap hides whatever follows it.
-    #
-    #     ("thanks " * 2857) + "Also, my parcel has been sitting at the depot
-    #     since Tuesday and nobody has called me back."
-    #
-    # was suppressed - empty console card, no send controls, no owner alert,
-    # Hermes never invoked, complaint never read.
-    #
-    # So: collapse whitespace FIRST, so padding cannot fill the budget, and
-    # then refuse to judge anything still over it. "I could not read all of
-    # this" is not the same as "there is nothing here", and only the second
-    # justifies silence.
+    # ADR-015 §2.4 — collapse padding first; over-limit input drafts, never truncates.
     message = " ".join(str(message or "").split())
     if len(message) > _MAX_GATE_MESSAGE:
         return ShouldDraft(True)
-    # The SUBJECT gets the same treatment, three lines after declaring that
-    # reasoning wrong. Round 10: the body was fixed and this slice was not, so
-    #   subject = ("thanks " * 286) + "Why has my refund still not arrived?"
-    # was suppressed at 2 038 characters and drafted at 1 996 - the question
-    # fell off the end of the slice. The classifier still escalates and pages
-    # the owner from the raw subject, so the blast radius is a missing draft
-    # rather than a missing alert, but it is the same mistake.
+    # Subject and body share the same fail-open-on-length rule.
     subject = " ".join(str(subject or "").split())
     if len(subject) > _MAX_GATE_SUBJECT:
         return ShouldDraft(True)

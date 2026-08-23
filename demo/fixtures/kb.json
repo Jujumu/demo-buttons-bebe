@@ -1,0 +1,116 @@
+{
+  "name": "cute-things-demo-kb",
+  "version": 1,
+  "documents": [
+    {
+      "id": "shipping-timeline",
+      "file": "policies/shipping.md",
+      "title": "Cute Things shipping timeline",
+      "category": "policies",
+      "status": "confirmed",
+      "sensitive": false,
+      "tags": ["shipping", "delivery", "tracking"],
+      "heading": "When orders ship and arrive",
+      "text": "Orders are usually packed within 1-2 business days. After dispatch, Bangladesh delivery generally takes 2-5 business days. The tracking link becomes useful after the carrier scans the parcel."
+    },
+    {
+      "id": "tracking-delay",
+      "file": "faq/order-tracking.md",
+      "title": "Tracking has not updated",
+      "category": "faq",
+      "status": "confirmed",
+      "sensitive": false,
+      "tags": ["tracking", "carrier", "delay"],
+      "heading": "Why tracking can pause",
+      "text": "A tracking page can remain unchanged for 24-48 hours while a parcel moves between carrier scans. Confirm the address and fulfillment status first. If there is still no movement after that window, escalate for a human review."
+    },
+    {
+      "id": "order-not-shipped",
+      "file": "intents/intent-17-when-will-order-ship.md",
+      "title": "Order has not shipped",
+      "category": "intents",
+      "status": "confirmed",
+      "sensitive": false,
+      "tags": ["shipping", "fulfillment", "wismo"],
+      "heading": "Check fulfillment before promising a date",
+      "text": "Use the order context to check whether the order is unfulfilled, partially fulfilled, or fulfilled. Do not promise a shipping date that is not supported by the order record."
+    },
+    {
+      "id": "returns-window",
+      "file": "policies/returns.md",
+      "title": "Returns and exchanges",
+      "category": "policies",
+      "status": "confirmed",
+      "sensitive": true,
+      "tags": ["returns", "exchange", "refund", "escalate"],
+      "heading": "Return eligibility",
+      "text": "Return and exchange requests require a human review of the order, item condition, and timing. The support agent may explain the policy but must not promise a refund, store credit, or exchange."
+    },
+    {
+      "id": "refund-status",
+      "file": "faq/refund-explanation.md",
+      "title": "Refund status explanation",
+      "category": "faq",
+      "status": "confirmed",
+      "sensitive": true,
+      "tags": ["refund", "payment", "escalate"],
+      "heading": "Refunds need order and payment context",
+      "text": "A refund can only be discussed after checking the order and Redo return context. Never state that money was refunded unless the payment or return record confirms it. Route disputes or missing refunds to a human owner."
+    },
+    {
+      "id": "damaged-item",
+      "file": "faq/damaged-items.md",
+      "title": "Damaged or wrong item",
+      "category": "faq",
+      "status": "confirmed",
+      "sensitive": true,
+      "tags": ["damaged", "wrong item", "replacement", "escalate"],
+      "heading": "Photo review and human handling",
+      "text": "For a damaged, missing, or wrong item, acknowledge the issue and ask for the order number and photos if needed. Do not promise a replacement or refund; flag the ticket for human review."
+    },
+    {
+      "id": "address-change",
+      "file": "policies/address-changes.md",
+      "title": "Address changes",
+      "category": "policies",
+      "status": "confirmed",
+      "sensitive": true,
+      "tags": ["address", "change", "shipping", "escalate"],
+      "heading": "Address changes before dispatch",
+      "text": "An address change may be possible before dispatch, but it must be checked against the order and fulfillment state. Never claim that an address was changed without a human confirmation."
+    },
+    {
+      "id": "demo-product-romper",
+      "file": "products/organic-cotton-baby-romper.md",
+      "title": "Organic Cotton Baby Romper",
+      "category": "products",
+      "status": "confirmed",
+      "sensitive": false,
+      "tags": ["romper", "cotton", "care"],
+      "heading": "Product care",
+      "text": "The Organic Cotton Baby Romper is a lightweight demo catalog item. Recommend washing gently according to the garment label and keeping the item away from high heat."
+    },
+    {
+      "id": "demo-product-blanket",
+      "file": "products/cashmere-knit-baby-blanket.md",
+      "title": "Cashmere Knit Baby Blanket",
+      "category": "products",
+      "status": "confirmed",
+      "sensitive": false,
+      "tags": ["blanket", "cashmere", "care"],
+      "heading": "Product care",
+      "text": "The Cashmere Knit Baby Blanket is a demo catalog item. Recommend following the care label, avoiding bleach, and drying flat when the label allows."
+    },
+    {
+      "id": "demo-store-boundary",
+      "file": "demo/cute-things-boundary.md",
+      "title": "Cute Things demo boundary",
+      "category": "demo",
+      "status": "confirmed",
+      "sensitive": true,
+      "tags": ["demo", "safety", "escalate"],
+      "heading": "Synthetic fixtures only",
+      "text": "This knowledge base is for the Cute Things demo store only. AI-DEMO customers use example.com addresses and synthetic Dhaka shipping addresses. Do not contact them, send receipts, or treat demo records as Buttons Bebe data."
+    }
+  ]
+}

@@ -14,6 +14,7 @@ import unicodedata
 import urllib.error
 import urllib.request
 
+from demo_safety import demo_mode_enabled, demo_url_allowed
 from logging_setup import get_logger, log_event
 
 logger = get_logger(__name__)
@@ -84,6 +85,29 @@ def send_whatsapp(
     """
     url = os.getenv("WHATSAPP_SEND_URL", "").strip()
     send_secret = os.getenv("WA_SEND_SECRET", "").strip()
+    ticket_base_url = os.getenv(
+        "WHATSAPP_TICKET_BASE_URL",
+        "https://buttonsbebe.gorgias.com/tickets",
+    ).rstrip("/")
+    if demo_mode_enabled() and (
+        not demo_url_allowed(
+            url,
+            port=8185,
+            exact_path="/connect-whatsapp/demo/send",
+        )
+        or not demo_url_allowed(
+            ticket_base_url,
+            port=8100,
+            exact_path="/demo/tickets",
+        )
+    ):
+        log_event(
+            logger,
+            "ERROR",
+            "Demo WhatsApp alert blocked: destination is not a local demo endpoint",
+            ticket_id=ticket_id,
+        )
+        return False
     # int(), not the raw value: ticket_id reaches the LAST line of the body,
     # so a string ticket id containing a newline forges a line BELOW the real
     # link, which is the half of the message a phone preview does not cut off.
@@ -103,7 +127,7 @@ def send_whatsapp(
         f"Customer: {_one_line(customer_email, _MAX_EMAIL)}\n"
         f"Reason: {_one_line(reason, _MAX_REASON)}\n"
         f"Summary: {_one_line(message_summary, _MAX_SUMMARY)}\n"
-        f"Link: https://buttonsbebe.gorgias.com/tickets/{safe_ticket_id}"
+        f"Link: {ticket_base_url}/{safe_ticket_id}"
     )
 
     missing = []

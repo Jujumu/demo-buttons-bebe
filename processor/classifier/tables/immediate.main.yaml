@@ -1,0 +1,182 @@
+[
+  {
+    "pattern": "\\brefund\\b",
+    "exemplar": "I need a refund for this order.",
+    "tier": "immediate",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\bchargeback\\b",
+    "exemplar": "I am filing a chargeback with my bank.",
+    "tier": "immediate",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\bdispute\\b",
+    "exemplar": "I am opening a dispute for this payment.",
+    "tier": "immediate",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\bmoney\\s+back\\b",
+    "exemplar": "Money back, please.",
+    "tier": "immediate",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\breimburse\\b",
+    "exemplar": "Please reimburse me for this order.",
+    "tier": "immediate",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\breimbursement\\b",
+    "exemplar": "I am requesting reimbursement for this purchase.",
+    "tier": "immediate",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\bcompensat\\w*\\b",
+    "exemplar": "I am asking for compensation for the delay.",
+    "tier": "immediate",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\bcredit\\s+(my|your|our)\\s+account\\b",
+    "exemplar": "Please credit my account.",
+    "tier": "immediate",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\bissue\\s+a\\s+refund\\b",
+    "exemplar": "Please issue a refund for me.",
+    "tier": "immediate",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\breturn\\s+(my|the)\\s+(money|payment|funds)\\b",
+    "exemplar": "Please return the payment to my card.",
+    "tier": "immediate",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\bdamaged?\\b",
+    "exemplar": "The item arrived damaged.",
+    "tier": "immediate",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\bdefect\\w*\\b",
+    "exemplar": "There is a defect in the product.",
+    "tier": "immediate",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\bbroken\\b",
+    "exemplar": "The product is broken.",
+    "tier": "immediate",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\btorn\\b",
+    "exemplar": "The garment is torn.",
+    "tier": "immediate",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\bwrong\\s+(item|size|color|colour|product|order)\\b",
+    "exemplar": "Wrong item.",
+    "tier": "immediate",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\bmissing\\s+(item|piece|part|product)\\b",
+    "exemplar": "Missing item.",
+    "tier": "immediate",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\bnever\\s+(received|arrived|came|got)\\b",
+    "exemplar": "I never received the item.",
+    "tier": "immediate",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\bdidn'?t\\s+(receive|get|arrive)\\b",
+    "exemplar": "I didn't receive anything.",
+    "tier": "immediate",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\bnot\\s+received\\b",
+    "exemplar": "It was not received.",
+    "tier": "immediate",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\blost\\s+(package|parcel|order|shipment)\\b",
+    "exemplar": "Lost package.",
+    "tier": "immediate",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\bstolen\\s+(package|parcel|order|shipment)\\b",
+    "exemplar": "A stolen package was reported.",
+    "tier": "immediate",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\b(package|parcel|order|shipment)\\s+(?:was|is|got|has\\s+been)\\s+(lost|stolen)\\b",
+    "exemplar": "The package was stolen.",
+    "tier": "immediate",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\b(angry|furious|outraged|disgusted|appalled|unacceptable)\\b",
+    "exemplar": "I am angry about this order.",
+    "tier": "immediate",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\b(terrible|horrible|awful|worst)\\s+(service|experience|company|store)\\b",
+    "exemplar": "This is terrible service.",
+    "tier": "immediate",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\bnever\\s+(shopping|buying|ordering)\\s+(here|from\\s+you)\\b",
+    "exemplar": "I am never shopping here again.",
+    "tier": "immediate",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\b(bbb|better\\s+business\\s+bureau|consumer\\s+protection|small\\s+claims)\\b",
+    "exemplar": "I will report this to the BBB.",
+    "tier": "immediate",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\b(lawsuit|sue|legal\\s+action|attorney|lawyer)\\b",
+    "exemplar": "I will take legal action.",
+    "tier": "immediate",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\bfraud\\b",
+    "exemplar": "This payment is fraud.",
+    "tier": "immediate",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\bscam\\b",
+    "exemplar": "This store is a scam.",
+    "tier": "immediate",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\bunauthorized\\s+charg\\w+\\b",
+    "exemplar": "There was an unauthorized charge on my card.",
+    "tier": "immediate",
+    "view": "unfiltered"
+  }
+]

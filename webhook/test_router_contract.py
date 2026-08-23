@@ -1,0 +1,96 @@
+"""Contract checks for the composed webhook application."""
+
+from __future__ import annotations
+
+import os
+import subprocess
+import sys
+import unittest
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock, patch
+
+from bb_webhook import app as app_module
+
+
+class RouterContractTests(unittest.TestCase):
+    def test_all_preexisting_http_paths_are_registered(self) -> None:
+        expected = {
+            ("GET", "/health"),
+            ("GET", "/ready"),
+            ("POST", "/webhook/gorgias/{tenant_id}"),
+            ("GET", "/dashboard/api/messages"),
+            ("GET", "/dashboard/api/stats"),
+            ("GET", "/dashboard/api/tickets"),
+            ("POST", "/dashboard/api/results"),
+            ("GET", "/dashboard/api/notifications"),
+            ("POST", "/dashboard/api/notifications/read"),
+            ("GET", "/dashboard/api/review/list"),
+            ("GET", "/dashboard/api/review/packet/{ticket_id}"),
+            ("POST", "/dashboard/api/review/approve/{ticket_id}"),
+            ("POST", "/dashboard/api/review/reject/{ticket_id}"),
+            ("POST", "/dashboard/api/review/reindex"),
+            ("POST", "/dashboard/api/ticket/{ticket_id}/send"),
+            ("POST", "/dashboard/api/ticket/{ticket_id}/note"),
+            ("POST", "/dashboard/api/ticket/{ticket_id}/rewrite"),
+            ("GET", "/dashboard/api/learning"),
+        }
+        actual = {
+            (method, path)
+            for path, item in app_module.app.openapi()["paths"].items()
+            for method in item
+            for method in (method.upper(),)
+        }
+        self.assertEqual(actual, expected)
+
+    def test_feedback_review_imports_under_the_production_pythonpath(self) -> None:
+        webhook_dir = Path(__file__).resolve().parent
+        env = os.environ.copy()
+        env["PYTHONPATH"] = str(webhook_dir / "src")
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "from bb_webhook.routers import console; "
+                    "raise SystemExit(console._review is None)"
+                ),
+            ],
+            cwd=webhook_dir,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_lifespan_keeps_logging_settings_and_db_startup_order(self) -> None:
+        events: list[str] = []
+        settings = SimpleNamespace(
+            webhook_host="127.0.0.1",
+            webhook_port=8000,
+            gorgias_subdomain="test",
+        )
+
+        async def init_db() -> None:
+            events.append("db")
+
+        async def exercise() -> None:
+            async with app_module.lifespan(app_module.app):
+                events.append("yield")
+
+        with (
+            patch.object(app_module, "setup_logging", Mock(side_effect=lambda: events.append("logging"))),
+            patch.object(app_module, "get_settings", Mock(side_effect=lambda: (events.append("settings") or settings))),
+            patch.object(app_module, "log_event", Mock(side_effect=lambda *args, **kwargs: events.append("log"))),
+            patch.object(app_module, "init_db", AsyncMock(side_effect=init_db)),
+        ):
+            import asyncio
+
+            asyncio.run(exercise())
+
+        self.assertEqual(events, ["logging", "settings", "log", "db", "yield", "log"])
+
+
+if __name__ == "__main__":
+    unittest.main()

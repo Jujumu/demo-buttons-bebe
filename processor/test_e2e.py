@@ -50,6 +50,7 @@ GORGIAS_AUTH = (GORGIAS_API_EMAIL, GORGIAS_API_KEY)
 
 # Live reads are opt-in. Never keep production ticket IDs in source.
 TEST_TICKET_ID = int(os.environ.get("TEST_TICKET_ID", "0"))
+RUN_TOKEN = "0123456789abcdef"
 
 # Hermes invocation. Mirrors processor/hermes_runner.build_hermes_command():
 # an explicit read-only toolset allow-list, and no --yolo (DEV-ISSUES #8).
@@ -241,28 +242,34 @@ def test_hermes_runner_unit() -> None:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "webhook" / "src"))
 
     try:
-        from hermes_runner import _build_prompt, _parse_json_result, _FALLBACK_RESULT
+        from hermes_runner import extract, prompt
 
         # 7a. Prompt builder
-        prompt = _build_prompt(
+        built_prompt = prompt._build_prompt(
             ticket_id=12345,
             message_text="Test message",
             ticket_subject="Test subject",
             customer_email="test@example.com",
             intents=["shipping/status"],
+            token=RUN_TOKEN,
         )
-        if len(prompt) > 100 and "JSON_RESULT" in prompt and "12345" in prompt:
-            pass_test("prompt builder", f"len={len(prompt)}")
+        if (
+            len(built_prompt) > 100
+            and f"JSON_RESULT[{RUN_TOKEN}]" in built_prompt
+            and "12345" in built_prompt
+        ):
+            pass_test("prompt builder", f"len={len(built_prompt)}")
         else:
-            fail_test("prompt builder", f"len={len(prompt)} missing JSON_RESULT")
+            fail_test("prompt builder", f"len={len(built_prompt)} missing tokenized JSON_RESULT")
 
         # 7b. Empty message handling
-        prompt_empty = _build_prompt(
+        prompt_empty = prompt._build_prompt(
             ticket_id=12345,
             message_text="",
             ticket_subject="Test",
             customer_email="test@example.com",
             intents=[],
+            token=RUN_TOKEN,
         )
         if "EMPTY MESSAGE" in prompt_empty:
             pass_test("empty message handling")
@@ -270,12 +277,13 @@ def test_hermes_runner_unit() -> None:
             fail_test("empty message handling", "no EMPTY MESSAGE flag")
 
         # 7c. Long message truncation
-        prompt_long = _build_prompt(
+        prompt_long = prompt._build_prompt(
             ticket_id=12345,
             message_text="A" * 5000,
             ticket_subject="Test",
             customer_email="test@example.com",
             intents=[],
+            token=RUN_TOKEN,
         )
         if "truncated" in prompt_long:
             pass_test("long message truncation")
@@ -283,8 +291,9 @@ def test_hermes_runner_unit() -> None:
             fail_test("long message truncation", "no truncation marker")
 
         # 7d. JSON_RESULT parser — valid
-        result = _parse_json_result(
-            'Some text\nJSON_RESULT: {"priority": "low", "reason": "test", "action": "drafted", "notify_owner": false, "gorgias_priority_set": true, "note_posted": true}\nMore text'
+        result = extract._parse_json_result(
+            f'Some text\nJSON_RESULT[{RUN_TOKEN}]: {{"priority": "low", "reason": "test", "action": "drafted", "notify_owner": false, "gorgias_priority_set": true, "note_posted": true}}\nMore text',
+            token=RUN_TOKEN,
         )
         if result["priority"] == "low" and result["action"] == "drafted":
             pass_test("JSON_RESULT parser (valid)")
@@ -292,27 +301,29 @@ def test_hermes_runner_unit() -> None:
             fail_test("JSON_RESULT parser (valid)", f"got {result}")
 
         # 7e. JSON_RESULT parser — missing
-        result = _parse_json_result("No JSON_RESULT here")
-        if result == _FALLBACK_RESULT:
-            pass_test("JSON_RESULT parser (missing → fallback)")
+        result = extract._parse_json_result("No JSON_RESULT here", token=RUN_TOKEN)
+        if result.get("no_draft") and result.get("action") == "sensitive_draft":
+            pass_test("JSON_RESULT parser (missing token → no draft)")
         else:
             fail_test("JSON_RESULT parser (missing)", f"got {result}")
 
         # 7f. JSON_RESULT parser — invalid priority
-        result = _parse_json_result(
-            'JSON_RESULT: {"priority": "bogus", "reason": "test", "action": "drafted", "notify_owner": false}'
+        result = extract._parse_json_result(
+            f'JSON_RESULT[{RUN_TOKEN}]: {{"priority": "bogus", "reason": "test", "action": "drafted", "notify_owner": false}}',
+            token=RUN_TOKEN,
         )
-        if result == _FALLBACK_RESULT:
-            pass_test("JSON_RESULT parser (invalid priority → fallback)")
+        if result.get("no_draft") and result.get("action") == "sensitive_draft":
+            pass_test("JSON_RESULT parser (invalid priority → no draft)")
         else:
             fail_test("JSON_RESULT parser (invalid priority)", f"got {result}")
 
         # 7g. JSON_RESULT parser — missing required fields
-        result = _parse_json_result(
-            'JSON_RESULT: {"priority": "low", "reason": "test"}'
+        result = extract._parse_json_result(
+            f'JSON_RESULT[{RUN_TOKEN}]: {{"priority": "low", "reason": "test"}}',
+            token=RUN_TOKEN,
         )
-        if result == _FALLBACK_RESULT:
-            pass_test("JSON_RESULT parser (missing fields → fallback)")
+        if result.get("no_draft") and result.get("action") == "sensitive_draft":
+            pass_test("JSON_RESULT parser (missing fields → no draft)")
         else:
             fail_test("JSON_RESULT parser (missing fields)", f"got {result}")
 
@@ -442,7 +453,8 @@ def test_live_hermes() -> None:
             f"recommend priority, draft reply (always draft, tag sensitive), and output JSON_RESULT. "
             f"Do not write to Gorgias or any file.\n"
             f"Be concise. Do not ask questions. Make your best judgment.\n\n"
-            f'JSON_RESULT: {{"priority": "<critical|high|normal|low>", "reason": "<one sentence>", '
+            f'Use the exact run-token markers <DRAFT:{RUN_TOKEN}>...</DRAFT:{RUN_TOKEN}> and '
+            f'JSON_RESULT[{RUN_TOKEN}]: {{"priority": "<critical|high|normal|low>", "reason": "<one sentence>", '
             f'"action": "<drafted|sensitive_draft|no_kb_match>", "notify_owner": <true|false>, '
             f'"gorgias_priority_set": false, "note_posted": false}}'
         )
@@ -463,28 +475,21 @@ def test_live_hermes() -> None:
             fail_test("Hermes invocation", "empty output")
             return
 
-        # Check for JSON_RESULT
-        import re
-        match = re.search(r'JSON_RESULT:\s*(\{)', stdout, re.IGNORECASE)
-        if match:
-            # Extract balanced JSON
-            depth = 0
-            start = match.start(1)
-            for i in range(start, len(stdout)):
-                if stdout[i] == '{': depth += 1
-                elif stdout[i] == '}':
-                    depth -= 1
-                    if depth == 0:
-                        try:
-                            parsed = json.loads(stdout[start:i+1])
-                            pass_test("Hermes JSON_RESULT", f"priority={parsed.get('priority')} action={parsed.get('action')}")
-                        except json.JSONDecodeError:
-                            fail_test("Hermes JSON_RESULT", f"parse error: {stdout[start:i+1][:200]}")
-                        break
-            else:
-                fail_test("Hermes JSON_RESULT", "unbalanced braces")
+        from hermes_runner import extract
+
+        parsed = extract._parse_json_result(stdout, token=RUN_TOKEN)
+        if parsed.get("no_draft") or parsed.get("action") not in {
+            "drafted",
+            "sensitive_draft",
+            "escalated",
+            "no_kb_match",
+        }:
+            fail_test("Hermes JSON_RESULT", "missing or invalid run-token verdict")
         else:
-            fail_test("Hermes JSON_RESULT", "not found in output")
+            pass_test(
+                "Hermes JSON_RESULT",
+                f"priority={parsed.get('priority')} action={parsed.get('action')}",
+            )
 
         # Check that Hermes actually did something (MCP calls, etc.)
         if "search_kb" in stdout or "get_ticket" in stdout or "curl" in stdout:

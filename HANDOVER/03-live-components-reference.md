@@ -29,7 +29,7 @@
 | `kb-admin/server.js` | Node (stdlib http) | **8087** · `buttonsbebe-kb-admin` | Owner API behind the console for editing KB files + Notice Board. |
 | `console-src/index.html` | HTML/JS SPA | served as `/console` (via Caddy→:8000) | Support Console UI — **current** build (adds Notice Board tab). |
 | `dashboard/index.html` | HTML/JS SPA | served as `/console` (via Caddy→:8000) | Same Support Console — **older** build (no Notice Board tab). |
-| `deploy/patch_app.py` | Python | (deploy script, runs on VPS) | Idempotently injects the (now-superseded) feedback "review console" routes into the webhook `app.py`. |
+| `deploy/patch_app.py` | Python | retired compatibility command | No-op since 2026-08-23. Review and console routes now ship as versioned `bb_webhook.routers` modules. |
 
 **All three MCP services (`8077` KB, `8078` Redo, `8079` Gorgias) bind `127.0.0.1` only and are strictly read-only (GET requests to external APIs; no writes).** They are registered with Hermes by URL as `buttonsbebe_kb`, `buttonsbebe_redo`, `buttonsbebe_gorgias`.
 
@@ -229,7 +229,7 @@ Zero-dependency Node HTTP server bound to `127.0.0.1:8087`, exposed behind the c
 
 ---
 
-## 5. `deploy/patch_app.py`
+## 5. `deploy/patch_app.py` (retired)
 
 - **Purpose:** an **idempotent deploy-time patcher** that injects the (older) **feedback "review console"** routes into the live webhook app at `/root/Buttonsbebe Agent/webhook/src/bb_webhook/app.py` (a file that lives on the VPS, **not** in this repo).
 - **What it patches in:**
@@ -243,7 +243,7 @@ Zero-dependency Node HTTP server bound to `127.0.0.1:8087`, exposed behind the c
      - `POST /dashboard/api/review/reindex`
      - all delegating to `from feedback import review as _rv`.
 - **Safety:** no-ops if `/dashboard/api/review/list` is already present; errors out if the `from pathlib import Path` or webhook-receiver anchors are missing; **backs up** `app.py` to `app.py.bak-review-<timestamp>`, then `py_compile`s the result and **reverts on compile failure**.
-- **Env vars:** none. **How it runs:** `python deploy/patch_app.py` on the VPS (edits a VPS file in place).
+- **Env vars:** none. **How it runs:** the legacy command now exits successfully without editing files. Deploy the versioned webhook package; do not use this script as evidence that routes were installed.
 - ⚠️ **Status:** per `CLAUDE.md` §8, this poll-based "review console" is **superseded** by the console's per-ticket action buttons + the `learning.py` capture. Document it as historical/optional; the routes it adds may or may not be wired on the current box.
 
 ---
