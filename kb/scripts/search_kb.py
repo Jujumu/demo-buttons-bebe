@@ -9,13 +9,14 @@ relevance score and the file's risk label.
 """
 import os
 import fcntl
+import re
 import sys
 from contextlib import contextmanager
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import lancedb
-from kb_lib import DB_DIR, TABLE, embed_query
+from kb_lib import CATEGORY_WEIGHT, DB_DIR, TABLE, embed_query
 
 try:
     # Notice Board: owner-posted overrides that ride on top of every search.
@@ -27,6 +28,40 @@ except Exception:                      # never let the board break search
 K = 5         # how many results to return
 POOL = 100    # deep enough to diversify repeated chunks across the 22 intents
 RRF_K = 60   # reciprocal-rank-fusion constant (a standard, safe default)
+PLATFORM_IDENTIFIER_RE = re.compile(
+    r"(?<!\w)[A-Za-z][A-Za-z0-9]*(?:_[A-Za-z0-9]+)+(?!\w)"
+)
+EXACT_IDENTIFIER_RRF = 1.0 / (RRF_K + 1)
+MAX_IDENTIFIER_SCAN_CHARS = 4096
+MAX_PLATFORM_IDENTIFIERS = 8
+MAX_PLATFORM_IDENTIFIER_CHARS = 80
+
+
+def _platform_identifiers(query: str) -> tuple[str, ...]:
+    """Return a bounded set of distinct snake-case identifiers in the query."""
+    identifiers: list[str] = []
+    for match in PLATFORM_IDENTIFIER_RE.finditer(query[:MAX_IDENTIFIER_SCAN_CHARS]):
+        identifier = match.group(0).casefold()
+        if len(identifier) > MAX_PLATFORM_IDENTIFIER_CHARS or identifier in identifiers:
+            continue
+        identifiers.append(identifier)
+        if len(identifiers) == MAX_PLATFORM_IDENTIFIERS:
+            break
+    return tuple(identifiers)
+
+
+def _has_exact_identifier(text: str, identifier: str) -> bool:
+    """Match a platform identifier as a complete token, not a substring."""
+    return re.search(rf"(?<!\w){re.escape(identifier)}(?!\w)", text, re.IGNORECASE) is not None
+
+
+def _weighted_score(score: float, hit: dict, identifiers: tuple[str, ...] = ()) -> float:
+    """Apply exact identifier evidence, then the shared category multiplier."""
+    category = hit.get("category")
+    weight = CATEGORY_WEIGHT.get(category, 1.0) if isinstance(category, str) else 1.0
+    text = str(hit.get("text", ""))
+    exact_matches = sum(_has_exact_identifier(text, identifier) for identifier in identifiers)
+    return (score + exact_matches * EXACT_IDENTIFIER_RRF) * weight
 
 
 def _diversify_by_file(ranked: list[tuple[str, float]], info: dict[str, dict], k: int):
@@ -91,7 +126,16 @@ def search(query: str, k: int = K) -> list[dict]:
         scores[i] = scores.get(i, 0.0) + 1.0 / (RRF_K + rank + 1)
         info.setdefault(i, hit)
 
-    ranked_all = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
+    # Exact platform identifiers are an independent lexical anchor. Treat each
+    # verbatim identifier match as rank-one RRF evidence before applying the
+    # category trust prior. Unknown categories keep the neutral multiplier so a
+    # malformed row cannot gain extra authority; queries without identifiers
+    # retain the ordinary post-RRF weighting behavior.
+    identifiers = _platform_identifiers(query)
+    weighted_scores = {
+        i: _weighted_score(score, info[i], identifiers) for i, score in scores.items()
+    }
+    ranked_all = sorted(weighted_scores.items(), key=lambda kv: kv[1], reverse=True)
     ranked = _diversify_by_file(ranked_all, info, k)
     results = []
     for i, score in ranked:

@@ -36,7 +36,7 @@ Legend for **Type**: `live-source` = code running (or meant to run) in productio
 | `SPRINT-notice-board-2026-07-12.md` | docs | tracked | Sprint plan for the Notice Board (owner overrides). **main-only.** |
 | `console-src/` | live-source | tracked | **Newest** support-console SPA (single `index.html`, **includes the Notice Board panel**). Added by the Notice Board commit; supersedes `dashboard/` as source of truth. **main-only.** |
 | `dashboard/` | live-source | tracked | The console SPA as served at **`/dashboard`** (webhook :8000). One feature behind `console-src/` — **no** Notice Board panel (79-line diff). |
-| `deploy/` | live-source / ops | tracked | VPS deploy helpers: `patch_app.py` (idempotently injects review endpoints into the webhook `app.py`) + `review_console.html`. On `main`, `deploy/vps-patches/` is **untracked** (working tree holds only `__pycache__`). |
+| `deploy/` | live-source / ops | tracked | Deployment helpers plus the retired no-op `patch_app.py`; review endpoints now ship in `webhook/src/bb_webhook/routers/`. On `main`, `deploy/vps-patches/` is **untracked** (working tree holds only `__pycache__`). |
 | `feedback/` | live-source | tracked | The **learning-loop** Python package (capture → review → promote). Wired but **SHADOW/stub** per `CLAUDE.md §8`; the live learning path is now `webhook/src/bb_webhook/learning.py` (VPS-only). See §3. |
 | `kb/` | KB-content + live-source | tracked | The **knowledge base**: markdown content (`intents/ faq/ policies/ tickets/ notices/`), the index/search/MCP **scripts**, and the KB **systemd units**. Maps to `KB/` on the VPS (note case). See §3. |
 | `kb-admin/` | live-source | tracked | Zero-dependency Node API (`server.js`, :8087) letting the console read/edit KB markdown and re-index; excludes `products/` + `learned/`, path-hardened. |
@@ -112,7 +112,7 @@ Both are a **single-file SPA** titled "Buttons Bebe — Support Console" (same d
 `qa.html` (dark static viewer, "Hermes QA — Buttons Bebe") + `results.json`. A saved evaluation run for human review — not wired into the runtime.
 
 ### `deploy/` — VPS deploy helpers (~36 KB)
-`patch_app.py` (idempotently patches the webhook `app.py` to add feedback-review routes) and `review_console.html`. **`deploy/vps-patches/` is NOT tracked on `main`** — the working tree holds only `__pycache__/` (`classifier.pyc`, `draft_cleaner.pyc`). The actual patch **sources live on `Fable_buttonsbebe`** (see §4): `classifier.py`, `draft_cleaner.py`, `heartbeat.sh`, `README.md`.
+`patch_app.py` is a retired no-op retained for old runbooks; feedback-review routes are versioned under `webhook/src/bb_webhook/routers/`. `review_console.html` remains. **`deploy/vps-patches/` is NOT tracked on `main`** — the working tree holds only `__pycache__/` (`classifier.pyc`, `draft_cleaner.pyc`). The historical patch **sources live on `Fable_buttonsbebe`** (see §4): `classifier.py`, `draft_cleaner.py`, `heartbeat.sh`, `README.md`.
 
 ---
 

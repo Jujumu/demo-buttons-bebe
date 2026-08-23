@@ -1,0 +1,38 @@
+[
+  {
+    "pattern": "\\b(?:speak|talk)\\s+to\\s+(?:a|your|the)\\s+(?:manager|supervisor|owner)\\b",
+    "exemplar": "Let me talk to a manager.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\bget\\s+me\\s+(?:a|your|the)\\s+(?:manager|supervisor|owner)\\b",
+    "exemplar": "Get me a manager.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\bwant\\s+(?:a|to\\s+speak\\s+to\\s+a)\\s+manager\\b",
+    "exemplar": "I want a manager.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\byour\\s+supervisor\\b",
+    "exemplar": "Put me through to your supervisor.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\bi\\s+demand\\b",
+    "exemplar": "I demand an answer.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\b(?:owner|manager|supervisor)'?s?\\s+(?:personal\\s+)?(?:phone|number|cell|mobile|email|address)\\b",
+    "exemplar": "Give me the owner's personal phone number.",
+    "tier": "immediate",
+    "view": "filtered"
+  }
+]

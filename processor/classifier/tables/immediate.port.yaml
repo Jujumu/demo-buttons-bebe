@@ -1,0 +1,260 @@
+[
+  {
+    "pattern": "\\bcharge\\s?-?\\s?back\\b",
+    "exemplar": "I will charge back the payment.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\bcharged\\s+back\\b",
+    "exemplar": "I have charged back the payment.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\breverse\\s+the\\s+(charge|payment)\\b",
+    "exemplar": "Please reverse the charge.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\bdisput(?:ing|ed)\\b",
+    "exemplar": "I am disputing this with my bank.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\bcontest\\s+the\\s+charge\\b",
+    "exemplar": "I will contest the charge.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\b(?:did\\s+not|didn'?t|never|have\\s+not|haven'?t)\\s+authoris?z?e\\w*\\b",
+    "exemplar": "I never authorised this payment.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\bunauthoris(?:ed|ing)\\s+(charge|transaction|payment)\\b",
+    "exemplar": "There is an unauthorised transaction on my card.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\bunauthorized\\s+transaction\\b",
+    "exemplar": "There is an unauthorized transaction.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\bfraudulent\\b",
+    "exemplar": "This looks fraudulent.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\bscamm(?:ed|er)\\b",
+    "exemplar": "I have been scammed.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\b(?:is|was|are|were|be|what)\\s+(?:a|an)\\s+rip[\\s-]?off\\b",
+    "exemplar": "This is a rip off.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\b(?:total|complete|absolute|utter|proper|such\\s+a)\\s+rip[\\s-]?off\\b",
+    "exemplar": "Total rip-off.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\brip[\\s-]?off\\s+(?:price|prices|merchant|merchants|company|site|shop)\\b",
+    "exemplar": "Rip off merchants, the lot of you.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\bripped\\s+(?:me|us)\\s+off\\b",
+    "exemplar": "You ripped me off.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\bstole\\s+my\\s+money\\b",
+    "exemplar": "They stole my money.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\b(?:want|give\\s+me|return)\\s+my\\s+money\\b",
+    "exemplar": "I want my money.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\byou\\s+stole\\b",
+    "exemplar": "You stole from me.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\b(?:this|that|it)\\s+is\\s+theft\\b",
+    "exemplar": "This is theft.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\breport(?:ing)?\\s+(?:this\\s+)?(?:as\\s+)?theft\\b",
+    "exemplar": "I am reporting this as theft.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\byou\\s+(?:have\\s+)?stolen\\b",
+    "exemplar": "You have stolen from me.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\bsuing\\b",
+    "exemplar": "I am suing.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\blegal\\s+counsel\\b",
+    "exemplar": "I have retained legal counsel.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\bcease\\s+and\\s+desist\\b",
+    "exemplar": "Consider this a cease and desist.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\bfile\\s+a\\s+complaint\\b",
+    "exemplar": "I will file a complaint.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\b(?:is\\s?n'?t|was\\s?n'?t|not)\\s+what\\s+i\\s+ordered\\b",
+    "exemplar": "This isn't what I ordered.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\b(?:got|sent|received)\\s+the\\s+wrong\\b",
+    "exemplar": "She received the wrong bag.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\b(?:items?|parcel|package|box|order|name|address|label)\\b[^.!?]{0,30}\\bnot\\s+mine\\b",
+    "exemplar": "The items in the box are not mine.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\bnot\\s+as\\s+described\\b",
+    "exemplar": "It is not as described.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\blooks?\\s+nothing\\s+like\\b",
+    "exemplar": "It looks nothing like it.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\bnothing\\s+like\\s+the\\s+(photo|picture|listing|description|website)\\b",
+    "exemplar": "Nothing like the photo.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\bbut\\s+(?:i\\s+)?got\\s+(?:a|an|the)\\s(?!error|message|email|reply|response|notification|code|discount|confirmation|receipt|voucher|refund|call|text)",
+    "exemplar": "I picked blue but got a pink one.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\bbut\\s+received\\s+(?:a|an|the)\\s(?!error|message|email|reply|response|notification|code|discount|confirmation|receipt|voucher|refund|call|text)",
+    "exemplar": "I picked blue but received a pink one.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\binstead\\s+i\\s+got\\b",
+    "exemplar": "Instead I got the gown.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\byou\\s+(?:sent|shipped|packed)\\s+(?:me\\s+)?(?:(?:a|an|the)\\s*)?(?:wrong|different|completely\\s+different)\\b",
+    "exemplar": "You sent me a different item.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\bcracked\\b",
+    "exemplar": "It is cracked.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\bshattered\\b",
+    "exemplar": "It is shattered.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\bfrayed\\b",
+    "exemplar": "The hem is frayed.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\bfell\\s+apart\\b",
+    "exemplar": "It fell apart.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\bseam\\s+ripped\\b",
+    "exemplar": "The seam ripped.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\b(?:there\\s?'?s|there\\s+is|it\\s+has|it\\s+had|came\\s+with|arrived\\s+with|turned\\s+up\\s+with|found)\\s+(?:a\\s+)?(?:big\\s+|small\\s+|large\\s+|huge\\s+|tiny\\s+)?(?:hole|rip|tear|stain|snag)\\b(?!\\s*(?:-\\s*)?away)",
+    "exemplar": "There is a hole in the fabric.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\b(?:did\\s+not|didn'?t)\\s+come\\s+with\\b",
+    "exemplar": "It didn't come with the bib.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\b(?:marked|says|shows|tracking\\s+says)\\s+(?:it\\s+was\\s+|as\\s+)?delivered\\s+but\\b",
+    "exemplar": "It is marked delivered but I have not seen it.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\bnothing\\s+(?:is\\s+)?here\\b",
+    "exemplar": "The courier says delivered, nothing is here.",
+    "tier": "immediate",
+    "view": "filtered"
+  }
+]

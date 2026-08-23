@@ -52,7 +52,8 @@ does not write to Gorgias.
 ## Knowledge base
 
 - Live root: `/root/Buttonsbebe Agent/KB`
-- Sources: `intents/`, `faq/`, `policies/`, `tickets/`, and `products/`
+- Sources: `intents/`, `faq/`, `policies/`, `tickets/`, `products/`, and
+  lower-trust Shopify platform background in `shopify/`
 - Index: LanceDB hybrid vector + FTS search
 - Product source: active Shopify catalog, refreshed every three days by
   `buttonsbebe-kb-sync.timer`

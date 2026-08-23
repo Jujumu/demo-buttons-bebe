@@ -6,7 +6,7 @@ so the rest of the code stays short and easy to read.
 It follows the file format described in CONVENTIONS.md:
   - each file is YAML front-matter + `##` sections
   - each `##` section becomes one searchable "chunk"
-  - content lives in intents/, faq/, policies/, tickets/
+  - content lives in intents/, faq/, policies/, tickets/, products/, shopify/
   - the learned/ folder is review-only and is NOT indexed
 
 In plain terms, this file knows how to:
@@ -34,8 +34,23 @@ TABLE = "kb"
 
 # Which content folders get indexed, in order of trust (highest first).
 # "products" is auto-synced from Shopify (see scripts/sync_products.py).
-CONTENT_FOLDERS = ["intents", "faq", "policies", "tickets", "products"]
+# "shopify" is platform-background reference (shopify.dev facts, not store policy).
+CONTENT_FOLDERS = ["intents", "faq", "policies", "tickets", "products", "shopify"]
 # learned/ is deliberately excluded until a human promotes a file out of it.
+
+# Multipliers are applied to the fused search score before results are sorted.
+# Store-authored and curated content stays authoritative; generated catalog data
+# is useful context, while Shopify platform background must not outrank store
+# policy on an otherwise similar query. Keep this map beside CONTENT_FOLDERS so
+# index and search code cannot grow separate category taxonomies.
+CATEGORY_WEIGHT = {
+    "intents": 1.0,
+    "faq": 1.0,
+    "policies": 1.0,
+    "tickets": 1.0,
+    "products": 0.85,
+    "shopify": 0.70,
+}
 
 # ---- the local language model ------------------------------------------
 # Small, multilingual (50+ languages incl. Hebrew), runs on CPU, ~0.2 GB,
@@ -73,7 +88,7 @@ class KBChunk(LanceModel):
     id: str            # stable id: "<relative/path.md>::<n>"
     file: str          # repo-relative path, e.g. policies/shipping-policy.md
     title: str         # the file's title (front-matter)
-    category: str      # intents | faq | policies | tickets
+    category: str      # intents | faq | policies | tickets | products | shopify
     status: str        # confirmed | DRAFT
     source: str        # provenance, e.g. derived-from-tickets (may be empty)
     tags: str          # comma-joined tags

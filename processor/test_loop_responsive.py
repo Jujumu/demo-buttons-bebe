@@ -49,7 +49,7 @@ WHAT COVERS THE RISK INSTEAD
 
 `ReDoSTests` in test_classifier_rules.py measures every pattern for
 superlinear growth, and a structure-aware fuzz of all 179 patterns across
-classifier.py, draft_cleaner.py and hermes_runner.py found zero remaining
+the classifier package, draft_cleaner.py and every hermes_runner.* module found zero remaining
 instances while still catching all six historical ones. The class is closed by
 making the patterns linear, not by trying to survive a non-linear one.
 
@@ -138,12 +138,19 @@ class TheTimersMustNotBeReorderedTests(unittest.TestCase):
     """
 
     def test_both_timers_still_use_the_same_budget(self):
-        import hermes_runner
+        from hermes_runner import runner as hermes_runner_runner
         import orchestrator
 
-        runner = inspect.getsource(hermes_runner.process_ticket_with_hermes)
-        self.assertIn("timeout=settings.job_timeout", runner,
-                      "if this gained a margin, the note in this file is stale")
+        source = inspect.getsource(hermes_runner_runner.process_ticket_with_hermes)
+        configured_timeout = (
+            "settings.job_timeout" in source
+            or 'getattr(settings, "job_timeout"' in source
+        )
+        subprocess_timeout = (
+            "timeout=settings.job_timeout" in source or "timeout=timeout" in source
+        )
+        self.assertTrue(configured_timeout and subprocess_timeout,
+                        "the Hermes subprocess must use the configured timeout")
         loop = inspect.getsource(orchestrator._run_with_timeout)
         self.assertIn("asyncio.wait_for", loop)
 

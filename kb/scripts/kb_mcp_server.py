@@ -17,6 +17,10 @@ Environment variables:
   KB_MCP_PORT        default 8077
 
 The server offers exactly ONE tool -- search_kb -- and nothing else.
+
+The CLI and MCP entrypoints share the search implementation. Its indexed
+folders and category weights come from `kb_lib`, so the MCP wrapper does not
+maintain a second category taxonomy or scorer.
 """
 import os
 import sys
@@ -25,7 +29,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from mcp.server.fastmcp import FastMCP
 from search_kb import search
-from kb_lib import _get_model
+from kb_lib import CATEGORY_WEIGHT, CONTENT_FOLDERS, _get_model
 
 HOST = os.environ.get("KB_MCP_HOST", "127.0.0.1")
 PORT = int(os.environ.get("KB_MCP_PORT", "8077"))
@@ -34,9 +38,22 @@ TRANSPORT = os.environ.get("KB_MCP_TRANSPORT", "stdio")
 mcp = FastMCP("buttonsbebe-kb", host=HOST, port=PORT)
 
 
+def _validate_category_configuration() -> None:
+    """Fail closed if the indexed corpus and ranking map drift apart."""
+    missing = sorted(set(CONTENT_FOLDERS) - set(CATEGORY_WEIGHT))
+    if missing:
+        raise RuntimeError(
+            "missing category weights for indexed folders: " + ", ".join(missing)
+        )
+
+
+_validate_category_configuration()
+
+
 @mcp.tool()
 def search_kb(query: str, k: int = 5) -> list[dict]:
-    """Search the Buttons Bebe knowledge base (policies, macros, solved tickets).
+    """Search the shared, weighted Buttons Bebe knowledge base.
+
     Returns the top matching passages, each with a relevance score and a risk
     label ("sensitive": true means return a safely prefixed draft for elevated
     human review; never send it and never suppress the draft)."""

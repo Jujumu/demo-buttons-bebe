@@ -43,8 +43,7 @@ from bb_webhook.database import (  # noqa: E402
     claim_job,
     complete_job,
     fail_job,
-    get_pending_agent_jobs,
-    get_pending_jobs,
+    get_next_pending_job,
     get_job_stats,
     init_db,
     requeue_stale_jobs,
@@ -55,6 +54,7 @@ from classifier import classify as deterministic_classify, IMMEDIATE, HIGH, NORM
 from demo_safety import demo_mode_enabled, demo_url_allowed  # noqa: E402
 from hermes_runner import draft_for_console, process_ticket_with_hermes  # noqa: E402
 from logging_setup import get_logger, setup_logging, log_event  # noqa: E402
+from shared.priority import Priority, at_least, normalize  # noqa: E402
 from whatsapp_notifier import send_whatsapp  # noqa: E402
 
 logger = get_logger(__name__)
@@ -222,7 +222,11 @@ async def process_customer_message(job: dict[str, Any]) -> dict[str, Any]:
         intents=intent_names,
     )
 
-    result["priority"] = hermes_result.get("priority", "high")
+    result["priority"] = normalize(
+        hermes_result.get("priority", Priority.HIGH.value),
+        default=Priority.HIGH,
+    )
+    hermes_result["priority"] = result["priority"]
     result["action"] = hermes_result.get("action", "sensitive_draft")
     notify_owner = hermes_result.get("notify_owner", False)
 
@@ -237,7 +241,7 @@ async def process_customer_message(job: dict[str, Any]) -> dict[str, Any]:
     if action == "sensitive_draft":
         # Sensitive topics (refunds, damaged/wrong items, disputes, etc.)
         # must always be at least HIGH and must always notify the owner.
-        if priority not in ("critical", "high"):
+        if not at_least(priority, Priority.HIGH):
             log_event(logger, "WARNING",
                       "Overriding LLM priority for sensitive topic",
                       ticket_id=ticket_id,
@@ -261,13 +265,15 @@ async def process_customer_message(job: dict[str, Any]) -> dict[str, Any]:
     # misclassifications of sensitive tickets. The classifier can NEVER
     # de-escalate the LLM's assessment (escalate-only).
     if det_result["priority"] in (IMMEDIATE, HIGH):
-        det_priority_map = {IMMEDIATE: "critical", HIGH: "high"}
+        det_priority_map = {
+            IMMEDIATE: Priority.CRITICAL.value,
+            HIGH: Priority.HIGH.value,
+        }
         enforced = det_priority_map[det_result["priority"]]
 
         current = result["priority"]
-        # Only escalate, never de-escalate
-        escalate_order = {"low": 0, "normal": 1, "high": 2, "critical": 3}
-        if escalate_order.get(enforced, 0) > escalate_order.get(current, 0):
+        # Only escalate, never de-escalate.
+        if not at_least(current, enforced):
             log_event(logger, "WARNING",
                       "Deterministic classifier escalating priority",
                       ticket_id=ticket_id,
@@ -426,25 +432,15 @@ async def run_processor() -> int:
 
     while not _shutdown:
         try:
-            # Customer messages first (higher priority)
-            customer_jobs = await get_pending_jobs(limit=1, db_path=settings.db_path_absolute)
+            # One query per pass, with customer messages ordered ahead of
+            # agent feedback work. This avoids a second round trip and keeps
+            # the customer-first policy in the database boundary.
+            job = await get_next_pending_job(db_path=settings.db_path_absolute)
 
-            if customer_jobs:
-                job = customer_jobs[0]
+            if job:
                 await _process_one_job(
-                    job, is_customer=True,
-                    settings=settings,
-                )
-                consecutive_errors = 0
-                continue
-
-            # Then agent messages (feedback loop)
-            agent_jobs = await get_pending_agent_jobs(limit=1, db_path=settings.db_path_absolute)
-
-            if agent_jobs:
-                job = agent_jobs[0]
-                await _process_one_job(
-                    job, is_customer=False,
+                    job,
+                    is_customer=bool(job.get("is_customer_message")),
                     settings=settings,
                 )
                 consecutive_errors = 0
