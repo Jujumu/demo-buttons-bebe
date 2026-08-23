@@ -22,6 +22,13 @@ class CompareClassifierTests(unittest.TestCase):
         parsed = harness._parser().parse_args(["--old", "old.py", "--new", "new.py"])
         self.assertEqual(parsed.samples, 10_000)
 
+    def test_python_ci_fetches_history_for_the_parity_source(self) -> None:
+        workflow = (
+            Path(__file__).resolve().parents[1] / ".github" / "workflows" / "ci.yml"
+        ).read_text(encoding="utf-8")
+        python_job = workflow.split("  whatsapp:", 1)[0]
+        self.assertIn("fetch-depth: 0", python_job)
+
     def test_synthetic_corpus_is_reproducible_and_exactly_sized(self) -> None:
         first = harness.synthetic_payloads(10_000, seed=17)
         second = harness.synthetic_payloads(10_000, seed=17)
