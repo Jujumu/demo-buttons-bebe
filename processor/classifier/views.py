@@ -11,6 +11,7 @@ from .guards import order_context as _order_context
 from .guards import problem as _problem
 
 
+# ADR-014 §2.2 — bound/fold/filter the port view; main keeps raw ticket text.
 _MAX_SCAN_CHARS = 60_000
 _TRUNCATION_SENTINEL = "zqxtruncatedzqx"
 _SMART_QUOTES = {

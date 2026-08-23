@@ -25,6 +25,7 @@ logger = get_logger(__name__)
 _NEVER = re.compile(r"(?!)")
 
 
+# ADR-015 §2.1 — only exact per-run tokens authenticate drafts and verdicts.
 def _json_marker_re(token: str | None) -> re.Pattern[str]:
     """Return only an exact-token JSON marker pattern.
 

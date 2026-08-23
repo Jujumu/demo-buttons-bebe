@@ -19,6 +19,7 @@ def _load(name: str):
 
 @dataclass(frozen=True, slots=True)
 class Rule:
+    # ADR-014 §2.2 — canonical metadata backs legacy flattened list identities.
     """One labelled classifier rule and the evidence that exercises it."""
 
     pattern: str

@@ -1,5 +1,6 @@
 """Compatibility shim for the package-backed Hermes runner."""
 
+# ADR-015 §2.4 — retain the flat facade over the authenticated package.
 from hermes_runner import (  # noqa: F401
     build_hermes_command,
     draft_for_console,

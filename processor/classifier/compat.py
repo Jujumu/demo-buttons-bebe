@@ -10,6 +10,7 @@ def install(
     modules: tuple[ModuleType, ...],
     names: set[str] | None = None,
 ) -> None:
+    # ADR-014 §2.1 — retain the legacy facade over canonical package owners.
     del names
     targets: dict[str, tuple[ModuleType, ...]] = {}
     for module in modules:

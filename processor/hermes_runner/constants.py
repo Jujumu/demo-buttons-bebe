@@ -38,8 +38,7 @@ def _make_run_token() -> str:
     return secrets.token_hex(_NONCE_BYTES)
 
 
-# This is intentionally sendable: it is reserved for an invocation failure
-# such as a missing binary, non-zero exit, or timeout.
+# ADR-015 §2.3 — runner execution failure is sendable; token failure is not.
 _FALLBACK_RESULT: dict[str, Any] = {
     "priority": "high",
     "reason": "Hermes invocation failed — defaulting to high for safety",
