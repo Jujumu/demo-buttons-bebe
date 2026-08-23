@@ -27,6 +27,7 @@ from typing import Any
 from config import get_settings
 from draft_cleaner import clean_draft, should_draft
 from logging_setup import get_logger, log_event
+from shared.priority import RANK, at_least
 
 logger = get_logger(__name__)
 
@@ -249,8 +250,9 @@ def _is_echo_of_customer(fragment: str, customer_text: str | None) -> bool:
     return needle in _normalise_for_echo(customer_text)
 
 
-# Severity order, most severe last. Used to merge verdicts conservatively.
-_PRIORITY_ORDER = ("low", "normal", "high", "critical")
+# Compatibility alias for callers that imported the old private tuple.  The
+# canonical ordering lives in shared.priority.RANK.
+_PRIORITY_ORDER = tuple(RANK)
 # Same idea for "action": the more cautious value wins a disagreement.
 _ACTION_SEVERITY = {"drafted": 0, "no_kb_match": 1, "sensitive_draft": 2,
                     "escalated": 3}
@@ -316,7 +318,7 @@ def _valid_verdicts(
             continue
         # A template echo ("<critical|high|normal|low>") fails here and is
         # skipped rather than destroying the real answer.
-        if str(parsed["priority"]).lower().strip() not in _PRIORITY_ORDER:
+        if str(parsed["priority"]).lower().strip() not in RANK:
             continue
         # "reason" is rendered on the dashboard and passed to send_whatsapp().
         # Only "the key exists" was checked, so a dict or list reason survived
@@ -346,8 +348,8 @@ def _merge_verdicts(blocks: list[tuple[re.Match, dict[str, Any]]]) -> dict[str, 
     Raising is not free (a spurious page is alert fatigue), but it is
     recoverable; silently clearing an owner alert on a chargeback is not.
     """
-    best = max(blocks, key=lambda b: _PRIORITY_ORDER.index(
-        str(b[1]["priority"]).lower().strip()))[1]
+    best = max(blocks, key=lambda b: RANK.get(
+        str(b[1]["priority"]).lower().strip(), -1))[1]
 
     # WHITELIST, not dict(best). Copying the whole block let a planted verdict
     # smuggle arbitrary keys into the result - including a forged
@@ -1034,8 +1036,7 @@ def process_ticket_with_hermes(
             log_event(logger, "WARNING",
                       "Ambiguous draft in Hermes output — withholding it",
                       ticket_id=ticket_id, token_used=used_token)
-            if _PRIORITY_ORDER.index(str(parsed.get("priority", "high")).lower()
-                                     ) < _PRIORITY_ORDER.index("high"):
+            if not at_least(parsed.get("priority", "high"), "high"):
                 parsed["priority"] = "high"
             parsed["action"] = "sensitive_draft"
             parsed["notify_owner"] = True

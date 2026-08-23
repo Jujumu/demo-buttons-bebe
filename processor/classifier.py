@@ -43,13 +43,14 @@ from typing import Any
 
 from config import get_settings
 from logging_setup import get_logger, log_event
+from shared.priority import Priority
 
 logger = get_logger(__name__)
 
 # Priority constants
 IMMEDIATE = "immediate"
-HIGH = "high"
-NORMAL = "normal"
+HIGH = Priority.HIGH.value
+NORMAL = Priority.NORMAL.value
 
 # ── Keyword patterns ────────────────────────────────────────
 
