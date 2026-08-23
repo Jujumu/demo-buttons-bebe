@@ -1,4 +1,4 @@
-srv1766050.hstgr.cloud {
+srv1766050.hstgr.cloud, support.buttonsbebe.com {
 	@whatsapp path /connect-whatsapp/<WA_TOKEN> /connect-whatsapp/<WA_TOKEN>/*
 	handle @whatsapp {
 		reverse_proxy 127.0.0.1:8085
