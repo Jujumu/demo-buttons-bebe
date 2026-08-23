@@ -15,6 +15,14 @@ fake_kb_lib = sys.modules.setdefault("kb_lib", types.ModuleType("kb_lib"))
 fake_kb_lib.DB_DIR = Path("/tmp/buttonsbebe-search-test")
 fake_kb_lib.TABLE = "kb"
 fake_kb_lib.embed_query = lambda _query: [0.1]
+fake_kb_lib.CATEGORY_WEIGHT = {
+    "intents": 1.0,
+    "faq": 1.0,
+    "policies": 1.0,
+    "tickets": 1.0,
+    "products": 0.85,
+    "shopify": 0.70,
+}
 
 import search_kb  # noqa: E402
 
@@ -118,6 +126,68 @@ class SearchDiversificationTests(unittest.TestCase):
         self.assertEqual(
             [result["heading"] for result in results],
             ["returns-1", "shipping-1", "returns-2", "shipping-2"],
+        )
+
+    def test_shopify_background_cannot_outrank_same_query_policy(self) -> None:
+        rows = [
+            hit("shopify-refund", "shopify/shopify-refunds-how-they-work.md"),
+            hit("store-policy", "policies/refunds-and-disputes.md"),
+        ]
+
+        results = self._search(rows, k=2)
+
+        self.assertEqual(
+            [result["file"] for result in results],
+            [
+                "policies/refunds-and-disputes.md",
+                "shopify/shopify-refunds-how-they-work.md",
+            ],
+        )
+
+    def test_exact_platform_identifier_surfaces_shopify_explainer_in_default_top_five(self) -> None:
+        shopify = hit("shopify-status", "shopify/shopify-refunds-how-they-work.md")
+        shopify["text"] = "Shopify financial status: partially_refunded means some payment was returned."
+        policies = [hit(f"policy-{index}", f"policies/policy-{index}.md") for index in range(1, 6)]
+
+        table = FakeTable(
+            [shopify, *policies],
+            [*policies, shopify],
+        )
+        with patch.object(search_kb.lancedb, "connect", return_value=FakeDB(table)):
+            with patch.object(search_kb, "_notice_results", return_value=[]):
+                results = search_kb.search("what is partially_refunded")
+
+        files = [result["file"] for result in results]
+        self.assertIn("shopify/shopify-refunds-how-they-work.md", files[:5])
+
+    def test_platform_identifier_evidence_is_bounded(self) -> None:
+        query = " ".join(f"field_{index}" for index in range(100))
+
+        identifiers = search_kb._platform_identifiers(query)
+
+        self.assertEqual(len(identifiers), search_kb.MAX_PLATFORM_IDENTIFIERS)
+        self.assertTrue(
+            all(
+                len(identifier) <= search_kb.MAX_PLATFORM_IDENTIFIER_CHARS
+                for identifier in identifiers
+            )
+        )
+
+    def test_unknown_category_keeps_neutral_weight(self) -> None:
+        score = search_kb._weighted_score(0.5, {"category": "future-category"})
+        self.assertEqual(score, 0.5)
+
+    def test_products_are_penalized_against_same_query_policy(self) -> None:
+        rows = [
+            hit("product", "products/red-dress.md"),
+            hit("store-policy", "policies/sizing-guide.md"),
+        ]
+
+        results = self._search(rows, k=2)
+
+        self.assertEqual(
+            [result["file"] for result in results],
+            ["policies/sizing-guide.md", "products/red-dress.md"],
         )
 
     def test_search_holds_read_lock_while_opening_and_querying_index(self) -> None:

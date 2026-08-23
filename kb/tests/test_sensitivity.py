@@ -145,7 +145,7 @@ class SensitivityTaxonomyTests(unittest.TestCase):
             re.IGNORECASE | re.DOTALL,
         )
         failures = []
-        for folder in ("intents", "faq", "policies", "tickets"):
+        for folder in ("intents", "faq", "policies", "tickets", "shopify"):
             for path in sorted((KB_DIR / folder).rglob("*.md")):
                 if path.name.lower() == "readme.md":
                     continue

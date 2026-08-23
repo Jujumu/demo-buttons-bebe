@@ -1,8 +1,9 @@
 # KB Search Engine (LanceDB) — how to run and maintain it
 
 This explains the **search engine** that sits on top of the content. For the
-content itself (what's in `intents/`, `faq/`, `policies/`, `tickets/`) and the
-file format, see `README.md` and `CONVENTIONS.md`.
+content itself (what's in `intents/`, `faq/`, `policies/`, `tickets/`,
+`products/`, and `shopify/`) and the file format, see `README.md` and
+`CONVENTIONS.md`.
 
 You do not need to be technical. **You only ever edit the markdown files.**
 
@@ -33,8 +34,11 @@ marker, so it's obvious which answers must go to a human.
 
 ## What gets indexed
 
-- **Indexed:** `intents/`, `faq/`, `policies/`, `tickets/`, `products/` — each `##`
-  section in a file becomes one searchable chunk (this matches `CONVENTIONS.md`).
+- **Indexed:** `intents/`, `faq/`, `policies/`, `tickets/`, `products/`,
+  `shopify/` — each `##` section in a file becomes one searchable chunk (this
+  matches `CONVENTIONS.md`). `shopify/` is platform-background reference
+  (Shopify statuses, refunds, returns, cancellations, payments, gift cards,
+  catalog model) researched from shopify.dev.
 - **Not indexed:** the `learned/` folder (review-only), folder `README.md` files,
   and any file whose name starts with `_`.
 
@@ -76,6 +80,16 @@ section two ways: as **keywords** and as a **meaning fingerprint**. A question i
 then searched **both** ways at once and the results are blended — so it matches
 exact words (order numbers, SKUs, Hebrew/other languages) **and** paraphrases.
 
+After reciprocal-rank fusion, the search applies the category multiplier before
+sorting and diversification. Store-authored or curated content remains at full
+weight; generated products are `0.85`; Shopify platform background is `0.70`.
+This keeps platform mechanics useful for factual questions without letting them
+outrank a Buttons Bebe policy on a similar query. Unknown categories use the
+neutral `1.0` fallback. Exact snake-case platform identifiers such as
+`partially_refunded` receive one bounded lexical anchor before that trust
+multiplier, so a precise mechanics question can still surface its explainer.
+Owner Notice Board entries are still prepended as explicit overrides.
+
 Under the hood: **LanceDB** (an embedded hybrid-search library — no server to run)
 plus a **small local multilingual model** for the "meaning" side. Everything runs
 on this server: **no API keys, no per-search cost, nothing leaves the box.**
@@ -86,7 +100,9 @@ on this server: **no API keys, no per-search cost, nothing leaves the box.**
 
 ```
 KB/
-  intents/ faq/ policies/ tickets/   <- YOUR CONTENT (edit these)
+  intents/ faq/ policies/ tickets/   <- store content (edit these)
+  products/                           <- generated Shopify catalog
+  shopify/                            <- platform background (shopify.dev research)
   learned/                            <- review-only, not searched
   scripts/
     kb_lib.py        shared helpers (reads files, makes fingerprints)

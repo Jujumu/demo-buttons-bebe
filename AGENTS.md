@@ -77,7 +77,7 @@ Gorgias webhook
 |---|---|
 | `webhook/` | FastAPI receiver + queue DB + console API (`src/bb_webhook/app.py`). uv package. |
 | `processor/` | Orchestrator loop; `hermes_runner.py` (prompt, command build, draft extraction); `draft_cleaner.py`; `whatsapp_notifier.py`; `heartbeat.sh`. uv package. |
-| `kb/` | KB markdown (`intents/ faq/ policies/ tickets/ products/`), LanceDB index/sync scripts, MCP server, systemd units/timers, `search.sh`. |
+| `kb/` | KB markdown (`intents/ faq/ policies/ tickets/ products/ shopify/` — `shopify/` is shopify.dev platform background), LanceDB index/sync scripts, MCP server, systemd units/timers, `search.sh`. |
 | `tools/` | Read-only Redo + Gorgias MCP modules, `run-gorgias.sh` / `run-redo.sh`, `verify_release.sh`, `verify_hermes_toolset.sh`. |
 | `kb-admin/` | KB editor API (Node, :8087) with auth-safety tests. |
 | `whatsapp-connect/` | Node + Baileys: QR pairing page, owner alerts, 2-way Hermes bridge (:8085). |
