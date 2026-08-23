@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -12,56 +13,73 @@ PROCESSOR_DIR = Path(__file__).resolve().parent
 WEBHOOK_SRC = PROCESSOR_DIR.parent / "webhook" / "src"
 sys.path[:0] = [str(PROCESSOR_DIR), str(WEBHOOK_SRC)]
 
-from hermes_runner import (  # noqa: E402
-    _build_prompt,
-    _parse_json_result,
-    draft_for_console,
-    process_ticket_with_hermes,
-)
+from hermes_runner import draft_for_console, process_ticket_with_hermes  # noqa: E402
+from hermes_runner import extract, prompt, runner  # noqa: E402
 from classifier import classify  # noqa: E402
+
+
+TOKEN = "0123456789abcdef"
+
+
+def tokenized_verdict(**fields: object) -> str:
+    payload = {
+        "priority": "high",
+        "reason": "test",
+        "action": "sensitive_draft",
+        "notify_owner": True,
+        "gorgias_priority_set": False,
+        "note_posted": False,
+        **fields,
+    }
+    return f"JSON_RESULT[{TOKEN}]: " + json.dumps(payload, separators=(",", ":"))
 
 
 class HermesReadOnlyPromptTests(unittest.TestCase):
     def test_prompt_and_runner_expose_no_write_toggle(self) -> None:
-        prompt = _build_prompt(
+        built_prompt = prompt._build_prompt(
             ticket_id=12345,
             message_text="Please refund order 123456",
             ticket_subject="Refund request",
             customer_email="customer@example.com",
             intents=["refund"],
+            token=TOKEN,
         )
 
-        self.assertIn("<DRAFT>", prompt)
-        self.assertIn("READ-ONLY", prompt)
-        self.assertIn("note_posted=false", prompt)
-        self.assertIn("gorgias_priority_set=false", prompt)
-        self.assertNotIn("curl PUT", prompt)
-        self.assertNotIn("curl POST", prompt)
-        self.assertNotIn("Post the draft as an internal note", prompt)
-        self.assertNotIn("get_order", prompt)
-        self.assertIn("get_returns_for_order", prompt)
-        self.assertIn("get_customer", prompt)
-        self.assertNotIn("gorgias_writes_enabled", inspect.signature(_build_prompt).parameters)
+        self.assertIn(f"<DRAFT:{TOKEN}>", built_prompt)
+        self.assertIn(f"JSON_RESULT[{TOKEN}]", built_prompt)
+        self.assertIn("READ-ONLY", built_prompt)
+        self.assertIn("note_posted=false", built_prompt)
+        self.assertIn("gorgias_priority_set=false", built_prompt)
+        self.assertNotIn("curl PUT", built_prompt)
+        self.assertNotIn("curl POST", built_prompt)
+        self.assertNotIn("Post the draft as an internal note", built_prompt)
+        self.assertNotIn("get_order", built_prompt)
+        self.assertIn("get_returns_for_order", built_prompt)
+        self.assertIn("get_customer", built_prompt)
+        self.assertNotIn("gorgias_writes_enabled", inspect.signature(prompt._build_prompt).parameters)
         self.assertNotIn(
             "gorgias_writes_enabled",
             inspect.signature(process_ticket_with_hermes).parameters,
         )
 
     def test_model_cannot_claim_read_only_writes_happened(self) -> None:
-        parsed = _parse_json_result(
-            'JSON_RESULT: {"priority":"high","reason":"test",'
-            '"action":"sensitive_draft","notify_owner":true,'
-            '"gorgias_priority_set":true,"note_posted":true}'
+        parsed = extract._parse_json_result(
+            tokenized_verdict(gorgias_priority_set=True, note_posted=True),
+            token=TOKEN,
         )
         self.assertFalse(parsed["gorgias_priority_set"])
         self.assertFalse(parsed["note_posted"])
 
     def test_failed_generation_never_echoes_customer_message_as_draft(self) -> None:
         customer_message = "Where is my order?"
-        fallback = _parse_json_result("Hermes did not return JSON")
+        fallback = extract._parse_json_result(
+            "Hermes did not return JSON", token=TOKEN
+        )
         draft = draft_for_console(fallback)
-        self.assertTrue(draft.startswith("[SENSITIVE — REVIEW CAREFULLY BEFORE SENDING]"))
-        self.assertIn("reviewing your request", draft)
+        self.assertEqual(fallback["action"], "sensitive_draft")
+        self.assertTrue(fallback["notify_owner"])
+        self.assertTrue(fallback["no_draft"])
+        self.assertEqual(draft, "")
         self.assertNotEqual(
             draft, customer_message
         )
@@ -75,29 +93,29 @@ class HermesReadOnlyPromptTests(unittest.TestCase):
             )
         )
 
-    @patch("hermes_runner.subprocess.run")
-    @patch("hermes_runner.get_settings")
-    def test_valid_json_without_draft_fails_closed_to_reviewable_fallback(
-        self, get_settings, run
-    ) -> None:
-        get_settings.return_value = SimpleNamespace(job_timeout=30)
-        run.return_value = SimpleNamespace(
-            returncode=0,
-            stderr="",
-            stdout=(
-                'JSON_RESULT: {"priority":"normal","reason":"classified",'
-                '"action":"drafted","notify_owner":false,'
-                '"gorgias_priority_set":false,"note_posted":false}'
+    def test_valid_json_without_draft_fails_closed_to_non_sendable_result(self) -> None:
+        with patch.object(
+            runner,
+            "get_settings",
+            return_value=SimpleNamespace(job_timeout=30),
+        ), patch.object(
+            runner.subprocess,
+            "run",
+            return_value=SimpleNamespace(
+                returncode=0,
+                stderr="",
+                stdout=tokenized_verdict(
+                    priority="normal", action="drafted", notify_owner=False
+                ),
             ),
-        )
-
-        result = process_ticket_with_hermes(
-            ticket_id=123,
-            message_text="Where is my order?",
-            ticket_subject="Order status",
-            customer_email="customer@example.com",
-            intents=["shipping"],
-        )
+        ):
+            result = process_ticket_with_hermes(
+                ticket_id=123,
+                message_text="Where is my order?",
+                ticket_subject="Order status",
+                customer_email="customer@example.com",
+                intents=["shipping"],
+            )
 
         self.assertEqual(result["priority"], "high")
         self.assertEqual(result["action"], "sensitive_draft")

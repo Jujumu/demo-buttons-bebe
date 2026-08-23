@@ -1,0 +1,38 @@
+[
+  {
+    "pattern": "\\b(angry|furious|outraged|disgusted|appalled|unacceptable)\\b",
+    "exemplar": "I am angry that my refund is still missing.",
+    "tier": "immediate",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\b(terrible|horrible|awful|worst)\\b",
+    "exemplar": "This is terrible service and I need a refund.",
+    "tier": "immediate",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\bnever\\s+(shopping|buying|ordering)\\s+(here|from\\s+you)\\b",
+    "exemplar": "I am never shopping here again because I need a refund.",
+    "tier": "immediate",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\b(bbb|better\\s+business\\s+bureau|consumer\\s+protection|small\\s+claims)\\b",
+    "exemplar": "I will report this to the BBB if my refund is not resolved.",
+    "tier": "immediate",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\b(lawsuit|sue|legal\\s+action|attorney|lawyer)\\b",
+    "exemplar": "I will take legal action over this refund.",
+    "tier": "immediate",
+    "view": "unfiltered"
+  },
+  {
+    "pattern": "\\b(scam|fraud|rip\\s?off|robbed)\\b",
+    "exemplar": "This feels like a scam and I want a refund.",
+    "tier": "immediate",
+    "view": "unfiltered"
+  }
+]
