@@ -176,6 +176,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible{
 .live{min-height:38px;border:1px solid rgba(35,122,75,.12);background:rgba(255,255,255,.48);color:var(--ink);padding:7px 12px;border-radius:999px;font-size:11.5px;font-weight:650;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,.75)}
 .live:hover{background:rgba(255,255,255,.72)}.dot{width:7px;height:7px;background:#3aa166;box-shadow:0 0 0 4px rgba(58,161,102,.12)}
 .head-icon,.head-avatar{border:1px solid rgba(255,255,255,.62);background:rgba(255,255,255,.4);color:var(--ink);display:grid;place-items:center;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,.75)}
+.head-logout{border:1px solid rgba(28,28,28,.12);background:rgba(255,255,255,.4);color:var(--ink);border-radius:999px;padding:9px 14px;font-size:11px;font-weight:650;cursor:pointer}.head-logout:hover{background:rgba(255,255,255,.72)}.head-logout:disabled{opacity:.6;cursor:wait}
 .head-icon{width:39px;height:39px;border-radius:50%;position:relative}.head-icon svg{width:18px;height:18px}.head-icon:after{content:"";position:absolute;right:8px;top:7px;width:6px;height:6px;border-radius:50%;background:var(--orange);border:2px solid #f2f0e6}.head-avatar{width:40px;height:40px;border-radius:50%;background:var(--orange);font-size:12px;font-weight:750}
 .head-icon:hover,.head-avatar:hover{transform:translateY(-1px);background:rgba(255,255,255,.7)}
 .menu-btn,.nav-scrim{display:none}
@@ -323,6 +324,7 @@ function render(){
        <div class="live" role="status"><span class="dot"></span> Agent live</div>
        <button class="head-icon refresh-control" id="refresh" aria-label="Refresh dashboard data" title="Refresh dashboard data">${IC.refresh}</button>
        <button class="head-icon" id="header-notif" aria-label="${notificationLabel}" title="${notificationLabel}">${IC.notif}${unreadCount===null?'':`<span class="t-badge" data-open="${unreadCount>0}"><span class="t-badge-dot">${unreadCount>99?'99+':unreadCount}</span></span>`}</button>
+       <button class="head-logout" id="header-logout" type="button">Sign out</button>
        <button class="head-avatar" id="header-settings" aria-label="Open settings">B</button>
       </div></header>
     <div class="wrap"><div class="t-panel-slide" data-open="false">${loadFailed?errorBanner():""}${view()}</div></div>
@@ -333,6 +335,7 @@ function render(){
  const rf=document.getElementById("refresh");if(rf)rf.onclick=async()=>{rf.classList.add("refreshing");rf.disabled=true;statusMsg="Refreshing dashboard data";if(tab==="kb"){kbData=null;await loadKb();}else if(tab==="notif"){await loadNotifications();}else if(tab==="notices"){await loadNotices();}else{await boot();}};
  const hn=document.getElementById("header-notif");if(hn)hn.onclick=()=>openTab("notif");
  const hs=document.getElementById("header-settings");if(hs)hs.onclick=()=>openTab("settings");
+ const lo=document.getElementById("header-logout");if(lo)lo.onclick=async()=>{lo.disabled=true;try{await fetch(API+"/auth/logout",{method:"POST",credentials:"same-origin"});}finally{location.replace("/console/login");}};
  const mb=document.getElementById("menu-btn"),side=document.querySelector(".side"),scrim=document.getElementById("nav-scrim");
  const setMenu=(open,restore=true)=>{if(!side||!scrim||!mb)return;side.classList.toggle("open",open);scrim.classList.toggle("open",open);mb.setAttribute("aria-expanded",String(open));if(open)requestAnimationFrame(()=>{const first=side.querySelector(".nav a");if(first)first.focus();});else if(restore)mb.focus();};
  if(mb)mb.onclick=()=>setMenu(!side.classList.contains("open"));if(scrim)scrim.onclick=()=>setMenu(false);

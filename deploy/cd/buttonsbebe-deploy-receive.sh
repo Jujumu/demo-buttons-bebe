@@ -63,6 +63,11 @@ rollback() {
   if [[ -f "$backup_root/console/index.html" ]]; then
     install -D -m 0644 "$backup_root/console/index.html" "$web_root/index.html"
   fi
+  if [[ -f "$backup_root/console/login.html" ]]; then
+    install -D -m 0644 "$backup_root/console/login.html" "$web_root/login.html"
+  else
+    rm -f "$web_root/login.html"
+  fi
   for service in "${services[@]}"; do
     systemctl start "$service" 2>/dev/null || true
   done
@@ -162,6 +167,9 @@ rsync -a --no-specials --no-devices "$live_root/" "$backup_root/source/"
 if [[ -f "$web_root/index.html" ]]; then
   cp -p "$web_root/index.html" "$backup_root/console/index.html"
 fi
+if [[ -f "$web_root/login.html" ]]; then
+  cp -p "$web_root/login.html" "$backup_root/console/login.html"
+fi
 rollback_needed=1
 
 for timer in "${maintenance_timers[@]}"; do
@@ -202,6 +210,7 @@ sync_source kb-admin "$live_root/kb-admin" \
   --exclude '.env' --exclude '.venv/' --exclude '__pycache__/' \
   --exclude 'node_modules/' --exclude 'data/' --exclude 'logs/'
 install -D -m 0644 "$release_dir/console-src/index.html" "$web_root/index.html"
+install -D -m 0644 "$release_dir/console-src/login.html" "$web_root/login.html"
 
 (cd "$live_root/webhook" && "$uv_bin" sync --locked)
 (cd "$live_root/processor" && "$uv_bin" sync --locked)
