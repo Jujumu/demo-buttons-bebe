@@ -1,0 +1,32 @@
+[
+  {
+    "pattern": "\\b(?:has\\s?n'?t|has\\s+not|have\\s+not|have\\s?n'?t)\\s+(?:arrived|turned\\s+up|shown\\s+up)\\b",
+    "exemplar": "My parcels haven't arrived.",
+    "tier": "high",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\bstill\\s+(?:has\\s?n'?t|have\\s?n'?t|not)\\s+(?:arrived|come|received)\\b",
+    "exemplar": "It still hasn't come.",
+    "tier": "high",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\bnot\\s+(?:been\\s+)?delivered\\b",
+    "exemplar": "It was not delivered.",
+    "tier": "high",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\bnothing\\s+(?:has\\s+|had\\s+)?(?:arrived|come|turned\\s+up|showed\\s+up|been\\s+delivered)\\b",
+    "exemplar": "Nothing has arrived.",
+    "tier": "high",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\bwhere\\s+my\\s+(?:order|parcel|package|delivery|items?|stuff)\\s+(?:is|are)\\b",
+    "exemplar": "Do you know where my parcel is?",
+    "tier": "high",
+    "view": "filtered"
+  }
+]

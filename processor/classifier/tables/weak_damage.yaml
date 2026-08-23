@@ -1,0 +1,44 @@
+[
+  {
+    "pattern": "\\bripped\\b",
+    "exemplar": "The parcel held a ripped bodysuit.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\bstained\\b",
+    "exemplar": "My order held a stained bib.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\b(?:for|to|belongs?\\s+to|addressed\\s+to|labell?ed\\s+(?:for|to)|meant\\s+for)\\s+another\\s+customer\\b",
+    "exemplar": "The box is labelled for another customer.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\banother\\s+customer'?s\\s+(?:order|name|parcel|package|box|address|details|items?)\\b",
+    "exemplar": "The parcel has another customer's name on it.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\bsomeone\\s+else'?s?\\s+(order|items?|package|parcel|box)\\b",
+    "exemplar": "The box holds someone else's order.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\ba\\s+(?:hole|rip|tear|stain)\\b(?!-)(?!\\s*(?:-\\s*)?away)",
+    "exemplar": "My parcel held a top with a stain.",
+    "tier": "immediate",
+    "view": "filtered"
+  },
+  {
+    "pattern": "\\b(?:hole|rip|tear|stain)\\b(?!-)\\s+(?:in|on)\\b",
+    "exemplar": "My parcel held a top with holes, hole in the arm.",
+    "tier": "immediate",
+    "view": "filtered"
+  }
+]

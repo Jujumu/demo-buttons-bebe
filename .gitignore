@@ -69,3 +69,7 @@ _VPS-FULL-BACKUP-*/
 
 # Generated agent-session artifacts (review rounds, diffs, scratch)
 output/
+
+# Generated project explainers
+/PROJECT-EXPLAINER.html
+/PROJECT-EXPLAINER.pdf

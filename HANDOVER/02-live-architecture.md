@@ -197,7 +197,7 @@ Captures the human's real reply and feeds it back into the KB.
 These exist in the repo/on the VPS but post-date `CLAUDE.md` (2026-07-09) — flag and confirm on the VPS:
 - **KB Admin API — `kb-admin/server.js` (🟢), port `8087`, unit `buttonsbebe-kb-admin`.** "Editable knowledge base API for the console," reached behind Console auth at `/console/kbapi/*`. Powers the **Notice Board** (owner-posted notices that override KB answers, with auto-expiry). Related in-repo pieces: `kb/notices/`, `kb/scripts/notices_lib.py`, notice-injection in `kb/scripts/search_kb.py`, and the GC unit **`buttonsbebe-kb-notices-gc.service` + `.timer`** (every ~15 min). Source: `SPRINT-notice-board-2026-07-12.md`.
 - **`fable/` (⚠️ verify).** A directory tree (`server/app/brains`, `emulators`, `scripts`, `tests`) with a SQLite DB (`fable/server/data/fable.db`) and compiled `__pycache__`, **but zero `.py` source files** in the checkout. Not referenced by `CLAUDE.md`. Do **not** assume it is part of the live pipeline — treat as experimental/unknown until confirmed on the VPS.
-- **`deploy/` (🟢).** `patch_app.py`, `review_console.html`, `vps-patches/` — deployment/patching helpers.
+- **`deploy/` (🟢).** `review_console.html` and `vps-patches/` are deployment helpers; `patch_app.py` is a retired no-op because review routes now ship in the versioned webhook package.
 - **`data/` (🟢).** Two exported Gorgias ticket CSVs (2026-06-23) — sample data, not runtime.
 
 ---

@@ -7,7 +7,6 @@ Gorgias sends bursts of webhook deliveries.
 
 from __future__ import annotations
 
-import asyncio
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -16,13 +15,10 @@ from typing import Any
 import aiosqlite
 
 from .config import get_settings
+from .db import Database
 from .logging_utils import get_logger
 
 logger = get_logger(__name__)
-
-_LOCK_RETRY_ATTEMPTS = 5
-_LOCK_RETRY_DELAY = 0.15  # seconds
-
 
 # ── Schema ────────────────────────────────────────────────
 
@@ -110,9 +106,7 @@ CREATE TABLE IF NOT EXISTS app_settings (
 
 async def init_db(db_path: Path | None = None) -> None:
     """Create the database, tables, and enable WAL journal mode."""
-    if db_path is None:
-        settings = get_settings()
-        db_path = settings.db_path_absolute
+    db_path = Database(db_path).path
 
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -134,44 +128,23 @@ async def _with_retry(
     fetch: bool = False,
     return_rowcount: bool = False,
 ) -> Any | None:  # noqa: F401 -- Any imported via aiosqlite.Row
-    """Execute *sql* with retry-on-locked."""
-    for attempt in range(_LOCK_RETRY_ATTEMPTS):
-        try:
-            async with aiosqlite.connect(str(db_path)) as conn:
-                await conn.execute("PRAGMA busy_timeout=3000")
-                if fetch:
-                    conn.row_factory = aiosqlite.Row
-                    cursor = await conn.execute(sql, params)
-                    result = await cursor.fetchall()
-                    await cursor.close()
-                    return result
-                else:
-                    cursor = await conn.execute(sql, params)
-                    affected = cursor.rowcount
-                    row = cursor.lastrowid
-                    await conn.commit()
-                    await cursor.close()
-                    return affected if return_rowcount else row
-        except aiosqlite.OperationalError as exc:
-            if "locked" in str(exc).lower() and attempt < _LOCK_RETRY_ATTEMPTS - 1:
-                logger.warning("DB locked on %s — retry %d/%d", operation, attempt + 1, _LOCK_RETRY_ATTEMPTS)
-                await asyncio.sleep(_LOCK_RETRY_DELAY)
-                continue
-            raise
-    return None
+    """Compatibility seam for callers that used the old module helper."""
+    return await Database(db_path).execute(
+        sql,
+        params,
+        operation=operation,
+        fetch=fetch,
+        return_rowcount=return_rowcount,
+    )
 
 
 async def is_duplicate(message_id: str, db_path: Path | None = None) -> bool:
     """Check if we've already received this message_id."""
-    if db_path is None:
-        db_path = get_settings().db_path_absolute
-
-    rows = await _with_retry(
-        "is_duplicate",
+    db = Database(db_path)
+    rows = await db.fetch(
         "SELECT 1 FROM webhook_events WHERE message_id = ?",
         (message_id,),
-        db_path,
-        fetch=True,
+        operation="is_duplicate",
     )
     return bool(rows) and len(rows) > 0
 
@@ -190,20 +163,17 @@ async def record_event(
     Returns ``True`` only for the request that inserted the idempotency row.
     Concurrent duplicate deliveries therefore have one unambiguous winner.
     """
-    if db_path is None:
-        db_path = get_settings().db_path_absolute
-
+    db = Database(db_path)
     now = datetime.now(timezone.utc).isoformat()
 
-    inserted = await _with_retry(
-        "record_event",
+    inserted = await db.execute(
         """INSERT OR IGNORE INTO webhook_events
            (message_id, tenant_id, ticket_id, event_type,
             author_type, raw_payload, received_at)
            VALUES (?, ?, ?, ?, ?, ?, ?)""",
         (message_id, tenant_id, ticket_id, event_type,
          author_type, raw_payload, now),
-        db_path,
+        operation="record_event",
         return_rowcount=True,
     )
     return inserted == 1
@@ -220,13 +190,10 @@ async def enqueue_job(
     db_path: Path | None = None,
 ) -> int:
     """Add a job to the queue for the orchestrator worker."""
-    if db_path is None:
-        db_path = get_settings().db_path_absolute
-
+    db = Database(db_path)
     now = datetime.now(timezone.utc).isoformat()
 
-    job_id = await _with_retry(
-        "enqueue_job",
+    job_id = await db.execute(
         """INSERT INTO job_queue
            (tenant_id, ticket_id, message_id, event_type,
             author_type, is_customer_message, status, payload, created_at)
@@ -237,17 +204,15 @@ async def enqueue_job(
         (tenant_id, ticket_id, message_id, event_type,
          author_type, int(is_customer_message), "pending", json.dumps(payload), now,
          message_id),
-        db_path,
+        operation="enqueue_job",
     )
     if job_id:
         return int(job_id)
 
-    rows = await _with_retry(
-        "enqueue_job_existing",
+    rows = await db.fetch(
         "SELECT id FROM job_queue WHERE message_id = ? ORDER BY id LIMIT 1",
         (message_id,),
-        db_path,
-        fetch=True,
+        operation="enqueue_job_existing",
     )
     return int(rows[0]["id"]) if rows else 0
 
@@ -257,18 +222,14 @@ async def get_pending_jobs(
     db_path: Path | None = None,
 ) -> list[dict]:
     """Fetch pending customer-message jobs for the orchestrator."""
-    if db_path is None:
-        db_path = get_settings().db_path_absolute
-
-    rows = await _with_retry(
-        "get_pending_jobs",
+    db = Database(db_path)
+    rows = await db.fetch(
         """SELECT * FROM job_queue
            WHERE status = 'pending' AND is_customer_message = 1
            ORDER BY created_at ASC
            LIMIT ?""",
         (limit,),
-        db_path,
-        fetch=True,
+        operation="get_pending_jobs",
     )
 
     return [dict(row) for row in (rows or [])]
@@ -279,21 +240,30 @@ async def get_pending_agent_jobs(
     db_path: Path | None = None,
 ) -> list[dict]:
     """Fetch pending agent-message jobs for the feedback loop."""
-    if db_path is None:
-        db_path = get_settings().db_path_absolute
-
-    rows = await _with_retry(
-        "get_pending_agent_jobs",
+    db = Database(db_path)
+    rows = await db.fetch(
         """SELECT * FROM job_queue
            WHERE status = 'pending' AND is_customer_message = 0
            ORDER BY created_at ASC
            LIMIT ?""",
         (limit,),
-        db_path,
-        fetch=True,
+        operation="get_pending_agent_jobs",
     )
 
     return [dict(row) for row in (rows or [])]
+
+
+async def get_next_pending_job(db_path: Path | None = None) -> dict | None:
+    """Fetch one pending job, preferring customer messages over agent work."""
+    db = Database(db_path)
+    rows = await db.fetch(
+        """SELECT * FROM job_queue
+           WHERE status = 'pending'
+           ORDER BY is_customer_message DESC, created_at ASC
+           LIMIT 1""",
+        operation="get_next_pending_job",
+    )
+    return dict(rows[0]) if rows else None
 
 
 async def claim_job(
@@ -305,17 +275,14 @@ async def claim_job(
     Returns True if the job was successfully claimed (was pending),
     False if another worker already claimed it.
     """
-    if db_path is None:
-        db_path = get_settings().db_path_absolute
-
+    db = Database(db_path)
     now = datetime.now(timezone.utc).isoformat()
-    affected = await _with_retry(
-        "claim_job",
+    affected = await db.execute(
         """UPDATE job_queue
            SET status = 'processing', started_at = ?
            WHERE id = ? AND status = 'pending'""",
         (now, job_id),
-        db_path,
+        operation="claim_job",
         return_rowcount=True,
     )
     return affected == 1
@@ -327,17 +294,14 @@ async def complete_job(
     db_path: Path | None = None,
 ) -> None:
     """Mark a job as done with optional result metadata."""
-    if db_path is None:
-        db_path = get_settings().db_path_absolute
-
+    db = Database(db_path)
     now = datetime.now(timezone.utc).isoformat()
-    await _with_retry(
-        "complete_job",
+    await db.execute(
         """UPDATE job_queue
            SET status = 'done', finished_at = ?, error = NULL
            WHERE id = ?""",
         (now, job_id),
-        db_path,
+        operation="complete_job",
     )
 
 
@@ -347,17 +311,14 @@ async def fail_job(
     db_path: Path | None = None,
 ) -> None:
     """Mark a job as failed with an error message."""
-    if db_path is None:
-        db_path = get_settings().db_path_absolute
-
+    db = Database(db_path)
     now = datetime.now(timezone.utc).isoformat()
-    await _with_retry(
-        "fail_job",
+    await db.execute(
         """UPDATE job_queue
            SET status = 'failed', finished_at = ?, error = ?
            WHERE id = ?""",
         (now, error[:2000], job_id),
-        db_path,
+        operation="fail_job",
     )
 
 
@@ -370,18 +331,14 @@ async def requeue_stale_jobs(
     Returns the number of jobs reclaimed.
     Called at processor startup to recover from crashes.
     """
-    if db_path is None:
-        db_path = get_settings().db_path_absolute
-
+    db = Database(db_path)
     now = datetime.now(timezone.utc).isoformat()
-    rows = await _with_retry(
-        "requeue_stale_jobs_select",
+    rows = await db.fetch(
         """SELECT id, started_at FROM job_queue
            WHERE status = 'processing'
              AND started_at < ?""",
         (now,),
-        db_path,
-        fetch=True,
+        operation="requeue_stale_jobs_select",
     )
     count = 0
     for row in (rows or []):
@@ -390,15 +347,14 @@ async def requeue_stale_jobs(
             started = datetime.fromisoformat(row["started_at"].replace("Z", "+00:00"))
             age_min = (datetime.now(timezone.utc) - started).total_seconds() / 60
             if age_min > max_age_minutes:
-                affected = await _with_retry(
-                    "requeue_stale_job",
+                affected = await db.execute(
                     """UPDATE job_queue
                        SET status = 'pending', started_at = NULL,
                            retry_count = retry_count + 1
                        WHERE id = ? AND status = 'processing'
                          AND started_at = ?""",
                     (row["id"], row["started_at"]),
-                    db_path,
+                    operation="requeue_stale_job",
                     return_rowcount=True,
                 )
                 if affected == 1:
@@ -413,31 +369,24 @@ async def requeue_failed_job(
     db_path: Path | None = None,
 ) -> None:
     """Requeue a failed job for retry (up to max retries)."""
-    if db_path is None:
-        db_path = get_settings().db_path_absolute
-
-    await _with_retry(
-        "requeue_failed_job",
+    db = Database(db_path)
+    await db.execute(
         """UPDATE job_queue
            SET status = 'pending', started_at = NULL, finished_at = NULL,
                error = NULL, retry_count = retry_count + 1
            WHERE id = ? AND retry_count < 3""",
         (job_id,),
-        db_path,
+        operation="requeue_failed_job",
     )
 
 
 async def get_job_stats(db_path: Path | None = None) -> dict:
     """Return job queue stats for monitoring."""
-    if db_path is None:
-        db_path = get_settings().db_path_absolute
-
-    rows = await _with_retry(
-        "get_job_stats",
+    db = Database(db_path)
+    rows = await db.fetch(
         """SELECT status, COUNT(*) as cnt FROM job_queue GROUP BY status""",
         (),
-        db_path,
-        fetch=True,
+        operation="get_job_stats",
     )
     stats = {"pending": 0, "processing": 0, "done": 0, "failed": 0}
     for row in (rows or []):
@@ -461,14 +410,11 @@ async def record_parsed_message(
     db_path: Path | None = None,
 ) -> None:
     """Insert or replace a parsed message row for the dashboard."""
-    if db_path is None:
-        db_path = get_settings().db_path_absolute
-
+    db = Database(db_path)
     now = datetime.now(timezone.utc).isoformat()
     intent_names = json.dumps([i.get("name") for i in intents if isinstance(i, dict) and i.get("name")])
 
-    await _with_retry(
-        "record_parsed_message",
+    await db.execute(
         """INSERT OR REPLACE INTO parsed_messages
            (message_id, ticket_id, event_type, author_type,
             author_email, channel, customer_email, ticket_subject,
@@ -477,7 +423,7 @@ async def record_parsed_message(
         (message_id, ticket_id, event_type, author_type,
          author_email, channel, customer_email, ticket_subject,
          message_text, intent_names, int(is_customer_message), created_at, now),
-        db_path,
+        operation="record_parsed_message",
     )
 
 
@@ -488,19 +434,15 @@ async def get_parsed_messages(
     db_path: Path | None = None,
 ) -> list[dict]:
     """Fetch parsed messages for the dashboard, newest first."""
-    if db_path is None:
-        db_path = get_settings().db_path_absolute
-
+    db = Database(db_path)
     where = "WHERE is_customer_message = 1" if customer_only else ""
     sql = f"""SELECT * FROM parsed_messages {where}
              ORDER BY received_at DESC LIMIT ? OFFSET ?"""
 
-    rows = await _with_retry(
-        "get_parsed_messages",
+    rows = await db.fetch(
         sql,
         (limit, offset),
-        db_path,
-        fetch=True,
+        operation="get_parsed_messages",
     )
 
     return [dict(row) for row in (rows or [])]
@@ -520,12 +462,9 @@ async def record_ticket_result(
     db_path: Path | None = None,
 ) -> None:
     """Store the Hermes processing result for a ticket message."""
-    if db_path is None:
-        db_path = get_settings().db_path_absolute
-
+    db = Database(db_path)
     now = datetime.now(timezone.utc).isoformat()
-    await _with_retry(
-        "record_ticket_result",
+    await db.execute(
         """INSERT OR REPLACE INTO ticket_results
            (ticket_id, message_id, job_id, priority, action, reason,
             notify_owner, gorgias_priority_set, note_posted, draft_text, processed_at)
@@ -533,7 +472,7 @@ async def record_ticket_result(
         (ticket_id, message_id, job_id, priority, action, reason,
          int(notify_owner), int(gorgias_priority_set), int(note_posted),
          draft_text, now),
-        db_path,
+        operation="record_ticket_result",
     )
 
 
@@ -543,15 +482,11 @@ async def get_ticket_results(
     db_path: Path | None = None,
 ) -> list[dict]:
     """Fetch ticket processing results, newest first."""
-    if db_path is None:
-        db_path = get_settings().db_path_absolute
-
-    rows = await _with_retry(
-        "get_ticket_results",
+    db = Database(db_path)
+    rows = await db.fetch(
         """SELECT * FROM ticket_results ORDER BY processed_at DESC LIMIT ? OFFSET ?""",
         (limit, offset),
-        db_path,
-        fetch=True,
+        operation="get_ticket_results",
     )
     return [dict(row) for row in (rows or [])]
 
@@ -568,9 +503,7 @@ async def get_dashboard_tickets(
     - The job status (pending/processing/done/failed)
     - The AI result (priority, action, reason, draft_text, note_posted, etc.)
     """
-    if db_path is None:
-        db_path = get_settings().db_path_absolute
-
+    db = Database(db_path)
     sql = """SELECT
         pm.message_id,
         pm.ticket_id,
@@ -600,12 +533,10 @@ async def get_dashboard_tickets(
     ORDER BY pm.received_at DESC
     LIMIT ? OFFSET ?"""
 
-    rows = await _with_retry(
-        "get_dashboard_tickets",
+    rows = await db.fetch(
         sql,
         (limit, offset),
-        db_path,
-        fetch=True,
+        operation="get_dashboard_tickets",
     )
     return [dict(row) for row in (rows or [])]
 
@@ -615,39 +546,32 @@ async def dashboard_ticket_exists(
     db_path: Path | None = None,
 ) -> bool:
     """Return whether a customer ticket is present in the review console."""
-    if db_path is None:
-        db_path = get_settings().db_path_absolute
-    rows = await _with_retry(
-        "dashboard_ticket_exists",
+    db = Database(db_path)
+    rows = await db.fetch(
         """SELECT 1 FROM parsed_messages
            WHERE ticket_id = ? AND is_customer_message = 1 LIMIT 1""",
         (ticket_id,),
-        db_path,
-        fetch=True,
+        operation="dashboard_ticket_exists",
     )
     return bool(rows)
 
 
 async def get_result_stats(db_path: Path | None = None) -> dict:
     """Return aggregate stats for the dashboard."""
-    if db_path is None:
-        db_path = get_settings().db_path_absolute
+    db = Database(db_path)
 
     # Job stats
-    job_rows = await _with_retry(
-        "get_result_stats_jobs",
+    job_rows = await db.fetch(
         "SELECT status, COUNT(*) as cnt FROM job_queue WHERE is_customer_message=1 GROUP BY status",
         (),
-        db_path,
-        fetch=True,
+        operation="get_result_stats_jobs",
     )
     job_stats = {"pending": 0, "processing": 0, "done": 0, "failed": 0}
     for row in (job_rows or []):
         job_stats[row["status"]] = row["cnt"]
 
     # Result stats
-    result_rows = await _with_retry(
-        "get_result_stats_results",
+    result_rows = await db.fetch(
         """SELECT
              COUNT(*) as total,
              SUM(CASE WHEN action = 'drafted' THEN 1 ELSE 0 END) as drafted,
@@ -660,8 +584,7 @@ async def get_result_stats(db_path: Path | None = None) -> dict:
              SUM(CASE WHEN priority = 'low' THEN 1 ELSE 0 END) as low
            FROM ticket_results""",
         (),
-        db_path,
-        fetch=True,
+        operation="get_result_stats_results",
     )
     if result_rows:
         row = result_rows[0]
@@ -685,15 +608,11 @@ async def get_result_stats(db_path: Path | None = None) -> dict:
 
 async def get_setting(key: str, default: str = "", db_path: Path | None = None) -> str:
     """Get a setting value from the app_settings table."""
-    if db_path is None:
-        db_path = get_settings().db_path_absolute
-
-    rows = await _with_retry(
-        "get_setting",
+    db = Database(db_path)
+    rows = await db.fetch(
         "SELECT value FROM app_settings WHERE key = ?",
         (key,),
-        db_path,
-        fetch=True,
+        operation="get_setting",
     )
     if rows:
         return rows[0]["value"]
@@ -702,48 +621,37 @@ async def get_setting(key: str, default: str = "", db_path: Path | None = None) 
 
 async def set_setting(key: str, value: str, db_path: Path | None = None) -> None:
     """Set a setting value in the app_settings table."""
-    if db_path is None:
-        db_path = get_settings().db_path_absolute
-
+    db = Database(db_path)
     now = datetime.now(timezone.utc).isoformat()
-    await _with_retry(
-        "set_setting",
+    await db.execute(
         """INSERT OR REPLACE INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)""",
         (key, value, now),
-        db_path,
+        operation="set_setting",
     )
 
 
 async def get_all_settings(db_path: Path | None = None) -> dict:
     """Get all settings as a dict."""
-    if db_path is None:
-        db_path = get_settings().db_path_absolute
-
-    rows = await _with_retry(
-        "get_all_settings",
+    db = Database(db_path)
+    rows = await db.fetch(
         "SELECT key, value FROM app_settings",
         (),
-        db_path,
-        fetch=True,
+        operation="get_all_settings",
     )
     return {row["key"]: row["value"] for row in (rows or [])}
 
 
 async def get_parsed_stats(db_path: Path | None = None) -> dict:
     """Return aggregate stats for the dashboard."""
-    if db_path is None:
-        db_path = get_settings().db_path_absolute
-
-    rows = await _with_retry(
-        "get_parsed_stats",
+    db = Database(db_path)
+    rows = await db.fetch(
         """SELECT
              COUNT(*) as total,
              SUM(is_customer_message) as customer_count,
              SUM(CASE WHEN is_customer_message = 0 THEN 1 ELSE 0 END) as agent_count
            FROM parsed_messages""",
         (),
-        db_path,
-        fetch=True,
+        operation="get_parsed_stats",
     )
 
     if rows:
