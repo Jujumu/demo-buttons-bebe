@@ -1751,9 +1751,11 @@ class ReDoSTests(unittest.TestCase):
         """Every module whose regexes run on attacker-controlled ticket text.
 
         The classifier is a package now, so every fully-qualified classifier
-        submodule is included. The previous version read only the facade, and
-        two historical bombs lived in draft_cleaner - so appending a quadratic
-        to a helper module left the whole suite green.
+        submodule is included. Hermes is also a package now: scanning only its
+        facade would leave a quadratic in ``hermes_runner.extract`` or
+        ``hermes_runner.prompt`` invisible. The previous version read only the
+        facade, and two historical bombs lived in draft_cleaner - so appending
+        a quadratic to a helper module left the whole suite green.
         """
         import importlib
 
@@ -1761,15 +1763,12 @@ class ReDoSTests(unittest.TestCase):
             (name, importlib.import_module(name))
             for name in _classifier_package_module_names()
         ]
-        for name in ("draft_cleaner", "hermes_runner"):
+        for name in ReDoSTests._hermes_package_module_names():
             try:
                 modules.append((name, importlib.import_module(name)))
-            except ImportError:
-                # These live on sibling task branches; on a branch where one is
-                # absent there is nothing of its to scan. The coverage test
-                # below asserts that everything IMPORTABLE is scanned, so a
-                # module quietly dropping out of the guard still fails.
-                continue
+            except ImportError as exc:
+                raise AssertionError(f"Hermes submodule {name} is not importable") from exc
+        modules.append(("draft_cleaner", importlib.import_module("draft_cleaner")))
         return modules
 
     @staticmethod
@@ -1785,13 +1784,48 @@ class ReDoSTests(unittest.TestCase):
                 importlib.import_module(name)
             except ImportError as exc:
                 raise AssertionError(f"classifier submodule {name} is not importable") from exc
-        for name in ("draft_cleaner", "hermes_runner"):
+        hermes_names = ReDoSTests._hermes_package_module_names()
+        for name in hermes_names:
             try:
                 importlib.import_module(name)
-            except ImportError:
-                continue
+            except ImportError as exc:
+                raise AssertionError(f"Hermes submodule {name} is not importable") from exc
             found.add(name)
+        importlib.import_module("draft_cleaner")
+        found.add("draft_cleaner")
         return found
+
+    @staticmethod
+    def _hermes_package_module_names() -> tuple[str, ...]:
+        """Return every fully-qualified Hermes module, including the facade.
+
+        The package is deliberately discovered from both the filesystem and
+        ``pkgutil``. This catches a new source file even when it is not yet
+        imported, and keeps the coverage assertion honest about the complete
+        ``hermes_runner.*`` namespace.
+        """
+        import importlib
+
+        package = importlib.import_module("hermes_runner")
+        names = {package.__name__}
+        for package_root in getattr(package, "__path__", ()):
+            root = Path(package_root)
+            if not root.is_dir():
+                continue
+            for path in root.rglob("*.py"):
+                relative = path.relative_to(root)
+                if "__pycache__" in relative.parts:
+                    continue
+                parts = list(relative.with_suffix("").parts)
+                if parts and parts[-1] == "__init__":
+                    parts.pop()
+                if parts:
+                    names.add("hermes_runner." + ".".join(parts))
+            for module in pkgutil.walk_packages(
+                (str(root),), prefix="hermes_runner."
+            ):
+                names.add(module.name)
+        return tuple(sorted(names))
 
     # Enough to reach a pattern nested in a dict of lists of tuples. Bounded
     # only so a cycle or a huge data structure cannot hang the test.
