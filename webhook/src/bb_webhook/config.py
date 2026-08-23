@@ -47,6 +47,14 @@ class Settings(BaseSettings):
     webhook_host: str = Field(default="127.0.0.1", alias="WEBHOOK_HOST")
     webhook_port: int = Field(default=8000, alias="WEBHOOK_PORT")
 
+    # ── Human console authentication ─────────────────────
+    # The password is stored as a PBKDF2 hash and sessions are signed with a
+    # separate secret. Neither value is safe to replace with a plaintext
+    # password or to check into the repository.
+    console_username: str = Field(default="chaim", alias="CONSOLE_USERNAME")
+    console_password_hash: str = Field(default="", alias="CONSOLE_PASSWORD_HASH")
+    console_session_secret: str = Field(default="", alias="CONSOLE_SESSION_SECRET")
+
     # ── Queue / idempotency DB ────────────────────────────
     webhook_db_path: str = Field(default="./data/webhook.db", alias="WEBHOOK_DB_PATH")
 

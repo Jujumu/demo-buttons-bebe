@@ -20,9 +20,14 @@ class CaddyConfigTests(unittest.TestCase):
         self.assertIn("handle @whatsapp", self.text)
         self.assertNotIn("handle /connect-whatsapp/<WA_TOKEN> {", self.text)
 
-    def test_console_and_admin_routes_are_basic_auth_gated(self) -> None:
-        self.assertEqual(self.text.count("basicauth {"), 4)
-        self.assertEqual(self.text.count("chaim <CONSOLE_PASSWORD_HASH>"), 4)
+    def test_console_and_admin_routes_use_cookie_forward_auth(self) -> None:
+        self.assertNotIn("basicauth", self.text)
+        self.assertIn("@consoleauth path /console/api/auth/*", self.text)
+        self.assertIn("uri replace /console/api /auth", self.text)
+        self.assertEqual(self.text.count("uri /auth/check"), 3)
+        self.assertIn("uri /auth/page-check", self.text)
+        self.assertIn("@consolelogin path /console/login /console/login/*", self.text)
+        self.assertIn("rewrite * /login.html", self.text)
         for route in ("/console/api/*", "/console/waapi/*", "/console/kbapi/*", "/console*"):
             self.assertIn(route, self.text)
 
@@ -50,7 +55,6 @@ class CaddyConfigTests(unittest.TestCase):
     def test_proxy_targets_are_local_and_secrets_are_placeholders(self) -> None:
         self.assertNotIn("bcrypt", self.text.lower())
         self.assertIn("<WA_TOKEN>", self.text)
-        self.assertIn("<CONSOLE_PASSWORD_HASH>", self.text)
         for target in ("127.0.0.1:8000", "127.0.0.1:8085", "127.0.0.1:8087"):
             self.assertIn(target, self.text)
 
