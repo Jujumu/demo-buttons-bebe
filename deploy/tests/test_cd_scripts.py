@@ -139,6 +139,20 @@ class DeploymentGuardrailTests(unittest.TestCase):
         self.assertIn("trap - ERR", readiness)
         self.assertIn("curl --fail", readiness)
 
+    def test_whatsapp_readiness_override_is_explicitly_time_bound(self) -> None:
+        source = RECEIVER.read_text(encoding="utf-8")
+        self.assertIn(
+            'readonly whatsapp_override_file="/etc/buttonsbebe-deploy-whatsapp-qr-until"',
+            source,
+        )
+        self.assertIn("whatsapp_readiness_override_active()", source)
+        self.assertIn('[[ "$expires_at" =~ ^[0-9]+$ ]]', source)
+        self.assertIn("if ((expires_at > current_epoch)); then", source)
+        self.assertIn(
+            '[[ "$whatsapp_state" != "connected" ]] && ! whatsapp_readiness_override_active',
+            source,
+        )
+
     def test_checkout_and_sudo_do_not_persist_or_prompt_for_credentials(self) -> None:
         workflow = (ROOT / ".github/workflows/deploy-production.yml").read_text(
             encoding="utf-8"

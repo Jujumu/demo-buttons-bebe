@@ -16,11 +16,14 @@ post it as an internal note, request a rewrite, or discard it.
 1. Hermes never sends a customer reply or posts an internal note.
 2. Hermes and its three MCP tools are read-only: Gorgias read, Redo read, KB
    search. Hermes must not load credentials or use direct API/curl fallbacks.
-3. Gorgias writes exist only behind human-triggered, Basic-Auth-protected console
-   endpoints: `POST /console/api/ticket/{id}/send|note|rewrite`. Caddy rewrites
-   these internally to the FastAPI `/dashboard/api/*` namespace; direct public
-   access to `/dashboard` and `/dashboard/*` is blocked. Public send requires a
-   confirmation click; rewrite returns text to the console and does not send it.
+3. Gorgias writes exist only behind human-triggered, signed-session-protected
+   console endpoints: `POST /console/api/ticket/{id}/send|note|rewrite`. The
+   standalone `/console/login` page issues an HttpOnly session cookie; Caddy's
+   `forward_auth` check gates the console, WhatsApp, KB-admin, and dashboard API
+   routes. Caddy rewrites these internally to the FastAPI `/dashboard/api/*`
+   namespace; direct public access to `/dashboard` and `/dashboard/*` is blocked.
+   Public send requires a confirmation click; rewrite returns text to the console
+   and does not send it.
 4. Every ticket gets a draft. Sensitive tickets (refunds, disputes,
    damaged/wrong/missing items, cancellations, angry customers, and similar)
    get a clearly prefixed sensitive draft, HIGH/CRITICAL review priority, and
@@ -79,12 +82,12 @@ does not write to Gorgias.
 | 8087 | KB admin API | `buttonsbebe-kb-admin` |
 | — | Queue processor | `buttonsbebe-processor` |
 
-Caddy exposes the Basic-Auth-protected support console at
+Caddy exposes the session-protected support console at
 `https://srv1766050.hstgr.cloud/console/`; all application services bind to
-localhost. The internal `/dashboard/*` namespace is explicitly blocked. Caddy
-only proxies the public
-FastAPI allowlist (`/webhook/gorgias/*`, `/health`, and `/ready`); all other
-unmatched paths return 404.
+localhost. The internal `/dashboard/*` namespace is explicitly blocked. The
+public Caddy allowlist includes only the login/auth paths needed to establish a
+session, `/webhook/gorgias/*`, `/health`, and `/ready`; all other unmatched paths
+return 404. Console data and writes still require a valid session cookie.
 
 ## Learning loop
 

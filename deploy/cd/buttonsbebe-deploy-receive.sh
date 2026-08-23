@@ -9,6 +9,7 @@ readonly backups_root="/opt/buttonsbebe/backups"
 readonly web_root="/var/www/console"
 readonly uv_bin="/root/.local/bin/uv"
 readonly approved_config_file="/etc/buttonsbebe-deploy-approved-config.sha256"
+readonly whatsapp_override_file="/etc/buttonsbebe-deploy-whatsapp-qr-until"
 readonly max_archive_bytes=$((64 * 1024 * 1024))
 readonly retention_count=5
 readonly readiness_attempts=10
@@ -62,6 +63,11 @@ rollback() {
   rsync -a --delete --no-specials --no-devices "$backup_root/source/" "$live_root/"
   if [[ -f "$backup_root/console/index.html" ]]; then
     install -D -m 0644 "$backup_root/console/index.html" "$web_root/index.html"
+  fi
+  if [[ -f "$backup_root/console/login.html" ]]; then
+    install -D -m 0644 "$backup_root/console/login.html" "$web_root/login.html"
+  else
+    rm -f "$web_root/login.html"
   fi
   for service in "${services[@]}"; do
     systemctl start "$service" 2>/dev/null || true
@@ -162,6 +168,9 @@ rsync -a --no-specials --no-devices "$live_root/" "$backup_root/source/"
 if [[ -f "$web_root/index.html" ]]; then
   cp -p "$web_root/index.html" "$backup_root/console/index.html"
 fi
+if [[ -f "$web_root/login.html" ]]; then
+  cp -p "$web_root/login.html" "$backup_root/console/login.html"
+fi
 rollback_needed=1
 
 for timer in "${maintenance_timers[@]}"; do
@@ -202,6 +211,7 @@ sync_source kb-admin "$live_root/kb-admin" \
   --exclude '.env' --exclude '.venv/' --exclude '__pycache__/' \
   --exclude 'node_modules/' --exclude 'data/' --exclude 'logs/'
 install -D -m 0644 "$release_dir/console-src/index.html" "$web_root/index.html"
+install -D -m 0644 "$release_dir/console-src/login.html" "$web_root/login.html"
 
 (cd "$live_root/webhook" && "$uv_bin" sync --locked)
 (cd "$live_root/processor" && "$uv_bin" sync --locked)
@@ -216,6 +226,19 @@ done
 for timer in "${maintenance_timers[@]}"; do
   systemctl start "$timer"
 done
+
+whatsapp_readiness_override_active() {
+  local expires_at current_epoch
+  [[ -r "$whatsapp_override_file" ]] || return 1
+  expires_at="$(<"$whatsapp_override_file")"
+  [[ "$expires_at" =~ ^[0-9]+$ ]] || return 1
+  current_epoch="$(date +%s)"
+  if ((expires_at > current_epoch)); then
+    echo "WARNING: WhatsApp QR readiness override active until ${expires_at}." >&2
+    return 0
+  fi
+  return 1
+}
 
 readiness_ok() (
   # Startup failures are expected while services warm up. Keep the global ERR
@@ -232,7 +255,9 @@ readiness_ok() (
     curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8085/wa/status |
       python3 -c 'import json, sys; print(json.load(sys.stdin).get("state", ""))'
   )" || return 1
-  [[ "$whatsapp_state" == "connected" ]] || return 1
+  if [[ "$whatsapp_state" != "connected" ]] && ! whatsapp_readiness_override_active; then
+    return 1
+  fi
   (cd "$live_root/KB" && \
     ./.venv/bin/python scripts/search_kb.py "size guide" >/dev/null) || return 1
 )

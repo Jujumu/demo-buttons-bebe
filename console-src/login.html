@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Sign in · Buttons Bebe Support</title>
+<style>
+:root{color-scheme:light;--ink:#1c1c1c;--muted:#66665f;--paper:#e8e5d8;--card:rgba(255,255,255,.62);--lime:#e7f65e;--orange:#f9a16c;--red:#8e2b20}
+*{box-sizing:border-box}html,body{min-height:100%;margin:0}body{display:grid;place-items:center;padding:24px;background:var(--paper);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.shell{width:min(100%,440px)}.brand{display:flex;align-items:center;gap:12px;margin:0 0 28px 8px;font-size:16px;font-weight:700}.mark{display:grid;place-items:center;width:34px;height:34px;background:var(--ink);color:var(--lime);font-size:17px;font-weight:800;clip-path:polygon(0 0,100% 0,100% 100%,0 100%,0 66%,43% 50%,0 34%)}
+.card{padding:36px;border:1px solid rgba(255,255,255,.7);border-radius:32px;background:var(--card);box-shadow:0 24px 70px rgba(45,42,29,.1);backdrop-filter:blur(18px)}h1{margin:0;font-size:32px;line-height:1.1;font-weight:500;letter-spacing:-.04em} .intro{margin:10px 0 28px;color:var(--muted);font-size:14px;line-height:1.5}
+label{display:block;margin:18px 0 7px;font-size:12px;font-weight:700}input{width:100%;padding:13px 14px;border:1px solid rgba(28,28,28,.16);border-radius:13px;background:rgba(255,255,255,.7);color:var(--ink);font:inherit;font-size:15px;outline:none}input:focus{border-color:var(--ink);box-shadow:0 0 0 3px rgba(231,246,94,.8)}button{width:100%;margin-top:24px;padding:14px 18px;border:0;border-radius:999px;background:var(--ink);color:#fff;font:inherit;font-size:14px;font-weight:700;cursor:pointer}button:hover{background:#3a3932}button:disabled{opacity:.6;cursor:wait}.error{min-height:20px;margin-top:16px;color:var(--red);font-size:13px;line-height:1.4}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+@media(max-width:520px){body{padding:16px}.card{padding:28px 22px;border-radius:24px}.brand{margin-left:2px}}
+</style>
+</head>
+<body>
+<main class="shell">
+  <div class="brand"><span class="mark" aria-hidden="true">B</span><span>Buttons Bebe Support</span></div>
+  <section class="card" aria-labelledby="title">
+    <h1 id="title">Welcome back</h1>
+    <p class="intro">Sign in to review your AI support drafts and live store activity.</p>
+    <form id="login-form">
+      <label for="username">Username</label>
+      <input id="username" name="username" type="text" autocomplete="username" required autofocus>
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
+      <button id="submit" type="submit">Sign in</button>
+      <div id="error" class="error" role="alert" aria-live="polite"></div>
+    </form>
+  </section>
+</main>
+<script>
+const form=document.getElementById("login-form"),user=document.getElementById("username"),pass=document.getElementById("password"),submit=document.getElementById("submit"),error=document.getElementById("error");
+const nextPath=()=>{const value=new URLSearchParams(location.search).get("next")||"/console/";return (value==="/console"||value.startsWith("/console/"))?value:"/console/";};
+const showError=(message)=>{error.textContent=message;};
+fetch("/console/api/auth/session",{credentials:"same-origin",cache:"no-store"}).then(response=>{if(response.ok)location.replace(nextPath());}).catch(()=>{});
+form.addEventListener("submit",async(event)=>{event.preventDefault();showError("");submit.disabled=true;submit.textContent="Signing in…";try{const response=await fetch("/console/api/auth/login",{method:"POST",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({username:user.value,password:pass.value,next:nextPath()})});let body={};try{body=await response.json();}catch(_){}if(!response.ok){showError(response.status===429?"Too many attempts. Please wait a minute and try again.":response.status===503?"Sign-in is temporarily unavailable. Please contact the owner.":"The username or password is not correct.");submit.disabled=false;submit.textContent="Sign in";pass.select();return;}location.replace(body.redirect||"/console/");}catch(_){showError("Could not reach the sign-in service. Please try again.");submit.disabled=false;submit.textContent="Sign in";}});
+</script>
+</body>
+</html>

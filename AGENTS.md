@@ -22,9 +22,11 @@ Gorgias) where a human sends / notes / edits / discards. Client: **Chaim**.
    read, KB search). No credential loading, no direct API/curl fallbacks.
 3. The only external writes are human-triggered console actions:
    `POST /dashboard/api/ticket/{id}/send|note|rewrite` on the webhook app
-   (:8000). Publicly reached via Caddy Basic-Auth as `/console/api/*`; direct
-   public `/dashboard*` access is denied. Send requires a confirm click;
-   rewrite returns text to the console and never sends it.
+   (:8000). Publicly reached through the standalone `/console/login` page and
+   an HttpOnly signed session cookie; Caddy `forward_auth` gates `/console/api/*`
+   and the console's WhatsApp/KB-admin routes. Direct public `/dashboard*`
+   access is denied. Send requires a confirm click; rewrite returns text to the
+   console and never sends it.
 4. Every ticket gets a draft. Sensitive tickets (refunds, chargebacks,
    disputes, damaged/wrong/missing items, cancellations, angry customers) get
    a clearly prefixed sensitive draft, HIGH/CRITICAL priority, and an owner
@@ -103,10 +105,13 @@ Gorgias webhook
 | — | Timers: product sync (3d) / notices GC / nightly learn (03:30) | `buttonsbebe-kb-sync` / `-notices-gc` / `-kb-learn` |
 
 Caddy (`deploy/caddy/Caddyfile.redacted` is the only supported source;
-`webhook/Caddyfile` is marked RETIRED): Basic-Auth console at `/console/*`
-(rewritten internally to `/dashboard/api/*`; `/console/kbapi` → :8087,
-`/console/waapi` → :8085); public allowlist is only `/webhook/gorgias/*`,
-`/health`, `/ready`, `/connect-whatsapp/*`; everything else 404s.
+`webhook/Caddyfile` is marked RETIRED): session-protected console at
+`/console/*` (rewritten internally to `/dashboard/api/*`; `/console/kbapi` →
+:8087, `/console/waapi` → :8085). `/console/login` and
+`/console/api/auth/*` are the only public console bootstrap paths; all console
+data and mutation routes require the signed session cookie. The other public
+allowlist is `/webhook/gorgias/*`, `/health`, `/ready`, and
+`/connect-whatsapp/*`; everything else 404s.
 
 ## 7. Credentials
 
@@ -116,9 +121,11 @@ removal on the VPS — do not add values there; see
 `deploy/ENV-CONSOLIDATION-RUNBOOK.md`.
 
 Shopify = client-credentials grant (`SHOPIFY_CLIENT_ID/SECRET`, mint 24h Admin
-token); Gorgias = Basic (email + API key); Redo = Bearer. Never commit `.env*`
-or anything from `_VPS-FULL-BACKUP-*/`. Hermes skills never read env files —
-the authenticated MCP services are their only runtime data path.
+token); Gorgias = Basic (email + API key); Redo = Bearer. The console uses
+`CONSOLE_PASSWORD_HASH` (PBKDF2) and `CONSOLE_SESSION_SECRET` from the root
+`.env`; never commit `.env*` or anything from `_VPS-FULL-BACKUP-*/`. Hermes
+skills never read env files — the authenticated MCP services are their only
+runtime data path.
 
 ## 8. Verify before pushing — CI auto-deploys `main`
 

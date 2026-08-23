@@ -11,6 +11,7 @@ from .config import get_settings
 from .logging_utils import get_logger, log_event, setup_logging
 from .middleware import rate_limit as _rate_limit
 from .routers import (
+    auth as _auth,
     console as _console,
     dashboard as _dashboard,
     health as _health,
@@ -38,6 +39,8 @@ _HEALTH_NAMES = {"health", "ready"}
 _WEBHOOK_NAMES = {"_MAX_WEBHOOK_BODY_BYTES", "is_event_in_future", "is_event_too_old",
                   "parse_event", "receive_gorgias_webhook", "verify_signature"}
 _MODULE_NAMES = ((_DATABASE_NAMES, database), (_CONSOLE_NAMES, _console),
+                 ({"auth_check", "auth_login", "auth_logout", "auth_page_check",
+                   "auth_session"}, _auth),
                  (_DASHBOARD_NAMES, _dashboard), (_NOTIFICATION_NAMES, _notifications),
                  (_HEALTH_NAMES, _health), (_WEBHOOK_NAMES, _webhook))
 _RATE_LIMIT_NAMES = {"_MAX_REQUESTS_PER_MINUTE": _rate_limit._MAX_REQUESTS_PER_MINUTE,
@@ -78,7 +81,7 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
     for route_router in (
-        _health.router, _webhook.router, _dashboard.router,
+        _health.router, _webhook.router, _auth.router, _dashboard.router,
         _notifications.router, _console.router,
     ):
         application.include_router(route_router)
