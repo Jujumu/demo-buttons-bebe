@@ -42,3 +42,37 @@ Note: Gorgias pagination uses `limit` (not `per_page`).
 
 All services auto-start on boot and auto-restart on failure. Credentials live in
 the agent `.env` (`/root/Buttonsbebe Agent/.env`).
+
+## Shopify content-write safety monitor
+
+`shopify_safety.py` is a read-only host monitor for the live warehouse path. It
+checks that the warehouse and Caddy services are active, the active Caddy
+entrypoint and three fragments match a root-owned SHA-256 manifest, port 4000
+is bound only to loopback, the deployed `shopify.js` keeps its central mutation
+and content-write guards disabled by default, the running warehouse process has
+not enabled either guard and started after that hardened source was installed,
+and every warehouse JavaScript file matches an exact reviewed source manifest.
+It also checks the public
+warehouse routes have the expected HTTPS/auth behavior, the local GET-only
+webhook inspection endpoint reports exactly the three product subscriptions,
+and the support health endpoint returns 200.
+
+The monitor sends only unauthenticated HTTP GET requests. It never calls a
+Shopify mutation, creates a webhook, sends a synthetic product event, or prints
+response bodies, webhook IDs, environment values, or credentials. Results are
+reported as `PASS`, `DRIFT` (a completed check found an unsafe difference), or
+`UNKNOWN` (the check could not obtain trustworthy evidence). Either non-PASS
+state exits non-zero so the systemd timer records a visible failure.
+
+Run it manually from the deployed tree:
+
+```bash
+python3 tools/shopify_safety.py
+python3 tools/shopify_safety.py --json
+```
+
+The checked-in units are
+`deploy/systemd/buttonsbebe-shopify-safety.service` and
+`deploy/systemd/buttonsbebe-shopify-safety.timer`. Installing or enabling them
+is an operations action and is intentionally separate from this read-only
+module change.

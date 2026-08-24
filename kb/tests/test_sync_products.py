@@ -6,7 +6,7 @@ import types
 import unittest
 import fcntl
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 fake_requests = types.ModuleType("requests")
@@ -201,6 +201,67 @@ class TestSyncProducts(unittest.TestCase):
                 )
         self.assertIn('title:\\"red\\"', gql.call_args_list[0].args[3])
         clock.sleep.assert_called_once_with(4)
+
+    def test_gql_blocks_non_bulk_mutations_and_multi_operation_documents(self) -> None:
+        blocked_documents = [
+            """
+                # Named mutations cannot bypass the read-only gate.
+                mutation UpdateProduct {
+                    productUpdate(product: {id: \"gid://shopify/Product/1\"}) {
+                        product { id }
+                    }
+                }
+            """,
+            '''
+                mutation SpoofBulk {
+                    bulkOperationRunQuery(query: """{ products { edges { node { id } } } }""") {
+                        bulkOperation { id }
+                    }
+                    productDelete(input: {id: \"gid://shopify/Product/1\"}) { deletedProductId }
+                }
+            ''',
+            """
+                query First { shop { name } }
+                query Second { shop { name } }
+            """,
+        ]
+        with patch.object(sync_products.requests, "post") as post:
+            for document in blocked_documents:
+                with self.subTest(document=document):
+                    with self.assertRaisesRegex(ValueError, "mutation|operation|GraphQL"):
+                        sync_products.gql("shop.myshopify.com", "2026-04", "token", document)
+            post.assert_not_called()
+
+    def test_gql_allows_named_queries_and_exact_bulk_read_wrapper(self) -> None:
+        response = Mock()
+        response.json.return_value = {"data": {"ok": True}}
+        query = """
+            # Comments and operation names are valid and harmless.
+            query ProductRead {
+                products(first: 1, query: "mutation") { edges { node { id } } }
+            }
+        """
+        bulk_read = '''
+            # This is the one Shopify mutation permitted for the read-only sync.
+            mutation StartBulk {
+                bulkOperationRunQuery(
+                    query: """{ products { edges { node { id title } } } }"""
+                ) {
+                    bulkOperation { id status }
+                    userErrors { field message }
+                }
+            }
+        '''
+        with patch.object(sync_products.requests, "post", return_value=response) as post:
+            self.assertEqual(
+                sync_products.gql("shop.myshopify.com", "2026-04", "token", query),
+                {"data": {"ok": True}},
+            )
+            self.assertEqual(
+                sync_products.gql("shop.myshopify.com", "2026-04", "token", bulk_read),
+                {"data": {"ok": True}},
+            )
+        self.assertEqual(post.call_count, 2)
 
 
 if __name__ == "__main__":

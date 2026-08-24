@@ -1,0 +1,24 @@
+[Unit]
+Description=Buttons Bebe Shopify content-write safety monitor
+After=network-online.target warehouse.service caddy.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/Buttonsbebe Agent
+ExecStart=/usr/bin/python3 "/root/Buttonsbebe Agent/tools/shopify_safety.py" --json
+TimeoutStartSec=45
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+UMask=0077

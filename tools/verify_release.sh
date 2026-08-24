@@ -141,7 +141,13 @@ esac
 "$PYTHON" -c 'import sys,types,unittest; requests=types.ModuleType("requests"); requests.get=lambda *a,**k: None; requests.post=lambda *a,**k: None; sys.modules["requests"]=requests; names=["feedback.tests.test_all","feedback.tests.test_retirement"]; suite=unittest.TestSuite(unittest.defaultTestLoader.loadTestsFromName(n) for n in names); result=unittest.TextTestRunner(verbosity=1).run(suite); raise SystemExit(not result.wasSuccessful())'
 "$PYTHON" -m unittest discover -s kb/tests -v
 "$PYTHON" -m unittest discover -s deploy/tests -v
-"$PYTHON" -m unittest tools.test_tool_contracts tools.test_compare_classifier tools.test_python_file_sizes -v
+"$PYTHON" -m unittest \
+  tools.test_tool_contracts \
+  tools.test_compare_classifier \
+  tools.test_python_file_sizes \
+  tools.test_shopify_safety \
+  shopify.test_shopify_read_only \
+  -v
 PYTHONPATH="$ROOT_DIR/webhook/src${PYTHONPATH:+:$PYTHONPATH}" \
   "$PYTHON" -m unittest discover -s webhook -p 'test_notifications.py' -v
 if "$PYTHON" -c 'import aiosqlite' >/dev/null 2>&1; then
