@@ -102,7 +102,269 @@ def mint_token(shop, cid, sec) -> str:
     return r.json()["access_token"]
 
 
+def _graphql_tokens(document: str) -> list[tuple[str, str]]:
+    """Tokenize GraphQL while treating comments and string contents as data."""
+    if not isinstance(document, str) or not document.strip():
+        raise ValueError("GraphQL document must be a non-empty string")
+
+    tokens = []
+    i = 0
+    length = len(document)
+    punctuators = set("!$&():=@[]{|}")
+    while i < length:
+        char = document[i]
+        if char in " \t\n\r,\ufeff":
+            i += 1
+            continue
+        if char == "#":
+            i += 1
+            while i < length and document[i] not in "\r\n":
+                i += 1
+            continue
+        if document.startswith("...", i):
+            tokens.append(("punct", "..."))
+            i += 3
+            continue
+        if char == '"':
+            if document.startswith('"""', i):
+                i += 3
+                while i < length:
+                    if document.startswith('\\"""', i):
+                        i += 4
+                    elif document.startswith('"""', i):
+                        i += 3
+                        break
+                    else:
+                        i += 1
+                else:
+                    raise ValueError("unterminated GraphQL block string")
+            else:
+                i += 1
+                while i < length:
+                    if document[i] == "\\":
+                        i += 2
+                    elif document[i] == '"':
+                        i += 1
+                        break
+                    else:
+                        i += 1
+                else:
+                    raise ValueError("unterminated GraphQL string")
+            tokens.append(("string", ""))
+            continue
+        if char.isalpha() or char == "_":
+            start = i
+            i += 1
+            while i < length and (document[i].isalnum() or document[i] == "_"):
+                i += 1
+            tokens.append(("name", document[start:i]))
+            continue
+        if char.isdigit() or (char == "-" and i + 1 < length and document[i + 1].isdigit()):
+            start = i
+            i += 1
+            while i < length and (document[i].isalnum() or document[i] in ".+-"):
+                i += 1
+            tokens.append(("value", document[start:i]))
+            continue
+        if char in punctuators:
+            tokens.append(("punct", char))
+            i += 1
+            continue
+        raise ValueError(f"invalid GraphQL character: {char!r}")
+    return tokens
+
+
+def _graphql_selection_start(tokens, start: int) -> int:
+    paren_depth = 0
+    bracket_depth = 0
+    for index in range(start, len(tokens)):
+        value = tokens[index][1]
+        if value == "(":
+            paren_depth += 1
+        elif value == ")":
+            paren_depth -= 1
+            if paren_depth < 0:
+                raise ValueError("unbalanced GraphQL parentheses")
+        elif value == "[":
+            bracket_depth += 1
+        elif value == "]":
+            bracket_depth -= 1
+            if bracket_depth < 0:
+                raise ValueError("unbalanced GraphQL brackets")
+        elif value == "{" and paren_depth == 0 and bracket_depth == 0:
+            return index
+    raise ValueError("GraphQL operation has no selection set")
+
+
+def _graphql_skip_group(tokens, start: int) -> int:
+    pairs = {"(": ")", "[": "]", "{": "}"}
+    closing = set(pairs.values())
+    if start >= len(tokens) or tokens[start][1] not in pairs:
+        raise ValueError("GraphQL group must start with an opening delimiter")
+    stack = [tokens[start][1]]
+    index = start + 1
+    while index < len(tokens):
+        value = tokens[index][1]
+        if value in pairs:
+            stack.append(value)
+        elif value in closing:
+            if not stack or pairs[stack[-1]] != value:
+                raise ValueError("unbalanced GraphQL delimiters")
+            stack.pop()
+            if not stack:
+                return index + 1
+        index += 1
+    raise ValueError("unbalanced GraphQL delimiters")
+
+
+def _graphql_arguments(tokens, start: int) -> tuple[int, tuple[str, ...]]:
+    """Skip field arguments and return only their top-level argument names."""
+    if tokens[start][1] != "(":
+        raise ValueError("GraphQL arguments must start with '('")
+    pairs = {"(": ")", "[": "]", "{": "}"}
+    closing = set(pairs.values())
+    stack = ["("]
+    names = []
+    index = start + 1
+    while index < len(tokens):
+        kind, value = tokens[index]
+        if value in pairs:
+            stack.append(value)
+        elif value in closing:
+            if not stack or pairs[stack[-1]] != value:
+                raise ValueError("unbalanced GraphQL argument delimiters")
+            stack.pop()
+            if not stack:
+                return index + 1, tuple(names)
+        elif len(stack) == 1 and kind == "name":
+            if index + 1 < len(tokens) and tokens[index + 1][1] == ":":
+                names.append(value)
+        index += 1
+    raise ValueError("unbalanced GraphQL argument delimiters")
+
+
+def _graphql_directives(tokens, start: int) -> int:
+    while start < len(tokens) and tokens[start][1] == "@":
+        start += 1
+        if start >= len(tokens) or tokens[start][0] != "name":
+            raise ValueError("GraphQL directive has no name")
+        start += 1
+        if start < len(tokens) and tokens[start][1] == "(":
+            start = _graphql_skip_group(tokens, start)
+    return start
+
+
+def _graphql_selection_set(tokens, start: int) -> tuple[list[dict], int]:
+    if start >= len(tokens) or tokens[start][1] != "{":
+        raise ValueError("GraphQL selection set must start with '{'")
+    fields = []
+    index = start + 1
+    while index < len(tokens):
+        kind, value = tokens[index]
+        if value == "}":
+            return fields, index + 1
+        if value == "...":
+            index += 1
+            if index < len(tokens) and tokens[index][0] == "name":
+                if tokens[index][1] == "on":
+                    index += 2  # inline-fragment type condition
+                else:
+                    index += 1  # fragment spread name
+            index = _graphql_directives(tokens, index)
+            if index < len(tokens) and tokens[index][1] == "{":
+                _, index = _graphql_selection_set(tokens, index)
+            continue
+        if kind != "name":
+            raise ValueError("invalid GraphQL field")
+        first_name = value
+        index += 1
+        alias = None
+        if index < len(tokens) and tokens[index][1] == ":":
+            alias = first_name
+            index += 1
+            if index >= len(tokens) or tokens[index][0] != "name":
+                raise ValueError("GraphQL field alias has no field")
+            field_name = tokens[index][1]
+            index += 1
+        else:
+            field_name = first_name
+        argument_names = ()
+        if index < len(tokens) and tokens[index][1] == "(":
+            index, argument_names = _graphql_arguments(tokens, index)
+        index = _graphql_directives(tokens, index)
+        if index < len(tokens) and tokens[index][1] == "{":
+            _, index = _graphql_selection_set(tokens, index)
+        fields.append({
+            "name": field_name,
+            "alias": alias,
+            "arguments": argument_names,
+        })
+    raise ValueError("unbalanced GraphQL selection set")
+
+
+def _graphql_document(document: str) -> list[dict]:
+    tokens = _graphql_tokens(document)
+    definitions = []
+    index = 0
+    while index < len(tokens):
+        kind, value = tokens[index]
+        if value == "{":
+            fields, index = _graphql_selection_set(tokens, index)
+            definitions.append({"kind": "query", "fields": fields})
+            continue
+        if kind != "name":
+            raise ValueError("invalid GraphQL definition")
+        if value in {"query", "mutation", "subscription"}:
+            operation_kind = value
+            index += 1
+            if index < len(tokens) and tokens[index][0] == "name":
+                index += 1  # optional operation name
+            index = _graphql_selection_start(tokens, index)
+            fields, index = _graphql_selection_set(tokens, index)
+            definitions.append({"kind": operation_kind, "fields": fields})
+            continue
+        if value == "fragment":
+            index += 1
+            if index >= len(tokens) or tokens[index][0] != "name":
+                raise ValueError("fragment definition has no name")
+            index += 1
+            index = _graphql_selection_start(tokens, index)
+            _, index = _graphql_selection_set(tokens, index)
+            definitions.append({"kind": "fragment", "fields": []})
+            continue
+        raise ValueError(f"unsupported GraphQL definition: {value}")
+    return definitions
+
+
+def _assert_read_only_graphql(document: str) -> None:
+    """Allow queries and the one read-only bulk export wrapper only."""
+    definitions = _graphql_document(document)
+    operations = [definition for definition in definitions if definition["kind"] != "fragment"]
+    if len(operations) != 1:
+        raise ValueError("GraphQL document must contain exactly one operation")
+
+    operation = operations[0]
+    if operation["kind"] == "query":
+        return
+    if operation["kind"] != "mutation":
+        raise ValueError("only GraphQL query operations are allowed")
+    if len(definitions) != 1:
+        raise ValueError("bulk read mutation cannot include additional definitions")
+
+    fields = operation["fields"]
+    if len(fields) != 1:
+        raise ValueError("only the bulkOperationRunQuery mutation is allowed")
+    field = fields[0]
+    if (
+        field["name"] != "bulkOperationRunQuery"
+        or field["alias"] is not None
+        or field["arguments"] != ("query",)
+    ):
+        raise ValueError("only the bulkOperationRunQuery mutation is allowed")
+
+
 def gql(shop, ver, tok, query, variables=None) -> dict:
+    _assert_read_only_graphql(query)
     r = requests.post(
         f"https://{shop}/admin/api/{ver}/graphql.json",
         headers={"X-Shopify-Access-Token": tok, "Content-Type": "application/json"},

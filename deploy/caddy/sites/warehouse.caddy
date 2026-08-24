@@ -1,0 +1,37 @@
+# Warehouse and Shopify webhook ingress.
+#
+# Redacted placeholder:
+#   <WAREHOUSE_PASSWORD_HASH> must be replaced only in the protected
+#   production fragment. Do not commit the live hash or any other credential.
+#
+# Shopify cannot send a Basic Auth password. The webhook path is therefore
+# excluded from Caddy Basic Auth and remains protected by the warehouse
+# application's X-Shopify-Hmac-Sha256 verification over the raw request body.
+
+wh.buttonsbebe.com {
+	@protected not path /api/shopify/webhook/*
+	basicauth @protected {
+		warehouse <WAREHOUSE_PASSWORD_HASH>
+	}
+
+	# A supplier PDF arrives base64-encoded inside a JSON body.
+	request_body {
+		max_size 16MB
+	}
+
+	reverse_proxy 127.0.0.1:4000 {
+		header_up Host {host}
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+		transport http {
+			read_timeout 120s
+		}
+	}
+
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+	}
+	encode gzip zstd
+}

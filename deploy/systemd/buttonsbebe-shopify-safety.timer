@@ -1,0 +1,12 @@
+[Unit]
+Description=Run the Buttons Bebe Shopify content-write safety monitor
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=15min
+RandomizedDelaySec=60s
+Persistent=true
+Unit=buttonsbebe-shopify-safety.service
+
+[Install]
+WantedBy=timers.target

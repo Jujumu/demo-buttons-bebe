@@ -1,0 +1,18 @@
+# Exchange service.
+#
+# This fragment owns exchange.buttonsbebe.com only. The upstream is kept on
+# loopback; Caddy is the public TLS boundary.
+
+exchange.buttonsbebe.com {
+	reverse_proxy 127.0.0.1:4100
+	header {
+		X-Robots-Tag "noindex, nofollow"
+		X-Content-Type-Options nosniff
+		-Server
+	}
+	encode gzip zstd
+	log {
+		output file /var/log/caddy/exchange.log
+		format json
+	}
+}

@@ -207,6 +207,10 @@ sync_source kb "$live_root/KB" \
   --exclude 'lancedb/' --exclude 'products/' --exclude 'learned/' \
   --exclude 'notices/' --exclude 'archive/' --exclude '_archive_learned/' \
   --exclude 'logs/'
+# Git archive extraction deliberately drops source modes. Restore the one
+# executable maintenance entrypoint explicitly so the systemd timer cannot
+# regress to status=203/EXEC after an otherwise successful release.
+install -m 0755 "$release_dir/kb/sync-products.sh" "$live_root/KB/sync-products.sh"
 sync_source kb-admin "$live_root/kb-admin" \
   --exclude '.env' --exclude '.venv/' --exclude '__pycache__/' \
   --exclude 'node_modules/' --exclude 'data/' --exclude 'logs/'
