@@ -56,7 +56,7 @@ RUN_TOKEN = "0123456789abcdef"
 # an explicit read-only toolset allow-list, and no --yolo (DEV-ISSUES #8).
 HERMES_TOOLSETS = os.environ.get(
     "HERMES_TOOLSETS",
-    "mcp-buttonsbebe_kb,mcp-buttonsbebe_redo,mcp-buttonsbebe_gorgias",
+    "buttonsbebe_kb,buttonsbebe_redo,buttonsbebe_gorgias",
 )
 HERMES_BASE_CMD = ["hermes"]
 if HERMES_TOOLSETS:

@@ -121,7 +121,7 @@ purgeable.
   `deploy/ENV-CONSOLIDATION-RUNBOOK.md`. No secret has ever been committed to
   git (full-history prefix scan, 2026-07-29).
 - Hermes runs with an explicit tool allow-list, not `--yolo`. The processor
-  passes `-t mcp-buttonsbebe_kb,mcp-buttonsbebe_redo,mcp-buttonsbebe_gorgias`
+  passes `-t buttonsbebe_kb,buttonsbebe_redo,buttonsbebe_gorgias`
   (see `build_hermes_command()` in `processor/hermes_runner.py`), so the
   `terminal` and `file` toolsets are out of scope and there is nothing
   dangerous left to auto-approve. Override with `HERMES_TOOLSETS`;

@@ -14,7 +14,7 @@ metadata:
 # Buttons Bebe Headless Ticket Processor
 
 This skill is invoked by the job processor (orchestrator.py) in one-shot
-mode (`hermes -t mcp-buttonsbebe_kb,mcp-buttonsbebe_redo,mcp-buttonsbebe_gorgias -z "..."`).
+mode (`hermes -t buttonsbebe_kb,buttonsbebe_redo,buttonsbebe_gorgias -z "..."`).
 It processes a single Gorgias ticket using ONLY those three read-only MCP
 servers — no shell, no filesystem, no network beyond them.
 

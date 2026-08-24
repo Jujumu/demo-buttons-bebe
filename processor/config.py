@@ -70,14 +70,14 @@ class ProcessorSettings(BaseSettings):
     heartbeat_seconds: float = Field(default=120.0, alias="PROCESSOR_HEARTBEAT_SECONDS")
 
     # ── Hermes tool policy ────────────────────────────────
-    # Comma-separated toolsets passed to `hermes -t`. Each configured MCP
-    # server exposes itself as a toolset named "mcp-<server key>", so this
-    # list is exactly the three read-only Buttons Bebe servers and nothing
+    # Comma-separated toolsets passed to `hermes -t`. Hermes names each MCP
+    # toolset by the configured server key itself, so this list is exactly the
+    # three read-only Buttons Bebe servers and nothing
     # else - in particular NOT the `terminal` or `file` toolsets that
     # ~/.hermes/config.yaml grants the CLI platform by default.
     # Set to "" to fall back to whatever config.yaml grants (NOT recommended).
     hermes_toolsets: str = Field(
-        default="mcp-buttonsbebe_kb,mcp-buttonsbebe_redo,mcp-buttonsbebe_gorgias",
+        default="buttonsbebe_kb,buttonsbebe_redo,buttonsbebe_gorgias",
         alias="HERMES_TOOLSETS",
     )
     # Escape hatch. --yolo skips Hermes' approval prompts; with the toolset

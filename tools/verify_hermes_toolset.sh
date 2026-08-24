@@ -13,12 +13,12 @@
 #
 #  USAGE:
 #     bash tools/verify_hermes_toolset.sh
-#     HERMES_TOOLSETS="mcp-a,mcp-b" bash tools/verify_hermes_toolset.sh
+#     HERMES_TOOLSETS="buttonsbebe_kb,buttonsbebe_redo" bash tools/verify_hermes_toolset.sh
 #     SKIP_LIVE=1 bash tools/verify_hermes_toolset.sh   # config checks only
 # =============================================================================
 set -u
 
-TOOLSETS="$(printf '%s' "${HERMES_TOOLSETS:-mcp-buttonsbebe_kb,mcp-buttonsbebe_redo,mcp-buttonsbebe_gorgias}" | tr -d '[:space:]')"
+TOOLSETS="$(printf '%s' "${HERMES_TOOLSETS:-buttonsbebe_kb,buttonsbebe_redo,buttonsbebe_gorgias}" | tr -d '[:space:]')"
 EXPECTED_SERVERS="buttonsbebe_kb buttonsbebe_redo buttonsbebe_gorgias"
 FAILED=0
 
@@ -67,15 +67,10 @@ if [ "${#WANTED[@]}" -eq 0 ]; then
 fi
 for ts in "${WANTED[@]}"; do
     [ -z "$ts" ] && continue
-    server="${ts#mcp-}"
-    if [ "$server" = "$ts" ]; then
-        note "$ts is not an mcp- toolset — skipping the server-key check"
-        continue
-    fi
-    if printf '%s' "$MCP_OUT" | grep -Eq "(^|[^A-Za-z0-9_])${server}([^A-Za-z0-9_]|$)"; then
-        ok "$ts -> server '$server'"
+    if printf '%s' "$MCP_OUT" | grep -Eq "(^|[^A-Za-z0-9_])${ts}([^A-Za-z0-9_]|$)"; then
+        ok "$ts -> registered server key '$ts'"
     else
-        bad "$ts -> no server called '$server'. THIS WOULD SILENTLY LOSE THE TOOL."
+        bad "$ts -> no registered server key '$ts'. THIS WOULD SILENTLY LOSE THE TOOL."
     fi
 done
 

@@ -48,7 +48,7 @@ Gorgias webhook
   → bb_webhook FastAPI :8000        HMAC verify (WEBHOOK_SECRET), dedupe
   → SQLite job_queue                webhook/data/webhook.db (WAL)
   → buttonsbebe-processor           polls ~every 2s, one Hermes run per job
-  → hermes -t mcp-buttonsbebe_kb,mcp-buttonsbebe_redo,mcp-buttonsbebe_gorgias -z "…"
+  → hermes -t buttonsbebe_kb,buttonsbebe_redo,buttonsbebe_gorgias -z "…"
        ├─ buttonsbebe_gorgias :8079   ticket / messages / customer (read-only)
        ├─ buttonsbebe_redo    :8078   return & refund status (read-only)
        └─ buttonsbebe_kb      :8077   LanceDB hybrid search: policies · faq ·

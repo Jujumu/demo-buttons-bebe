@@ -98,7 +98,7 @@ class VerifyToolsetScriptTests(unittest.TestCase):
         self.assertNotEqual(proc.returncode, 0)
 
     def test_a_misspelled_toolset_is_caught(self):
-        proc = self.run_script(toolsets="mcp-buttonsbebe_kb,mcp-buttonsbebe_reddo")
+        proc = self.run_script(toolsets="buttonsbebe_kb,buttonsbebe_reddo")
         self.assertNotEqual(proc.returncode, 0)
         self.assertIn("SILENTLY LOSE THE TOOL", proc.stdout)
 

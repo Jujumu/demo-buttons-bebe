@@ -28,7 +28,7 @@ from config import ProcessorSettings  # noqa: E402
 from hermes_runner import build_hermes_command, process_ticket_with_hermes  # noqa: E402
 from hermes_runner import runner  # noqa: E402
 
-DEFAULT_TOOLSETS = "mcp-buttonsbebe_kb,mcp-buttonsbebe_redo,mcp-buttonsbebe_gorgias"
+DEFAULT_TOOLSETS = "buttonsbebe_kb,buttonsbebe_redo,buttonsbebe_gorgias"
 TOKEN = "0123456789abcdef"
 
 

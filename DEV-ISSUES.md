@@ -78,9 +78,9 @@ Two sections: **A. Open issues to fix**, then **B. Already fixed (context only)*
    - Was: `hermes --yolo -z ...` auto-approved ALL tool calls. Worse than first
      recorded — `~/.hermes/config.yaml` grants the CLI platform the `terminal` and
      `file` toolsets, so `--yolo` also covered shell and filesystem access.
-   - Now: `hermes -t mcp-buttonsbebe_kb,mcp-buttonsbebe_redo,mcp-buttonsbebe_gorgias -z ...`
+   - Now: `hermes -t buttonsbebe_kb,buttonsbebe_redo,buttonsbebe_gorgias -z ...`
      with no `--yolo`. Each MCP server registers a runtime toolset named
-     `mcp-<server key>`, so the allow-list is exactly the three read-only servers.
+     by its configured server key, so the allow-list is exactly the three read-only servers.
      Tunable via `HERMES_TOOLSETS`; `HERMES_SKIP_APPROVAL=1` restores `--yolo` as a
      temporary unblock and logs a WARNING every run.
    - **Before deploying:** run `bash tools/verify_hermes_toolset.sh` on the VPS. A
