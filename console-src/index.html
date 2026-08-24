@@ -303,12 +303,14 @@ function bindCompactHeader(){
 }
 
 async function boot(){
- const [s,t,lg,kh,nd]=await Promise.all([jget(API+"/stats"),jget(API+"/tickets?limit=100"),jget(API+"/learning"),jget(KBAPI+"/health"),jget(API+"/notifications")]);
+ const [s,t,lg,kh,nd,wd]=await Promise.all([jget(API+"/stats"),jget(API+"/tickets?limit=100"),jget(API+"/learning"),jget(KBAPI+"/health"),jget(API+"/notifications"),jget(WAAPI+"/status")]);
  loadErrors=[];if(s===null)loadErrors.push("stats");if(t===null)loadErrors.push("tickets");if(lg===null)loadErrors.push("learning");
  loadFailed=loadErrors.length>0;
  if(s!==null)stats=s;if(Array.isArray(t))tickets=t;if(lg!==null)learn=lg;
  if(kh!==null){kbHealth=kh;kbHealthError="";}else{kbHealth=null;kbHealthError="Knowledge-base health data is unavailable";}
  if(nd!==null){notificationData=nd;notificationError="";}else{notificationError="Live notifications are unavailable. Refresh to retry.";}
+ if(wd!==null){waData=wd;waSig=wd.state+"|"+(wd.owner||"")+"|"+(wd.qr||"");}
+ else{waData=null;waSig="";}
  if(!loadFailed)lastUpdated=new Date();statusMsg=loadFailed?"Could not load "+loadErrors.join(", ")+" data; showing last known values":"Dashboard data updated";
  startNotificationPoll();
  render();
@@ -343,7 +345,7 @@ function render(){
     <div class="wrap" tabindex="0" aria-label="Dashboard content"><div class="t-panel-slide" data-open="false">${loadFailed?errorBanner():""}${view()}</div></div>
   </div>`;
  const status=document.getElementById("app-status");if(status){status.textContent="";requestAnimationFrame(()=>{status.textContent=liveMessage();});}
- const openTab=k=>{tab=k;openTk=null;focusHeadingAfterRender=true;if(tab==="kb"&&!kbData){loadKb();}else if(tab==="notif"){render();loadNotifications();}else if(tab==="notices"){loadNotices();}else{render();}};
+ const openTab=k=>{tab=k;openTk=null;focusHeadingAfterRender=true;if(tab==="kb"&&!kbData){loadKb();}else if(tab==="notif"||tab==="conns"){render();loadNotifications();}else if(tab==="notices"){loadNotices();}else{render();}};
  document.querySelectorAll(".nav a").forEach(a=>{a.onclick=()=>openTab(a.dataset.tab);a.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();openTab(a.dataset.tab);}};});
  const rf=document.getElementById("refresh");if(rf)rf.onclick=async()=>{rf.classList.add("refreshing");rf.disabled=true;statusMsg="Refreshing dashboard data";if(tab==="kb"){kbData=null;await loadKb();}else if(tab==="notif"){await loadNotifications();}else if(tab==="notices"){await loadNotices();}else{await boot();}};
  const hn=document.getElementById("header-notif");if(hn)hn.onclick=()=>openTab("notif");
@@ -489,6 +491,14 @@ async function rewriteDraft(){
  actBusy=false;render();
 }
 
+function whatsappConnectionSummary(data){
+ const state=data&&data.state;
+ if(state==="connected")return{label:"Connected",detail:"Linked device",healthy:true};
+ if(state==="qr")return{label:"Needs linking",detail:"Scan the QR in Notifications",healthy:false};
+ if(state)return{label:"Connecting",detail:"Waiting for WhatsApp to connect",healthy:false};
+ return{label:"Status unavailable",detail:"Connection status could not be confirmed",healthy:false};
+}
+
 function conns(){
  const h=kbHealth,folders=h&&h.folders||{},products=h&&h.products||{};
  const count=(name,label)=>Number.isInteger(folders[name])?folders[name]+" "+label:"unknown "+label;
@@ -496,7 +506,8 @@ function conns(){
  const age=Number.isFinite(products.age_hours)?(products.age_hours<24?Math.round(products.age_hours)+"h":Math.floor(products.age_hours/24)+"d"):null;
  const productDetail=products.last_modified?`Product files last changed ${age||"recently"} ago${products.fresh?"":" — refresh overdue"}`:"Product file freshness unavailable";
  const kbState=h&&h.ok?(products.fresh?"Content current":"Content stale"):"Files unavailable";
- const cs=[["G","Gorgias","buttonsbebe.gorgias.com","Help desk - tickets in & drafts out","Configured",true],["S","Shopify","buttons-bebe.myshopify.com",`${productCount} product files`,products.fresh?"Current":"Needs refresh",!!products.fresh],["R","Redo","Returns & refunds","Live return status","Configured",true],["W","WhatsApp alerts","Owner escalations","Linked device","Configured",true],["KB","Knowledge base",`${count("intents","intents")} - ${count("policies","policies")} - ${count("faq","FAQs")}`,productDetail,kbState,h&&h.ok&&products.fresh]];
+ const wa=whatsappConnectionSummary(waData);
+ const cs=[["G","Gorgias","buttonsbebe.gorgias.com","Help desk - tickets in & drafts out","Configured",true],["S","Shopify","buttons-bebe.myshopify.com",`${productCount} product files`,products.fresh?"Current":"Needs refresh",!!products.fresh],["R","Redo","Returns & refunds","Live return status","Configured",true],["W","WhatsApp alerts","Owner escalations",wa.detail,wa.label,wa.healthy],["KB","Knowledge base",`${count("intents","intents")} - ${count("policies","policies")} - ${count("faq","FAQs")}`,productDetail,kbState,h&&h.ok&&products.fresh]];
  const healthTitle=kbHealthError?"Knowledge-base file status unavailable":(h&&h.ok&&products.fresh?"Knowledge-base content files are current":"Knowledge-base content files need attention");
  const healthDetail=kbHealthError||(!h||!h.ok?"One or more knowledge-base folders could not be read.":productDetail+`. ${h.editable_files??"Unknown"} editable files detected.`);
  return `<div class="conns">${cs.map(c=>`<div class="conn"><div class="h"><div class="ic">${c[0]}</div><div><b>${c[1]}</b><small>${esc(c[2])}</small></div></div><span class="stt"><span class="dot ${c[5]?'':'off'}"></span> ${esc(c[4])}</span><div class="dt">${esc(c[3])}</div></div>`).join("")}</div>
@@ -617,28 +628,30 @@ function notificationsView(){
  </section><div class="sec-title">Alert delivery</div>${notificationDelivery()}`;
 }
 async function loadNotifications({renderNow=true}={}){
- const loadWhatsApp=tab==="notif";
+ const loadWhatsApp=tab==="notif"||tab==="conns";
  const [nextNotifications,nextWhatsApp]=await Promise.all([
   jget(API+"/notifications"),
   loadWhatsApp?jget(WAAPI+"/status"):Promise.resolve(null),
  ]);
  if(nextNotifications===null){notificationError="Live notifications are unavailable. Refresh to retry.";}
  else{notificationData=nextNotifications;notificationError="";}
- if(nextWhatsApp!==null){
-  const nextSig=nextWhatsApp.state+"|"+(nextWhatsApp.owner||"")+"|"+(nextWhatsApp.qr||"");
-  if(nextSig!==waSig){captureWaForm();waData=nextWhatsApp;waSig=nextSig;}
+ if(loadWhatsApp){
+  if(nextWhatsApp!==null){
+   const nextSig=nextWhatsApp.state+"|"+(nextWhatsApp.owner||"")+"|"+(nextWhatsApp.qr||"");
+   if(nextSig!==waSig){captureWaForm();waData=nextWhatsApp;waSig=nextSig;}
+  }else{waData=null;waSig="";}
  }
- if(renderNow&&tab==="notif")render();
+ if(renderNow&&(tab==="notif"||tab==="conns"))render();
 }
 function startNotificationPoll(){
  if(notificationPoll)clearTimeout(notificationPoll);
  const poll=async()=>{
-  if(!document.hidden)await loadNotifications({renderNow:tab==="notif"});
+  if(!document.hidden)await loadNotifications({renderNow:tab==="notif"||tab==="conns"});
   notificationPoll=setTimeout(poll,15000);
  };
  notificationPoll=setTimeout(poll,15000);
 }
-document.addEventListener("visibilitychange",()=>{if(!document.hidden)loadNotifications({renderNow:tab==="notif"});});
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)loadNotifications({renderNow:tab==="notif"||tab==="conns"});});
 async function markNotificationsRead(ids,all=false){
  if(!notificationData)return false;
  notificationBusy=true;notificationMsg="Marking notifications read…";render();
