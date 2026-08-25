@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import html
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -15,6 +17,25 @@ logger = get_logger(__name__)
 # ── Constants ──────────────────────────────────────────────
 _API_VERSION = "/api"
 _TIMEOUT = 15.0  # seconds
+_USER_AGENT = "ButtonsBebe-Dashboard/1.0"
+_MAX_429_RETRIES = 2
+_DELIVERY_POLLS = 4
+_DELIVERY_POLL_DELAY = 0.5
+
+
+def _retry_after(response: httpx.Response) -> float:
+    """Return a bounded delay for Gorgias rate-limit responses."""
+    try:
+        value = float(response.headers.get("Retry-After", "1"))
+    except (TypeError, ValueError):
+        value = 1.0
+    return max(0.0, min(value, 10.0))
+
+
+def _address(value: Any) -> str:
+    if isinstance(value, dict):
+        return str(value.get("address") or value.get("email") or "").strip()
+    return str(value or "").strip()
 
 
 class GorgiasClient:
@@ -59,11 +80,13 @@ class GorgiasClient:
             return None
 
         url = f"{self.base_url}{_API_VERSION}/tickets/{ticket_id}"
-        params = {"per_page": 50}  # max messages to retrieve
-
         try:
             async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-                resp = await client.get(url, auth=self._auth, params=params)
+                resp = await client.get(
+                    url,
+                    auth=self._auth,
+                    headers={"User-Agent": _USER_AGENT, "Accept": "application/json"},
+                )
 
                 if resp.status_code == 401:
                     log_event(logger, "ERROR", "Gorgias auth failed — check API key",
@@ -94,7 +117,11 @@ class GorgiasClient:
 
         try:
             async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-                resp = await client.get(url, auth=self._auth)
+                resp = await client.get(
+                    url,
+                    auth=self._auth,
+                    headers={"User-Agent": _USER_AGENT, "Accept": "application/json"},
+                )
                 if resp.status_code in (401, 404):
                     log_event(logger, "WARNING", f"Message {message_id} not found")
                     return None
@@ -114,7 +141,11 @@ class GorgiasClient:
 
         try:
             async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-                resp = await client.get(url, auth=self._auth)
+                resp = await client.get(
+                    url,
+                    auth=self._auth,
+                    headers={"User-Agent": _USER_AGENT, "Accept": "application/json"},
+                )
                 if resp.status_code in (401, 404):
                     return None
                 resp.raise_for_status()
@@ -127,11 +158,16 @@ class GorgiasClient:
         if not self._auth:
             return False
 
-        url = f"{self.base_url}{_API_VERSION}/tickets?per_page=1"
+        url = f"{self.base_url}{_API_VERSION}/tickets"
 
         try:
             async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-                resp = await client.get(url, auth=self._auth)
+                resp = await client.get(
+                    url,
+                    auth=self._auth,
+                    params={"limit": 1},
+                    headers={"User-Agent": _USER_AGENT, "Accept": "application/json"},
+                )
                 ok = resp.status_code == 200
                 log_event(logger, "INFO", f"Gorgias connection test: {'OK' if ok else 'FAIL'}",
                           status_code=resp.status_code)
@@ -149,14 +185,30 @@ class GorgiasClient:
         url = f"{self.base_url}{_API_VERSION}/tickets/{ticket_id}/messages"
         try:
             async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-                resp = await client.post(url, auth=self._auth, json=payload)
+                resp = None
+                for attempt in range(_MAX_429_RETRIES + 1):
+                    resp = await client.post(
+                        url,
+                        auth=self._auth,
+                        json=payload,
+                        headers={"User-Agent": _USER_AGENT, "Accept": "application/json"},
+                    )
+                    if resp.status_code != 429 or attempt >= _MAX_429_RETRIES:
+                        break
+                    await asyncio.sleep(_retry_after(resp))
+                assert resp is not None
                 if resp.status_code in (200, 201):
                     return {"ok": True, "message": resp.json()}
                 if resp.status_code == 400 and "body_text" in payload:
                     p2 = dict(payload)
                     txt = p2.pop("body_text")
                     p2["body_html"] = txt.replace("\n", "<br>")
-                    resp2 = await client.post(url, auth=self._auth, json=p2)
+                    resp2 = await client.post(
+                        url,
+                        auth=self._auth,
+                        json=p2,
+                        headers={"User-Agent": _USER_AGENT, "Accept": "application/json"},
+                    )
                     if resp2.status_code in (200, 201):
                         return {"ok": True, "message": resp2.json()}
                     return {"ok": False, "error": f"gorgias {resp2.status_code}: {resp2.text[:300]}"}
@@ -185,16 +237,32 @@ class GorgiasClient:
         """
         if not self._auth:
             return {"ok": False, "error": "gorgias credentials not configured"}
-        murl = f"{self.base_url}{_API_VERSION}/tickets/{ticket_id}/messages"
+        murl = f"{self.base_url}{_API_VERSION}/messages"
         msgs = []
         try:
             async with httpx.AsyncClient(timeout=_TIMEOUT) as _c:
-                mr = await _c.get(murl, auth=self._auth, params={"limit": 30})
+                mr = None
+                for attempt in range(_MAX_429_RETRIES + 1):
+                    mr = await _c.get(
+                        murl,
+                        auth=self._auth,
+                        params={
+                            "ticket_id": ticket_id,
+                            "limit": 30,
+                            "order_by": "created_datetime:desc",
+                        },
+                        headers={"User-Agent": _USER_AGENT, "Accept": "application/json"},
+                    )
+                    if mr.status_code != 429 or attempt >= _MAX_429_RETRIES:
+                        break
+                    await asyncio.sleep(_retry_after(mr))
+                assert mr is not None
                 if mr.status_code == 404:
                     return {"ok": False, "error": "ticket not found"}
-                if mr.status_code == 200:
-                    jd = mr.json()
-                    msgs = jd.get("data", jd) if isinstance(jd, dict) else jd
+                if mr.status_code != 200:
+                    return {"ok": False, "error": f"gorgias {mr.status_code}: {mr.text[:300]}"}
+                jd = mr.json()
+                msgs = jd.get("data", jd) if isinstance(jd, dict) else jd
         except Exception as exc:
             return {"ok": False, "error": f"failed to read ticket: {exc}"}
         if not isinstance(msgs, list):
@@ -207,29 +275,83 @@ class GorgiasClient:
             if not m.get("from_agent", False):
                 base = m
                 break
-        if base is None and msgs_sorted:
-            base = msgs_sorted[-1]
-        base = base or {}
-        channel = base.get("channel") or "email"
+        if base is None:
+            return {"ok": False, "error": "no customer message available for reply routing"}
+        channel = str(base.get("channel") or "").strip()
+        if not channel:
+            return {"ok": False, "error": "customer message has no reply channel"}
         src = base.get("source") or {}
-        cust_from = src.get("from") or {}
+        cust_from = src.get("from") or base.get("sender") or {}
         our_to = src.get("to") or []
+        if isinstance(our_to, dict):
+            our_to = [our_to]
+        customer_email = _address(cust_from)
+        if not customer_email:
+            return {"ok": False, "error": "customer message has no recipient address"}
+        source_from = our_to[0] if isinstance(our_to, list) and our_to else {}
+        source_from_address = _address(source_from)
+        if not source_from_address:
+            return {"ok": False, "error": "customer message has no support mailbox route"}
         new_source = {}
         stype = src.get("type") or channel
         if stype:
             new_source["type"] = stype
         if cust_from:
-            new_source["to"] = [cust_from]
-        if isinstance(our_to, list) and our_to:
-            new_source["from"] = our_to[0]
+            new_source["to"] = [{"address": customer_email}]
+        new_source["from"] = {"address": source_from_address}
         payload = {
             "channel": channel,
-            "via": channel,
+            "via": "api",
             "from_agent": True,
             "public": True,
             "body_text": body_text,
+            "body_html": html.escape(body_text).replace("\n", "<br>"),
             "sender": {"email": self.email},
+            "receiver": {"email": customer_email},
+            "source": new_source,
         }
-        if new_source:
-            payload["source"] = new_source
-        return await self._post_message(ticket_id, payload)
+        result = await self._post_message(ticket_id, payload)
+        if not result.get("ok"):
+            return result
+        created = result.get("message") or {}
+        message_id = created.get("id")
+        if not message_id:
+            return {"ok": False, "error": "Gorgias did not return a message id"}
+        delivery = await self._wait_for_delivery(ticket_id, int(message_id))
+        return {
+            "ok": delivery["status"] != "failed",
+            "delivery_status": delivery["status"],
+            "message_id": int(message_id),
+            "message": delivery.get("message", created),
+            **({"error": delivery["error"]} if delivery.get("error") else {}),
+        }
+
+    async def _wait_for_delivery(self, ticket_id: int, message_id: int) -> dict:
+        """Poll the documented message resource until sent, failed, or pending."""
+        url = f"{self.base_url}{_API_VERSION}/tickets/{ticket_id}/messages/{message_id}"
+        latest: dict[str, Any] = {}
+        try:
+            async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+                for attempt in range(_DELIVERY_POLLS):
+                    resp = await client.get(
+                        url,
+                        auth=self._auth,
+                        headers={"User-Agent": _USER_AGENT, "Accept": "application/json"},
+                    )
+                    if resp.status_code == 200:
+                        latest = resp.json()
+                        if latest.get("sent_datetime"):
+                            return {"status": "sent", "message": latest}
+                        if latest.get("failed_datetime") or latest.get("last_sending_error"):
+                            error = latest.get("last_sending_error") or "Gorgias failed to deliver the message"
+                            return {"status": "failed", "message": latest, "error": str(error)}
+                    elif resp.status_code == 429 and attempt < _DELIVERY_POLLS - 1:
+                        await asyncio.sleep(_retry_after(resp))
+                        continue
+                    elif resp.status_code in (401, 403, 404):
+                        return {"status": "unknown", "error": f"could not verify Gorgias message ({resp.status_code})"}
+                    if attempt < _DELIVERY_POLLS - 1:
+                        await asyncio.sleep(_DELIVERY_POLL_DELAY)
+        except Exception as exc:
+            return {"status": "unknown", "error": f"could not verify Gorgias delivery: {exc}"}
+        return {"status": "pending", "message": latest}

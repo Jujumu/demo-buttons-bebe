@@ -130,12 +130,36 @@ async def action_send(ticket_id: int, request: Request) -> JSONResponse:
             "Public reply failed",
             ticket_id=ticket_id,
             detail=result.get("error"),
+            message_id=result.get("message_id"),
+            delivery_status=result.get("delivery_status"),
         )
         return JSONResponse(
             status_code=502,
-            content={"error": result.get("error", "send failed")},
+            content={
+                "error": result.get("error", "send failed"),
+                "delivery_status": result.get("delivery_status", "failed"),
+                **({"message_id": result["message_id"]} if result.get("message_id") else {}),
+            },
         )
-    log_event(logger, "INFO", "Public reply sent from dashboard", ticket_id=ticket_id)
+    delivery_status = result.get("delivery_status", "unknown")
+    if delivery_status == "sent":
+        log_event(
+            logger,
+            "INFO",
+            "Public reply sent from dashboard",
+            ticket_id=ticket_id,
+            message_id=result.get("message_id"),
+            delivery_status=delivery_status,
+        )
+    else:
+        log_event(
+            logger,
+            "WARNING",
+            "Public reply accepted by Gorgias; delivery is not confirmed",
+            ticket_id=ticket_id,
+            message_id=result.get("message_id"),
+            delivery_status=delivery_status,
+        )
     try:
         _app_value("_record_lesson", _record_lesson)(
             "sent",
@@ -147,7 +171,14 @@ async def action_send(ticket_id: int, request: Request) -> JSONResponse:
         )
     except Exception:
         pass
-    return JSONResponse(content={"ok": True})
+    return JSONResponse(
+        status_code=200 if delivery_status == "sent" else 202,
+        content={
+            "ok": True,
+            "delivery_status": delivery_status,
+            **({"message_id": result["message_id"]} if result.get("message_id") else {}),
+        },
+    )
 
 
 @router.post("/ticket/{ticket_id}/note")
