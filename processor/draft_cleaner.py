@@ -37,6 +37,21 @@ _SELF_TALK_MARKERS = [
     # An internal agent note is not customer-facing text.
     r"agent[\s-]note\b",
     r"\(internal[:\s]",
+    # Model outputs sometimes wrap these labels in brackets. They are
+    # reviewer material, never customer-facing prose.
+    r"suggested(?:\s+customer[- ]facing)?\s+reply\b",
+    r"recommended(?:\s+customer[- ]facing)?\s+reply\b",
+    r"recommended(?:\s+customer[- ]facing)?\s+handling\b",
+    r"action\s+needed\b",
+    r"policy\s+basis\b",
+    r"human\s+review\b",
+    r"no\s+customer[- ]facing\s+reply\b",
+    r"\[internal\s+note\b",
+    r"\[suggested(?:\s+customer[- ]facing)?\s+reply\b",
+    r"\[recommended(?:\s+customer[- ]facing)?\s+handling\b",
+    r"\[action\s+needed\b",
+    r"\[policy\s+basis\b",
+    r"\[no\s+customer[- ]facing\s+reply\b",
     # "As an AI, I cannot ..." style refusals leaking into a draft.
     r"as an ai\b.*\bi (?:cannot|can't|am unable)",
 ]
@@ -55,6 +70,117 @@ _MAX_GATE_MESSAGE = 20_000
 # treat it as a genuine duplication. Keeps short, legitimately-repeated content
 # (e.g. "Yes.\n\nYes.") from being collapsed.
 _MIN_DUP_CHARS = 40
+
+# The model prompt asks for 4 sentences for routine work and 5 for sensitive
+# work. This is a last-mile guard: an overlong draft is shortened at a complete
+# sentence boundary rather than reaching the console unchanged.
+_MAX_NORMAL_SENTENCES = 4
+_MAX_SENSITIVE_SENTENCES = 5
+SENSITIVE_DRAFT_PREFIX = "[SENSITIVE — REVIEW CAREFULLY BEFORE SENDING]"
+_SENSITIVE_HEADER_RE = re.compile(
+    r"^\s*(" + re.escape(SENSITIVE_DRAFT_PREFIX) + r")"
+    r"\s*(?:\n+|$)",
+    re.IGNORECASE,
+)
+_SENTENCE_END_RE = re.compile(r"[.!?](?:[\"')\]]+)?(?=\s|$)")
+_COMMON_ABBREVIATION_RE = re.compile(
+    r"\b(?:e\.g|i\.e|u\.s|u\.k|mr|mrs|ms|dr|vs|etc)\.",
+    re.IGNORECASE,
+)
+
+_OPERATION_VERBS = (
+    r"switch|change|cancel|replace|ship|refund|credit|issue|process|create|"
+    r"invoice|prioritize|hold|flag|contact|notify|remove|add|apply|arrange|"
+    r"leave|correct|resolve"
+)
+_OPERATION_PARTICIPLES = (
+    r"switched|updated|changed|cancelled|canceled|replaced|shipped|sent|"
+    r"issued|processed|refunded|credited|created|prioritized|held|flagged|"
+    r"contacted|notified|removed|added|applied|arranged|left|corrected|resolved"
+)
+_ORDER_MUTATION_PARTICIPLES = (
+    r"updated|changed|cancelled|canceled|replaced|issued|processed|refunded|"
+    r"credited|created|prioritized|held|flagged|contacted|notified|removed|"
+    r"added|applied|arranged|left|corrected|resolved"
+)
+_OPERATION_OBJECTS = (
+    r"label|refund|credit|replacement|invoice|warehouse|order|shipment|"
+    r"package|address"
+)
+_UPDATE_OPERATION = r"update(?!\s+(?:you|yourself|us|the\s+customer)\b)"
+
+# Hermes is read-only. These patterns target first-person operational claims,
+# while deliberately allowing safe language such as "we're reviewing" and
+# "we'll get back to you". A match fails closed so the customer never sees a
+# claim that the store has performed or committed to an external action.
+_ACTION_CLAIM_RE = re.compile(
+    r"(?:"
+    r"\b(?:we|i|our team|the team|the store|store|warehouse|a human|human)\s+(?:can|could|will|would|have|has|"
+    r"already|just|are going to|is going to)\s+"
+    rf"(?:{_OPERATION_VERBS}|{_UPDATE_OPERATION})\b"
+    r"|\b(?:we|i)\s*['\u2019]re going to\s+"
+    rf"(?:{_OPERATION_VERBS}|{_UPDATE_OPERATION})\b"
+    r"|\b(?:we|i)\s*['\u2019]m going to\s+"
+    rf"(?:{_OPERATION_VERBS}|{_UPDATE_OPERATION})\b"
+    r"|\b(?:we|i)\s*['\u2019](?:ll|ve)\s+"
+    rf"(?:{_OPERATION_VERBS}|{_UPDATE_OPERATION})\b"
+    r"|\b(?:we|i)\s*['\u2019]ll\s+(?:get|have)\s+"
+    r"(?:it|this|that|your(?:\s+\w+){0,3}|the(?:\s+\w+){0,3})\s+"
+    rf"(?:{_OPERATION_PARTICIPLES})\b"
+    r"|\b(?:we|i)\s*['\u2019]ll\s+take\s+care\s+of\s+"
+    r"(?:it|this|that|your\s+order)\b"
+    r"|\b(?:we|i)\s*['\u2019]ll\s+(?:work\s+on\s+)?getting\s+"
+    r"(?:your|the)\b[^.!?\n]{0,80}\b(?:sent|shipped|replaced|updated|"
+    r"switched|corrected)\b"
+    r"|\b(?:we|i|our team|the team)\s+(?:have|has|just|already)\s+"
+    rf"(?:{_OPERATION_PARTICIPLES})\b"
+    r"|\b(?:we|i|our team|the team|the store|store|warehouse|a human|human)\s+(?:will|would|are going to|is going to)\s+"
+    r"send\b[^.!?\n]{0,80}\b(?:prepaid\s+|return\s+)?"
+    rf"(?:{_OPERATION_OBJECTS})\b"
+    r"|\b(?:we|i|our team|the team|the store|store|warehouse|a human|human)\s+(?:will|would|are going to|is going to)\s+"
+    r"provide\b[^.!?\n]{0,80}\b(?:prepaid\s+|return\s+)?"
+    rf"(?:{_OPERATION_OBJECTS})\b"
+    r"|\b(?:we|i)\s*['\u2019]ll\s+(?:send|provide)\b"
+    r"[^.!?\n]{0,80}\b(?:prepaid\s+|return\s+)?"
+    rf"(?:{_OPERATION_OBJECTS})\b"
+    r"|\b(?:we|i)\s*['\u2019]re going to\s+(?:send|provide)\b"
+    r"[^.!?\n]{0,80}\b(?:prepaid\s+|return\s+)?"
+    rf"(?:{_OPERATION_OBJECTS})\b"
+    r"|\b(?:we|i)\s*['\u2019]m going to\s+(?:send|provide)\b"
+    r"[^.!?\n]{0,80}\b(?:prepaid\s+|return\s+)?"
+    rf"(?:{_OPERATION_OBJECTS})\b"
+    r"|\b(?:we|i)\s*['\u2019]ve\s+"
+    rf"(?:{_OPERATION_PARTICIPLES})\b[^.!?\n]{{0,80}}\b(?:prepaid\s+|return\s+)?"
+    r"(?:label|refund|credit|replacement|invoice|warehouse|address|return)\b"
+    r"|\b(?:your|the|a|an)\s+(?:prepaid\s+return\s+label|return\s+label|"
+    r"item|replacement|refund|credit|label|invoice|shipment|package|return|"
+    r"address|warehouse)\s+(?:has|have)(?:\s+been)?\s+"
+    rf"(?:{_OPERATION_PARTICIPLES})\b"
+    r"|\b(?:your|the|a|an)\s+(?:prepaid\s+return\s+label|return\s+label|"
+    r"item|replacement|refund|credit|label|invoice|shipment|package|return|"
+    r"address|warehouse)\s+(?:is|are|was|were|will)\s+(?:being\s+|be\s+)?"
+    rf"(?:{_OPERATION_PARTICIPLES})\b"
+    r"|\b(?:your|the|order(?:\s+#?\w+)?)\s+(?:has|have)(?:\s+been)?\s+"
+    rf"(?:{_ORDER_MUTATION_PARTICIPLES})\b"
+    r"|\b(?:your|the|order(?:\s+#?\w+)?)\s+(?:is|are|was|were|will)\s+"
+    r"(?:being\s+|be\s+)?"
+    rf"(?:{_OPERATION_PARTICIPLES})\b"
+    r")",
+    re.IGNORECASE,
+)
+_PENDING_ACTION_RE = re.compile(
+    r"\b(?:reviewing|checking|confirming|verifying)\b[^.!?\n]{0,50}"
+    r"\b(?:whether\s+)?(?:we|i|our team|the team)\s+(?:can|could|may|might)\s+"
+    rf"(?:{_OPERATION_VERBS}|update)\b",
+    re.IGNORECASE,
+)
+
+_SAFE_REVIEW_BODY = (
+    "Hi! We’re reviewing this for you and will follow up with the correct "
+    "information as soon as possible."
+)
+_COMPACT_SAFE_REVIEW_BODY = "Hi! We’re reviewing this."
+_SHORT_SAFE_REVIEW_BODY = "Reviewing."
 
 
 @dataclass
@@ -175,6 +301,87 @@ def _dedupe_repeats(text: str) -> tuple[str, bool]:
     return stripped, False
 
 
+def _sentence_count(text: str) -> int:
+    """Count conservative sentence boundaries in customer-facing text."""
+
+    masked = _COMMON_ABBREVIATION_RE.sub(
+        lambda match: match.group(0).replace(".", " "),
+        text,
+    )
+    return len(list(_SENTENCE_END_RE.finditer(masked)))
+
+
+def _shorten_to_sentence_limit(text: str) -> tuple[str, str]:
+    """Keep only complete sentences within the prompt's concise-output cap."""
+
+    header = _SENSITIVE_HEADER_RE.match(text)
+    body = text[header.end():] if header else text
+    limit = _MAX_SENSITIVE_SENTENCES if header else _MAX_NORMAL_SENTENCES
+    masked = _COMMON_ABBREVIATION_RE.sub(
+        lambda match: match.group(0).replace(".", " "),
+        body,
+    )
+    boundaries = list(_SENTENCE_END_RE.finditer(masked))
+    if len(boundaries) <= limit:
+        return text, ""
+    end = boundaries[limit - 1].end()
+    shortened_body = body[:end].rstrip()
+    removed_tail = body[end:].strip()
+    if header:
+        shortened = f"{header.group(1)}\n\n{shortened_body}"
+    else:
+        shortened = shortened_body
+    return shortened, removed_tail
+
+
+def _safe_review_fallback(text: str) -> str:
+    """Return a concise, non-committal draft when the model promised an action."""
+
+    header = _SENSITIVE_HEADER_RE.match(text)
+    body = (
+        _SAFE_REVIEW_BODY
+        if len(text.strip()) >= len(_SAFE_REVIEW_BODY)
+        else (
+            _COMPACT_SAFE_REVIEW_BODY
+            if len(text.strip()) >= len(_COMPACT_SAFE_REVIEW_BODY)
+            else _SHORT_SAFE_REVIEW_BODY
+        )
+    )
+    if header:
+        return f"{header.group(1)}\n\n{body}"
+    return body
+
+
+def _exceeds_sentence_limit(text: str) -> bool:
+    """Return whether a draft exceeds the normal or sensitive sentence cap."""
+
+    header = _SENSITIVE_HEADER_RE.match(text)
+    body = text[header.end():] if header else text
+    limit = _MAX_SENSITIVE_SENTENCES if header else _MAX_NORMAL_SENTENCES
+    return _sentence_count(body) > limit
+
+
+def _find_action_claim(text: str) -> str:
+    """Return the first unsupported operational claim, if any."""
+
+    for match in _ACTION_CLAIM_RE.finditer(text):
+        sentence_start = max(
+            text.rfind(".", 0, match.start()),
+            text.rfind("!", 0, match.start()),
+            text.rfind("?", 0, match.start()),
+            text.rfind("\n", 0, match.start()),
+        ) + 1
+        sentence = text[sentence_start:match.end()]
+        pending_action = _PENDING_ACTION_RE.search(sentence)
+        if pending_action and pending_action.end() == match.end() - sentence_start:
+            continue
+        # Keep the reviewer diagnostic bounded and on one line. The draft
+        # itself is rejected, so this text can never reach the customer-facing
+        # composer.
+        return " ".join(match.group(0).split())[:240]
+    return ""
+
+
 def clean_draft(text: str) -> CleanResult:
     """Clean an AI draft before it is shown to a human / posted anywhere."""
     if text is None or not str(text).strip():
@@ -206,6 +413,26 @@ def clean_draft(text: str) -> CleanResult:
             text="", no_draft=True,
             reasons=reasons + ["nothing left after cleaning"],
             removed_note=note,
+        )
+    shortened, removed_tail = _shorten_to_sentence_limit(out)
+    if shortened != out:
+        out = shortened
+        reasons.append(
+            "shortened draft to concise-output sentence limit"
+        )
+        if removed_tail:
+            removed.append(removed_tail)
+            note = "\n".join(removed).strip()
+
+    action_claim = _find_action_claim(out)
+    if action_claim:
+        return CleanResult(
+            text=_safe_review_fallback(out),
+            no_draft=False,
+            reasons=reasons + [
+                "replaced unsupported operational promise with review-only fallback"
+            ],
+            removed_note=action_claim,
         )
     return CleanResult(text=out, no_draft=False, reasons=reasons,
                        removed_note=note)

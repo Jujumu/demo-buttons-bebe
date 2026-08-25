@@ -150,37 +150,49 @@ class RealDraftTests(unittest.TestCase):
             with self.subTest(ticket=ticket_id):
                 answer = _live_answer(ticket_id)
                 self.assertGreater(len(answer), 40)
+                baseline = dc.clean_draft(answer)
+                self.assertFalse(baseline.no_draft)
+                self.assertTrue(baseline.text)
                 res = dc.clean_draft(f"{answer}\n\n{answer}")
-                self.assertFalse(res.no_draft)
                 self.assertIn("removed duplicated draft body", res.reasons)
-                self.assertEqual(_norm(res.text), _norm(answer))
-                self.assertLess(len(res.text), len(answer) * 1.2)
+                self.assertEqual(res.no_draft, baseline.no_draft)
+                self.assertEqual(res.text, baseline.text)
 
     def test_real_answer_with_appended_self_talk_is_trimmed(self):
         for ticket_id in REAL_DRAFT_IDS:
             with self.subTest(ticket=ticket_id):
                 answer = _live_answer(ticket_id)
+                baseline = dc.clean_draft(answer)
+                self.assertFalse(baseline.no_draft)
+                self.assertTrue(baseline.text)
                 leaked = f"{answer}\n\nThe response above was complete and ready for review."
                 res = dc.clean_draft(leaked)
                 self.assertIn("stripped model self-commentary", res.reasons)
-                self.assertEqual(_norm(res.text), _norm(answer))
+                self.assertEqual(res.no_draft, baseline.no_draft)
+                self.assertEqual(res.text, baseline.text)
 
     def test_real_answer_duplicated_then_self_talk(self):
         answer = _live_answer("R01")
+        baseline = dc.clean_draft(answer)
+        self.assertFalse(baseline.no_draft)
+        self.assertTrue(baseline.text)
         leaked = f"{answer}\n\n{answer}\n\nThe response above was complete."
         res = dc.clean_draft(leaked)
         self.assertIn("stripped model self-commentary", res.reasons)
         self.assertIn("removed duplicated draft body", res.reasons)
-        self.assertEqual(_norm(res.text), _norm(answer))
+        self.assertEqual(res.no_draft, baseline.no_draft)
+        self.assertEqual(res.text, baseline.text)
 
-    def test_real_clean_answer_passes_through_untouched(self):
+    def test_real_answers_never_reach_console_overlong(self):
         for ticket_id in REAL_DRAFT_IDS:
             with self.subTest(ticket=ticket_id):
                 answer = _live_answer(ticket_id)
                 res = dc.clean_draft(answer)
                 self.assertFalse(res.no_draft)
-                self.assertEqual(res.reasons, [])
-                self.assertEqual(res.text, answer)
+                self.assertTrue(res.text)
+                self.assertFalse(dc._exceeds_sentence_limit(res.text))
+                if dc._exceeds_sentence_limit(answer):
+                    self.assertIn("concise-output sentence limit", " ".join(res.reasons))
 
     def test_empty_customer_message_qa19(self):
         rows = json.loads(RESULTS_LIVE.read_text(encoding="utf-8"))
@@ -246,6 +258,164 @@ class NoFalsePositiveTests(unittest.TestCase):
         res = dc.clean_draft(draft)
         self.assertEqual(res.text, draft)
         self.assertEqual(res.reasons, [])
+
+
+class QualityGuardTests(unittest.TestCase):
+    """Customer-facing drafts are guarded against the three brand-risk patterns."""
+
+    def test_bracketed_internal_note_is_not_sendable(self):
+        result = dc.clean_draft(
+            "[INTERNAL NOTE FOR HUMAN REVIEW — do not send as-is]\n"
+            "Customer needs a confirmed size before we answer."
+        )
+        self.assertTrue(result.no_draft)
+        self.assertEqual(result.text, "")
+        self.assertIn("Customer needs", result.removed_note)
+
+    def test_plain_internal_note_labels_are_not_sendable(self):
+        for label in (
+            "SUGGESTED REPLY:",
+            "RECOMMENDED CUSTOMER-FACING REPLY:",
+            "ACTION NEEDED:",
+            "POLICY BASIS:",
+            "HUMAN REVIEW:",
+        ):
+            with self.subTest(label=label):
+                result = dc.clean_draft(
+                    f"Hi! We're reviewing this for you.\n\n{label}\n"
+                    "Ask the warehouse to send a replacement."
+                )
+                self.assertFalse(result.no_draft)
+                self.assertEqual(
+                    result.text,
+                    "Hi! We're reviewing this for you.",
+                )
+                self.assertIn("Ask the warehouse", result.removed_note)
+
+    def test_internal_note_after_customer_text_is_removed(self):
+        result = dc.clean_draft(
+            "Hi! We're reviewing this for you and will get back shortly.\n\n"
+            "[SUGGESTED CUSTOMER-FACING REPLY]\n"
+            "Ask the warehouse to send a replacement."
+        )
+        self.assertFalse(result.no_draft)
+        self.assertEqual(
+            result.text,
+            "Hi! We're reviewing this for you and will get back shortly.",
+        )
+        self.assertIn("Ask the warehouse", result.removed_note)
+
+    def test_overlong_normal_draft_is_shortened(self):
+        draft = (
+            "Hi! Shipping depends on the method selected. "
+            "USPS usually takes 7–14 days. "
+            "UPS is usually next day. "
+            "ETA shipping is around 1–2 days. "
+            "Processing time is separate from carrier transit."
+        )
+        result = dc.clean_draft(draft)
+        self.assertFalse(result.no_draft)
+        self.assertTrue(result.text)
+        self.assertFalse(dc._exceeds_sentence_limit(result.text))
+        self.assertIn("concise-output sentence limit", " ".join(result.reasons))
+
+    def test_sensitive_draft_allows_five_sentences_and_shortens_six(self):
+        body = " ".join([
+            "Hi, we're reviewing this for you.",
+            "We want to make sure everything is correct.",
+            "We'll get back to you shortly.",
+            "Thank you for your patience.",
+            "We appreciate your understanding.",
+        ])
+        prefix = "[SENSITIVE — REVIEW CAREFULLY BEFORE SENDING]\n\n"
+        allowed = dc.clean_draft(prefix + body)
+        self.assertFalse(allowed.no_draft)
+
+        rejected = dc.clean_draft(prefix + body + " Please wait for our update.")
+        self.assertFalse(rejected.no_draft)
+        self.assertTrue(rejected.text.startswith(prefix.strip()))
+        self.assertFalse(dc._exceeds_sentence_limit(rejected.text))
+        self.assertIn("concise-output sentence limit", " ".join(rejected.reasons))
+
+    def test_unsupported_operational_promises_use_review_fallback(self):
+        for draft in [
+            "Hi! We'll switch your order to pickup right away.",
+            "Hi! We'll send you a prepaid return label.",
+            "Hi! We have issued your refund.",
+            "Hi! We're going to replace the item.",
+            "Hi! We're going to send you a prepaid return label.",
+            "Hi! I'm going to update your address.",
+            "Hi! We'll get your order switched over.",
+            "Hi! We'll take care of your order on our end.",
+            "Hi! Your refund has been issued.",
+            "Hi! A prepaid return label has been sent.",
+            "Hi! A replacement has been shipped.",
+            "Hi! The warehouse has been contacted.",
+            "Hi! We've shipped your replacement.",
+            "Hi! The return has been processed.",
+            ]:
+            with self.subTest(draft=draft):
+                result = dc.clean_draft(draft)
+                self.assertFalse(result.no_draft)
+                self.assertIn(
+                    result.text,
+                    (
+                        dc._SAFE_REVIEW_BODY,
+                        dc._COMPACT_SAFE_REVIEW_BODY,
+                        dc._SHORT_SAFE_REVIEW_BODY,
+                    ),
+                )
+                self.assertLessEqual(len(result.text), len(draft))
+                self.assertIn("review-only fallback", " ".join(result.reasons))
+
+    def test_abbreviations_do_not_consume_the_sentence_budget(self):
+        draft = (
+            "Hi! U.S. orders usually ship in 2–3 days. "
+            "International delivery varies by destination. "
+            "We'll get back to you shortly."
+        )
+        result = dc.clean_draft(draft)
+        self.assertFalse(result.no_draft)
+        self.assertEqual(result.text, draft)
+        self.assertEqual(result.reasons, [])
+
+    def test_safe_review_language_is_not_blocked(self):
+        for draft in [
+            "Hi! We're reviewing this for you and will get back shortly.",
+            "Hi! We're reviewing whether we can update the order before it ships.",
+            "Hi! We can help with that once we confirm the order details.",
+            "Hi! We'll update you shortly.",
+            "Hi! We can provide product details and care instructions.",
+            "Hi! We'll make it right after our team reviews the photos.",
+        ]:
+            with self.subTest(draft=draft):
+                result = dc.clean_draft(draft)
+                self.assertFalse(result.no_draft)
+                self.assertEqual(result.text, draft)
+
+    def test_reviewed_action_does_not_allow_later_promise(self):
+        result = dc.clean_draft(
+            "Hi! We're reviewing whether we can update the order, and we'll switch it right away."
+        )
+        self.assertFalse(result.no_draft)
+        self.assertEqual(result.text, dc._COMPACT_SAFE_REVIEW_BODY)
+        self.assertIn("review-only fallback", " ".join(result.reasons))
+
+    def test_short_unsafe_draft_gets_a_short_safe_fallback(self):
+        result = dc.clean_draft("We'll ship.")
+        self.assertFalse(result.no_draft)
+        self.assertEqual(result.text, dc._SHORT_SAFE_REVIEW_BODY)
+        self.assertLessEqual(len(result.text), len("We'll ship."))
+
+    def test_verified_shipping_status_is_not_treated_as_a_promise(self):
+        for draft in (
+            "Hi! Your order has shipped.",
+            "Hi! Order #123 has shipped.",
+        ):
+            with self.subTest(draft=draft):
+                result = dc.clean_draft(draft)
+                self.assertFalse(result.no_draft)
+                self.assertEqual(result.text, draft)
 
 
 # ===========================================================================

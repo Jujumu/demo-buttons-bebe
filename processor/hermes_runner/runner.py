@@ -7,7 +7,7 @@ import subprocess
 from typing import Any
 
 from config import get_settings
-from draft_cleaner import clean_draft, should_draft
+from draft_cleaner import SENSITIVE_DRAFT_PREFIX, clean_draft, should_draft
 from logging_setup import get_logger, log_event
 from shared.priority import RANK
 
@@ -67,7 +67,14 @@ def draft_for_console(hermes_result: dict[str, Any]) -> str:
     if hermes_result.get("no_draft"):
         return ""
     draft = str(hermes_result.get("draft_text") or "").strip()
-    return draft or str(_FALLBACK_RESULT["draft_text"])
+    if not draft:
+        return str(_FALLBACK_RESULT["draft_text"])
+    if (
+        hermes_result.get("action") == "sensitive_draft"
+        and not draft.lstrip().lower().startswith(SENSITIVE_DRAFT_PREFIX.lower())
+    ):
+        return f"{SENSITIVE_DRAFT_PREFIX}\n\n{draft}"
+    return draft
 
 
 # ADR-015 §2.3 — auth anomalies are non-sendable; runner failures fall back.
@@ -233,13 +240,14 @@ def process_ticket_with_hermes(
             log_event(
                 logger,
                 "WARNING",
-                "Draft was entirely model self-commentary — storing no draft",
+                "Draft rejected by last-mile safety cleaning — storing no draft",
                 ticket_id=ticket_id,
                 clean_reasons=cleaned.reasons,
             )
             parsed = _no_draft_result(
                 parsed,
-                "Hermes produced only self-commentary — defaulting to high for safety",
+                "Hermes draft rejected by safety cleaning — "
+                + "; ".join(cleaned.reasons),
             )
         else:
             parsed["draft_text"] = cleaned.text

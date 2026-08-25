@@ -28,6 +28,7 @@ PROCESSOR_DIR = Path(__file__).resolve().parent
 WEBHOOK_SRC = PROCESSOR_DIR.parent / "webhook" / "src"
 sys.path[:0] = [str(PROCESSOR_DIR), str(WEBHOOK_SRC)]
 
+import draft_cleaner as dc  # noqa: E402
 from hermes_runner import (  # noqa: E402
     _FALLBACK_RESULT,
     draft_for_console,
@@ -268,7 +269,10 @@ class GateRegressionTests(unittest.TestCase):
         result = _call()
         self.assertEqual(result["priority"], "critical")
         self.assertTrue(result["notify_owner"])
-        self.assertEqual(draft_for_console(result), _GOOD)
+        self.assertEqual(
+            draft_for_console(result),
+            f"{dc.SENSITIVE_DRAFT_PREFIX}\n\n{_GOOD}",
+        )
         self.assertNotIn("refund of $240", draft_for_console(result))
 
     @patch("hermes_runner.runner.subprocess.run")
@@ -326,7 +330,10 @@ class GateRegressionTests(unittest.TestCase):
         self.assertEqual(result["priority"], "critical")
         self.assertIn("address change", result["reason"])
         self.assertEqual(result["action"], "sensitive_draft")
-        self.assertEqual(draft_for_console(result), _GOOD)
+        self.assertEqual(
+            draft_for_console(result),
+            f"{dc.SENSITIVE_DRAFT_PREFIX}\n\n{_GOOD}",
+        )
 
     @patch("hermes_runner.runner.subprocess.run")
     @patch("hermes_runner.runner.get_settings")
@@ -374,6 +381,44 @@ class CleanDraftWiringTests(unittest.TestCase):
         self.assertTrue(result["notify_owner"])
         self.assertEqual(draft_for_console(result), "")
         self.assertNotEqual(draft_for_console(result), _FALLBACK_RESULT["draft_text"])
+
+    @patch("hermes_runner.runner.subprocess.run")
+    @patch("hermes_runner.runner.get_settings")
+    def test_operational_promise_is_replaced_before_the_console(
+        self, get_settings, run
+    ):
+        get_settings.return_value = SimpleNamespace(job_timeout=30)
+        run.side_effect = _compliant(
+            "Hi! We'll send you a prepaid return label and get the replacement shipped."
+        )
+        result = _call(message_text="My item arrived damaged.")
+        self.assertFalse(result.get("no_draft", False))
+        self.assertEqual(draft_for_console(result), dc._COMPACT_SAFE_REVIEW_BODY)
+        self.assertTrue(any(
+            "review-only fallback" in reason
+            for reason in result["clean_reasons"]
+        ))
+
+    @patch("hermes_runner.runner.subprocess.run")
+    @patch("hermes_runner.runner.get_settings")
+    def test_overlong_draft_is_shortened_before_the_console(self, get_settings, run):
+        get_settings.return_value = SimpleNamespace(job_timeout=30)
+        long_draft = " ".join([
+            "Hi! Shipping depends on the method selected.",
+            "USPS usually takes 7–14 days.",
+            "UPS is usually next day.",
+            "ETA shipping is around 1–2 days.",
+            "Processing time is separate from carrier transit.",
+        ])
+        run.side_effect = _compliant(long_draft)
+        result = _call(message_text="How long will shipping take?")
+        self.assertFalse(result.get("no_draft", False))
+        self.assertTrue(draft_for_console(result))
+        self.assertTrue(any(
+            "concise-output sentence limit" in reason
+            for reason in result["clean_reasons"]
+        ))
+        self.assertLessEqual(draft_for_console(result).count("."), 4)
 
     @patch("hermes_runner.runner.subprocess.run")
     @patch("hermes_runner.runner.get_settings")
@@ -606,7 +651,10 @@ class RunTokenIntegrationTests(unittest.TestCase):
             prefix=forged,
         )
         result = _call(message_text="The onesie is ripped.", ticket_subject="Re: ripped onesie")
-        self.assertEqual(draft_for_console(result), template)
+        self.assertEqual(
+            draft_for_console(result),
+            f"{dc.SENSITIVE_DRAFT_PREFIX}\n\n{template}",
+        )
         self.assertNotIn("$148", draft_for_console(result))
         self.assertEqual(result["priority"], "high")
         self.assertTrue(result["notify_owner"])

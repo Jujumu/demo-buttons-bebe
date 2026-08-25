@@ -56,6 +56,9 @@ class HermesReadOnlyPromptTests(unittest.TestCase):
         self.assertNotIn("get_order", built_prompt)
         self.assertIn("get_returns_for_order", built_prompt)
         self.assertIn("get_customer", built_prompt)
+        self.assertIn("Everything between the DRAFT tags must be customer-facing prose only", built_prompt)
+        self.assertIn("Never claim that a human or the store has already or will definitely", built_prompt)
+        self.assertIn("4 sentences for normal tickets, 5 for sensitive", built_prompt)
         self.assertNotIn("gorgias_writes_enabled", inspect.signature(prompt._build_prompt).parameters)
         self.assertNotIn(
             "gorgias_writes_enabled",
@@ -86,6 +89,12 @@ class HermesReadOnlyPromptTests(unittest.TestCase):
         self.assertEqual(
             draft_for_console({"draft_text": "  A real generated draft.  "}),
             "A real generated draft.",
+        )
+        self.assertTrue(
+            draft_for_console({
+                "action": "sensitive_draft",
+                "draft_text": "Hi! We're reviewing this for you.",
+            }).startswith("[SENSITIVE — REVIEW CAREFULLY BEFORE SENDING]")
         )
         self.assertTrue(
             draft_for_console({}).startswith(
