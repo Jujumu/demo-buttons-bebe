@@ -1,5 +1,5 @@
 import { MAILBOX_TOPICS } from "../contracts.js";
-import { esc } from "../util.js";
+import { esc, formatOrderCount } from "../util.js";
 import { createCustomerTissue, renderCustomer } from "./customer.js";
 import { createOrderHistoryTissue, renderOrderHistory } from "./order-history.js";
 import { createOrderTissue, renderOrder } from "./order.js";
@@ -31,7 +31,7 @@ export function createRailOrgan({ shop, mailbox }) {
     customer: { ok: false, peek: "Customer", record: null },
     order: { ok: false, peek: "This order", record: null },
     returns: { ok: true, peek: "No returns", collapsedDefault: true, record: null },
-    history: { ok: true, peek: "0", rows: [] },
+    history: { ok: true, peek: formatOrderCount(0), rows: [] },
   };
   let peekedHistoryId = null;
   let currentOrderId = null;
@@ -39,7 +39,7 @@ export function createRailOrgan({ shop, mailbox }) {
   function renderError(tissueId, label, peek, message) {
     return `<section class="rail-card is-error" data-tissue="${esc(tissueId)}" data-open="true">
       <button type="button" class="rail-toggle" data-toggle="${esc(tissueId)}" aria-expanded="true">
-        <span>${esc(label)}</span><span class="peek">${esc(peek)}</span>
+        <h2>${esc(label)}</h2><span class="peek">${esc(peek)}</span>
       </button>
       <div class="rail-body"><p class="tissue-error">${esc(message || "Unavailable")}</p></div>
     </section>`;
@@ -63,7 +63,7 @@ export function createRailOrgan({ shop, mailbox }) {
     const historyRows = (models.history.rows || []).filter((row) => row.id !== currentOrderId);
     const historyView = models.history.error
       ? models.history
-      : { ...models.history, peek: String(historyRows.length), rows: historyRows };
+      : { ...models.history, peek: formatOrderCount(historyRows.length), rows: historyRows };
     const historyHtml = models.history.error
       ? renderError("order-history", "Past orders", models.history.peek, models.history.error)
       : renderOrderHistory(historyView, { open: open["order-history"], peekedId: peekedHistoryId });
@@ -82,7 +82,7 @@ export function createRailOrgan({ shop, mailbox }) {
       customer.load({ shop: shopId, customerId }).catch((err) => ({ ok: false, peek: "Customer error", error: String(err?.message || err), record: null })),
       order.load({ shop: shopId, orderId }).catch((err) => ({ ok: false, peek: "Order error", error: String(err?.message || err), record: null })),
       returns.load({ shop: shopId, orderId }).catch((err) => ({ ok: false, peek: "Returns error", error: String(err?.message || err), collapsedDefault: true })),
-      history.load({ shop: shopId, customerId }).catch((err) => ({ ok: false, peek: "0", rows: [], error: String(err?.message || err) })),
+      history.load({ shop: shopId, customerId }).catch((err) => ({ ok: false, peek: formatOrderCount(0), rows: [], error: String(err?.message || err) })),
     ]);
     models = {
       customer: customerModel,

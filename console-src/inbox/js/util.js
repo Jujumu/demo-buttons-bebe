@@ -17,10 +17,15 @@ export function formatMoney(money, fallback = "") {
 }
 
 export function formatSku(sku) {
-  if (sku == null || sku === "") return "—";
+  if (sku == null || sku === "") return "";
   const text = String(sku).trim();
-  if (text === "" || text === "null" || text === "undefined") return "—";
+  if (text === "" || text === "null" || text === "undefined") return "";
   return text;
+}
+
+export function formatOrderCount(n) {
+  const count = Number(n) || 0;
+  return `${count} ${count === 1 ? "order" : "orders"}`;
 }
 
 export function formatWhen(iso) {
@@ -50,8 +55,10 @@ export function addressesDiffer(shipping, billing) {
 
 export function addressPeek(shipping, billing) {
   if (!shipping && !billing) return "No address";
-  if (!billing || addressesDiffer(shipping, billing)) return "Ship ≠ bill";
-  return shipping.city || shipping.country || "Address";
+  if (!billing) return "No billing";
+  if (!shipping) return "No shipping";
+  if (addressesDiffer(shipping, billing)) return "Ship ≠ bill";
+  return "Same address";
 }
 
 export function statusLabel(value) {

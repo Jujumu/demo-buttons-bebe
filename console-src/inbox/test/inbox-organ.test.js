@@ -41,16 +41,40 @@ test("inbox organ renders four panes and an ink selected bar", async () => {
   assert.equal(snap.selectedId, "t-ada-track");
   assert.match(snap.html, /Ada Demo/);
   assert.match(snap.html, /#1001 · Paid · Fulfilled/);
+  assert.match(snap.html, /Skip to thread\./);
+  assert.match(snap.html, /<h2>Customer<\/h2>/);
+  assert.match(snap.html, /<h3>Addresses<\/h3>/);
 });
 
 test("discarding the AI strip does not restore the draft", async () => {
   const organ = createInboxOrgan({ viewId: "mine" });
   let snap = await organ.ready();
   assert.match(snap.html, /data-draft-strip/);
+  const stripAt = snap.html.indexOf("data-draft-strip");
+  const bodyAt = snap.html.indexOf("data-body");
+  assert.ok(stripAt > -1 && bodyAt > stripAt, "draft strip sits above the textarea");
+  const stripHtml = snap.html.slice(stripAt, bodyAt);
+  assert.match(stripHtml, /data-insert/);
+  assert.match(stripHtml, /data-discard/);
+  assert.doesNotMatch(stripHtml, />Send</);
   organ.discardStrip();
   snap = organ.snapshot();
   assert.doesNotMatch(snap.html, /data-draft-strip/);
   assert.equal(snap.sendDisabled, true);
+});
+
+test("Send is ink primary and Send & close is hairline secondary", async () => {
+  const organ = createInboxOrgan({ viewId: "mine" });
+  const snap = await organ.ready();
+  const buttons = [...snap.html.matchAll(/<button\b[^>]*>/g)].map((match) => match[0]);
+  const send = buttons.find((html) => /\bdata-send\b/.test(html) && !/\bdata-send-close\b/.test(html));
+  const sendClose = buttons.find((html) => /\bdata-send-close\b/.test(html));
+  assert.ok(send, "primary Send is present");
+  assert.ok(sendClose, "Send & close is present on an open ticket");
+  assert.match(send, /btn-ink/);
+  assert.match(send, /btn-send/);
+  assert.match(sendClose, /btn-hairline/);
+  assert.doesNotMatch(sendClose, /btn-ink/);
 });
 
 test("Send stays disabled until the body has text", async () => {
@@ -72,6 +96,7 @@ test("closed ticket keeps composer and hides Send & close", async () => {
   assert.match(snap.html, /data-composer/);
   assert.match(snap.html, />Send</);
   assert.doesNotMatch(snap.html, /Send &amp; close/);
+  assert.doesNotMatch(snap.html, /data-send-close/);
 });
 
 test("no Edit, Refund, Cancel controls and no Gaia", async () => {

@@ -42,25 +42,27 @@ export function renderOrder(model, { open = true, addressesOpen = false, shipmen
   if (!model.ok || !record) {
     return `<section class="rail-card" data-tissue="order" data-open="${open ? "true" : "false"}">
       <button type="button" class="rail-toggle" data-toggle="order" aria-expanded="${open ? "true" : "false"}">
-        <span>This order</span><span class="peek">${esc(model.peek)}</span>
+        <h2>This order</h2><span class="peek">${esc(model.peek)}</span>
       </button>
       <div class="rail-body"><p class="tissue-empty">No order on this ticket</p></div>
     </section>`;
   }
   const shipOpen = shipmentOpen == null ? model.hasTracking : shipmentOpen;
   const items = (record.lineItems?.nodes || []).map((item, index) => {
-    const skuLabel = model.skuLabels[index] || formatSku(item.sku);
-    return `<tr>
-      <td>${esc(item.title)}</td>
-      <td class="mono" data-sku="${esc(skuLabel)}">${esc(skuLabel)}</td>
-      <td>${esc(item.quantity)}</td>
-      <td class="mono">${esc(item.price)}</td>
-    </tr>`;
+    const skuLabel = model.skuLabels[index] ?? formatSku(item.sku);
+    const skuRow = skuLabel
+      ? `<p class="mono line-sku" data-sku="${esc(skuLabel)}">${esc(skuLabel)}</p>`
+      : "";
+    return `<li class="line">
+      <p class="line-title">${esc(item.title)}</p>
+      ${skuRow}
+      <p class="line-meta">${esc(item.quantity)} · <span class="mono">${esc(item.price)}</span></p>
+    </li>`;
   }).join("");
   const tracking = model.tracking;
   const shipment = model.hasTracking && tracking
     ? `<div class="rail-sub" data-open="${shipOpen ? "true" : "false"}">
-        <button type="button" class="rail-sub-toggle" data-toggle="shipment" aria-expanded="${shipOpen ? "true" : "false"}">Shipment</button>
+        <button type="button" class="rail-sub-toggle" data-toggle="shipment" aria-expanded="${shipOpen ? "true" : "false"}"><h3>Shipment</h3></button>
         <div class="rail-sub-body"${shipOpen ? "" : " hidden"}>
           <a class="track-link" href="${esc(tracking.url)}" rel="noreferrer">${esc(tracking.company)} ${esc(tracking.number)}</a>
         </div>
@@ -68,16 +70,13 @@ export function renderOrder(model, { open = true, addressesOpen = false, shipmen
     : "";
   return `<section class="rail-card" data-tissue="order" data-open="${open ? "true" : "false"}">
     <button type="button" class="rail-toggle" data-toggle="order" aria-expanded="${open ? "true" : "false"}">
-      <span>This order</span>
+      <h2>This order</h2>
       <span class="peek">${esc(model.peek)}</span>
     </button>
     <div class="rail-body">
       <p class="mono order-name">${esc(record.name)}</p>
       <p class="mute">${esc(formatWhen(record.createdAt))}</p>
-      <table class="lines">
-        <thead><tr><th>Item</th><th>SKU</th><th>Qty</th><th>Price</th></tr></thead>
-        <tbody>${items}</tbody>
-      </table>
+      <ul class="lines">${items}</ul>
       <dl class="totals">
         <div><dt>Subtotal</dt><dd class="mono">${esc(formatMoney(record.currentSubtotalPriceSet, "—"))}</dd></div>
         <div><dt>Shipping</dt><dd class="mono">${esc(formatMoney(record.totalShippingPriceSet, "—"))}</dd></div>
@@ -86,7 +85,7 @@ export function renderOrder(model, { open = true, addressesOpen = false, shipmen
       </dl>
       <div class="rail-sub" data-open="${addressesOpen ? "true" : "false"}">
         <button type="button" class="rail-sub-toggle" data-toggle="addresses" aria-expanded="${addressesOpen ? "true" : "false"}">
-          Addresses <span class="peek">${esc(model.addressPeek)}</span>
+          <h3>Addresses</h3> <span class="peek">${esc(model.addressPeek)}</span>
         </button>
         <div class="rail-sub-body addr-stack"${addressesOpen ? "" : " hidden"}>
           ${renderAddress("Shipping", record.shippingAddress)}

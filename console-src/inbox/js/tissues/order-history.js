@@ -1,5 +1,5 @@
 import { MAILBOX_TOPICS } from "../contracts.js";
-import { esc, formatWhen, statusLabel } from "../util.js";
+import { esc, formatOrderCount, formatWhen, statusLabel } from "../util.js";
 
 /**
  * Past-orders rail tissue.
@@ -11,7 +11,7 @@ export function projectOrderHistory(rows) {
   const list = [...(rows || [])].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
   return {
     ok: true,
-    peek: String(list.length),
+    peek: formatOrderCount(list.length),
     rows: list,
   };
 }
@@ -28,7 +28,7 @@ export function renderOrderHistory(model, { open = false, peekedId = null } = {}
   }).join("");
   return `<section class="rail-card" data-tissue="order-history" data-open="${open ? "true" : "false"}">
     <button type="button" class="rail-toggle" data-toggle="order-history" aria-expanded="${open ? "true" : "false"}">
-      <span>Past orders</span>
+      <h2>Past orders</h2>
       <span class="peek">${esc(model.peek)}</span>
     </button>
     <div class="rail-body"${open ? "" : " hidden"}>${rows || `<p class="tissue-empty">No past orders</p>`}</div>
@@ -43,7 +43,7 @@ export function createOrderHistoryTissue({ shop, mailbox }) {
         const rows = await shop.getOrderHistory({ shop: shopId, customerId });
         return projectOrderHistory(rows);
       } catch (err) {
-        return { ok: false, peek: "0", rows: [], error: String(err?.message || err) };
+        return { ok: false, peek: formatOrderCount(0), rows: [], error: String(err?.message || err) };
       }
     },
     project: projectOrderHistory,

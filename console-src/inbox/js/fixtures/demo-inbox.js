@@ -1,6 +1,8 @@
 /**
  * Invented inbox fixtures. Not a live shop.
- * SKUs are null. Returns are empty. Billing is often null.
+ * SKUs are null — the rail omits the mono SKU row. Billing is often null
+ * (Addresses peek: No billing). One OPEN return lives on Ada #1001.
+ * Admin GraphQL 2026-07 ReturnStatus in-progress value is OPEN.
  */
 
 export const SHOP = "demo-inbox.example";
@@ -178,7 +180,7 @@ export const orders = {
   },
 };
 
-/** Empty returns for every invented fixture order. */
+/** Empty returns. Used for Casey / Jordan / tickets with no in-progress return. */
 export const emptyReturns = {
   returns: { nodes: [] },
   returnStatus: null,
@@ -188,6 +190,49 @@ export const emptyReturns = {
   creditTotal: null,
   tracking: null,
 };
+
+/** One in-progress return on Ada #1001 so Returns default-open can be reviewed. */
+export const openReturn1001 = {
+  returns: {
+    nodes: [
+      {
+        id: "gid://shopify/Return/70001",
+        status: "OPEN",
+        returnStatus: "OPEN",
+      },
+    ],
+  },
+  returnStatus: "OPEN",
+  inProgress: true,
+  items: [
+    { title: "Oak Demo Rattle", reason: "Changed mind", type: "RETURN" },
+  ],
+  refundTotal: money("24.00"),
+  creditTotal: null,
+  tracking: {
+    number: "DEMO-RET-1001",
+    company: "Demo Carrier",
+    url: "https://example.com/track/demo-ret-1001",
+  },
+};
+
+export const returnsByOrder = {
+  [ORDER_1001]: openReturn1001,
+};
+
+function cloneReturns(record) {
+  return {
+    ...record,
+    returns: { nodes: [...(record.returns?.nodes || [])] },
+    items: [...(record.items || [])],
+    tracking: record.tracking ? { ...record.tracking } : null,
+  };
+}
+
+export function returnsForOrder(orderId) {
+  const record = returnsByOrder[orderId];
+  return record ? cloneReturns(record) : cloneReturns(emptyReturns);
+}
 
 export const views = [
   { id: "mine", label: "Assigned to me" },

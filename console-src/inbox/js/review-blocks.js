@@ -54,8 +54,9 @@ export function reviewBlockViolations(html) {
 
   for (const sku of displayedSkus(text)) {
     if (sku === "null" || sku === "undefined") hits.push("literal null SKU");
+    if (sku === "—" || sku === "–" || sku === "-") hits.push("em dash SKU");
   }
-  if (/<td[^>]*class="[^"]*mono[^"]*"[^>]*>\s*null\s*</i.test(text)) {
+  if (/<(?:td|p)[^>]*class="[^"]*mono[^"]*"[^>]*>\s*null\s*</i.test(text)) {
     hits.push("literal null SKU");
   }
 

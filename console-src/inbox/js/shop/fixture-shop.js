@@ -1,4 +1,4 @@
-import { customers, emptyReturns, orders, SHOP } from "../fixtures/demo-inbox.js";
+import { customers, emptyReturns, orders, returnsForOrder, SHOP } from "../fixtures/demo-inbox.js";
 
 function assertShop(shop) {
   if (shop && shop !== SHOP) {
@@ -50,9 +50,9 @@ export function createFixtureShop(opts = {}) {
       assertShop(shop);
       maybeFail("returns");
       if (!orderId || !orders[orderId]) {
-        return { ...emptyReturns };
+        return { ...emptyReturns, returns: { nodes: [] }, items: [] };
       }
-      return { ...emptyReturns };
+      return returnsForOrder(orderId);
     },
     getOrderHistory({ shop, customerId }) {
       assertShop(shop);

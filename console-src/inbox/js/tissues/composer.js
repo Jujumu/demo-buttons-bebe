@@ -71,17 +71,17 @@ export function createComposerTissue({ mailbox }) {
       : "";
     const sendClose = hideSendAndClose(next)
       ? ""
-      : `<button type="button" class="btn-ink" data-send-close ${sendDisabled(next) ? "disabled" : ""}>Send &amp; close</button>`;
+      : `<button type="button" class="btn-hairline" data-send-close ${sendDisabled(next) ? "disabled" : ""}>Send &amp; close</button>`;
     return `<section class="composer" data-composer>
       <div class="composer-to"><span>To</span> <strong>${esc(to.name)}</strong> <span class="mute">${esc(to.email)}</span></div>
       <div class="composer-box">
         <input class="macro-search" data-macro-search type="search" placeholder="Search macros by name or tags" value="${esc(next.query)}">
         <div class="macro-list">${macroItems}</div>
-        <textarea data-body placeholder="Write the reply. The human always sends.">${esc(next.body)}</textarea>
         ${strip}
+        <textarea data-body placeholder="Write the reply. The human always sends.">${esc(next.body)}</textarea>
       </div>
       <div class="composer-actions">
-        <button type="button" class="btn-ink" data-send ${sendDisabled(next) ? "disabled" : ""}>Send</button>
+        <button type="button" class="btn-ink btn-send" data-send ${sendDisabled(next) ? "disabled" : ""}>Send</button>
         ${sendClose}
       </div>
     </section>`;

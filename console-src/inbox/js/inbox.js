@@ -84,9 +84,10 @@ export function createInboxOrgan(opts = {}) {
 
   function shell() {
     return `<div class="inbox" data-organ="inbox">
+      <a class="skip-link" href="#inbox-thread">Skip to thread.</a>
       <aside class="pane pane-views" data-pane="views"></aside>
       <section class="pane pane-list" data-pane="list"></section>
-      <section class="pane pane-thread" data-pane="thread">
+      <section class="pane pane-thread" id="inbox-thread" data-pane="thread" tabindex="-1">
         <div data-slot="thread"></div>
         <div data-slot="composer"></div>
       </section>
@@ -120,9 +121,10 @@ export function createInboxOrgan(opts = {}) {
     const threadModel = threadTissue.update({ ticket });
     const composerModel = composerTissue.update(composerInput(ticket));
     const html = `<div class="inbox" data-organ="inbox">
+      <a class="skip-link" href="#inbox-thread">Skip to thread.</a>
       <aside class="pane pane-views" data-pane="views">${viewTissue.render(viewModel)}</aside>
       <section class="pane pane-list" data-pane="list">${listTissue.render(listModel)}</section>
-      <section class="pane pane-thread" data-pane="thread">${threadTissue.render(threadModel)}${composerTissue.render(composerModel)}</section>
+      <section class="pane pane-thread" id="inbox-thread" data-pane="thread" tabindex="-1">${threadTissue.render(threadModel)}${composerTissue.render(composerModel)}</section>
       <aside class="pane pane-rail" data-pane="rail">${rail.render()}</aside>
     </div>`;
     return {

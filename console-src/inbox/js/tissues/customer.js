@@ -37,7 +37,7 @@ export function renderCustomer(model, { open = true } = {}) {
       </dl>`;
   return `<section class="rail-card" data-tissue="customer" data-open="${open ? "true" : "false"}">
     <button type="button" class="rail-toggle" data-toggle="customer" aria-expanded="${open ? "true" : "false"}">
-      <span>Customer</span>
+      <h2>Customer</h2>
       <span class="peek">${esc(model.peek)}</span>
     </button>
     <div class="rail-body">${body}</div>
