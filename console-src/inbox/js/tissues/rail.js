@@ -5,6 +5,16 @@ import { createOrderHistoryTissue, renderOrderHistory } from "./order-history.js
 import { createOrderTissue, renderOrder } from "./order.js";
 import { createReturnsTissue, renderReturns } from "./returns.js";
 
+/** Locked first-paint defaults. Addresses and past orders never start open. */
+export const RAIL_DEFAULTS = Object.freeze({
+  customer: true,
+  order: true,
+  returns: false,
+  "order-history": false,
+  addresses: false,
+  shipment: false,
+});
+
 /**
  * Rail organ: customer + this order + returns + past orders.
  * Collapsibles are independent (not an accordion).
@@ -15,14 +25,7 @@ export function createRailOrgan({ shop, mailbox }) {
   const returns = createReturnsTissue({ shop });
   const history = createOrderHistoryTissue({ shop, mailbox });
 
-  const open = {
-    customer: true,
-    order: true,
-    returns: false,
-    "order-history": false,
-    addresses: false,
-    shipment: false,
-  };
+  const open = { ...RAIL_DEFAULTS };
 
   let models = {
     customer: { ok: false, peek: "Customer", record: null },

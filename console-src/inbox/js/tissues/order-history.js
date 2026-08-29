@@ -31,7 +31,7 @@ export function renderOrderHistory(model, { open = false, peekedId = null } = {}
       <span>Past orders</span>
       <span class="peek">${esc(model.peek)}</span>
     </button>
-    <div class="rail-body">${rows || `<p class="tissue-empty">No past orders</p>`}</div>
+    <div class="rail-body"${open ? "" : " hidden"}>${rows || `<p class="tissue-empty">No past orders</p>`}</div>
   </section>`;
 }
 

@@ -1,0 +1,116 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import test from "node:test";
+import { fileURLToPath } from "node:url";
+
+import { orders } from "../js/fixtures/cute-things.js";
+import { createInboxOrgan } from "../js/inbox.js";
+import {
+  displayedSkus,
+  reviewBlockViolations,
+  toggleExpanded,
+} from "../js/review-blocks.js";
+import { formatSku } from "../js/util.js";
+
+const here = dirname(fileURLToPath(import.meta.url));
+
+function chrome() {
+  return [
+    readFileSync(join(here, "../index.html"), "utf8"),
+    readFileSync(join(here, "../styles.css"), "utf8"),
+  ].join("\n");
+}
+
+test("UX Pro blocks fail the default Ada paint", async () => {
+  const organ = createInboxOrgan({ viewId: "mine" });
+  const snap = await organ.ready();
+  assert.deepEqual(reviewBlockViolations(snap.html), []);
+  assert.equal(toggleExpanded(snap.html, "customer"), true);
+  assert.equal(toggleExpanded(snap.html, "order"), true);
+  assert.equal(toggleExpanded(snap.html, "returns"), false);
+  assert.equal(toggleExpanded(snap.html, "order-history"), false);
+  assert.equal(toggleExpanded(snap.html, "addresses"), false);
+  assert.match(snap.html, /data-tissue="returns"[^>]*data-open="false"/);
+  assert.match(snap.html, /No returns/);
+  assert.match(snap.html, /data-tissue="order-history"[^>]*data-open="false"/);
+  assert.match(snap.html, /<span class="peek">0<\/span>/);
+  assert.deepEqual(displayedSkus(snap.html), ["—"]);
+  assert.doesNotMatch(snap.html, /data-sku="null"/);
+  assert.doesNotMatch(snap.html, />\s*null\s*</);
+});
+
+test("UX Pro blocks fail Casey and Jordan default paints", async () => {
+  for (const opts of [
+    { viewId: "unassigned", ticketId: "t-casey-hat" },
+    { viewId: "unassigned", ticketId: "t-casey-blanket" },
+    { viewId: "snoozed", ticketId: "t-jordan-ship" },
+    { viewId: "closed", ticketId: "t-ada-closed" },
+  ]) {
+    const snap = await createInboxOrgan(opts).ready();
+    assert.deepEqual(reviewBlockViolations(snap.html), [], JSON.stringify(opts));
+    assert.equal(toggleExpanded(snap.html, "returns"), false);
+    assert.equal(toggleExpanded(snap.html, "order-history"), false);
+    if (toggleExpanded(snap.html, "addresses") != null) {
+      assert.equal(toggleExpanded(snap.html, "addresses"), false);
+    }
+  }
+});
+
+test("empty returns stay collapsed with No returns peek", async () => {
+  const snap = await createInboxOrgan({ viewId: "mine" }).ready();
+  assert.equal(snap.rail.models.returns.record.returns.nodes.length, 0);
+  assert.equal(snap.rail.models.returns.inProgress, false);
+  assert.equal(snap.rail.open.returns, false);
+  assert.match(snap.html, /data-toggle="returns"[^>]*aria-expanded="false"/);
+  assert.match(snap.html, /<span>Returns<\/span>\s*<span class="peek">No returns<\/span>/);
+  assert.match(snap.html, /data-tissue="returns"[^>]*>[\s\S]*?<div class="rail-body" hidden/);
+});
+
+test("past orders stay collapsed with a count in the header", async () => {
+  const snap = await createInboxOrgan({ viewId: "unassigned", ticketId: "t-casey-hat" }).ready();
+  assert.equal(snap.rail.open["order-history"], false);
+  assert.match(snap.html, /data-toggle="order-history"[^>]*aria-expanded="false"/);
+  assert.match(snap.html, /<span>Past orders<\/span>\s*<span class="peek">1<\/span>/);
+  assert.match(snap.html, /data-tissue="order-history"[^>]*>[\s\S]*?<div class="rail-body" hidden/);
+});
+
+test("null SKUs stay null on the fixture and never print as null", () => {
+  for (const order of Object.values(orders)) {
+    for (const item of order.lineItems.nodes) {
+      assert.equal(item.sku, null);
+      assert.equal(formatSku(item.sku), "—");
+    }
+  }
+  assert.equal(formatSku("null"), "—");
+  assert.equal(formatSku("undefined"), "—");
+  assert.notEqual(formatSku(null), "null");
+});
+
+test("chrome has no Gaia, Ask Gaia, or Gorgias purple", () => {
+  const page = chrome();
+  assert.doesNotMatch(page, /\bGaia\b/i);
+  assert.doesNotMatch(page, /Ask Gaia/i);
+  assert.doesNotMatch(page, /#6[Bb]46[Cc]1|#7[Cc]3[Aa][Ee][Dd]|#5[Bb]21[Bb]6|#7[Cc]4[Dd][Ff][Ff]/);
+  assert.doesNotMatch(page, /#B5471D.*#6|#6.*#B5471D/);
+});
+
+test("review-block detector flags the wall and a printed null SKU", () => {
+  const wall = `
+    <button data-toggle="customer" aria-expanded="true"></button>
+    <button data-toggle="order" aria-expanded="true"></button>
+    <button data-toggle="returns" aria-expanded="true"></button>
+    <button data-toggle="addresses" aria-expanded="true"></button>
+    <button data-toggle="order-history" aria-expanded="true"></button>
+    <section data-tissue="returns"><span class="peek">No returns</span></section>
+    <td class="mono" data-sku="null">null</td>
+    <button>Ask Gaia</button>
+    <style>:root{--acc:#6B46C1}</style>`;
+  const hits = reviewBlockViolations(wall);
+  assert.ok(hits.includes("fully-open rail wall"));
+  assert.ok(hits.includes("empty returns open"));
+  assert.ok(hits.includes("past orders open by default"));
+  assert.ok(hits.includes("literal null SKU"));
+  assert.ok(hits.includes("Gaia"));
+  assert.ok(hits.includes("Gorgias purple"));
+});

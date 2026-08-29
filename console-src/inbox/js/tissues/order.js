@@ -48,19 +48,20 @@ export function renderOrder(model, { open = true, addressesOpen = false, shipmen
     </section>`;
   }
   const shipOpen = shipmentOpen == null ? model.hasTracking : shipmentOpen;
-  const items = (record.lineItems?.nodes || []).map((item, index) => (
-    `<tr>
+  const items = (record.lineItems?.nodes || []).map((item, index) => {
+    const skuLabel = model.skuLabels[index] || formatSku(item.sku);
+    return `<tr>
       <td>${esc(item.title)}</td>
-      <td class="mono">${esc(model.skuLabels[index] || formatSku(item.sku))}</td>
+      <td class="mono" data-sku="${esc(skuLabel)}">${esc(skuLabel)}</td>
       <td>${esc(item.quantity)}</td>
       <td class="mono">${esc(item.price)}</td>
-    </tr>`
-  )).join("");
+    </tr>`;
+  }).join("");
   const tracking = model.tracking;
   const shipment = model.hasTracking && tracking
     ? `<div class="rail-sub" data-open="${shipOpen ? "true" : "false"}">
         <button type="button" class="rail-sub-toggle" data-toggle="shipment" aria-expanded="${shipOpen ? "true" : "false"}">Shipment</button>
-        <div class="rail-sub-body">
+        <div class="rail-sub-body"${shipOpen ? "" : " hidden"}>
           <a class="track-link" href="${esc(tracking.url)}" rel="noreferrer">${esc(tracking.company)} ${esc(tracking.number)}</a>
         </div>
       </div>`
@@ -87,7 +88,7 @@ export function renderOrder(model, { open = true, addressesOpen = false, shipmen
         <button type="button" class="rail-sub-toggle" data-toggle="addresses" aria-expanded="${addressesOpen ? "true" : "false"}">
           Addresses <span class="peek">${esc(model.addressPeek)}</span>
         </button>
-        <div class="rail-sub-body addr-stack">
+        <div class="rail-sub-body addr-stack"${addressesOpen ? "" : " hidden"}>
           ${renderAddress("Shipping", record.shippingAddress)}
           ${renderAddress("Billing", record.billingAddress)}
         </div>

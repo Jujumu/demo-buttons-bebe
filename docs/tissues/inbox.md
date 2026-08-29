@@ -77,8 +77,9 @@ Clerk DTO field names are locked. In for each: `{ shop, customerId? , orderId? }
 
 - **Out:** `returns`, `returnStatus`, in-progress flag, items + reason/type, refund vs credit totals, return tracking
 - Cute Things fixtures are empty: peek `No returns`, collapsed
-- Open only when a return is in progress
+- Open only when a return is in progress. Empty Cute Things fixtures stay collapsed with peek `No returns`
 - **Degrade:** “Returns error” in this card only
+- Review block: shipping this section open while empty fails the inbox PR
 
 ### order-history
 
@@ -86,6 +87,7 @@ Clerk DTO field names are locked. In for each: `{ shop, customerId? , orderId? }
 - Default collapsed. Peek: count
 - Click peeks a row. It does not change This order
 - **Degrade:** “No past orders” / card error
+- Review blocks that fail the inbox PR: a fully-open rail wall (addresses + past orders + the rest), past orders open on first paint, Gorgias purple / Gaia / Ask Gaia, or a literal `null` SKU
 
 ## Shop tissue
 

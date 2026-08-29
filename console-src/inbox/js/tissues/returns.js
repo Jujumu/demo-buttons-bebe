@@ -47,7 +47,7 @@ export function renderReturns(model, { open } = {}) {
       <span>Returns</span>
       <span class="peek">${esc(model.peek)}</span>
     </button>
-    <div class="rail-body">${body}</div>
+    <div class="rail-body"${isOpen ? "" : " hidden"}>${body}</div>
   </section>`;
 }
 

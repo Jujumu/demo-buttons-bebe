@@ -18,7 +18,9 @@ export function formatMoney(money, fallback = "") {
 
 export function formatSku(sku) {
   if (sku == null || sku === "") return "—";
-  return String(sku);
+  const text = String(sku).trim();
+  if (text === "" || text === "null" || text === "undefined") return "—";
+  return text;
 }
 
 export function formatWhen(iso) {

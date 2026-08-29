@@ -207,8 +207,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   font-size: 13px;
 }
 .peek { color: var(--mute); font-weight: 400; font-size: 12px; }
-.rail-card[data-open="false"] .rail-body,
-.rail-sub[data-open="false"] .rail-sub-body { display: none; }
+.rail-card[data-open="false"] > .rail-body,
+.rail-sub[data-open="false"] > .rail-sub-body,
+.rail-body[hidden],
+.rail-sub-body[hidden] { display: none !important; }
 .rail-body, .rail-sub-body { padding: 0 12px 12px; font-size: 13px; }
 .rail-dl { display: grid; gap: 8px; }
 .rail-dl div { display: grid; gap: 2px; }
