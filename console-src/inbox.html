@@ -228,6 +228,15 @@ function tissueBlock(id,title,open,count,inner){
 }
 function retryBtn(kind){return `<p class="err">This tissue failed on its own.</p><button type="button" class="btn" data-retry="${kind}">Retry</button>`;}
 function empty(reason){return `<p class="empty">${esc(reason||"Nothing to show.")}</p>`;}
+function money(value){
+  if(!value||value.amount==null||!value.currencyCode) return empty("No amount.");
+  return `${esc(value.currencyCode)} ${mono(value.amount)}`;
+}
+function addrBlock(label, addr){
+  if(!addr) return `<div class="addr"><div class="k">${esc(label)}</div>${empty("No "+label+".")}</div>`;
+  const lines=(addr.formatted&&addr.formatted.length)?addr.formatted:[addr.address1,addr.address2,[addr.city,addr.province,addr.zip].filter(Boolean).join(", "),addr.country].filter(Boolean);
+  return `<div class="addr"><div class="k">${esc(label)}</div>${addr.name?`<div>${esc(addr.name)}</div>`:""}${lines.map(line=>`<div>${esc(line)}</div>`).join("")}</div>`;
+}
 function nested(id,label,open,html){
   return `<div class="nested ${open?"open":""}" data-nested="${id}">
     <button type="button" class="nested-h" aria-expanded="${open?"true":"false"}">${esc(label)}</button>
@@ -241,46 +250,39 @@ function renderRail(){
   $("rail-empty").hidden=true;$("rail-main").hidden=false;
   const ident=ws.identity, shop=ws.shopify, ret=ws.returns, past=ws.past_orders;
   const identInner = ident.status==="error"?retryBtn("identity"):ident.status!=="ok"?empty(ident.empty_reason):
-    `<div class="kv"><div><div class="k">Name</div>${esc(ident.data.display_name)}</div>
-     <div><div class="k">Email</div>${esc(ident.data.email)}</div>
-     <div><div class="k">Phone</div>${esc(ident.data.phone||"None on file")}</div>
-     <div><div class="k">Notes</div>${esc(ident.data.notes||"No notes.")}</div></div>`;
+    `<div class="kv"><div><div class="k">Name</div>${esc(ident.data.displayName)}</div>
+     <div><div class="k">Email</div>${(ident.data.defaultEmailAddress&&ident.data.defaultEmailAddress.emailAddress)?esc(ident.data.defaultEmailAddress.emailAddress):empty("No defaultEmailAddress.")}</div>
+     <div><div class="k">Orders</div>${esc(ident.data.numberOfOrders)}</div>
+     <div><div class="k">Spent</div>${money(ident.data.amountSpent)}</div></div>`;
   let orderInner;
   if(shop.status==="error") orderInner=retryBtn("shopify");
   else if(shop.status!=="ok") orderInner=empty(shop.empty_reason);
   else {
     const o=shop.data;
-    const lines=`<ul class="lines">${(o.lines||[]).map(l=>`<li><span>${esc(l.title)} · ${mono(l.sku)} × ${l.quantity}</span><span>${esc(o.currency)} ${esc(l.price)}</span></li>`).join("")}</ul>
-      <div class="totals kv">
-        <div>Subtotal ${esc(o.currency)} ${esc(o.subtotal)}</div>
-        <div>Shipping ${esc(o.currency)} ${esc(o.shipping)}</div>
-        <div>Tax ${esc(o.currency)} ${esc(o.tax)}</div>
-        <div><b>Total ${esc(o.currency)} ${esc(o.total)}</b></div>
-      </div>`;
-    const addrs=(o.addresses||[]).map(a=>`<div class="addr"><div class="k">${esc(a.label)}</div><div>${esc(a.name)}</div>${(a.lines||[]).map(line=>`<div>${esc(line)}</div>`).join("")}</div>`).join("");
-    const ship=o.shipment?`<div class="kv"><div>Status ${esc(o.shipment.status)}</div><div>Carrier ${esc(o.shipment.carrier)}</div>
-      <div><a class="track-link" href="${esc(o.shipment.tracking_url)}" target="_blank" rel="noopener">${esc(o.shipment.tracking_label)}</a></div></div>`:empty("No tracking on this order.");
+    const nodes=(o.lineItems&&o.lineItems.nodes)||[];
+    const lines=nodes.length?`<ul class="lines">${nodes.map(l=>`<li><span>${esc(l.name)} · ${l.sku?mono(l.sku):`<span class="empty">No SKU</span>`} × ${esc(l.quantity)}</span></li>`).join("")}</ul>`:empty("No lineItems.");
+    const totals=`<div class="totals kv"><div><b>Total</b> ${money(o.currentTotalPriceSet&&o.currentTotalPriceSet.shopMoney)}</div></div>`;
+    const addrs=addrBlock("shippingAddress",o.shippingAddress)+addrBlock("billingAddress",o.billingAddress);
+    const tracks=(o.fulfillments||[]).flatMap(f=>f.trackingInfo||[]).filter(t=>t&&(t.number||t.url));
+    const ship=tracks.length?`<div class="kv">${tracks.map(t=>`<div>${t.company?`<div class="k">${esc(t.company)}</div>`:""}${t.number?`<div>${mono(t.number)}</div>`:""}${t.url?`<div><a class="track-link" href="${esc(t.url)}" target="_blank" rel="noopener">Track</a></div>`:empty("No tracking url.")}</div>`).join("")}</div>`:empty("No fulfillments.trackingInfo.");
     orderInner=`<div class="kv">
-      <div><div class="k">Order</div>${mono("#"+o.order_number)}</div>
-      <div><div class="k">Payment</div>${esc(o.financial_status)}</div>
-      <div><div class="k">Fulfillment</div>${esc(o.fulfillment_status)}</div>
-      <div><div class="k">Created</div>${esc(o.created_label)}</div>
-      <div class="empty">${esc(o.freshness_label)}</div>
+      <div><div class="k">Order</div>${mono(o.name)}</div>
+      <div><div class="k">Payment</div><span class="status">${esc(o.displayFinancialStatus)}</span></div>
+      <div><div class="k">Fulfillment</div><span class="status">${esc(o.displayFulfillmentStatus)}</span></div>
     </div>
-    ${nested("lines","Lines and totals",true,lines)}
+    ${nested("lines","Lines and totals",true,lines+totals)}
     ${nested("addr","Addresses",false,addrs)}
-    ${nested("ship","Shipment",Boolean(o.shipment),ship)}`;
+    ${nested("ship","Shipment",tracks.length>0,ship)}`;
   }
-  const retOpen=ret.status==="ok"&&ret.data&&ret.data.in_progress;
-  const retInner=ret.status==="error"?retryBtn("returns"):!retOpen?empty(ret.empty_reason||"No return in progress."):
-    `<div class="kv"><div><div class="k">Return</div>${mono(ret.data.return_id)}</div>
-     <div><div class="k">Stage</div>${esc(ret.data.stage)}</div>
-     <div><div class="k">Next step</div>${esc(ret.data.next_step)}</div>
-     <div><div class="k">Refund status</div>${esc(ret.data.refund_status)}</div>
-     <div class="empty">${esc(ret.data.freshness_label)}</div></div>`;
+  const retData=ret.data||{};
+  const retNodes=(retData.returns&&retData.returns.nodes)||[];
+  const retOpen=ret.status==="ok"&&retData.returnStatus&&retData.returnStatus!=="NO_RETURN";
+  const retInner=ret.status==="error"?retryBtn("returns"):!retOpen?empty(ret.empty_reason||`returnStatus ${retData.returnStatus||"NO_RETURN"}. No returns.`):
+    `<div class="kv"><div><div class="k">returnStatus</div>${esc(retData.returnStatus)}</div>
+     <ul class="lines">${retNodes.map(n=>`<li><span>${mono(n.name)}</span><span>${esc(n.status)}</span></li>`).join("")}</ul></div>`;
   const pastCount=past.status==="ok"&&past.data?past.data.count:0;
   const pastInner=past.status==="error"?retryBtn("shopify"):past.status!=="ok"?empty(past.empty_reason):
-    `<ul class="lines">${(past.data.orders||[]).map(o=>`<li><span>${mono("#"+o.order_number)} · ${esc(o.date_label)}</span><span>${esc(o.status)} ${esc(o.total)}</span></li>`).join("")}</ul>`;
+    `<ul class="lines">${(past.data.orders||[]).map(o=>`<li><span>${mono(o.name)}</span><span>${esc(o.displayFulfillmentStatus)} ${money(o.currentTotalPriceSet&&o.currentTotalPriceSet.shopMoney)}</span></li>`).join("")}</ul>`;
   $("rail-main").innerHTML =
     tissueBlock("customer","Customer",true,null,identInner)+
     tissueBlock("order","This order",true,null,orderInner)+

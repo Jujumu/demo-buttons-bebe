@@ -7,7 +7,12 @@ import unittest
 from pathlib import Path
 
 from bb_webhook.tissues import drafts, identity, returns, shopify_context, tickets, workspace
-from bb_webhook.tissues.types import TissueResult
+from bb_webhook.tissues.types import (
+    CUSTOMER_RAIL_FIELDS,
+    ORDER_RAIL_FIELDS,
+    RAIL_LOCK_QUERY,
+    TissueResult,
+)
 
 TISSUE_DIR = Path(__file__).resolve().parent / "src" / "bb_webhook" / "tissues"
 INBOX = Path(__file__).resolve().parents[1] / "console-src" / "inbox.html"
@@ -64,10 +69,11 @@ class TissueIsolationTests(unittest.TestCase):
 
     def test_returns_degrade_when_empty(self) -> None:
         empty = returns.get_return_context("tk-1001")
-        active = returns.get_return_context("tk-1004")
+        also_empty = returns.get_return_context("tk-1004")
         self.assertEqual(empty.status, "empty")
-        self.assertEqual(active.status, "ok")
-        self.assertTrue(active.data.in_progress)
+        self.assertEqual(also_empty.status, "empty")
+        self.assertEqual(empty.data.returnStatus, "NO_RETURN")
+        self.assertEqual(empty.data.returns.nodes, ())
 
     def test_identity_unidentified_ticket_is_empty_not_guessed(self) -> None:
         result = identity.get_identity("tk-1006")
@@ -86,7 +92,7 @@ class TissueIsolationTests(unittest.TestCase):
     def test_send_requires_body_and_is_human_gated(self) -> None:
         blank = workspace.send_reply("tk-1002", "   ")
         self.assertEqual(blank.status, "error")
-        sent = workspace.send_reply("tk-1002", "The romper on order 1002 is 3 months.")
+        sent = workspace.send_reply("tk-1002", "Order #1002 is fulfilled. Use the Track link.")
         self.assertEqual(sent.status, "ok")
         self.assertEqual(sent.data.messages[-1].kind, "agent")
         self.assertEqual(tickets.get_ticket("tk-1002").status, "open")
@@ -100,20 +106,50 @@ class TissueIsolationTests(unittest.TestCase):
     def test_inbox_views_and_fixture_names_are_fake(self) -> None:
         snapshot = workspace.inbox("open")
         names = {ticket.customer_name for ticket in snapshot.tickets}
-        self.assertIn("Jane Example", names)
-        self.assertIn("Alex Patron", names)
+        self.assertIn("AI-DEMO Customer A", names)
+        self.assertIn("AI-DEMO Customer B", names)
         self.assertEqual(snapshot.source, "fixture")
         blob = "\n".join(ticket.as_dict().__repr__() for ticket in snapshot.tickets)
         for banned in FORBIDDEN_PII:
             self.assertNotIn(banned, blob)
 
     def test_shopify_dto_has_no_mutation_actions(self) -> None:
-        order = shopify_context.get_order_context("tk-1001").data
+        order = shopify_context.get_order_context("tk-1002").data
         payload = order.as_dict()
         for banned in ("edit", "refund", "cancel", "Edit", "Refund", "Cancel"):
             self.assertNotIn(banned, payload)
-        self.assertEqual(payload["shipment"]["tracking_label"], "Track shipment")
-        self.assertTrue(payload["shipment"]["tracking_url"].startswith("https://example.com/"))
+        track = payload["fulfillments"][0]["trackingInfo"][0]
+        self.assertEqual(track["number"], "AI-DEMO-1002")
+        self.assertTrue(track["url"].startswith("https://example.com/"))
+
+    def test_identity_uses_locked_customer_fields(self) -> None:
+        payload = identity.get_identity("tk-1002").data.as_dict()
+        self.assertEqual(set(payload), set(CUSTOMER_RAIL_FIELDS))
+        self.assertNotIn("email", payload)
+        self.assertEqual(payload["displayName"], "AI-DEMO Customer A")
+        self.assertEqual(payload["defaultEmailAddress"]["emailAddress"], "ai-demo-a@example.com")
+        self.assertEqual(payload["defaultEmailAddress"].keys(), {"emailAddress"})
+
+    def test_order_dto_matches_admin_graphql_lock_and_sandbox_shape(self) -> None:
+        paid = {
+            shopify_context.get_order_context("tk-1002").data.name,
+            shopify_context.get_order_context("tk-1001").data.name,
+            shopify_context.get_order_context("tk-1004").data.name,
+        }
+        self.assertEqual(paid, {"#1002", "#1003", "#1004"})
+        for ticket_id in ("tk-1001", "tk-1002", "tk-1004"):
+            payload = shopify_context.get_order_context(ticket_id).data.as_dict()
+            self.assertEqual(set(payload), set(ORDER_RAIL_FIELDS))
+            self.assertEqual(payload["displayFinancialStatus"], "PAID")
+            self.assertEqual(payload["returnStatus"], "NO_RETURN")
+            self.assertEqual(payload["returns"]["nodes"], [])
+            for node in payload["lineItems"]["nodes"]:
+                self.assertIsNone(node["sku"])
+        self.assertIsNone(shopify_context.get_order_context("tk-1002").data.billingAddress)
+        self.assertIsNone(shopify_context.get_order_context("tk-1001").data.billingAddress)
+        self.assertIsNotNone(shopify_context.get_order_context("tk-1004").data.billingAddress)
+        self.assertIn("defaultEmailAddress { emailAddress }", RAIL_LOCK_QUERY)
+        self.assertNotIn("Customer.email", RAIL_LOCK_QUERY)
 
     def test_open_ticket_returns_tissue_envelopes(self) -> None:
         result = workspace.open_ticket("tk-1001")
@@ -150,6 +186,14 @@ class InboxSourceGuardTests(unittest.TestCase):
         self.assertNotIn(">Send<", strip)
         self.assertIn("This order", source)
         self.assertIn("Past orders", source)
+        self.assertIn("defaultEmailAddress", source)
+        self.assertIn("No SKU", source)
+        self.assertIn('"No "+label+"."', source)
+        self.assertIn('addrBlock("billingAddress"', source)
+        self.assertIn("returnStatus", source)
+        self.assertNotIn("ident.data.email", source)
+        self.assertNotIn("order_number", source)
+        self.assertNotIn("display_name", source)
         self.assertNotIn("Edit order", source)
         self.assertNotIn(">Refund</", source)
         self.assertNotIn("id=\"refund\"", source)

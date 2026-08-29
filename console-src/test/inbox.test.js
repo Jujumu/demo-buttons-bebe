@@ -51,3 +51,21 @@ test("inbox is fixture-only and does not advertise a live shop", () => {
   assert.match(source, /Fixture data/);
   assert.doesNotMatch(source, /yznyc1-ez|Cute Things|SHOPIFY_CLIENT|myshopify\.com/i);
 });
+
+test("rail reads locked Admin GraphQL fields and empty sandbox states", () => {
+  assert.match(source, /ident\.data\.displayName/);
+  assert.match(source, /defaultEmailAddress\.emailAddress/);
+  assert.match(source, /displayFinancialStatus/);
+  assert.match(source, /displayFulfillmentStatus/);
+  assert.match(source, /currentTotalPriceSet/);
+  assert.match(source, /lineItems/);
+  assert.match(source, /shippingAddress/);
+  assert.match(source, /billingAddress/);
+  assert.match(source, /trackingInfo/);
+  assert.match(source, /returnStatus/);
+  assert.match(source, /No SKU/);
+  assert.match(source, /"No "\+label\+"\."/);
+  assert.match(source, /addrBlock\("billingAddress"/);
+  assert.doesNotMatch(source, /ident\.data\.email[^A]/);
+  assert.doesNotMatch(source, /order_number|display_name|financial_status/);
+});

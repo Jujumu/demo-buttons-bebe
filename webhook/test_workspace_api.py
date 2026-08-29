@@ -44,7 +44,7 @@ class WorkspaceApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["source"], "fixture")
         self.assertNotIn("shopify_shop", payload)
         names = {ticket["customer_name"] for ticket in payload["tickets"]}
-        self.assertIn("Jane Example", names)
+        self.assertIn("AI-DEMO Customer A", names)
         self.assertNotIn("Malky Sperber", names)
 
     async def test_ticket_workspace_keeps_thread_when_shopify_errors(self) -> None:
@@ -78,7 +78,7 @@ class WorkspaceApiTests(unittest.IsolatedAsyncioTestCase):
             request_for(
                 "POST",
                 "/dashboard/api/workspace/tickets/tk-1002/send",
-                {"body": "The romper SKU is BB-ROMPER-3M.", "close": False},
+                {"body": "Order #1002 is fulfilled. Use the Track link.", "close": False},
             ),
         )
         self.assertEqual(response.status_code, 200)

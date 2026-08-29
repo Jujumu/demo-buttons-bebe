@@ -1,4 +1,11 @@
-"""Public DTOs shared at tissue boundaries. No tissue owns another tissue."""
+"""Public DTOs shared at tissue boundaries. No tissue owns another tissue.
+
+Shopify rail keys are Admin GraphQL 2026-07 names from a validated
+read-only query (see ``RAIL_LOCK_QUERY``). Do not invent fields.
+Runtime payloads are fixtures in the development-store sandbox shape:
+three AI-DEMO customers, paid ``#1002``–``#1004``, null ``sku``,
+empty ``returns``, ``billingAddress`` often null.
+"""
 
 from __future__ import annotations
 
@@ -8,6 +15,59 @@ from typing import Any, Literal
 TissueStatus = Literal["ok", "empty", "error", "unavailable"]
 TicketStatus = Literal["open", "closed", "snoozed"]
 MessageKind = Literal["customer", "agent", "status"]
+
+RAIL_LOCK_API_VERSION = "2026-07"
+CUSTOMER_RAIL_FIELDS = (
+    "displayName",
+    "defaultEmailAddress",
+    "numberOfOrders",
+    "amountSpent",
+)
+ORDER_RAIL_FIELDS = (
+    "name",
+    "displayFinancialStatus",
+    "displayFulfillmentStatus",
+    "currentTotalPriceSet",
+    "lineItems",
+    "shippingAddress",
+    "billingAddress",
+    "fulfillments",
+    "returns",
+    "returnStatus",
+)
+RAIL_LOCK_QUERY = """
+query RailLock {
+  customers(first: 10, query: "email:ai-demo") {
+    nodes {
+      displayName
+      defaultEmailAddress { emailAddress }
+      numberOfOrders
+      amountSpent { amount currencyCode }
+    }
+  }
+  orders(first: 10, query: "name:#1002 OR name:#1003 OR name:#1004") {
+    nodes {
+      name
+      displayFinancialStatus
+      displayFulfillmentStatus
+      currentTotalPriceSet {
+        shopMoney { amount currencyCode }
+        presentmentMoney { amount currencyCode }
+      }
+      lineItems(first: 20) {
+        nodes { name sku quantity }
+      }
+      shippingAddress { name address1 address2 city province zip country formatted }
+      billingAddress { name address1 address2 city province zip country formatted }
+      fulfillments(first: 10) {
+        trackingInfo { company number url }
+      }
+      returns(first: 10) { nodes { name status } }
+      returnStatus
+    }
+  }
+}
+"""
 
 
 def _public(obj: Any) -> Any:
@@ -93,108 +153,201 @@ class Thread:
 
 
 @dataclass(frozen=True)
+class CustomerEmailAddress:
+    """Customer.defaultEmailAddress — never Customer.email (deprecated)."""
+
+    emailAddress: str
+
+    def as_dict(self) -> dict[str, Any]:
+        return {"emailAddress": self.emailAddress}
+
+
+@dataclass(frozen=True)
+class MoneyV2:
+    amount: str
+    currencyCode: str
+
+    def as_dict(self) -> dict[str, Any]:
+        return {"amount": self.amount, "currencyCode": self.currencyCode}
+
+
+@dataclass(frozen=True)
+class MoneyBag:
+    shopMoney: MoneyV2
+    presentmentMoney: MoneyV2
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "shopMoney": self.shopMoney.as_dict(),
+            "presentmentMoney": self.presentmentMoney.as_dict(),
+        }
+
+
+def money_bag(amount: str, currency_code: str = "USD") -> MoneyBag:
+    money = MoneyV2(amount=amount, currencyCode=currency_code)
+    return MoneyBag(shopMoney=money, presentmentMoney=money)
+
+
+@dataclass(frozen=True)
 class CustomerProfile:
-    display_name: str
-    email: str
-    phone: str | None
-    notes: str
-    identified: bool
+    displayName: str
+    defaultEmailAddress: CustomerEmailAddress | None
+    numberOfOrders: str
+    amountSpent: MoneyV2
 
     def as_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        return {
+            "displayName": self.displayName,
+            "defaultEmailAddress": None
+            if self.defaultEmailAddress is None
+            else self.defaultEmailAddress.as_dict(),
+            "numberOfOrders": self.numberOfOrders,
+            "amountSpent": self.amountSpent.as_dict(),
+        }
 
 
 @dataclass(frozen=True)
-class OrderLine:
-    title: str
-    sku: str
-    quantity: int
-    price: str
-
-    def as_dict(self) -> dict[str, Any]:
-        return asdict(self)
-
-
-@dataclass(frozen=True)
-class Address:
-    label: str
+class LineItemNode:
     name: str
-    lines: tuple[str, ...]
+    sku: str | None
+    quantity: int
 
     def as_dict(self) -> dict[str, Any]:
-        return {"label": self.label, "name": self.name, "lines": list(self.lines)}
+        return {"name": self.name, "sku": self.sku, "quantity": self.quantity}
 
 
 @dataclass(frozen=True)
-class Shipment:
-    tracking_number: str
-    tracking_url: str
-    tracking_label: str
-    carrier: str
+class LineItemConnection:
+    nodes: tuple[LineItemNode, ...]
+
+    def as_dict(self) -> dict[str, Any]:
+        return {"nodes": [node.as_dict() for node in self.nodes]}
+
+
+@dataclass(frozen=True)
+class MailingAddress:
+    name: str | None
+    address1: str | None
+    address2: str | None
+    city: str | None
+    province: str | None
+    zip: str | None
+    country: str | None
+    formatted: tuple[str, ...]
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "address1": self.address1,
+            "address2": self.address2,
+            "city": self.city,
+            "province": self.province,
+            "zip": self.zip,
+            "country": self.country,
+            "formatted": list(self.formatted),
+        }
+
+
+@dataclass(frozen=True)
+class FulfillmentTrackingInfo:
+    company: str | None
+    number: str | None
+    url: str | None
+
+    def as_dict(self) -> dict[str, Any]:
+        return {"company": self.company, "number": self.number, "url": self.url}
+
+
+@dataclass(frozen=True)
+class Fulfillment:
+    trackingInfo: tuple[FulfillmentTrackingInfo, ...]
+
+    def as_dict(self) -> dict[str, Any]:
+        return {"trackingInfo": [info.as_dict() for info in self.trackingInfo]}
+
+
+@dataclass(frozen=True)
+class ReturnNode:
+    name: str
     status: str
 
     def as_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        return {"name": self.name, "status": self.status}
+
+
+@dataclass(frozen=True)
+class ReturnConnection:
+    nodes: tuple[ReturnNode, ...]
+
+    def as_dict(self) -> dict[str, Any]:
+        return {"nodes": [node.as_dict() for node in self.nodes]}
+
+
+EMPTY_RETURNS = ReturnConnection(nodes=())
 
 
 @dataclass(frozen=True)
 class ShopifyOrder:
-    """Support-facing Shopify DTO. Source of truth remains Shopify."""
+    """Support-facing Shopify DTO. Keys match Admin GraphQL 2026-07."""
 
-    order_number: str
-    financial_status: str
-    fulfillment_status: str
-    created_label: str
-    currency: str
-    subtotal: str
-    shipping: str
-    tax: str
-    total: str
-    lines: tuple[OrderLine, ...]
-    addresses: tuple[Address, ...]
-    shipment: Shipment | None
-    freshness_label: str
+    name: str
+    displayFinancialStatus: str
+    displayFulfillmentStatus: str
+    currentTotalPriceSet: MoneyBag
+    lineItems: LineItemConnection
+    shippingAddress: MailingAddress | None
+    billingAddress: MailingAddress | None
+    fulfillments: tuple[Fulfillment, ...]
+    returns: ReturnConnection
+    returnStatus: str
 
     def as_dict(self) -> dict[str, Any]:
         return {
-            "order_number": self.order_number,
-            "financial_status": self.financial_status,
-            "fulfillment_status": self.fulfillment_status,
-            "created_label": self.created_label,
-            "currency": self.currency,
-            "subtotal": self.subtotal,
-            "shipping": self.shipping,
-            "tax": self.tax,
-            "total": self.total,
-            "lines": [line.as_dict() for line in self.lines],
-            "addresses": [address.as_dict() for address in self.addresses],
-            "shipment": None if self.shipment is None else self.shipment.as_dict(),
-            "freshness_label": self.freshness_label,
+            "name": self.name,
+            "displayFinancialStatus": self.displayFinancialStatus,
+            "displayFulfillmentStatus": self.displayFulfillmentStatus,
+            "currentTotalPriceSet": self.currentTotalPriceSet.as_dict(),
+            "lineItems": self.lineItems.as_dict(),
+            "shippingAddress": None
+            if self.shippingAddress is None
+            else self.shippingAddress.as_dict(),
+            "billingAddress": None
+            if self.billingAddress is None
+            else self.billingAddress.as_dict(),
+            "fulfillments": [fulfillment.as_dict() for fulfillment in self.fulfillments],
+            "returns": self.returns.as_dict(),
+            "returnStatus": self.returnStatus,
         }
 
 
 @dataclass(frozen=True)
 class PastOrder:
-    order_number: str
-    date_label: str
-    total: str
-    status: str
+    name: str
+    displayFinancialStatus: str
+    displayFulfillmentStatus: str
+    currentTotalPriceSet: MoneyBag
 
     def as_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        return {
+            "name": self.name,
+            "displayFinancialStatus": self.displayFinancialStatus,
+            "displayFulfillmentStatus": self.displayFulfillmentStatus,
+            "currentTotalPriceSet": self.currentTotalPriceSet.as_dict(),
+        }
 
 
 @dataclass(frozen=True)
-class ReturnRecord:
-    return_id: str
-    in_progress: bool
-    stage: str
-    next_step: str
-    refund_status: str
-    freshness_label: str
+class OrderReturns:
+    """Order.returns + Order.returnStatus. Empty nodes is the sandbox shape."""
+
+    returns: ReturnConnection
+    returnStatus: str
 
     def as_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        return {
+            "returns": self.returns.as_dict(),
+            "returnStatus": self.returnStatus,
+        }
 
 
 @dataclass(frozen=True)

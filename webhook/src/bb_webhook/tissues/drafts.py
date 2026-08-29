@@ -14,24 +14,24 @@ _DEFAULT_DRAFTS: dict[str, Draft] = {
     "tk-1001": Draft(
         ticket_id="tk-1001",
         text=(
-            "Hi Jane — order 1001 is fulfilled. You can track it with the "
-            "shipment link on this ticket. Let me know if it does not update."
+            "Hi — order #1003 is paid and still unfulfilled. The line is the "
+            "Designer Linen Baby Sun Hat. There is no SKU on that line."
         ),
         language="en",
     ),
     "tk-1002": Draft(
         ticket_id="tk-1002",
         text=(
-            "Hi Alex — the romper on order 1002 is SKU BB-ROMPER-3M (3 months). "
-            "I can help you place a second one if you want the same size."
+            "Hi — order #1002 is paid and fulfilled. Use the Track link on "
+            "this ticket. The line has no SKU."
         ),
         language="en",
     ),
     "tk-1004": Draft(
         ticket_id="tk-1004",
         text=(
-            "Hi Riley — your return RET-1004 is in progress with the label created. "
-            "The refund is not issued until the parcel is scanned in."
+            "Hi — order #1004 is the Cashmere Knit Baby Blanket. It is paid "
+            "and fulfilled. There is no return on this order."
         ),
         language="en",
     ),
@@ -40,10 +40,10 @@ _DEFAULT_DRAFTS: dict[str, Draft] = {
 MACROS: tuple[Macro, ...] = (
     Macro("macro-ship", "shipping times",
           "Domestic orders usually leave within two business days. Tracking appears after fulfillment."),
-    Macro("macro-return", "sent return label",
-          "Your return label is ready in the returns portal. Refunds start after the parcel is received."),
+    Macro("macro-return", "return status",
+          "There is no return in progress on this order. I can walk you through starting one in the portal."),
     Macro("macro-size", "sizing help",
-          "If you share the size on the current order I can confirm the matching SKU for a second piece."),
+          "If you share the size you need I can confirm it against the line on this order."),
     Macro("macro-care", "care instructions",
           "Wash cold on a gentle cycle and lay flat to dry. Avoid bleach and fabric softener."),
 )

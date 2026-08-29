@@ -2,7 +2,8 @@
 
 INPUT: view id, ticket id, or a send request (body + close flag).
 OUTPUT: ticket summaries, a thread, or an updated thread after a human send.
-Does not look up Shopify/Redo, write drafts, or send through a provider.
+Does not look up Shopify, write drafts, or send through a provider.
+Customer names are the three AI-DEMO fixture profiles only.
 """
 
 from __future__ import annotations
@@ -24,9 +25,9 @@ _DEFAULT_TICKETS: dict[str, TicketSummary] = {
     "tk-1001": TicketSummary(
         id="tk-1001",
         view_ids=("assigned", "open", "all"),
-        customer_name="Jane Example",
-        subject="Where is order 1001?",
-        snippet="Has the cotton onesie shipped yet?",
+        customer_name="AI-DEMO Customer B",
+        subject="Size on order #1003",
+        snippet="What size is the sun hat on #1003?",
         updated_label="2h",
         status="open",
         assigned_to="You",
@@ -34,9 +35,9 @@ _DEFAULT_TICKETS: dict[str, TicketSummary] = {
     "tk-1002": TicketSummary(
         id="tk-1002",
         view_ids=("unassigned", "open", "all"),
-        customer_name="Alex Patron",
-        subject="Need a size for order 1002",
-        snippet="What size is the romper on this order?",
+        customer_name="AI-DEMO Customer A",
+        subject="Where is order #1002?",
+        snippet="Has the teether shipped yet?",
         updated_label="5h",
         status="open",
         assigned_to=None,
@@ -44,9 +45,9 @@ _DEFAULT_TICKETS: dict[str, TicketSummary] = {
     "tk-1003": TicketSummary(
         id="tk-1003",
         view_ids=("assigned", "open", "all"),
-        customer_name="Sam Reviewer",
+        customer_name="AI-DEMO Customer B",
         subject="Question about fabric care",
-        snippet="How should I wash the sample set?",
+        snippet="How should I wash the sun hat?",
         updated_label="1d",
         status="open",
         assigned_to="You",
@@ -54,9 +55,9 @@ _DEFAULT_TICKETS: dict[str, TicketSummary] = {
     "tk-1004": TicketSummary(
         id="tk-1004",
         view_ids=("assigned", "open", "all"),
-        customer_name="Riley Return",
-        subject="Return for order 1004",
-        snippet="I started a return in the portal.",
+        customer_name="AI-DEMO Customer C",
+        subject="Question about order #1004",
+        snippet="Can you confirm the blanket order?",
         updated_label="3h",
         status="open",
         assigned_to="You",
@@ -64,8 +65,8 @@ _DEFAULT_TICKETS: dict[str, TicketSummary] = {
     "tk-1005": TicketSummary(
         id="tk-1005",
         view_ids=("closed", "all"),
-        customer_name="Casey Closed",
-        subject="Thanks for order 1005",
+        customer_name="AI-DEMO Customer A",
+        subject="Thanks for order #1002",
         snippet="All set — thank you!",
         updated_label="4d",
         status="closed",
@@ -85,32 +86,33 @@ _DEFAULT_TICKETS: dict[str, TicketSummary] = {
 
 _DEFAULT_THREADS: dict[str, list[Message]] = {
     "tk-1001": [
-        Message("m1", "customer", "Jane Example",
-                "Hi — I placed order 1001. Has the cotton onesie shipped yet?", "Tue 9:14"),
+        Message("m1", "customer", "AI-DEMO Customer B",
+                "Hi — what size is the sun hat on order #1003?", "Tue 9:14"),
         Message("m2", "status", "System", "Ticket opened and assigned to you.", "Tue 9:14"),
         Message("m3", "agent", "You",
-                "Thanks Jane — I am checking the shipment and will reply with the tracking link.", "Tue 9:40"),
-        Message("m4", "customer", "Jane Example",
+                "Thanks — I am checking the order line and will confirm the size.", "Tue 9:40"),
+        Message("m4", "customer", "AI-DEMO Customer B",
                 "Appreciate it. The confirmation only shows paid so far.", "Tue 10:02"),
     ],
     "tk-1002": [
-        Message("m1", "customer", "Alex Patron",
-                "What size is the romper on order 1002? I want to order a second one.", "Mon 16:20"),
+        Message("m1", "customer", "AI-DEMO Customer A",
+                "Has order #1002 shipped? I want to track the teether.", "Mon 16:20"),
         Message("m2", "status", "System", "Ticket opened. Unassigned.", "Mon 16:20"),
     ],
     "tk-1003": [
-        Message("m1", "customer", "Sam Reviewer",
-                "How should I wash the sample set? Cold water okay?", "Sun 11:05"),
+        Message("m1", "customer", "AI-DEMO Customer B",
+                "How should I wash the sun hat? Cold water okay?", "Sun 11:05"),
         Message("m2", "status", "System", "Ticket opened and assigned to you.", "Sun 11:05"),
     ],
     "tk-1004": [
-        Message("m1", "customer", "Riley Return",
-                "I started a return for order 1004 in the returns portal. Is it moving?", "Tue 8:01"),
+        Message("m1", "customer", "AI-DEMO Customer C",
+                "Can you confirm order #1004 is the cashmere blanket?", "Tue 8:01"),
         Message("m2", "status", "System", "Ticket opened and assigned to you.", "Tue 8:01"),
     ],
     "tk-1005": [
-        Message("m1", "customer", "Casey Closed", "Just confirming order 1005 arrived. Thank you!", "Thu 14:12"),
-        Message("m2", "agent", "You", "Glad it arrived, Casey. Enjoy the set.", "Thu 14:40"),
+        Message("m1", "customer", "AI-DEMO Customer A",
+                "Just confirming order #1002 arrived. Thank you!", "Thu 14:12"),
+        Message("m2", "agent", "You", "Glad it arrived. Enjoy the teether.", "Thu 14:40"),
         Message("m3", "status", "System", "Ticket closed.", "Thu 14:40"),
     ],
     "tk-1006": [
@@ -121,11 +123,11 @@ _DEFAULT_THREADS: dict[str, list[Message]] = {
 }
 
 _SUMMARIES = {
-    "tk-1001": "Jane Example is asking whether order 1001 has shipped.",
-    "tk-1002": "Alex Patron wants the romper size on order 1002.",
-    "tk-1003": "Sam Reviewer asked how to wash the sample set.",
-    "tk-1004": "Riley Return wants the status of an in-progress return.",
-    "tk-1005": "Casey Closed confirmed delivery; ticket is closed.",
+    "tk-1001": "AI-DEMO Customer B is asking the size on order #1003.",
+    "tk-1002": "AI-DEMO Customer A wants tracking for order #1002.",
+    "tk-1003": "AI-DEMO Customer B asked how to wash the sun hat.",
+    "tk-1004": "AI-DEMO Customer C wants confirmation of order #1004.",
+    "tk-1005": "AI-DEMO Customer A confirmed delivery; ticket is closed.",
     "tk-1006": "Unidentified sender asked about a past purchase.",
 }
 
