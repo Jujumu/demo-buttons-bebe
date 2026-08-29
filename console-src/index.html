@@ -285,7 +285,8 @@ const IC={
  refresh:'<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24" fill="currentColor"><path d="M481.54-180q-125.63 0-212.81-87.17-87.19-87.17-87.19-212.77 0-125.6 87.19-212.83Q355.91-780 481.54-780q70.15 0 132.77 31.19 62.61 31.2 104.15 88.04V-780h60v244.61H533.85v-59.99h158q-31.62-57.93-87.7-91.27Q548.08-720 481.54-720q-100 0-170 70t-70 170q0 100 70 170t170 70q77 0 139-44t87-116h63.23q-27.23 97.92-107.27 158.96Q583.46-180 481.54-180Z"/></svg>',
  settings:'<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24" fill="currentColor"><path d="m387.69-100-15.23-121.85q-16.07-5.38-32.96-15.07-16.88-9.7-30.19-20.77L196.46-210l-92.3-160 97.61-73.77q-1.38-8.92-1.96-17.92-.58-9-.58-17.93 0-8.53.58-17.34t1.96-19.27L104.16-590l92.3-159.23 112.46 47.31q14.47-11.46 30.89-20.96t32.27-15.27L387.69-860h184.62l15.23 122.23q18 6.54 32.57 15.27 14.58 8.73 29.43 20.58l114-47.31L855.84-590l-99.15 74.92q2.15 9.69 2.35 18.12.19 8.42.19 16.96 0 8.15-.39 16.58-.38 8.42-2.76 19.27L854.46-370l-92.31 160-112.61-48.08q-14.85 11.85-30.31 20.96-15.46 9.12-31.69 14.89L572.31-100H387.69ZM440-160h78.62L533-267.15q30.62-8 55.96-22.73 25.35-14.74 48.89-37.89L737.23-286l39.39-68-86.77-65.38q5-15.54 6.8-30.47 1.81-14.92 1.81-30.15 0-15.62-1.81-30.15-1.8-14.54-6.8-29.7L777.38-606 738-674l-100.54 42.38q-20.08-21.46-48.11-37.92-28.04-16.46-56.73-23.31L520-800h-79.38l-13.24 106.77q-30.61 7.23-56.53 22.15-25.93 14.93-49.47 38.46L222-674l-39.38 68L269-541.62q-5 14.24-7 29.62t-2 32.38q0 15.62 2 30.62 2 15 6.62 29.62l-86 65.38L222-286l99-42q22.77 23.38 48.69 38.31 25.93 14.92 57.31 22.92L440-160Zm40.46-200q49.92 0 84.96-35.04 35.04-35.04 35.04-84.96 0-49.92-35.04-84.96Q530.38-600 480.46-600q-50.54 0-85.27 35.04T360.46-480q0 49.92 34.73 84.96Q429.92-360 480.46-360ZM480-480Z"/></svg>',
  check:'<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24" fill="currentColor"><path d="M382-253.85 168.62-467.23 211.38-510 382-339.38 748.62-706l42.76 42.77L382-253.85Z"/></svg>',
- menu:'<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24" fill="currentColor"><path d="M140-254.62v-59.99h680v59.99H140ZM140-450v-60h680v60H140Zm0-195.39v-59.99h680v59.99H140Z"/></svg>'
+ menu:'<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24" fill="currentColor"><path d="M140-254.62v-59.99h680v59.99H140ZM140-450v-60h680v60H140Zm0-195.39v-59.99h680v59.99H140Z"/></svg>',
+ inbox:'<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24" fill="currentColor"><path d="M140-160q-24 0-42-18t-18-42v-240l100-200h616l100 200v240q0 24-18 42t-42 18H140Zm94-360h492l-50-100H284l-50 100Zm-94 60v240h680v-240H586q0 45-31.5 76.5T478-352q-45 0-76.5-31.5T370-460H140Z"/></svg>'
 };
 const esc=s=>(s==null?"":String(s)).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const nameOf=t=>{const e=t.customer_email||"";return e?e.split("@")[0].replace(/[._]/g," ").replace(/\b\w/g,c=>c.toUpperCase()):"Customer";};
@@ -327,7 +328,7 @@ function render(){
  document.getElementById("app").innerHTML=`
   <aside class="side">
     <div class="logo"><div class="mark">B</div><b>Buttons Bebe</b><span class="tag">Support AI Agent</span></div>
-    <nav class="nav" aria-label="Dashboard">${Object.keys(pages).map(k=>`<a data-tab="${k}" role="button" tabindex="0" aria-current="${tab===k?'page':'false'}" class="${tab===k?'on':''}">${IC[k]}<span>${pages[k]}</span></a>`).join("")}</nav>
+    <nav class="nav" aria-label="Dashboard">${Object.keys(pages).map(k=>`<a data-tab="${k}" role="button" tabindex="0" aria-current="${tab===k?'page':'false'}" class="${tab===k?'on':''}">${IC[k]}<span>${pages[k]}</span></a>`).join("")}<a class="inbox-launch" href="inbox/index.html">${IC.inbox}<span>Inbox</span></a></nav>
     <div class="store"><div class="av">B</div><div><div class="nm">Buttons Bebe</div><div class="pl">Hermes agent</div></div></div>
   </aside>
   <button class="nav-scrim" id="nav-scrim" aria-label="Close navigation"></button>
@@ -347,7 +348,7 @@ function render(){
   </div>`;
  const status=document.getElementById("app-status");if(status){status.textContent="";requestAnimationFrame(()=>{status.textContent=liveMessage();});}
  const openTab=k=>{tab=k;openTk=null;focusHeadingAfterRender=true;if(tab==="kb"&&!kbData){loadKb();}else if(tab==="notif"||tab==="conns"){render();loadNotifications();}else if(tab==="notices"){loadNotices();}else{render();}};
- document.querySelectorAll(".nav a").forEach(a=>{a.onclick=()=>openTab(a.dataset.tab);a.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();openTab(a.dataset.tab);}};});
+ document.querySelectorAll(".nav a[data-tab]").forEach(a=>{a.onclick=()=>openTab(a.dataset.tab);a.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();openTab(a.dataset.tab);}};});
  const rf=document.getElementById("refresh");if(rf)rf.onclick=async()=>{rf.classList.add("refreshing");rf.disabled=true;statusMsg="Refreshing dashboard data";if(tab==="kb"){kbData=null;await loadKb();}else if(tab==="notif"){await loadNotifications();}else if(tab==="notices"){await loadNotices();}else{await boot();}};
  const hn=document.getElementById("header-notif");if(hn)hn.onclick=()=>openTab("notif");
  const hs=document.getElementById("header-settings");if(hs)hs.onclick=()=>openTab("settings");

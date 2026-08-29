@@ -14,7 +14,15 @@ from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
 CONSOLE = ROOT / "console-src" / "index.html"
+INBOX = ROOT / "console-src" / "inbox"
 UPSTREAM = "http://127.0.0.1:8100"
+INBOX_TYPES = {
+    ".html": "text/html; charset=utf-8",
+    ".css": "text/css; charset=utf-8",
+    ".js": "text/javascript; charset=utf-8",
+    ".json": "application/json",
+    ".svg": "image/svg+xml",
+}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -63,8 +71,26 @@ class Handler(BaseHTTPRequestHandler):
                 "application/json",
             )
 
+    def _inbox(self, path: str) -> None:
+        rel = path.removeprefix("/inbox").lstrip("/") or "index.html"
+        if ".." in Path(rel).parts:
+            return self._send(HTTPStatus.NOT_FOUND, b"not found", "text/plain")
+        target = (INBOX / rel).resolve()
+        try:
+            target.relative_to(INBOX.resolve())
+        except ValueError:
+            return self._send(HTTPStatus.NOT_FOUND, b"not found", "text/plain")
+        if not target.is_file():
+            return self._send(HTTPStatus.NOT_FOUND, b"not found", "text/plain")
+        return self._send(
+            HTTPStatus.OK,
+            target.read_bytes(),
+            INBOX_TYPES.get(target.suffix, "application/octet-stream"),
+        )
+
     def do_GET(self) -> None:  # noqa: N802
-        if urlsplit(self.path).path in {"/", "/console", "/console/"}:
+        path = urlsplit(self.path).path
+        if path in {"/", "/console", "/console/"}:
             page = CONSOLE.read_text(encoding="utf-8").replace(
                 "Buttons Bebe", "Cute Things"
             )
@@ -73,6 +99,8 @@ class Handler(BaseHTTPRequestHandler):
                 page.encode("utf-8"),
                 "text/html; charset=utf-8",
             )
+        if path == "/inbox" or path.startswith("/inbox/"):
+            return self._inbox(path)
         return self._proxy()
 
     def do_POST(self) -> None:  # noqa: N802

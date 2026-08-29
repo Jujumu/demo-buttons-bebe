@@ -1,0 +1,6 @@
+{
+  "name": "cute-things-inbox",
+  "private": true,
+  "type": "module",
+  "description": "Module 9 four-pane inbox organ. Fixture-only; no live Shopify writes."
+}

@@ -192,6 +192,8 @@ fi
 node --check whatsapp-connect/server.js
 node --test whatsapp-connect/test/security.test.js
 node --test console-src/test/connections.test.js
+node --test console-src/inbox/test/rail-contracts.test.js \
+  console-src/inbox/test/inbox-organ.test.js
 node --check kb-admin/server.js
 node --test kb-admin/test/server.test.js
 
