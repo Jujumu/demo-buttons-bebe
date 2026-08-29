@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Team Support Workspace</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ground:#F4F0EA;--surface:#FFFDF9;--ink:#1C1916;--mute:#5C564F;--accent:#B5471D;
+  --line:rgba(28,25,22,.12);--focus:2px solid #1C1916;
+  font-family:"IBM Plex Sans",ui-sans-serif,sans-serif;
+}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%;background:var(--ground);color:var(--ink)}
+body{min-width:1100px}
+button,input,textarea{font:inherit;color:inherit}
+button{appearance:none}
+:focus{outline:none}
+:focus-visible{outline:var(--focus);outline-offset:2px}
+.skip{position:absolute;left:12px;top:12px;z-index:20;padding:8px 12px;background:var(--ink);color:var(--surface);text-decoration:none}
+.skip:not(:focus){clip:rect(0,0,0,0);height:1px;width:1px;overflow:hidden;padding:0}
+.shell{display:grid;grid-template-columns:200px 300px minmax(0,1fr) 300px;height:100vh}
+.pane{min-height:0;background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column}
+.rail{border-right:0;border-left:1px solid var(--line)}
+.pane-h{flex:0 0 auto;padding:14px 14px 12px;border-bottom:1px solid var(--line)}
+.pane-h h1,.pane-h h2{font-size:13px;font-weight:600;letter-spacing:.02em}
+.pane-h .sub{margin-top:4px;color:var(--mute);font-size:12px}
+.views-nav{flex:1;overflow:auto;padding:8px}
+.view-btn{display:flex;justify-content:space-between;gap:8px;width:100%;padding:8px 10px;border:0;background:transparent;color:var(--ink);text-align:left;cursor:pointer}
+.view-btn[aria-current="true"]{box-shadow:inset 4px 0 0 var(--ink);font-weight:600}
+.view-btn .n{color:var(--mute);font-variant-numeric:tabular-nums}
+.views-foot{padding:12px 14px;border-top:1px solid var(--line);color:var(--mute);font-size:12px}
+.views-foot a{color:var(--ink)}
+.dash-link{display:inline-block;margin-top:8px;color:var(--ink)}
+.list-items{flex:1;overflow:auto}
+.ticket{display:grid;grid-template-columns:1fr auto;gap:2px 10px;width:100%;padding:12px 14px 12px 16px;border:0;border-bottom:1px solid var(--line);background:var(--surface);text-align:left;cursor:pointer}
+.ticket .who{font-weight:600;font-size:13px}
+.ticket .when{color:var(--mute);font-size:12px}
+.ticket .subj,.ticket .snip{grid-column:1/-1;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ticket .snip{color:var(--mute)}
+.ticket[aria-current="true"]{box-shadow:inset 4px 0 0 var(--ink)}
+.list-empty,.thread-empty{padding:28px 18px;color:var(--mute);font-size:13px}
+.thread-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.status{display:inline-flex;align-items:center;min-height:24px;padding:2px 8px;border:1px solid var(--line);font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.feed{flex:1;overflow:auto;padding:16px 18px 8px;display:flex;flex-direction:column;gap:12px}
+.msg{display:grid;grid-template-columns:36px minmax(0,1fr);gap:8px 10px}
+.av{width:36px;height:36px;display:grid;place-items:center;background:var(--ground);font-size:11px;font-weight:600}
+.msg .meta{display:flex;gap:8px;align-items:baseline;font-size:12px}
+.msg .meta b{font-weight:600}.msg .meta time{color:var(--mute)}
+.msg .body{grid-column:2;font-size:14px;line-height:1.5;white-space:pre-wrap}
+.msg.status-change{grid-template-columns:1fr}
+.msg.status-change .av{display:none}
+.msg.status-change .meta,.msg.status-change .body{grid-column:1;color:var(--mute);font-size:12px}
+.composer-wrap{padding:0 14px 14px}
+.summarize{width:100%;margin-bottom:8px;padding:8px 10px;border:1px solid var(--line);background:var(--ground);cursor:pointer}
+.summary{margin-bottom:8px;padding:10px 12px;background:var(--ground);color:var(--ink);font-size:13px;line-height:1.45}
+.composer{border:1px solid var(--line);background:var(--surface)}
+.draft-strip{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:10px 12px;border-bottom:1px solid var(--line);background:var(--ground)}
+.draft-strip p{font-size:13px;line-height:1.45;white-space:pre-wrap}
+.draft-acts{display:flex;flex-direction:column;gap:6px}
+.composer textarea{display:block;width:100%;min-height:110px;padding:12px;border:0;background:var(--surface);resize:vertical}
+.macro-box{border-top:1px solid var(--line);padding:8px 10px}
+.macro-box input{width:100%;padding:7px 8px;border:1px solid var(--line);background:var(--surface)}
+.macros{display:flex;flex-direction:column;margin-top:6px}
+.macros button{width:100%;padding:6px 4px;border:0;background:transparent;text-align:left;cursor:pointer;color:var(--mute);font-size:12px}
+.macros button:hover{color:var(--ink)}
+.composer-acts{display:flex;gap:8px;padding:10px;border-top:1px solid var(--line)}
+.btn{padding:8px 12px;border:1px solid var(--ink);background:var(--surface);cursor:pointer;font-weight:600;font-size:13px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn:disabled,.btn.primary:disabled{opacity:1;cursor:default;background:var(--ground);border-color:var(--line);color:var(--mute)}
+.rail{overflow:auto}
+.tissue{border-bottom:1px solid var(--line)}
+.tissue-h{display:flex;align-items:center;justify-content:space-between;width:100%;padding:12px 14px;border:0;background:transparent;cursor:pointer;text-align:left}
+.tissue-h b{font-size:13px}.tissue-h span{color:var(--mute);font-size:12px}
+.tissue-b{padding:0 14px 14px;display:none}
+.tissue.open .tissue-b{display:block}
+.kv{display:grid;gap:8px;font-size:13px}
+.kv .k{color:var(--mute);font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+.lines{margin:8px 0;padding:0;list-style:none}
+.lines li{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px solid var(--line);font-size:13px}
+.totals{margin-top:4px}
+.addr{margin-top:8px}
+.addr + .addr{margin-top:10px}
+.nested-h{width:100%;margin:8px 0 4px;padding:0;border:0;background:transparent;text-align:left;cursor:pointer;font-weight:600;font-size:12px}
+.nested-b{display:none}
+.nested.open .nested-b{display:block}
+.track-link{color:var(--accent);font-weight:600}
+.empty,.err{font-size:13px;color:var(--mute);line-height:1.45}
+.err{color:var(--ink)}
+.toast{min-height:18px;margin:0 14px 8px;font-size:12px;color:var(--mute)}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#thread">Skip to thread</a>
+<div class="shell" id="app">
+  <nav class="pane views" aria-label="Views">
+    <div class="pane-h"><h1>Inbox</h1><p class="sub" id="shop-sub">Fixture data</p></div>
+    <div class="views-nav" id="views"></div>
+    <div class="views-foot">
+      <div id="shop-foot"></div>
+      <a class="dash-link" href="/console/">Owner dashboard</a>
+    </div>
+  </nav>
+  <section class="pane list" aria-label="Ticket list">
+    <div class="pane-h"><h2 id="list-title">Open</h2><p class="sub">j / k moves · Enter opens</p></div>
+    <div class="list-items" id="list"></div>
+  </section>
+  <main class="pane thread" id="thread" tabindex="-1" aria-label="Conversation thread">
+    <div class="thread-empty" id="thread-empty">Select a ticket to read the conversation.</div>
+    <div id="thread-main" hidden>
+      <div class="pane-h thread-head">
+        <div>
+          <h2 id="thread-name"></h2>
+          <p class="sub" id="thread-subj"></p>
+        </div>
+        <div>
+          <span class="status" id="thread-status"></span>
+          <p class="sub" id="thread-assignee"></p>
+        </div>
+      </div>
+      <div class="feed" id="feed" aria-live="polite"></div>
+      <div class="composer-wrap">
+        <button type="button" class="summarize" id="summarize">Summarize 0 messages</button>
+        <div class="summary" id="summary" hidden></div>
+        <div class="composer">
+          <div class="draft-strip" id="draft-strip" hidden>
+            <p id="draft-text"></p>
+            <div class="draft-acts">
+              <button type="button" class="btn" id="draft-insert">Insert</button>
+              <button type="button" class="btn" id="draft-discard">Discard</button>
+            </div>
+          </div>
+          <label class="skip" for="composer-body">Reply</label>
+          <textarea id="composer-body" placeholder="Write a reply. A human always sends."></textarea>
+          <div class="macro-box">
+            <label class="skip" for="macro-q">Search macros</label>
+            <input id="macro-q" type="search" placeholder="Search macros">
+            <div class="macros" id="macros"></div>
+          </div>
+          <div class="composer-acts">
+            <button type="button" class="btn primary" id="send" disabled>Send</button>
+            <button type="button" class="btn" id="send-close" disabled>Send &amp; close</button>
+          </div>
+        </div>
+        <p class="toast" id="toast" role="status" aria-live="polite"></p>
+      </div>
+    </div>
+  </main>
+  <aside class="pane rail" aria-label="Context rail">
+    <div class="pane-h"><h2>Context</h2><p class="sub">Read only in v1</p></div>
+    <div id="rail-empty" class="thread-empty">Context appears when a ticket is open.</div>
+    <div id="rail-main" hidden></div>
+  </aside>
+</div>
+<script>
+const API = location.pathname.includes("/dashboard/api/") ? "/dashboard/api/workspace" : "/console/api/workspace";
+const state = {view:"open", tickets:[], selected:null, workspace:null, macros:[], toast:""};
+const $ = id => document.getElementById(id);
+const esc = s => String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+const mono = s => `<span class="mono">${esc(s)}</span>`;
+const initials = name => (name||"?").split(/\s+/).slice(0,2).map(p=>p[0]||"").join("").toUpperCase();
+
+async function jget(url){const r=await fetch(url,{cache:"no-store",credentials:"same-origin"});if(!r.ok) throw new Error("load_failed");return r.json();}
+async function jpost(url,body){const r=await fetch(url,{method:"POST",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify(body||{})});const data=await r.json().catch(()=>({}));if(!r.ok) throw data;return data;}
+
+function setToast(text){state.toast=text||"";const el=$("toast");if(el)el.textContent=state.toast;}
+
+function renderViews(inbox){
+  $("shop-sub").textContent = "Fixture data";
+  $("shop-foot").textContent = "Local fixtures only. No live Shopify or returns provider.";
+  $("views").innerHTML = inbox.views.map(v=>`<button type="button" class="view-btn" data-view="${esc(v.id)}" aria-current="${v.id===state.view?"true":"false"}"><span>${esc(v.label)}</span><span class="n">${v.count}</span></button>`).join("");
+  const current = inbox.views.find(v=>v.id===state.view);
+  $("list-title").textContent = current ? current.label : "Open";
+}
+
+function renderList(){
+  if(!state.tickets.length){
+    $("list").innerHTML = `<div class="list-empty">No tickets in this view.</div>`;
+    return;
+  }
+  $("list").innerHTML = state.tickets.map(t=>`<button type="button" class="ticket" data-id="${esc(t.id)}" aria-current="${t.id===state.selected?"true":"false"}">
+    <span class="who">${esc(t.customer_name)}</span><span class="when">${esc(t.updated_label)}</span>
+    <span class="subj">${esc(t.subject)}</span><span class="snip">${esc(t.snippet)}</span>
+  </button>`).join("");
+}
+
+function renderThread(){
+  const ws=state.workspace;
+  if(!ws){$("thread-main").hidden=true;$("thread-empty").hidden=false;return;}
+  $("thread-empty").hidden=true;$("thread-main").hidden=false;
+  const thread=ws.thread.data||{};
+  $("thread-name").textContent=thread.customer_name||ws.ticket.customer_name;
+  $("thread-subj").textContent=thread.subject||ws.ticket.subject;
+  $("thread-status").textContent=thread.status||ws.ticket.status;
+  $("thread-assignee").textContent=thread.assigned_to?`Assigned to ${thread.assigned_to}`:"Unassigned";
+  const messages=thread.messages||[];
+  $("feed").innerHTML=messages.map(m=>{
+    const status=m.kind==="status";
+    return `<article class="msg ${status?"status-change":""}">
+      <div class="av" aria-hidden="true">${esc(initials(m.author))}</div>
+      <div class="meta"><b>${esc(m.author)}</b><time>${esc(m.at_label)}</time></div>
+      <div class="body">${esc(m.body)}</div>
+    </article>`;
+  }).join("");
+  $("summarize").textContent=`Summarize ${thread.message_count||messages.length} messages`;
+  const draft=ws.draft||{};
+  const hasDraft=draft.status==="ok"&&draft.data&&draft.data.text;
+  $("draft-strip").hidden=!hasDraft;
+  $("draft-text").textContent=hasDraft?draft.data.text:"";
+  state.macros=ws.macros||[];
+  renderMacros();
+  syncSend();
+}
+
+function tissueBlock(id,title,open,count,inner){
+  return `<section class="tissue ${open?"open":""}" data-tissue="${id}">
+    <button type="button" class="tissue-h" aria-expanded="${open?"true":"false"}"><b>${esc(title)}</b><span>${count==null?"":esc(String(count))}</span></button>
+    <div class="tissue-b">${inner}</div>
+  </section>`;
+}
+function retryBtn(kind){return `<p class="err">This tissue failed on its own.</p><button type="button" class="btn" data-retry="${kind}">Retry</button>`;}
+function empty(reason){return `<p class="empty">${esc(reason||"Nothing to show.")}</p>`;}
+function nested(id,label,open,html){
+  return `<div class="nested ${open?"open":""}" data-nested="${id}">
+    <button type="button" class="nested-h" aria-expanded="${open?"true":"false"}">${esc(label)}</button>
+    <div class="nested-b">${html}</div>
+  </div>`;
+}
+
+function renderRail(){
+  const ws=state.workspace;
+  if(!ws){$("rail-main").hidden=true;$("rail-empty").hidden=false;return;}
+  $("rail-empty").hidden=true;$("rail-main").hidden=false;
+  const ident=ws.identity, shop=ws.shopify, ret=ws.returns, past=ws.past_orders;
+  const identInner = ident.status==="error"?retryBtn("identity"):ident.status!=="ok"?empty(ident.empty_reason):
+    `<div class="kv"><div><div class="k">Name</div>${esc(ident.data.display_name)}</div>
+     <div><div class="k">Email</div>${esc(ident.data.email)}</div>
+     <div><div class="k">Phone</div>${esc(ident.data.phone||"None on file")}</div>
+     <div><div class="k">Notes</div>${esc(ident.data.notes||"No notes.")}</div></div>`;
+  let orderInner;
+  if(shop.status==="error") orderInner=retryBtn("shopify");
+  else if(shop.status!=="ok") orderInner=empty(shop.empty_reason);
+  else {
+    const o=shop.data;
+    const lines=`<ul class="lines">${(o.lines||[]).map(l=>`<li><span>${esc(l.title)} · ${mono(l.sku)} × ${l.quantity}</span><span>${esc(o.currency)} ${esc(l.price)}</span></li>`).join("")}</ul>
+      <div class="totals kv">
+        <div>Subtotal ${esc(o.currency)} ${esc(o.subtotal)}</div>
+        <div>Shipping ${esc(o.currency)} ${esc(o.shipping)}</div>
+        <div>Tax ${esc(o.currency)} ${esc(o.tax)}</div>
+        <div><b>Total ${esc(o.currency)} ${esc(o.total)}</b></div>
+      </div>`;
+    const addrs=(o.addresses||[]).map(a=>`<div class="addr"><div class="k">${esc(a.label)}</div><div>${esc(a.name)}</div>${(a.lines||[]).map(line=>`<div>${esc(line)}</div>`).join("")}</div>`).join("");
+    const ship=o.shipment?`<div class="kv"><div>Status ${esc(o.shipment.status)}</div><div>Carrier ${esc(o.shipment.carrier)}</div>
+      <div><a class="track-link" href="${esc(o.shipment.tracking_url)}" target="_blank" rel="noopener">${esc(o.shipment.tracking_label)}</a></div></div>`:empty("No tracking on this order.");
+    orderInner=`<div class="kv">
+      <div><div class="k">Order</div>${mono("#"+o.order_number)}</div>
+      <div><div class="k">Payment</div>${esc(o.financial_status)}</div>
+      <div><div class="k">Fulfillment</div>${esc(o.fulfillment_status)}</div>
+      <div><div class="k">Created</div>${esc(o.created_label)}</div>
+      <div class="empty">${esc(o.freshness_label)}</div>
+    </div>
+    ${nested("lines","Lines and totals",true,lines)}
+    ${nested("addr","Addresses",false,addrs)}
+    ${nested("ship","Shipment",Boolean(o.shipment),ship)}`;
+  }
+  const retOpen=ret.status==="ok"&&ret.data&&ret.data.in_progress;
+  const retInner=ret.status==="error"?retryBtn("returns"):!retOpen?empty(ret.empty_reason||"No return in progress."):
+    `<div class="kv"><div><div class="k">Return</div>${mono(ret.data.return_id)}</div>
+     <div><div class="k">Stage</div>${esc(ret.data.stage)}</div>
+     <div><div class="k">Next step</div>${esc(ret.data.next_step)}</div>
+     <div><div class="k">Refund status</div>${esc(ret.data.refund_status)}</div>
+     <div class="empty">${esc(ret.data.freshness_label)}</div></div>`;
+  const pastCount=past.status==="ok"&&past.data?past.data.count:0;
+  const pastInner=past.status==="error"?retryBtn("shopify"):past.status!=="ok"?empty(past.empty_reason):
+    `<ul class="lines">${(past.data.orders||[]).map(o=>`<li><span>${mono("#"+o.order_number)} · ${esc(o.date_label)}</span><span>${esc(o.status)} ${esc(o.total)}</span></li>`).join("")}</ul>`;
+  $("rail-main").innerHTML =
+    tissueBlock("customer","Customer",true,null,identInner)+
+    tissueBlock("order","This order",true,null,orderInner)+
+    tissueBlock("returns","Returns",Boolean(retOpen),null,retInner)+
+    tissueBlock("past","Past orders",false,pastCount,pastInner);
+}
+
+function renderMacros(){
+  const q=($("macro-q").value||"").toLowerCase();
+  const items=state.macros.filter(m=>!q||m.title.toLowerCase().includes(q)||m.body.toLowerCase().includes(q));
+  $("macros").innerHTML=items.map(m=>`<button type="button" data-macro="${esc(m.id)}">${esc(m.title)}</button>`).join("")||`<span class="empty">No macros match.</span>`;
+}
+
+function syncSend(){
+  const has=Boolean(($("composer-body").value||"").trim());
+  $("send").disabled=!has;
+  $("send-close").disabled=!has;
+}
+
+function render(){
+  renderList();
+  renderThread();
+  renderRail();
+  setToast(state.toast);
+}
+
+async function loadInbox(){
+  const inbox=await jget(`${API}/inbox?view=${encodeURIComponent(state.view)}`);
+  state.tickets=inbox.tickets||[];
+  renderViews(inbox);
+  if(state.selected && !state.tickets.some(t=>t.id===state.selected)){
+    state.selected=null;state.workspace=null;
+  }
+  render();
+}
+
+async function openTicket(id, retryShopify){
+  state.selected=id;
+  const q=retryShopify?"?retry_shopify=true":"";
+  state.workspace=await jget(`${API}/tickets/${encodeURIComponent(id)}${q}`);
+  $("composer-body").value="";
+  $("summary").hidden=true;
+  setToast("");
+  render();
+}
+
+function selectedIndex(){return state.tickets.findIndex(t=>t.id===state.selected);}
+
+async function boot(){
+  try{await loadInbox();if(state.tickets[0]) await openTicket(state.tickets[0].id);}
+  catch(e){setToast("Could not load the inbox fixtures.");render();}
+}
+
+document.addEventListener("click",async ev=>{
+  const view=ev.target.closest("[data-view]");
+  if(view){state.view=view.getAttribute("data-view");await loadInbox();return;}
+  const ticket=ev.target.closest(".ticket");
+  if(ticket){await openTicket(ticket.getAttribute("data-id"));return;}
+  const tissue=ev.target.closest(".tissue-h");
+  if(tissue){const box=tissue.closest(".tissue");box.classList.toggle("open");tissue.setAttribute("aria-expanded",box.classList.contains("open")?"true":"false");return;}
+  const nested=ev.target.closest(".nested-h");
+  if(nested){const box=nested.closest(".nested");box.classList.toggle("open");nested.setAttribute("aria-expanded",box.classList.contains("open")?"true":"false");return;}
+  const retry=ev.target.closest("[data-retry]");
+  if(retry&&state.selected){await openTicket(state.selected, retry.getAttribute("data-retry")==="shopify");return;}
+  const macro=ev.target.closest("[data-macro]");
+  if(macro){const found=state.macros.find(m=>m.id===macro.getAttribute("data-macro"));if(found){$("composer-body").value=(($("composer-body").value||"")+((($("composer-body").value||"").trim()?"\n\n":"")+found.body));syncSend();}return;}
+});
+
+$("draft-insert").addEventListener("click",async()=>{
+  if(!state.selected)return;
+  const result=await jpost(`${API}/tickets/${state.selected}/draft/insert`,{});
+  if(result.sent)return;
+  const text=result.draft&&result.draft.data&&result.draft.data.text;
+  if(text)$("composer-body").value=text;
+  syncSend();
+  setToast("Draft inserted. Review it, then Send.");
+});
+$("draft-discard").addEventListener("click",async()=>{
+  if(!state.selected)return;
+  await jpost(`${API}/tickets/${state.selected}/draft/discard`,{});
+  if(state.workspace)state.workspace.draft={status:"empty",data:null,error:null,empty_reason:"Draft discarded."};
+  render();
+  setToast("Draft discarded.");
+});
+$("composer-body").addEventListener("input",syncSend);
+$("macro-q").addEventListener("input",renderMacros);
+$("summarize").addEventListener("click",()=>{
+  const box=$("summary");
+  const text=state.workspace&&state.workspace.thread&&state.workspace.thread.data&&state.workspace.thread.data.summary;
+  box.hidden=false;box.textContent=text||"No summary for this thread.";
+});
+async function send(close){
+  const body=($("composer-body").value||"").trim();
+  if(!body||!state.selected)return;
+  const result=await jpost(`${API}/tickets/${state.selected}/send`,{body,close});
+  if(result.auto_sent)return;
+  $("composer-body").value="";
+  await loadInbox();
+  await openTicket(state.selected);
+  setToast(close?"Reply recorded and ticket closed.":"Reply recorded. Nothing was auto-sent.");
+}
+$("send").addEventListener("click",()=>send(false));
+$("send-close").addEventListener("click",()=>send(true));
+document.addEventListener("keydown",ev=>{
+  if(ev.target&&(ev.target.tagName==="TEXTAREA"||ev.target.tagName==="INPUT"))return;
+  if(ev.key!=="j"&&ev.key!=="k")return;
+  if(!state.tickets.length)return;
+  ev.preventDefault();
+  const idx=Math.max(0,selectedIndex());
+  const next=ev.key==="j"?Math.min(state.tickets.length-1,idx+1):Math.max(0,idx-1);
+  openTicket(state.tickets[next].id);
+});
+boot();
+</script>
+</body>
+</html>

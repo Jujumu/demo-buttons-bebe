@@ -96,6 +96,16 @@ support.example.com {
 		file_server
 	}
 
+	@consoleinbox path /console/inbox /console/inbox/
+	handle @consoleinbox {
+		forward_auth 127.0.0.1:8000 {
+			uri /auth/page-check
+		}
+		root * /var/www/console
+		rewrite * /inbox.html
+		file_server
+	}
+
 	handle_path /console* {
 		forward_auth 127.0.0.1:8000 {
 			uri /auth/page-check

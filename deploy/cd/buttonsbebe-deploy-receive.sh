@@ -69,6 +69,11 @@ rollback() {
   else
     rm -f "$web_root/login.html"
   fi
+  if [[ -f "$backup_root/console/inbox.html" ]]; then
+    install -D -m 0644 "$backup_root/console/inbox.html" "$web_root/inbox.html"
+  else
+    rm -f "$web_root/inbox.html"
+  fi
   for service in "${services[@]}"; do
     systemctl start "$service" 2>/dev/null || true
   done
@@ -171,6 +176,9 @@ fi
 if [[ -f "$web_root/login.html" ]]; then
   cp -p "$web_root/login.html" "$backup_root/console/login.html"
 fi
+if [[ -f "$web_root/inbox.html" ]]; then
+  cp -p "$web_root/inbox.html" "$backup_root/console/inbox.html"
+fi
 rollback_needed=1
 
 for timer in "${maintenance_timers[@]}"; do
@@ -216,6 +224,7 @@ sync_source kb-admin "$live_root/kb-admin" \
   --exclude 'node_modules/' --exclude 'data/' --exclude 'logs/'
 install -D -m 0644 "$release_dir/console-src/index.html" "$web_root/index.html"
 install -D -m 0644 "$release_dir/console-src/login.html" "$web_root/login.html"
+install -D -m 0644 "$release_dir/console-src/inbox.html" "$web_root/inbox.html"
 
 (cd "$live_root/webhook" && "$uv_bin" sync --locked)
 (cd "$live_root/processor" && "$uv_bin" sync --locked)

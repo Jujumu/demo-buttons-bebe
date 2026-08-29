@@ -17,7 +17,12 @@ dependencies = [
 package = true
 
 [tool.setuptools]
-packages = ["bb_webhook"]
+packages = [
+    "bb_webhook",
+    "bb_webhook.routers",
+    "bb_webhook.middleware",
+    "bb_webhook.tissues",
+]
 
 [tool.setuptools.package-dir]
 bb_webhook = "src/bb_webhook"

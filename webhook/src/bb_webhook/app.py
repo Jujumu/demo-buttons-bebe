@@ -17,6 +17,7 @@ from .routers import (
     health as _health,
     notifications as _notifications,
     webhook as _webhook,
+    workspace as _workspace,
 )
 
 # Keep the established app-module patch surface without making routers import
@@ -82,7 +83,7 @@ def create_app() -> FastAPI:
     )
     for route_router in (
         _health.router, _webhook.router, _auth.router, _dashboard.router,
-        _notifications.router, _console.router,
+        _notifications.router, _console.router, _workspace.router,
     ):
         application.include_router(route_router)
     return application

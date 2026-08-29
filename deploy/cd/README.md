@@ -7,7 +7,8 @@ installed at `/usr/local/sbin/buttonsbebe-deploy-receive`.
 
 The receiver releases the tracked application source for `webhook/`,
 `processor/`, `kb/`, `tools/`, `kb-admin/`, `whatsapp-connect/`, and
-`console-src/index.html`. It preserves credentials, virtual environments,
+`console-src/index.html`, `console-src/login.html`, and
+`console-src/inbox.html`. It preserves credentials, virtual environments,
 WhatsApp session data, the webhook database, KB products, the live KB index,
 and learning/notice data. A failed health check restores the pre-deploy source
 backup and restarts the services.

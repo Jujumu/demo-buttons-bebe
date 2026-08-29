@@ -163,6 +163,14 @@ class DeploymentGuardrailTests(unittest.TestCase):
         self.assertIn("persist-credentials: false", workflow)
         self.assertIn('exec sudo -n "$receiver"', wrapper)
 
+    def test_receiver_installs_inbox_workspace_with_console_pages(self) -> None:
+        source = RECEIVER.read_text(encoding="utf-8")
+        self.assertIn(
+            'install -D -m 0644 "$release_dir/console-src/inbox.html" "$web_root/inbox.html"',
+            source,
+        )
+        self.assertIn('cp -p "$web_root/inbox.html" "$backup_root/console/inbox.html"', source)
+
     def test_pr_review_gate_keeps_a_read_only_token(self) -> None:
         workflow = (ROOT / ".github/workflows/pr-review.yml").read_text(
             encoding="utf-8"

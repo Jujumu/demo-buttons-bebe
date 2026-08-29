@@ -192,7 +192,10 @@ fi
 node --check whatsapp-connect/server.js
 node --test whatsapp-connect/test/security.test.js
 node --test console-src/test/connections.test.js
+node --test console-src/test/inbox.test.js
 node --check kb-admin/server.js
 node --test kb-admin/test/server.test.js
+PYTHONPATH="$ROOT_DIR/webhook/src${PYTHONPATH:+:$PYTHONPATH}" \
+  "$PYTHON" -m unittest webhook.test_workspace_tissues webhook.test_workspace_api webhook.test_router_contract -v
 
 echo "release gate passed: manifests, syntax, offline tests, KB admin safety, WhatsApp auth, and no-Twilio check"

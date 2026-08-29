@@ -84,6 +84,8 @@ class CaddyConfigTests(unittest.TestCase):
         self.assertIn("uri /auth/page-check", text)
         self.assertIn("@consolelogin path /console/login /console/login/*", text)
         self.assertIn("rewrite * /login.html", text)
+        self.assertIn("@consoleinbox path /console/inbox /console/inbox/", text)
+        self.assertIn("rewrite * /inbox.html", text)
         for route in ("/console/api/*", "/console/waapi/*", "/console/kbapi/*", "/console*"):
             self.assertIn(route, text)
         self.assertIn("@directdashboard path /dashboard /dashboard/*", text)

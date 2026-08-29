@@ -327,7 +327,7 @@ function render(){
  document.getElementById("app").innerHTML=`
   <aside class="side">
     <div class="logo"><div class="mark">B</div><b>Buttons Bebe</b><span class="tag">Support AI Agent</span></div>
-    <nav class="nav" aria-label="Dashboard">${Object.keys(pages).map(k=>`<a data-tab="${k}" role="button" tabindex="0" aria-current="${tab===k?'page':'false'}" class="${tab===k?'on':''}">${IC[k]}<span>${pages[k]}</span></a>`).join("")}</nav>
+    <nav class="nav" aria-label="Dashboard">${Object.keys(pages).map(k=>`<a data-tab="${k}" role="button" tabindex="0" aria-current="${tab===k?'page':'false'}" class="${tab===k?'on':''}">${IC[k]}<span>${pages[k]}</span></a>`).join("")}<a href="/console/inbox">Inbox workspace</a></nav>
     <div class="store"><div class="av">B</div><div><div class="nm">Buttons Bebe</div><div class="pl">Hermes agent</div></div></div>
   </aside>
   <button class="nav-scrim" id="nav-scrim" aria-label="Close navigation"></button>
