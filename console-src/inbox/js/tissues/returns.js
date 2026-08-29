@@ -6,7 +6,7 @@ const IN_PROGRESS = new Set(["OPEN", "REQUESTED", "IN_PROGRESS", "PENDING"]);
  * Returns rail tissue.
  * In: `{ shop, orderId }` via shop tissue.
  * Out: `returns` + returnStatus, in-progress flag, items, refund/credit, tracking.
- * Empty Cute Things fixture: peek "No returns", collapsed.
+ * Empty demo fixture: peek "No returns", collapsed.
  */
 export function projectReturns(record) {
   const nodes = record?.returns?.nodes || [];

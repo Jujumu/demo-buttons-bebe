@@ -1,5 +1,5 @@
 import { MAILBOX_TOPICS } from "./contracts.js";
-import { SHOP, macros, ticketInView, tickets as fixtureTickets, viewCounts, views } from "./fixtures/cute-things.js";
+import { SHOP, STORE_NAME, macros, ticketInView, tickets as fixtureTickets, viewCounts, views } from "./fixtures/demo-inbox.js";
 import { createMailbox } from "./mailbox.js";
 import { createFixtureShop } from "./shop/fixture-shop.js";
 import { createComposerTissue } from "./tissues/composer.js";
@@ -232,7 +232,7 @@ export function createInboxOrgan(opts = {}) {
         {
           id: `out-${Date.now()}`,
           fromAgent: true,
-          name: "Cute Things",
+          name: STORE_NAME,
           at: new Date().toISOString(),
           body: text,
         },

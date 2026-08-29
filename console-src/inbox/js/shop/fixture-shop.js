@@ -1,8 +1,8 @@
-import { customers, emptyReturns, orders, SHOP } from "../fixtures/cute-things.js";
+import { customers, emptyReturns, orders, SHOP } from "../fixtures/demo-inbox.js";
 
 function assertShop(shop) {
   if (shop && shop !== SHOP) {
-    throw new Error("shop tissue refused a non-Cute-Things shop");
+    throw new Error("shop tissue refused an unknown fixture shop");
   }
 }
 

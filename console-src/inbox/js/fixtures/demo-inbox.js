@@ -1,117 +1,114 @@
 /**
- * Cute Things sandbox fixtures. Synthetic AI-DEMO records only.
+ * Invented inbox fixtures. Not a live shop.
  * SKUs are null. Returns are empty. Billing is often null.
- * No Gorgias customer names or live store identifiers from screenshots.
  */
 
-export const SHOP = "yznyc1-ez.myshopify.com";
-export const STORE_NAME = "Cute Things";
+export const SHOP = "demo-inbox.example";
+export const STORE_NAME = "Demo Shop";
 
-const ADA = "gid://shopify/Customer/51002";
-const CASEY = "gid://shopify/Customer/51003";
-const JORDAN = "gid://shopify/Customer/51005";
+const ADA = "gid://shopify/Customer/90001";
+const CASEY = "gid://shopify/Customer/90002";
+const JORDAN = "gid://shopify/Customer/90003";
 
-const ORDER_1002 = "gid://shopify/Order/7131035861165";
-const ORDER_1003 = "gid://shopify/Order/7131035893933";
-const ORDER_1004 = "gid://shopify/Order/7131035992237";
-
-const dhakaShip = {
-  name: "Ada Demo",
-  address1: "12 Demo Lane",
-  address2: null,
-  city: "Dhaka",
-  province: "Dhaka Division",
-  zip: "1207",
-  country: "Bangladesh",
-};
+const ORDER_1001 = "gid://shopify/Order/80001";
+const ORDER_1002 = "gid://shopify/Order/80002";
+const ORDER_1003 = "gid://shopify/Order/80003";
 
 export const customers = {
   [ADA]: {
     id: ADA,
     displayName: "Ada Demo",
-    defaultEmailAddress: { emailAddress: "ai-demo-fulfilled@example.com" },
+    defaultEmailAddress: { emailAddress: "ada.demo@example.com" },
     createdAt: "2026-06-02T09:00:00Z",
     numberOfOrders: 1,
-    amountSpent: { amount: "36.80", currencyCode: "BDT" },
-    tags: ["AI-DEMO"],
+    amountSpent: { amount: "28.00", currencyCode: "USD" },
+    tags: ["DEMO"],
   },
   [CASEY]: {
     id: CASEY,
     displayName: "Casey Sandbox",
-    defaultEmailAddress: { emailAddress: "ai-demo-multi@example.com" },
+    defaultEmailAddress: { emailAddress: "casey.sandbox@example.com" },
     createdAt: "2026-06-04T11:30:00Z",
     numberOfOrders: 2,
-    amountSpent: { amount: "220.80", currencyCode: "BDT" },
-    tags: ["AI-DEMO"],
+    amountSpent: { amount: "96.00", currencyCode: "USD" },
+    tags: ["DEMO"],
   },
   [JORDAN]: {
     id: JORDAN,
     displayName: "Jordan Preview",
-    defaultEmailAddress: { emailAddress: "ai-demo-preview@example.com" },
+    defaultEmailAddress: { emailAddress: "jordan.preview@example.com" },
     createdAt: "2026-07-12T14:00:00Z",
     numberOfOrders: 0,
-    amountSpent: { amount: "0.00", currencyCode: "BDT" },
-    tags: ["AI-DEMO"],
+    amountSpent: { amount: "0.00", currencyCode: "USD" },
+    tags: ["DEMO"],
   },
 };
 
-function money(amount, currencyCode = "BDT") {
+function money(amount, currencyCode = "USD") {
   return { shopMoney: { amount, currencyCode } };
 }
 
 export const orders = {
-  [ORDER_1002]: {
-    id: ORDER_1002,
-    name: "#1002",
+  [ORDER_1001]: {
+    id: ORDER_1001,
+    name: "#1001",
     createdAt: "2026-08-20T09:05:00Z",
     displayFinancialStatus: "PAID",
     displayFulfillmentStatus: "FULFILLED",
-    currentTotalPriceSet: money("36.80"),
-    currentSubtotalPriceSet: money("32.00"),
-    totalShippingPriceSet: money("4.80"),
+    currentTotalPriceSet: money("28.00"),
+    currentSubtotalPriceSet: money("24.00"),
+    totalShippingPriceSet: money("4.00"),
     totalTaxSet: money("0.00"),
     lineItems: {
       nodes: [
         {
-          title: "Handcrafted Wooden Teether Toy",
+          title: "Oak Demo Rattle",
           sku: null,
           quantity: 1,
-          price: "32.00",
+          price: "24.00",
         },
       ],
     },
-    shippingAddress: { ...dhakaShip, name: "Ada Demo" },
+    shippingAddress: {
+      name: "Ada Demo",
+      address1: "12 Demo Lane",
+      address2: null,
+      city: "Demo City",
+      province: "Example State",
+      zip: "00001",
+      country: "Exampleland",
+    },
     billingAddress: null,
     fulfillments: [
       {
         trackingInfo: [
           {
-            number: "AI-DEMO-1002",
+            number: "DEMO-1001",
             company: "Demo Carrier",
-            url: "https://example.com/ai-demo/1002",
+            url: "https://example.com/track/demo-1001",
           },
         ],
       },
     ],
     customerId: ADA,
   },
-  [ORDER_1003]: {
-    id: ORDER_1003,
-    name: "#1003",
+  [ORDER_1002]: {
+    id: ORDER_1002,
+    name: "#1002",
     createdAt: "2026-08-22T10:12:00Z",
     displayFinancialStatus: "PAID",
     displayFulfillmentStatus: "UNFULFILLED",
-    currentTotalPriceSet: money("50.60"),
-    currentSubtotalPriceSet: money("44.00"),
-    totalShippingPriceSet: money("6.60"),
+    currentTotalPriceSet: money("36.00"),
+    currentSubtotalPriceSet: money("32.00"),
+    totalShippingPriceSet: money("4.00"),
     totalTaxSet: money("0.00"),
     lineItems: {
       nodes: [
         {
-          title: "Designer Linen Baby Sun Hat",
+          title: "Canvas Demo Visor",
           sku: null,
           quantity: 1,
-          price: "44.00",
+          price: "32.00",
         },
       ],
     },
@@ -119,32 +116,32 @@ export const orders = {
       name: "Casey Sandbox",
       address1: "88 Fixture Road",
       address2: null,
-      city: "Dhaka",
-      province: "Dhaka Division",
-      zip: "1212",
-      country: "Bangladesh",
+      city: "Demo City",
+      province: "Example State",
+      zip: "00002",
+      country: "Exampleland",
     },
     billingAddress: null,
     fulfillments: [],
     customerId: CASEY,
   },
-  [ORDER_1004]: {
-    id: ORDER_1004,
-    name: "#1004",
+  [ORDER_1003]: {
+    id: ORDER_1003,
+    name: "#1003",
     createdAt: "2026-08-24T08:40:00Z",
     displayFinancialStatus: "PAID",
     displayFulfillmentStatus: "FULFILLED",
-    currentTotalPriceSet: money("170.20"),
-    currentSubtotalPriceSet: money("148.00"),
-    totalShippingPriceSet: money("22.20"),
+    currentTotalPriceSet: money("60.00"),
+    currentSubtotalPriceSet: money("54.00"),
+    totalShippingPriceSet: money("6.00"),
     totalTaxSet: money("0.00"),
     lineItems: {
       nodes: [
         {
-          title: "Cashmere Knit Baby Blanket",
+          title: "Merino Demo Throw",
           sku: null,
           quantity: 1,
-          price: "148.00",
+          price: "54.00",
         },
       ],
     },
@@ -152,27 +149,27 @@ export const orders = {
       name: "Casey Sandbox",
       address1: "88 Fixture Road",
       address2: null,
-      city: "Dhaka",
-      province: "Dhaka Division",
-      zip: "1212",
-      country: "Bangladesh",
+      city: "Demo City",
+      province: "Example State",
+      zip: "00002",
+      country: "Exampleland",
     },
     billingAddress: {
       name: "Casey Sandbox",
       address1: "4 Preview Court",
       address2: null,
-      city: "Dhaka",
-      province: "Dhaka Division",
-      zip: "1205",
-      country: "Bangladesh",
+      city: "Demo City",
+      province: "Example State",
+      zip: "00005",
+      country: "Exampleland",
     },
     fulfillments: [
       {
         trackingInfo: [
           {
-            number: "AI-DEMO-1004",
+            number: "DEMO-1003",
             company: "Demo Carrier",
-            url: "https://example.com/ai-demo/1004",
+            url: "https://example.com/track/demo-1003",
           },
         ],
       },
@@ -181,7 +178,7 @@ export const orders = {
   },
 };
 
-/** Empty returns for every Cute Things fixture order. */
+/** Empty returns for every invented fixture order. */
 export const emptyReturns = {
   returns: { nodes: [] },
   returnStatus: null,
@@ -202,34 +199,34 @@ export const views = [
 
 export const macros = [
   { id: "where", name: "Where is my order", tags: ["shipping"], body: "Thanks for writing in — I am checking the shipment on this order now." },
-  { id: "ship", name: "Shipping timeline", tags: ["shipping"], body: "Demo store shipping usually leaves within a few days of the paid order." },
+  { id: "ship", name: "Shipping timeline", tags: ["shipping"], body: "Demo shop shipping usually leaves within a few days of the paid order." },
   { id: "care", name: "Care notes", tags: ["product"], body: "Happy to share care notes for the item on this order." },
 ];
 
 export const tickets = [
   {
     id: "t-ada-track",
-    subject: "Tracking on order #1002 has not moved",
+    subject: "Tracking on order #1001 has not moved",
     status: "open",
     view: "mine",
     assignee: "me",
     customerId: ADA,
-    orderId: ORDER_1002,
+    orderId: ORDER_1001,
     updatedAt: "2026-08-28T15:10:00Z",
-    stubDraft: "Hi Ada — order #1002 is paid and fulfilled. Demo Carrier has it under AI-DEMO-1002.",
-    stubSummary: "Ada asked where #1002 is. The order is fulfilled with Demo Carrier tracking.",
+    stubDraft: "Hi Ada — order #1001 is paid and fulfilled. Demo Carrier has it under DEMO-1001.",
+    stubSummary: "Ada asked where #1001 is. The order is fulfilled with Demo Carrier tracking.",
     messages: [
       {
         id: "m1",
         fromAgent: false,
         name: "Ada Demo",
         at: "2026-08-28T14:02:00Z",
-        body: "Where is my order #1002? The tracking has not updated.",
+        body: "Where is my order #1001? The tracking has not updated.",
       },
       {
         id: "m2",
         fromAgent: true,
-        name: "Cute Things",
+        name: STORE_NAME,
         at: "2026-08-28T14:40:00Z",
         body: "Looking at the shipment now — I will write back with the carrier update.",
       },
@@ -237,44 +234,44 @@ export const tickets = [
     ],
   },
   {
-    id: "t-casey-hat",
-    subject: "When will order #1003 ship?",
+    id: "t-casey-visor",
+    subject: "When will order #1002 ship?",
     status: "open",
     view: "unassigned",
     assignee: null,
     customerId: CASEY,
-    orderId: ORDER_1003,
+    orderId: ORDER_1002,
     updatedAt: "2026-08-28T16:20:00Z",
-    stubDraft: "Hi Casey — #1003 is paid and still unfulfilled. I will confirm when it is handed to the carrier.",
-    stubSummary: "Casey asked when the sun hat in #1003 will ship. The order is paid and unfulfilled.",
+    stubDraft: "Hi Casey — #1002 is paid and still unfulfilled. I will confirm when it is handed to the carrier.",
+    stubSummary: "Casey asked when the visor in #1002 will ship. The order is paid and unfulfilled.",
     messages: [
       {
         id: "m3",
         fromAgent: false,
         name: "Casey Sandbox",
         at: "2026-08-28T16:20:00Z",
-        body: "Please tell me when order #1003 will leave. I need the sun hat this week.",
+        body: "Please tell me when order #1002 will leave. I need the visor this week.",
       },
     ],
   },
   {
-    id: "t-casey-blanket",
-    subject: "Question about the blanket on #1004",
+    id: "t-casey-throw",
+    subject: "Question about the throw on #1003",
     status: "open",
     view: "unassigned",
     assignee: null,
     customerId: CASEY,
-    orderId: ORDER_1004,
+    orderId: ORDER_1003,
     updatedAt: "2026-08-27T11:05:00Z",
-    stubDraft: "Hi Casey — #1004 is paid and fulfilled. The cashmere blanket is with Demo Carrier as AI-DEMO-1004.",
-    stubSummary: "Casey asked about the blanket on #1004. The order is fulfilled.",
+    stubDraft: "Hi Casey — #1003 is paid and fulfilled. The merino throw is with Demo Carrier as DEMO-1003.",
+    stubSummary: "Casey asked about the throw on #1003. The order is fulfilled.",
     messages: [
       {
         id: "m4",
         fromAgent: false,
         name: "Casey Sandbox",
         at: "2026-08-27T11:05:00Z",
-        body: "Did the cashmere blanket on #1004 go out? I want to confirm the shipment.",
+        body: "Did the merino throw on #1003 go out? I want to confirm the shipment.",
       },
     ],
   },
@@ -287,7 +284,7 @@ export const tickets = [
     customerId: JORDAN,
     orderId: null,
     updatedAt: "2026-08-26T09:00:00Z",
-    stubDraft: "Hi Jordan — this Cute Things demo ships the fixture catalog on the published demo timeline. I can confirm the destination once an order exists.",
+    stubDraft: "Hi Jordan — this demo shop ships the fixture catalog on the published demo timeline. I can confirm the destination once an order exists.",
     stubSummary: "Jordan asked whether the demo catalog ships to Canada. No order is attached.",
     messages: [
       {
@@ -302,27 +299,27 @@ export const tickets = [
   },
   {
     id: "t-ada-closed",
-    subject: "Received the teether — thank you",
+    subject: "Received the rattle — thank you",
     status: "closed",
     view: "closed",
     assignee: "me",
     customerId: ADA,
-    orderId: ORDER_1002,
+    orderId: ORDER_1001,
     updatedAt: "2026-08-25T18:12:00Z",
-    stubDraft: "Glad #1002 arrived, Ada. I am here if anything about the teether comes up.",
-    stubSummary: "Ada confirmed the teether from #1002 arrived. Ticket is closed.",
+    stubDraft: "Glad #1001 arrived, Ada. I am here if anything about the rattle comes up.",
+    stubSummary: "Ada confirmed the rattle from #1001 arrived. Ticket is closed.",
     messages: [
       {
         id: "m6",
         fromAgent: false,
         name: "Ada Demo",
         at: "2026-08-25T17:50:00Z",
-        body: "The teether from #1002 arrived. Thank you — you can close this.",
+        body: "The rattle from #1001 arrived. Thank you — you can close this.",
       },
       {
         id: "m7",
         fromAgent: true,
-        name: "Cute Things",
+        name: STORE_NAME,
         at: "2026-08-25T18:10:00Z",
         body: "Glad it reached you, Ada.",
       },
@@ -335,9 +332,9 @@ export const IDS = {
   ADA,
   CASEY,
   JORDAN,
+  ORDER_1001,
   ORDER_1002,
   ORDER_1003,
-  ORDER_1004,
 };
 
 export function ticketInView(ticket, viewId) {

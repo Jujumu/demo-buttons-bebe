@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { orders } from "../js/fixtures/cute-things.js";
+import { orders } from "../js/fixtures/demo-inbox.js";
 import { createInboxOrgan } from "../js/inbox.js";
 import {
   displayedSkus,
@@ -42,8 +42,8 @@ test("UX Pro blocks fail the default Ada paint", async () => {
 
 test("UX Pro blocks fail Casey and Jordan default paints", async () => {
   for (const opts of [
-    { viewId: "unassigned", ticketId: "t-casey-hat" },
-    { viewId: "unassigned", ticketId: "t-casey-blanket" },
+    { viewId: "unassigned", ticketId: "t-casey-visor" },
+    { viewId: "unassigned", ticketId: "t-casey-throw" },
     { viewId: "snoozed", ticketId: "t-jordan-ship" },
     { viewId: "closed", ticketId: "t-ada-closed" },
   ]) {
@@ -68,7 +68,7 @@ test("empty returns stay collapsed with No returns peek", async () => {
 });
 
 test("past orders stay collapsed with a count in the header", async () => {
-  const snap = await createInboxOrgan({ viewId: "unassigned", ticketId: "t-casey-hat" }).ready();
+  const snap = await createInboxOrgan({ viewId: "unassigned", ticketId: "t-casey-visor" }).ready();
   assert.equal(snap.rail.open["order-history"], false);
   assert.match(snap.html, /data-toggle="order-history"[^>]*aria-expanded="false"/);
   assert.match(snap.html, /<span>Past orders<\/span>\s*<span class="peek">1<\/span>/);
@@ -85,6 +85,20 @@ test("null SKUs stay null on the fixture and never print as null", () => {
   assert.equal(formatSku("null"), "—");
   assert.equal(formatSku("undefined"), "—");
   assert.notEqual(formatSku(null), "null");
+});
+
+test("inbox fixtures are invented and do not name a live shop", () => {
+  const tree = [
+    readFileSync(join(here, "../index.html"), "utf8"),
+    readFileSync(join(here, "../js/fixtures/demo-inbox.js"), "utf8"),
+    readFileSync(join(here, "../js/inbox.js"), "utf8"),
+    readFileSync(join(here, "../js/shop/fixture-shop.js"), "utf8"),
+  ].join("\n");
+  assert.doesNotMatch(tree, /Cute Things/i);
+  assert.doesNotMatch(tree, /yznyc1-ez/);
+  assert.doesNotMatch(tree, /myshopify\.com/);
+  assert.doesNotMatch(tree, /7131035/);
+  assert.doesNotMatch(tree, /Handcrafted Wooden Teether|Cashmere Knit Baby Blanket|Designer Linen Baby Sun Hat/);
 });
 
 test("chrome has no Gaia, Ask Gaia, or Gorgias purple", () => {

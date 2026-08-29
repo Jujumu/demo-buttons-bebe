@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { IDS } from "../js/fixtures/cute-things.js";
+import { IDS } from "../js/fixtures/demo-inbox.js";
 import { createInboxOrgan } from "../js/inbox.js";
 import { createFixtureShop } from "../js/shop/fixture-shop.js";
 
@@ -21,7 +21,7 @@ function sourceTree() {
     "../js/tissues/thread.js",
     "../js/tissues/composer.js",
     "../js/tissues/rail.js",
-    "../js/fixtures/cute-things.js",
+    "../js/fixtures/demo-inbox.js",
   ];
   return files.map((file) => readFileSync(join(here, file), "utf8")).join("\n");
 }
@@ -40,7 +40,7 @@ test("inbox organ renders four panes and an ink selected bar", async () => {
   assert.equal(snap.selectedHasInkBar, true);
   assert.equal(snap.selectedId, "t-ada-track");
   assert.match(snap.html, /Ada Demo/);
-  assert.match(snap.html, /#1002 · Paid · Fulfilled/);
+  assert.match(snap.html, /#1001 · Paid · Fulfilled/);
 });
 
 test("discarding the AI strip does not restore the draft", async () => {
@@ -91,11 +91,11 @@ test("one rail tissue error leaves thread and other rail sections up", async () 
   const shop = createFixtureShop({ fail: { returns: "fixture returns down" } });
   const organ = createInboxOrgan({ shop, viewId: "mine" });
   const snap = await organ.ready();
-  assert.match(snap.html, /Where is my order #1002/);
+  assert.match(snap.html, /Where is my order #1001/);
   assert.match(snap.html, /data-tissue="customer"/);
   assert.match(snap.html, /Ada Demo/);
   assert.match(snap.html, /data-tissue="order"/);
-  assert.match(snap.html, /Handcrafted Wooden Teether Toy/);
+  assert.match(snap.html, /Oak Demo Rattle/);
   assert.match(snap.html, /data-tissue="returns"/);
   assert.match(snap.html, /Returns error|fixture returns down/);
   assert.equal(snap.rail.models.customer.ok, true);
@@ -116,9 +116,9 @@ test("Jordan ticket without an order does not blank the thread", async () => {
 });
 
 test("history peek does not swap the open order", async () => {
-  const organ = createInboxOrgan({ viewId: "unassigned", ticketId: "t-casey-hat" });
+  const organ = createInboxOrgan({ viewId: "unassigned", ticketId: "t-casey-visor" });
   const snap = await organ.ready();
-  assert.equal(snap.rail.currentOrderId, IDS.ORDER_1003);
-  assert.equal(snap.rail.models.order.record.name, "#1003");
-  assert.deepEqual(snap.rail.models.history.rows.map((row) => row.name), ["#1004", "#1003"]);
+  assert.equal(snap.rail.currentOrderId, IDS.ORDER_1002);
+  assert.equal(snap.rail.models.order.record.name, "#1002");
+  assert.deepEqual(snap.rail.models.history.rows.map((row) => row.name), ["#1003", "#1002"]);
 });

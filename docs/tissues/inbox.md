@@ -2,7 +2,7 @@
 
 Module 9 is an **organ**: view, list, thread, composer, and rail. Rail is itself an organ of customer, this-order, returns, and order-history. Tissues are replaceable black boxes. They talk over a mailbox. They do not import each other's internals. One tissue error stays in its pane.
 
-The shop tissue is fixture-backed in this module. Clerk replaces it later with a read-only Admin GraphQL 2026-07 client. `SHOPIFY_MUTATIONS_ENABLED` stays `0`. No live store writes.
+The shop tissue is fixture-backed in this module (`demo-inbox.example`). Clerk replaces it later with a read-only Admin GraphQL 2026-07 client. `SHOPIFY_MUTATIONS_ENABLED` stays `0`. No live store writes. The fixtures are invented demo records, not a live shop.
 
 Demo names only (Ada Demo, Casey Sandbox, Jordan Preview). No customer PII.
 
@@ -76,8 +76,8 @@ Clerk DTO field names are locked. In for each: `{ shop, customerId? , orderId? }
 ### returns
 
 - **Out:** `returns`, `returnStatus`, in-progress flag, items + reason/type, refund vs credit totals, return tracking
-- Cute Things fixtures are empty: peek `No returns`, collapsed
-- Open only when a return is in progress. Empty Cute Things fixtures stay collapsed with peek `No returns`
+- Invented demo fixtures are empty: peek `No returns`, collapsed
+- Open only when a return is in progress. Empty demo fixtures stay collapsed with peek `No returns`
 - **Degrade:** “Returns error” in this card only
 - Review block: shipping this section open while empty fails the inbox PR
 
