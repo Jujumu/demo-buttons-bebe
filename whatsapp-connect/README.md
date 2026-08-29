@@ -1,7 +1,7 @@
 # WhatsApp Connect
 
 The service binds to `127.0.0.1:8085` and is exposed through Caddy. It requires
-three different secrets from `/root/Buttonsbebe Agent/whatsapp-connect/.env` and refuses to start
+three different secrets from `/opt/buttonsbebe/whatsapp-connect/.env` and refuses to start
 when any is missing or still uses a placeholder:
 
 ```dotenv

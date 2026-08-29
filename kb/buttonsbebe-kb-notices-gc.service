@@ -5,5 +5,5 @@ Description=Buttons Bebe Notice Board cleanup (drop expired notices)
 Type=oneshot
 # Quoted because the path contains a space. Zero third-party deps, so the
 # system python is fine (no virtualenv needed).
-ExecStart=/usr/bin/python3 "/root/Buttonsbebe Agent/KB/scripts/purge_notices.py"
+ExecStart=/usr/bin/python3 "/opt/buttonsbebe/KB/scripts/purge_notices.py"
 TimeoutStartSec=60

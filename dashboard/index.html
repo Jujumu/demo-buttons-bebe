@@ -468,7 +468,9 @@ async function rewriteDraft(){
 }
 
 function conns(){
- const cs=[["G","Gorgias","buttonsbebe.gorgias.com","Help desk - tickets in & human-approved replies out"],["S","Shopify","buttons-bebe.myshopify.com","Current product catalog"],["R","Redo","Returns & refunds","Live return status"],["W","WhatsApp alerts","Owner escalations","Linked device"],["KB","Knowledge base","Policies, intents, FAQs, products and exemplars","Auto-refreshes every 3 days"]];
+ const shopHost=(stats&&stats.shopify_shop)||"Not configured — set SHOPIFY_SHOP";
+ const gorgiasHost=(stats&&stats.gorgias_host)||"Not configured — set GORGIAS_SUBDOMAIN";
+ const cs=[["G","Gorgias",gorgiasHost,"Help desk - tickets in & human-approved replies out"],["S","Shopify",shopHost,"Current product catalog"],["R","Redo","Returns & refunds","Live return status"],["W","WhatsApp alerts","Owner escalations","Linked device"],["KB","Knowledge base","Policies, intents, FAQs, products and exemplars","Auto-refreshes every 3 days"]];
  return `<div class="conns">${cs.map(c=>`<div class="conn"><div class="h"><div class="ic">${c[0]}</div><div><b>${c[1]}</b><small>${esc(c[2])}</small></div></div><span class="stt"><span class="dot"></span> Connected</span><div class="dt">${esc(c[3])}</div></div>`).join("")}</div>
  <div class="sec-title">Health</div>
  <div class="panel"><div class="act"><div class="r"><div class="ic g">${IC.check}</div><div>Connection summary<br><small style="color:var(--ink3)">Use the current Console Connections page for live file counts and status.</small></div><div class="tm">summary</div></div></div></div>`;

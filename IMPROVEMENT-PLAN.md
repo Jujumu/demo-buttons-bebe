@@ -50,7 +50,7 @@ risk-to-customers first, annoyance second.
    itself. A human might miss it and send it. Fix: a `draft_cleaner.py` that cuts known
    markers, de-dupes repeated blocks, and rejects drafts for empty/spam messages (QA #19).
 4. **Grounding slip.** It quoted a "$35 USD" international rate that isn't in the KB. Fix:
-   add the real rate to the KB (needs Chaim) + hard prompt rule "never state a price not in
+   add the real rate to the KB (needs the store owner) + hard prompt rule "never state a price not in
    the KB."
 
 ### Reliability
@@ -61,13 +61,13 @@ risk-to-customers first, annoyance second.
    prompt mismatch** (prompt names a `get_order` tool that doesn't exist). Both are
    ten-minute fixes that remove landmines.
 
-### Content (needs Chaim — start now, it's the slowest lane)
+### Content (needs the store owner — start now, it's the slowest lane)
 8. **Confirm the real policies** (return window, who pays return shipping, international
    rates, sale rules). Placeholders are the #1 source of wrong answers.
 9. **Resolve the order-change contradiction** the 48-scenario run found: pickup↔shipping
    switches get drafted, but address changes escalate. Pick one rule, write it in
    `agent-core-rules.md` AND the safety model, so the model stops guessing.
-10. **Fix the two-locations mixup** (pickup at 2133 Lakewood vs. 24/7 return bin at 6 Kenyon
+10. **Fix the two-locations mixup** (warehouse pickup vs. 24/7 return bin at the published after-hours drop-off
     Drive) in the KB wording.
 
 ---
@@ -85,7 +85,7 @@ replaces Gorgias" is four plugs (all designed as plugs already — no rewrites):
    first (never the real account).
 
 Then: parallel-run pilot (Fable + Gorgias both live for 2 weeks on a fresh VPS), compare,
-and cut over only after Chaim signs off.
+and cut over only after the store owner signs off.
 
 ---
 

@@ -25,7 +25,7 @@ date to confirm the timing. See `../intents/intent-19-store-credit-instead-of-re
 Final sale items that have already shipped are **not eligible for a regular return
 or exchange by mail**. Any exception would be a **warehouse-only, in-person
 exchange** that must be approved, with the item unworn, unused, and tags attached.
-The warehouse address is **Buttons Bebe, 2133 Lakewood Road, Unit 104, Toms River,
+The warehouse address is **Buttons Bebe, the store warehouse address, the local warehouse city,
 NJ**. Do not promise an exception — escalate for approval. See
 `../intents/intent-12-final-sale-exchange-exception.md`.
 

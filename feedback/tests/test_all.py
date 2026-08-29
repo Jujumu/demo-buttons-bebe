@@ -33,11 +33,11 @@ def customer(text, ts, **kw):
 
 
 def draft(text, ts, **kw):
-    return msg(True, False, text, ts, email="bot@buttonsbebe.com", **kw)
+    return msg(True, False, text, ts, email="bot@example.com", **kw)
 
 
 def human(text, ts, **kw):
-    return msg(True, True, text, ts, email="agent@buttonsbebe.com", **kw)
+    return msg(True, True, text, ts, email="agent@example.com", **kw)
 
 
 class TmpEnv(unittest.TestCase):
@@ -49,7 +49,7 @@ class TmpEnv(unittest.TestCase):
         config.ARCHIVE_DIR = root / "_archive_learned"
         config.STATE_DB = root / "state.db"
         config.KB_ROOT = root
-        config.AGENT_BOT_EMAIL = "bot@buttonsbebe.com"
+        config.AGENT_BOT_EMAIL = "bot@example.com"
         config.CAPTURE_MULTI_TURN = False
         config.MACRO_SIGNATURES_FILE = root / "macros.txt"
 

@@ -11,7 +11,7 @@ const path = require("path");
 const { spawn } = require("child_process");
 
 const PORT = process.env.KB_ADMIN_PORT || 8087;
-const KB = process.env.KB_DIR || "/root/Buttonsbebe Agent/KB";
+const KB = process.env.KB_DIR || "/opt/buttonsbebe/KB";
 const FOLDERS = ["intents", "faq", "policies", "tickets"];
 const NOTICES_DIR = path.join(KB, "notices");
 const NOTICES_FILE = path.join(NOTICES_DIR, "notices.json");

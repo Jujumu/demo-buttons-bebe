@@ -260,7 +260,7 @@ def send_priority_notification(ticket_id, priority, customer_message, *,
     if gorgias_ticket_url:
         lines.append(f"🔗 {gorgias_ticket_url}")
     else:
-        lines.append(f"🔗 https://buttonsbebe.gorgias.com/app/ticket/{ticket_id}")
+        lines.append(f"🔗 https://your-helpdesk.gorgias.com/app/ticket/{ticket_id}")
 
     text = "\n".join(lines)
     text = _truncate_for_telegram(text)
@@ -303,7 +303,7 @@ def send_kb_gap_question(ticket_id, customer_message, question=None):
         "",
         f"Customer asked: \"{_scrub_pii(ask_text)}\"",
         "",
-        f"🔗 https://buttonsbebe.gorgias.com/app/ticket/{ticket_id}",
+        f"🔗 https://your-helpdesk.gorgias.com/app/ticket/{ticket_id}",
         "",
         "Reply here with your answer and I'll use it to draft a reply.",
     ]
@@ -394,7 +394,7 @@ def send_kb_gap_question_async(ticket_id, customer_message, question=None):
         "",
         f"Customer asked: \"{_scrub_pii(ask_text)}\"",
         "",
-        f"🔗 https://buttonsbebe.gorgias.com/app/ticket/{ticket_id}",
+        f"🔗 https://your-helpdesk.gorgias.com/app/ticket/{ticket_id}",
         "",
         "Reply here with your answer and I'll use it to draft a reply.",
     ]
@@ -441,7 +441,7 @@ def send_kb_gap_question_async(ticket_id, customer_message, question=None):
                     "",
                     "I didn't receive an answer within 10 minutes.",
                     "The ticket still has the KB gap note. You can reply manually in Gorgias:",
-                    f"🔗 https://buttonsbebe.gorgias.com/app/ticket/{ticket_id}",
+                    f"🔗 https://your-helpdesk.gorgias.com/app/ticket/{ticket_id}",
                 ]
                 _send_all(token, chat_ids, "\n".join(timeout_lines))
                 return
@@ -534,7 +534,7 @@ def send_kb_gap_question_async(ticket_id, customer_message, question=None):
                     priority="normal",
                     customer_message=customer_message,
                     draft_text=result.draft_text,
-                    gorgias_ticket_url=f"https://buttonsbebe.gorgias.com/app/ticket/{ticket_id}",
+                    gorgias_ticket_url=f"https://your-helpdesk.gorgias.com/app/ticket/{ticket_id}",
                 )
                 logger.info("Follow-up notification sent for ticket #%s", ticket_id)
 
@@ -592,7 +592,7 @@ def main():
             priority=args.test_priority,
             customer_message="Hi, I need to change my shipping address before the order ships!",
             draft_text="hi! we can help with that — please send us the correct address and we'll update it right away.",
-            gorgias_ticket_url="https://buttonsbebe.gorgias.com/app/ticket/99999",
+            gorgias_ticket_url="https://your-helpdesk.gorgias.com/app/ticket/99999",
         )
         print(json.dumps(result, indent=2))
         return

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# server-fixes.sh — run this ON THE VPS (srv1766050) as root, from anywhere.
+# server-fixes.sh — run this ON THE VPS (your-host) as root, from anywhere.
 #
 # Fixes the server-only issues from INCONSISTENCIES.md that can't be changed
 # from the local project folder. It BACKS UP every file before touching it and
@@ -9,25 +9,19 @@
 #   scp this file to the server, then:   bash server-fixes.sh
 # ============================================================================
 set -euo pipefail
-AGENT="/root/Buttonsbebe Agent"
+AGENT="/opt/buttonsbebe"
 stamp="$(date -u +%Y%m%d-%H%M%S)"
 say() { printf '\n\033[1m%s\033[0m\n' "$*"; }
 
 # ---------------------------------------------------------------------------
-# H1 — wrong Shopify store name in the webhook env (missing hyphen).
-#   The Gorgias subdomain is 'buttonsbebe' (no hyphen) — correct.
-#   The Shopify store is 'buttons-bebe.myshopify.com' (WITH a hyphen).
+# H1 — SHOPIFY_SHOP must be the buyer's full *.myshopify.com domain.
 # ---------------------------------------------------------------------------
 say "H1: checking SHOPIFY_SHOP in webhook/.env"
 WENV="$AGENT/webhook/.env"
 if [[ -f "$WENV" ]]; then
-  cp "$WENV" "$WENV.bak-$stamp"
   before="$(grep -E '^SHOPIFY_SHOP=' "$WENV" || echo '(not set)')"
-  # only rewrite if it is the wrong hyphen-less value
-  sed -i -E 's|^SHOPIFY_SHOP=buttonsbebe(\.myshopify\.com)?[[:space:]]*$|SHOPIFY_SHOP=buttons-bebe.myshopify.com|' "$WENV"
-  after="$(grep -E '^SHOPIFY_SHOP=' "$WENV" || echo '(not set)')"
-  echo "  before: $before"
-  echo "  after:  $after"
+  echo "  current: $before"
+  echo "  Set SHOPIFY_SHOP to your-store.myshopify.com in the root .env. See CONNECT.md."
 else
   echo "  $WENV not found — skipping."
 fi

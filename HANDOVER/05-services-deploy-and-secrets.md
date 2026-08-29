@@ -30,7 +30,7 @@ Every service listens on loopback only; the public surface is fronted by Caddy (
 | — | Learning promotion (promote `KB/learned/` lessons) — nightly **03:30** | `buttonsbebe-kb-learn` (+ `.timer`) | ⚠️ **VPS‑only** — unit/timer file **not in repo** (behaviour per `CLAUDE.md §8`) |
 
 **Findings / doc‑drift flags for the new team:**
-- **`buttonsbebe-webhook` (8000) and `buttonsbebe-processor` have NO source in this repo.** `CLAUDE.md` places them at `/root/Buttonsbebe Agent/webhook` and `/root/Buttonsbebe Agent/processor` on the VPS, but there are no `webhook/` or `processor/` directories in the clone (confirmed). Their code, unit files, and `webhook/.env` live only on the VPS. **Obtain these from the VPS during handover.**
+- **`buttonsbebe-webhook` (8000) and `buttonsbebe-processor` have NO source in this repo.** `CLAUDE.md` places them at `/opt/buttonsbebe/webhook` and `/opt/buttonsbebe/processor` on the VPS, but there are no `webhook/` or `processor/` directories in the clone (confirmed). Their code, unit files, and `webhook/.env` live only on the VPS. **Obtain these from the VPS during handover.**
 - **`buttonsbebe-kb-notices-gc` and `buttonsbebe-kb-admin` (port 8087) exist in the repo but are absent from the `CLAUDE.md §6` port table** — they were added later (2026‑07‑12, per file dates + `SPRINT-notice-board-2026-07-12.md`). Treat them as live; the `CLAUDE.md` table is slightly stale.
 - **`buttonsbebe-kb-learn.timer` (nightly 03:30)** is described in `CLAUDE.md §8` (runs `KB/scripts/auto_promote_learned.py` then `learn-nightly.sh`) but **its unit/timer files are not in the repo** — VPS‑only.
 
@@ -42,24 +42,24 @@ Every service listens on loopback only; the public surface is fronted by Caddy (
 
 | Unit | Effective command (`ExecStart`) | Env set in unit | Source file |
 |---|---|---|---|
-| `buttonsbebe-kb-mcp` | `/root/kb-mcp-run.sh` → execs `"/root/Buttonsbebe Agent/KB/.venv/bin/python" ".../KB/scripts/kb_mcp_server.py"` | `KB_MCP_TRANSPORT=streamable-http`, `KB_MCP_HOST=127.0.0.1`, `KB_MCP_PORT=8077` | `kb/buttonsbebe-kb-mcp.service` (launcher repo src: `kb/run_mcp.sh`) |
+| `buttonsbebe-kb-mcp` | `/root/kb-mcp-run.sh` → execs `"/opt/buttonsbebe/KB/.venv/bin/python" ".../KB/scripts/kb_mcp_server.py"` | `KB_MCP_TRANSPORT=streamable-http`, `KB_MCP_HOST=127.0.0.1`, `KB_MCP_PORT=8077` | `kb/buttonsbebe-kb-mcp.service` (launcher repo src: `kb/run_mcp.sh`) |
 | `buttonsbebe-gorgias-mcp` | `/root/gorgias-mcp-run.sh` → execs `".../tools/.venv/bin/python" ".../tools/gorgias_mcp.py"` | `GORGIAS_MCP_TRANSPORT=streamable-http`, `GORGIAS_MCP_HOST=127.0.0.1`, `GORGIAS_MCP_PORT=8079` | `tools/buttonsbebe-gorgias-mcp.service` (launcher repo src: `tools/run-gorgias.sh`) |
 | `buttonsbebe-redo-mcp` | `/root/redo-mcp-run.sh` → execs `".../tools/.venv/bin/python" ".../tools/redo_mcp.py"` | `REDO_MCP_TRANSPORT=streamable-http`, `REDO_MCP_HOST=127.0.0.1`, `REDO_MCP_PORT=8078` | `tools/buttonsbebe-redo-mcp.service` (launcher repo src: `tools/run-redo.sh`) |
 | `buttonsbebe-whatsapp-connect` | `/bin/bash -c 'exec __NODE__ ".../whatsapp-connect/server.js"'` (WorkingDirectory `.../whatsapp-connect`) | reads `whatsapp-connect/.env` for `WA_TOKEN`, `WA_PASSWORD`, `WA_SEND_SECRET`; sets `WA_PORT=8085`, `WA_AUTH_DIR=.../whatsapp-connect/auth`, `HERMES_BIN=__HERMES_BIN__` | `whatsapp-connect/buttonsbebe-whatsapp-connect.service` |
-| `buttonsbebe-kb-admin` | `/bin/bash -c 'exec __NODE__ ".../kb-admin/server.js"'` | `KB_ADMIN_PORT=8087`, `KB_DIR=/root/Buttonsbebe Agent/KB` | `kb-admin/buttonsbebe-kb-admin.service` |
+| `buttonsbebe-kb-admin` | `/bin/bash -c 'exec __NODE__ ".../kb-admin/server.js"'` | `KB_ADMIN_PORT=8087`, `KB_DIR=/opt/buttonsbebe/KB` | `kb-admin/buttonsbebe-kb-admin.service` |
 | `buttonsbebe-webhook` | uvicorn serving `bb_webhook` on `:8000` (per `CLAUDE.md`) | — (reads `webhook/.env`) | ⚠️ **VPS‑only** |
 | `buttonsbebe-processor` | `python -m orchestrator` — polls the queue ~every 2s, runs `hermes -t mcp-buttonsbebe_{kb,redo,gorgias}` once per ticket, no `--yolo` (per `CLAUDE.md §4`) | — (reads `webhook/.env`) | ⚠️ **VPS‑only** |
 
 > **`__PLACEHOLDER__` substitution:** the WhatsApp and KB‑admin unit files ship with `__NODE__` and `__HERMES_BIN__` tokens. These are substituted with real absolute paths at deploy time on the VPS (Node lives at a non‑fixed path; the `Buttonsbebe Agent` folder name contains a space). WhatsApp secrets come from `whatsapp-connect/.env` and are never substituted into the unit.
 >
-> **Space‑free launcher shims:** `/root/kb-mcp-run.sh`, `/root/gorgias-mcp-run.sh`, `/root/redo-mcp-run.sh` exist because the install path `"/root/Buttonsbebe Agent/"` contains a space that systemd's/Hermes' command runner can't pass through cleanly. Repo sources are `kb/run_mcp.sh`, `tools/run-gorgias.sh`, `tools/run-redo.sh`; each just `exec`s the venv Python on the corresponding server module.
+> **Space‑free launcher shims:** `/root/kb-mcp-run.sh`, `/root/gorgias-mcp-run.sh`, `/root/redo-mcp-run.sh` exist because the install path `"/opt/buttonsbebe/"` contains a space that systemd's/Hermes' command runner can't pass through cleanly. Repo sources are `kb/run_mcp.sh`, `tools/run-gorgias.sh`, `tools/run-redo.sh`; each just `exec`s the venv Python on the corresponding server module.
 
 ### 2.2 Oneshot services + timers
 
 | Timer (unit) | Schedule | Runs (oneshot service `ExecStart`) | Source |
 |---|---|---|---|
-| `buttonsbebe-kb-sync.timer` | `OnActiveSec=3d` + `OnUnitActiveSec=3d`, `Persistent=true` → **first run 3 days after enable, then every 3 days** | `"/root/Buttonsbebe Agent/KB/sync-products.sh"` (`Type=oneshot`, `TimeoutStartSec=1800`) | `kb/buttonsbebe-kb-sync.timer` + `.service` (script repo src: `kb/sync-products.sh`) |
-| `buttonsbebe-kb-notices-gc.timer` | `OnBootSec=5min` + `OnUnitActiveSec=15min` → **~5 min after boot, then every 15 min** | `/usr/bin/python3 "/root/Buttonsbebe Agent/KB/scripts/purge_notices.py"` (`Type=oneshot`, `TimeoutStartSec=60`; system Python, no venv) | `kb/buttonsbebe-kb-notices-gc.timer` + `.service` |
+| `buttonsbebe-kb-sync.timer` | `OnActiveSec=3d` + `OnUnitActiveSec=3d`, `Persistent=true` → **first run 3 days after enable, then every 3 days** | `"/opt/buttonsbebe/KB/sync-products.sh"` (`Type=oneshot`, `TimeoutStartSec=1800`) | `kb/buttonsbebe-kb-sync.timer` + `.service` (script repo src: `kb/sync-products.sh`) |
+| `buttonsbebe-kb-notices-gc.timer` | `OnBootSec=5min` + `OnUnitActiveSec=15min` → **~5 min after boot, then every 15 min** | `/usr/bin/python3 "/opt/buttonsbebe/KB/scripts/purge_notices.py"` (`Type=oneshot`, `TimeoutStartSec=60`; system Python, no venv) | `kb/buttonsbebe-kb-notices-gc.timer` + `.service` |
 | `buttonsbebe-kb-learn.timer` | **Nightly 03:30** (per `CLAUDE.md §8`) | `KB/scripts/auto_promote_learned.py` → `learn-nightly.sh` (rebuild index) | ⚠️ **VPS‑only** — files not in repo |
 
 ---
@@ -70,7 +70,7 @@ Three external systems, three different auth schemes. Where each credential is *
 
 | System | Auth scheme | Credentials (var names) | Read by | Notes |
 |---|---|---|---|---|
-| **Shopify** | **Client‑credentials grant** — exchange client id + secret for a **24‑hour** Admin API token, minted on demand | `SHOPIFY_SHOP`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET` (opt: `SHOPIFY_API_VERSION`, `SHOPIFY_PRODUCT_QUERY`) | MCP tools (from **MAIN** `.env`); product‑sync script | Note the domains differ: Shopify store is `buttons-bebe.myshopify.com` (**hyphen**); Gorgias subdomain is `buttonsbebe` (**no hyphen**). See the `.env` wart in §5. |
+| **Shopify** | **Client‑credentials grant** — exchange client id + secret for a **24‑hour** Admin API token, minted on demand | `SHOPIFY_SHOP`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET` (opt: `SHOPIFY_API_VERSION`, `SHOPIFY_PRODUCT_QUERY`) | MCP tools (from **MAIN** `.env`); product‑sync script | Note the domains differ: Shopify store is `your-store.myshopify.com` (**hyphen**); Gorgias subdomain is `buttonsbebe` (**no hyphen**). See the `.env` wart in §5. |
 | **Gorgias** | **Basic Auth** (email = username, API key = password) | `GORGIAS_SUBDOMAIN`, `GORGIAS_API_EMAIL`, `GORGIAS_API_KEY` | MCP tools (**MAIN**) **and** webhook + processor (**webhook/.env**) — duplicated, kept in sync | The only external system the platform **writes** to (staff internal note, and human‑initiated public reply). |
 | **Redo** | **Bearer token** | `REDO_API_KEY`, `REDO_STORE_ID` | Redo MCP tool only, from **MAIN** `.env` | Lives **only** in MAIN. The processor reaches Redo *through the `buttonsbebe_redo` MCP tool* — it does **not** read `REDO_*` from `webhook/.env`. |
 
@@ -82,8 +82,8 @@ There are **two** separate env files on the VPS (a known wart, §5):
 
 | File (VPS path) | Read by | Contains | In repo? |
 |---|---|---|---|
-| **MAIN** — `/root/Buttonsbebe Agent/.env` | the **3 MCP tool modules** (KB / Redo / Gorgias) | `GORGIAS_*`, `SHOPIFY_SHOP` / `SHOPIFY_CLIENT_ID` / `SHOPIFY_CLIENT_SECRET`, `REDO_API_KEY`, `REDO_STORE_ID` (plus deployed extras — see §4.2) | ❌ git‑ignored (`.env`). Placeholder shipped as `env.example` / `.env.example`. |
-| `/root/Buttonsbebe Agent/webhook/.env` | the **webhook app + processor** (`processor/config.py`) | `GORGIAS_*`, `WEBHOOK_SECRET`, `WEBHOOK_*`, `SHOPIFY_*`, `LLM_*`, `PROCESSOR_*`, `KB_MCP_URL`, `LOG_*` | ⚠️ **VPS‑only** — the `webhook/` dir isn't in this repo at all. |
+| **MAIN** — `/opt/buttonsbebe/.env` | the **3 MCP tool modules** (KB / Redo / Gorgias) | `GORGIAS_*`, `SHOPIFY_SHOP` / `SHOPIFY_CLIENT_ID` / `SHOPIFY_CLIENT_SECRET`, `REDO_API_KEY`, `REDO_STORE_ID` (plus deployed extras — see §4.2) | ❌ git‑ignored (`.env`). Placeholder shipped as `env.example` / `.env.example`. |
+| `/opt/buttonsbebe/webhook/.env` | the **webhook app + processor** (`processor/config.py`) | `GORGIAS_*`, `WEBHOOK_SECRET`, `WEBHOOK_*`, `SHOPIFY_*`, `LLM_*`, `PROCESSOR_*`, `KB_MCP_URL`, `LOG_*` | ⚠️ **VPS‑only** — the `webhook/` dir isn't in this repo at all. |
 
 > `env.example` / `.env.example` is a **single merged reference** listing variables for *both* files ("ALL credentials & settings" per its header). Use the "Which `.env`" column in §4.1 to route each variable to the correct file when provisioning.
 
@@ -100,7 +100,7 @@ There are **two** separate env files on the VPS (a known wart, §5):
 | `GORGIAS_SUBDOMAIN` | MAIN **+** webhook | Gorgias MCP, webhook, processor | Gorgias subdomain (part before `.gorgias.com`, **no hyphen**) | `buttonsbebe` |
 | `GORGIAS_API_EMAIL` | MAIN **+** webhook | Gorgias MCP, webhook, processor | Basic‑Auth **username** (Gorgias → Settings → REST API) | *(from Gorgias)* |
 | `GORGIAS_API_KEY` | MAIN **+** webhook | Gorgias MCP, webhook, processor | Basic‑Auth **password / API key** | *(from Gorgias)* |
-| `SHOPIFY_SHOP` | MAIN (+ webhook) | Shopify calls in MCP tools; product sync | Full store domain (**with hyphen**) | `buttons-bebe.myshopify.com` |
+| `SHOPIFY_SHOP` | MAIN (+ webhook) | Shopify calls in MCP tools; product sync | Full store domain (**with hyphen**) | `your-store.myshopify.com` |
 | `SHOPIFY_CLIENT_ID` | MAIN | MCP tools; product sync | Client‑credentials app **client id** (mints 24h token) | *(from Shopify app)* |
 | `SHOPIFY_CLIENT_SECRET` | MAIN | MCP tools; product sync | Client‑credentials app **client secret** | *(from Shopify app)* |
 | `SHOPIFY_API_VERSION` *(commented)* | MAIN | MCP tools; product sync | Admin API version pin | `2026-04` |
@@ -139,7 +139,7 @@ Confirmed by a **names‑only** grep of the real MAIN `.env` and by reading the 
 | `WA_AUTH_DIR` | `whatsapp-connect` unit | WhatsApp connect | Baileys auth/session dir (`.../whatsapp-connect/auth`) |
 | `HERMES_BIN` | `whatsapp-connect` unit (`__HERMES_BIN__`) | WhatsApp connect | Path to the Hermes CLI for the 2‑way bridge |
 | `KB_ADMIN_PORT` | `kb-admin` unit | KB admin | Listen port (`8087`) |
-| `KB_DIR` | `kb-admin` unit | KB admin | KB content root (`/root/Buttonsbebe Agent/KB`) |
+| `KB_DIR` | `kb-admin` unit | KB admin | KB content root (`/opt/buttonsbebe/KB`) |
 | `KB_MCP_TRANSPORT` / `KB_MCP_HOST` / `KB_MCP_PORT` | `kb-mcp` unit | KB MCP | Transport (`streamable-http`) / bind host / port `8077` |
 | `GORGIAS_MCP_TRANSPORT` / `_HOST` / `_PORT` | `gorgias-mcp` unit | Gorgias MCP | Transport / host / port `8079` |
 | `REDO_MCP_TRANSPORT` / `_HOST` / `_PORT` | `redo-mcp` unit | Redo MCP | Transport / host / port `8078` |
@@ -154,7 +154,7 @@ Confirmed by a **names‑only** grep of the real MAIN `.env` and by reading the 
 
 1. **Duplication across two files.** Gorgias credentials (`GORGIAS_SUBDOMAIN` / `GORGIAS_API_EMAIL` / `GORGIAS_API_KEY`) live in **both** MAIN `.env` and `webhook/.env` and must be **kept in sync by hand**. Redo lives only in MAIN. This split is intentional but fragile — a mismatch silently breaks either the MCP tools or the webhook/processor.
 2. **Shopify "code half" — a stray static token.** The live Shopify auth is **client‑credentials** (mint a 24h token from id+secret). But `webhook/config.py` still reads a **static** `SHOPIFY_API_TOKEN` field rather than the client‑cred keys, and that variable **is present in the real MAIN `.env`** (confirmed by name). It only matters *if the webhook ever calls Shopify directly* — which it does **not** today. Clean up: converge the webhook onto the client‑credentials path and drop the static token.
-3. **`SHOPIFY_SHOP` hyphen trap.** The correct value has a hyphen (`buttons-bebe.myshopify.com`); the Gorgias subdomain does not (`buttonsbebe`). A past bug set the webhook's `SHOPIFY_SHOP` to the hyphen‑less form; `server-fixes.sh` (fix **H1**) rewrites it on the VPS. Watch for this when provisioning.
+3. **`SHOPIFY_SHOP` hyphen trap.** The correct value has a hyphen (`your-store.myshopify.com`); the Gorgias subdomain does not (`buttonsbebe`). A past bug set the webhook's `SHOPIFY_SHOP` to the hyphen‑less form; `server-fixes.sh` (fix **H1**) rewrites it on the VPS. Watch for this when provisioning.
 4. **WhatsApp deployment coordination.** The repository now requires three separate secrets from the dedicated `whatsapp-connect/.env` and contains no weak defaults. The VPS processor must send `WA_SEND_SECRET` as Bearer or Basic authentication; rotate the old token/password and configure that caller before restarting WhatsApp Connect.
 5. **VPS‑only env & source.** `webhook/.env` and the entire `webhook/` and `processor/` source trees are **not in this repo** — retrieve them from the VPS. The example file is also drifting (§4.2 lists live vars it omits).
 
@@ -167,7 +167,7 @@ Confirmed by a **names‑only** grep of the real MAIN `.env` and by reading the 
 Source: `whatsapp-connect/Caddyfile` (deployed as the system Caddy config on the VPS). Caddy terminates TLS (auto Let's Encrypt) and is the **only** public entry point; all app services stay on `127.0.0.1`.
 
 ```
-srv1766050.hstgr.cloud {
+support.example.com {
     handle /connect-whatsapp/* {
         reverse_proxy 127.0.0.1:8085          # WhatsApp connect (QR pairing + bridge)
     }
@@ -189,7 +189,7 @@ srv1766050.hstgr.cloud {
 }
 ```
 
-| Public path (HTTPS `srv1766050.hstgr.cloud`) | → Upstream | Service |
+| Public path (HTTPS `support.example.com`) | → Upstream | Service |
 |---|---|---|
 | `/connect-whatsapp/*` | `127.0.0.1:8085` | WhatsApp connect (owner scans the auto‑refreshing QR at `/connect-whatsapp/<WA_TOKEN>/`) |
 | everything else (incl. Gorgias webhook `POST /webhook/gorgias/{tenant}` and `/dashboard`) | `127.0.0.1:8000` | Webhook receiver + dashboard |
@@ -225,27 +225,27 @@ journalctl -u buttonsbebe-processor -f              # follow live
 
 **D. Test the knowledge base directly** (repo script: `kb/search.sh` → `.venv/bin/python scripts/search_kb.py "$@"`):
 ```bash
-cd "/root/Buttonsbebe Agent/KB" && ./search.sh "do you ship to canada"
+cd "/opt/buttonsbebe/KB" && ./search.sh "do you ship to canada"
 ```
 
 **E. Manually refresh products** (else the timer does it every 3 days; repo script: `kb/sync-products.sh`):
 ```bash
-cd "/root/Buttonsbebe Agent/KB" && ./sync-products.sh
+cd "/opt/buttonsbebe/KB" && ./sync-products.sh
 # runs: sync_products.py → index_kb.py → systemctl restart buttonsbebe-kb-mcp
 ```
 
 **F. Inspect the job queue** (SQLite, WAL):
 ```bash
-sqlite3 "/root/Buttonsbebe Agent/webhook/data/webhook.db" \
+sqlite3 "/opt/buttonsbebe/webhook/data/webhook.db" \
   "select status, count(*) from jobs group by status"
 ```
 
 **G. First‑time / rebuild helpers** (repo scripts, run from the relevant folder — each builds its own `.venv`):
 ```bash
 # KB search engine: create venv, install deps, build first index
-cd "/root/Buttonsbebe Agent/KB" && ./setup.sh
+cd "/opt/buttonsbebe/KB" && ./setup.sh
 # rebuild the KB index after editing content under the KB vault
-cd "/root/Buttonsbebe Agent/KB" && ./update.sh          # → scripts/index_kb.py
+cd "/opt/buttonsbebe/KB" && ./update.sh          # → scripts/index_kb.py
 ```
 
 ---
@@ -259,6 +259,6 @@ cd "/root/Buttonsbebe Agent/KB" && ./update.sh          # → scripts/index_kb.p
 | `tools/run-redo.sh` | `/root/redo-mcp-run.sh` |
 | `kb/*.service` / `kb/*.timer`, `tools/*.service`, `whatsapp-connect/*.service`, `kb-admin/*.service` | `/etc/systemd/system/` |
 | `whatsapp-connect/Caddyfile` | system Caddy config |
-| `env.example` / `.env.example` | copy → `/root/Buttonsbebe Agent/.env` (MAIN) **and** `.../webhook/.env`, split per §3 |
-| `KB/` content + `scripts/`, `sync-products.sh` | `/root/Buttonsbebe Agent/KB/` |
-| *(not in repo)* | `/root/Buttonsbebe Agent/webhook/` and `/root/Buttonsbebe Agent/processor/` — **fetch from VPS** |
+| `env.example` / `.env.example` | copy → `/opt/buttonsbebe/.env` (MAIN) **and** `.../webhook/.env`, split per §3 |
+| `KB/` content + `scripts/`, `sync-products.sh` | `/opt/buttonsbebe/KB/` |
+| *(not in repo)* | `/opt/buttonsbebe/webhook/` and `/opt/buttonsbebe/processor/` — **fetch from VPS** |

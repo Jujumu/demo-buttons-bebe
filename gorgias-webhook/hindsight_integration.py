@@ -29,7 +29,7 @@ DESIGN DECISIONS:
   - PII is scrubbed BEFORE sending to Hindsight, using the same scrub_pii()
     from kb_writeback.py. No customer names, emails, phones, or order
     numbers ever leave the VPS.
-  - The bank_id is "buttons-bebe" for all operational memories. We use
+  - The bank_id is "support-agent" for all operational memories. We use
     metadata to separate world facts (KB seed) from experiences (ticket
     interactions).
   - This module is stdlib-only except for hindsight_client (installed in
@@ -51,7 +51,7 @@ log = logging.getLogger("hindsight-integration")
 # Config
 # --------------------------------------------------------------------------- #
 HINDSIGHT_URL = os.environ.get("HINDSIGHT_URL", "http://127.0.0.1:8888")
-BANK_ID = "buttons-bebe"
+BANK_ID = "support-agent"
 
 # Lazy singleton — only created on first use
 _client = None
@@ -166,9 +166,9 @@ def retain_ticket_experience(
 
 
 def retain_owner_answer(question: str, answer: str, *, ticket_id: str = "") -> bool:
-    """Store an owner (Chaim) Q&A as a world fact — highest trust.
+    """Store an store owner Q&A as a world fact — highest trust.
 
-    Called when Chaim answers a KB gap question. This is the most valuable
+    Called when the store owner answers a KB gap question. This is the most valuable
     type of memory — the owner's authoritative answer.
     """
     client = _get_client()

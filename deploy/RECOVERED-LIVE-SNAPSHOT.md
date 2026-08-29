@@ -1,7 +1,7 @@
 # Recovered live VPS snapshot
 
 This source and deployment snapshot was recovered read-only from the live
-Buttons Bebe VPS (`chaim`, host `srv1766050`) on 2026-07-13. No remote files,
+Buttons Bebe VPS (`owner`, host `your-host`) on 2026-07-13. No remote files,
 services, credentials, products, or indexes were changed during recovery.
 
 ## What is versioned

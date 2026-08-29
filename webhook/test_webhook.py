@@ -23,7 +23,7 @@ import httpx
 # ── Config ───────────────────────────────────────────────
 BASE_URL = os.environ.get("WEBHOOK_BASE_URL", "http://127.0.0.1:8000")
 WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "")
-TENANT_ID = "buttonsbebe"
+TENANT_ID = os.environ.get("GORGIAS_SUBDOMAIN", "test-tenant")
 
 # ── Sample Gorgias webhook payload ────────────────────────
 # Use a timestamp that's 2 minutes ago (within the 10-minute replay window)

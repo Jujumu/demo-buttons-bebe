@@ -3,11 +3,11 @@
 # the application source while deliberately preserving production data/config.
 set -Eeuo pipefail
 
-readonly live_root="/root/Buttonsbebe Agent"
+readonly live_root="/opt/buttonsbebe"
 readonly releases_root="/opt/buttonsbebe/releases"
 readonly backups_root="/opt/buttonsbebe/backups"
 readonly web_root="/var/www/console"
-readonly uv_bin="/root/.local/bin/uv"
+readonly uv_bin="${UV_BIN:-$(command -v uv || true)}"
 readonly approved_config_file="/etc/buttonsbebe-deploy-approved-config.sha256"
 readonly whatsapp_override_file="/etc/buttonsbebe-deploy-whatsapp-qr-until"
 readonly max_archive_bytes=$((64 * 1024 * 1024))

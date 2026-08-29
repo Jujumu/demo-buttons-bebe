@@ -16,7 +16,7 @@ Two branches. History is short and linear (3 commits on `main`); `Fable_buttonsb
 
 | Branch | Tracked files | What it is | When to use it |
 |---|---|---|---|
-| **`main`** *(default, checked out)* | **119** | The **LIVE Hermes system as deployed on the VPS**: KB content + build scripts (`kb/`), the two read-only MCP tools (`tools/`), the KB-editor API (`kb-admin/`), the WhatsApp bridge (`whatsapp-connect/`), the support **console** UI (`console-src/`, `dashboard/`), the (shadow) learning-loop package (`feedback/`), and the architecture/ops docs. | Default. Use for **anything touching the production agent** on `srv1766050` — KB edits, tool changes, console tweaks, deploy scripts. |
+| **`main`** *(default, checked out)* | **119** | The **LIVE Hermes system as deployed on the VPS**: KB content + build scripts (`kb/`), the two read-only MCP tools (`tools/`), the KB-editor API (`kb-admin/`), the WhatsApp bridge (`whatsapp-connect/`), the support **console** UI (`console-src/`, `dashboard/`), the (shadow) learning-loop package (`feedback/`), and the architecture/ops docs. | Default. Use for **anything touching the production agent** on `your-host` — KB edits, tool changes, console tweaks, deploy scripts. |
 | **`Fable_buttonsbebe`** | **227** | A **superset-ish** of `main` that **adds the entire `fable/` tree** — a self-contained FastAPI **rebuild** of the help desk ("Fable", a Gorgias replacement) that runs 100% locally against emulators and never touches production. Also adds a `testing/` harness, extra planning docs, `deploy/vps-patches/` (real classifier + draft-cleaner hotfixes), and a `dashboard/DESIGN-SYSTEM.md` + console backups. | Use only for isolated Fable R&D. It is quarantined pending the dependency, egress, auth, and clean-install gates in handover **doc 10**; see doc 07 for the deep dive. |
 
 > ⚠️ **Not a strict superset.** `Fable_buttonsbebe` branched *before* the Notice Board work landed on `main`, so **7 files exist only on `main`** and are absent from Fable: `console-src/index.html`, `SPRINT-notice-board-2026-07-12.md`, `kb/notices/notices.json`, `kb/scripts/notices_lib.py`, `kb/scripts/purge_notices.py`, `kb/buttonsbebe-kb-notices-gc.service`, `kb/buttonsbebe-kb-notices-gc.timer`. If you need the Notice Board feature *and* Fable together, they must be merged. Commit history: `76e6654` (Notice Board, main) → `d23ea25` (ticket-feed redesign) → `8702513` (initial commit).
@@ -137,7 +137,7 @@ The Fable branch adds **115 files** beyond `main`. The bulk is the self-containe
 
 ## 5. What is NOT in the repo (VPS-only)
 
-These live only under `/root/Buttonsbebe Agent/` on the VPS (`srv1766050`) and must be pulled from the server — **cross-reference handover doc 06 for the exact pull procedure.**
+These live only under `/opt/buttonsbebe/` on the VPS (`your-host`) and must be pulled from the server — **cross-reference handover doc 06 for the exact pull procedure.**
 
 - **`webhook/`** — the FastAPI webhook receiver + dashboard server + SQLite job queue (`webhook/data/webhook.db`), and the **live learning capture** `webhook/src/bb_webhook/learning.py`. Not in either branch.
 - **`processor/`** — the orchestrator loop (`orchestrator.py`, `hermes_runner.py`, `gorgias_writer.py`, `kb_client.py`, plus the `classifier.py` / `whatsapp_notifier.py` / `feedback_collector.py` modules). Not in either branch.

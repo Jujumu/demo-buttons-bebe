@@ -8,7 +8,7 @@ const PLACEHOLDERS = new Set([
   "change-me",
   "password",
   "secret",
-  "chaim123",
+  "owner123",
   "__wa_token__",
   "__wa_send_secret__",
 ]);

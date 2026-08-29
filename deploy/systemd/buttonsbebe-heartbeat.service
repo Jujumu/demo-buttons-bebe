@@ -1,19 +1,19 @@
 [Unit]
 Description=Buttons Bebe processor heartbeat (dead-man's switch)
-Documentation="file:///root/Buttonsbebe%20Agent/processor/heartbeat.sh"
+Documentation="file:///opt/buttonsbebe/processor/heartbeat.sh"
 After=network-online.target
 
 [Service]
 Type=oneshot
 # Quoted because the path contains a space.
-ExecStart=/bin/bash "/root/Buttonsbebe Agent/processor/heartbeat.sh"
+ExecStart=/bin/bash "/opt/buttonsbebe/processor/heartbeat.sh"
 TimeoutStartSec=60
 
 # Same WhatsApp credentials the processor uses. Keeping this as a separate
 # drop-in (rather than inlining the secret) means rotating the secret is a
 # one-file change. Create /etc/systemd/system/buttonsbebe-heartbeat.service.d/whatsapp.conf
 # with the same two Environment= lines as the processor's drop-in.
-EnvironmentFile=-/root/Buttonsbebe Agent/.env
+EnvironmentFile=-/opt/buttonsbebe/.env
 
 # The alert de-dup state file must persist between firings — do NOT add
 # PrivateTmp=true here or every run will re-alert.

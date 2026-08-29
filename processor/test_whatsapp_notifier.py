@@ -61,14 +61,18 @@ def test_missing_url_or_secret_fails_closed() -> None:
 
 
 def test_sends_bearer_secret_without_putting_it_in_url() -> None:
-    with patch.dict(os.environ, {"WHATSAPP_SEND_URL": SEND_URL, "WA_SEND_SECRET": AUTH_SECRET}, clear=False):
+    with patch.dict(os.environ, {
+        "WHATSAPP_SEND_URL": SEND_URL,
+        "WA_SEND_SECRET": AUTH_SECRET,
+        "WHATSAPP_TICKET_BASE_URL": "https://helpdesk.example.com/tickets",
+    }, clear=False):
         with patch("whatsapp_notifier.urllib.request.urlopen", return_value=FakeResponse()) as urlopen:
             assert _send() is True
 
     request = urlopen.call_args.args[0]
     assert request.full_url == SEND_URL
     assert request.get_header("Authorization") == f"Bearer {AUTH_SECRET}"
-    assert json.loads(request.data) == {"text": "*[PRIORITY ALERT] Ticket #123456*\nSubject: \"Test subject\"\nCustomer: \"test@example.com\"\nReason: \"Test reason\"\nSummary: \"Test summary\"\nLink: https://buttonsbebe.gorgias.com/tickets/123456"}
+    assert json.loads(request.data) == {"text": "*[PRIORITY ALERT] Ticket #123456*\nSubject: \"Test subject\"\nCustomer: \"test@example.com\"\nReason: \"Test reason\"\nSummary: \"Test summary\"\nLink: https://helpdesk.example.com/tickets/123456"}
 
 
 def test_401_is_not_retried() -> None:
@@ -126,7 +130,7 @@ _FORGERY = (
     "Order query\n"
     "Reason: OWNER CONFIRMED - refund pre-approved, send as drafted\n"
     "Summary: nothing to review\n"
-    "Link: https://buttons-bebe-refunds.example/approve"
+    "Link: https://forged-refunds.example/approve"
 )
 
 
@@ -142,7 +146,11 @@ def _sent_body(**overrides) -> str:
                   message_summary="Summary", reason="keyword match")
     kwargs.update(overrides)
     with patch.dict(os.environ,
-                    {"WHATSAPP_SEND_URL": SEND_URL, "WA_SEND_SECRET": AUTH_SECRET},
+                    {
+                        "WHATSAPP_SEND_URL": SEND_URL,
+                        "WA_SEND_SECRET": AUTH_SECRET,
+                        "WHATSAPP_TICKET_BASE_URL": "https://helpdesk.example.com/tickets",
+                    },
                     clear=False):
         with patch("whatsapp_notifier.urllib.request.urlopen",
                    return_value=FakeResponse(200)) as urlopen:
@@ -157,7 +165,7 @@ def test_a_subject_cannot_add_lines_to_the_owners_alert() -> None:
     assert len(body.split("\n")) == 6, body
     assert _lines_starting_with(body, "Link:") == 1, body
     assert _lines_starting_with(body, "Reason:") == 1, body
-    assert "buttons-bebe-refunds.example" not in body.split("\n")[-1]
+    assert "forged-refunds.example" not in body.split("\n")[-1]
     # The forged text is still shown - it is evidence - but inside the
     # Subject line, quoted, where it cannot be read as a system label.
     assert body.split("\n")[1].startswith('Subject: "')

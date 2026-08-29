@@ -5,8 +5,8 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-WorkingDirectory=/root/Buttonsbebe Agent
-ExecStart=/usr/bin/python3 "/root/Buttonsbebe Agent/tools/shopify_safety.py" --json
+WorkingDirectory=/opt/buttonsbebe
+ExecStart=/usr/bin/python3 "/opt/buttonsbebe/tools/shopify_safety.py" --json
 TimeoutStartSec=45
 NoNewPrivileges=true
 PrivateTmp=true

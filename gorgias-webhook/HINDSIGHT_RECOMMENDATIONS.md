@@ -10,7 +10,7 @@
 
 2. **hindsight_integration.py** — bridge module with 5 functions:
    - `retain_ticket_experience()` — called by Workflow B on every agent reply
-   - `retain_owner_answer()` — called when Chaim answers a KB gap
+   - `retain_owner_answer()` — called when the store owner answers a KB gap
    - `retain_kb_content()` — seeds Hindsight with static KB content
    - `recall_relevant_memories()` — called by draft_engine alongside pgvector
    - `reflect_on_patterns()` — for weekly review / pattern discovery
@@ -27,16 +27,16 @@
 
 ## What's still missing (and how to handle each)
 
-### 1. Owner Q&A trigger (KB gap → Chaim answers → Hindsight + KB)
+### 1. Owner Q&A trigger (KB gap → the store owner answers → Hindsight + KB)
 
 **The gap:** When the KB can't answer a question (kb_gap=True), the system
-should ask Chaim for the answer. His answer needs to go into BOTH the KB
+should ask the store owner for the answer. His answer needs to go into BOTH the KB
 (kb/learned/owner-qa-*.md via kb_writeback) AND Hindsight (via
 retain_owner_answer). Right now neither trigger is wired.
 
 **Recommendation:** Add a Telegram bot command `/kb_gap` that:
 - Lists tickets with kb_gap=True from feedback.db
-- Chaim replies with the answer
+- the store owner replies with the answer
 - The answer is written to kb/learned/ via kb_writeback.record_owner_answer()
 - AND retained into Hindsight via retain_owner_answer()
 - The ingestion worker picks up the new KB file on next sync
@@ -57,7 +57,7 @@ but there's no way to promote a good reply to the KB. kb_writeback has
 - The Hindsight retain already happened automatically via Workflow B
 - The ingestion worker picks up the new file on next sync
 
-Chaim should only promote replies that contain generalizable knowledge
+the store owner should only promote replies that contain generalizable knowledge
 (not one-off order-specific answers). The review_pending banner in the
 file reminds him to vet it.
 
@@ -71,7 +71,7 @@ kb/learned/ as markdown files. They're stuck in JSONL.
 - Read enriched_clusters.jsonl
 - For each cluster with confidence >= 0.8 and sensitive=false:
   - Generate a CONVENTIONS-correct markdown file in kb/learned/
-  - Status: review_pending (Chaim must confirm before it's trusted)
+  - Status: review_pending (the store owner must confirm before it's trusted)
   - Git commit + ingestion_worker.sync()
   - Also retain into Hindsight via retain_kb_content()
 - For sensitive=true clusters (refunds, disputes): skip, flag for manual review
@@ -111,7 +111,7 @@ This gives unified logging via journalctl and consistent lifecycle management.
 from the VPS itself.
 
 **Recommendation:** Add a Caddy reverse proxy entry for `memory.<domain>` that
-points to :9999 with basic_auth. This lets Chaim browse memories, see what
+points to :9999 with basic_auth. This lets the store owner browse memories, see what
 the system has learned, and manually review/promote content. Optional — the
 API works fine without it.
 
@@ -119,7 +119,7 @@ API works fine without it.
 
 ```
                          ┌──────────────────────────────────────────────────────┐
-                         │                    VPS (srv1766050)                   │
+                         │                    VPS (your-host)                   │
                          │                                                      │
   Gorgias ──webhook──▶ Caddy ──▶ server.py ──▶ pipeline.py                      │
                                           │           │                          │
@@ -139,7 +139,7 @@ API works fine without it.
                                           │     │                                │
                                           │  Git repo (kb/*.md)                  │
                                           │     ▲                                │
-                                          │  Chaim edits                         │
+                                          │  the store owner edits                         │
                                           │                                      │
                                          Docker: hindsight + kb-postgres        │
                                          └──────────────────────────────────────────────┘

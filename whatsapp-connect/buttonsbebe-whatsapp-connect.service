@@ -5,12 +5,12 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/root/Buttonsbebe Agent/whatsapp-connect
-EnvironmentFile="/root/Buttonsbebe Agent/whatsapp-connect/.env"
+WorkingDirectory=/opt/buttonsbebe/whatsapp-connect
+EnvironmentFile="/opt/buttonsbebe/whatsapp-connect/.env"
 Environment=WA_PORT=8085
-Environment=WA_AUTH_DIR=/root/Buttonsbebe Agent/whatsapp-connect/auth
+Environment=WA_AUTH_DIR=/opt/buttonsbebe/whatsapp-connect/auth
 Environment=HERMES_BIN=__HERMES_BIN__
-ExecStart=/bin/bash -c 'exec __NODE__ "/root/Buttonsbebe Agent/whatsapp-connect/server.js"'
+ExecStart=/bin/bash -c 'exec __NODE__ "/opt/buttonsbebe/whatsapp-connect/server.js"'
 Restart=on-failure
 RestartSec=3
 

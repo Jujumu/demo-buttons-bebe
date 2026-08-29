@@ -491,7 +491,7 @@ def run_workflow_a(ctx, suppress_generic_notify=False):
                     ticket_id=ticket_id,
                     priority=priority,
                     customer_message=customer_message,
-                    gorgias_ticket_url=f"https://buttonsbebe.gorgias.com/app/ticket/{ticket_id}",
+                    gorgias_ticket_url=f"https://your-helpdesk.gorgias.com/app/ticket/{ticket_id}",
                 )
                 logger.info(f"WF-A ticket #{ticket_id}: URGENT owner notification sent")
             except Exception as e:
@@ -573,7 +573,7 @@ def run_workflow_a(ctx, suppress_generic_notify=False):
                     customer_message=customer_message,
                     draft_text=result.draft_text if actions.include_draft_in_notification else None,
                     conversation=getattr(ctx, "messages", None),
-                    gorgias_ticket_url=f"https://buttonsbebe.gorgias.com/app/ticket/{ticket_id}",
+                    gorgias_ticket_url=f"https://your-helpdesk.gorgias.com/app/ticket/{ticket_id}",
                 )
                 logger.info(f"WF-A ticket #{ticket_id}: priority notification sent (priority={priority})")
             except Exception as e:

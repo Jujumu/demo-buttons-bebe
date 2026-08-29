@@ -73,8 +73,8 @@ class SafetyConfig:
     shopify_source_path: Path = Path("/opt/warehouse/src/shopify.js")
     process_environ_dir: Path = Path("/proc")
     webhook_endpoint: str = "http://127.0.0.1:4000/api/shopify/webhooks"
-    warehouse_public_base_url: str = "https://wh.buttonsbebe.com"
-    support_public_base_url: str = "https://support.buttonsbebe.com"
+    warehouse_public_base_url: str = "https://warehouse.example.com"
+    support_public_base_url: str = "https://support.example.com"
     caddy_manifest_path: Path = Path("/etc/caddy/buttonsbebe-caddy.sha256")
     warehouse_source_manifest_path: Path = Path(
         "/opt/warehouse/.codex-safety-source.sha256"

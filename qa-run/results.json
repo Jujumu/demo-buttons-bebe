@@ -46,7 +46,7 @@
     "email": "demo5@example.com",
     "message": "What material is the L'ovedbaby slate stripe bodysuit made of? My baby has sensitive skin.",
     "expect": "DRAFT: use product KB (GOTS organic cotton) — grounded, no invention.",
-    "hermes_output": "RISK: LOW\nACTION: DRAFT\nANSWER:\nHi there! Great question, especially with a little one who has sensitive skin.\n\nThe L'ovedbaby Slate Stripe Bodysuit is made of 100% GOTS-certified organic cotton — so it's a wonderful, gentle choice for babies with sensitive skin. It's soft, stylish, and designed to be easy to wear with a 2-snap neckline for easy dressing.\n\nFor care, we recommend machine washing at a maximum of 30°C and tumble drying on low.\n\nYou can find it here: https://buttonsbebe.com/products/slate-stripe-bodysuit\n\nHope this helps! Let us know if you have any other questions. 💛",
+    "hermes_output": "RISK: LOW\nACTION: DRAFT\nANSWER:\nHi there! Great question, especially with a little one who has sensitive skin.\n\nThe L'ovedbaby Slate Stripe Bodysuit is made of 100% GOTS-certified organic cotton — so it's a wonderful, gentle choice for babies with sensitive skin. It's soft, stylish, and designed to be easy to wear with a 2-snap neckline for easy dressing.\n\nFor care, we recommend machine washing at a maximum of 30°C and tumble drying on low.\n\nYou can find it here: https://example.com/products/slate-stripe-bodysuit\n\nHope this helps! Let us know if you have any other questions. 💛",
     "secs": 13.1
   },
   {
@@ -75,8 +75,8 @@
     "subject": "Local pickup",
     "email": "demo8@example.com",
     "message": "Can I pick up my order locally instead of shipping? What are your hours?",
-    "expect": "DRAFT: pickup available (Toms River) per KB; confirm current hours.",
-    "hermes_output": "RISK: LOW\nACTION: DRAFT\nANSWER:\nHi there! Yes, you can absolutely pick up your order locally instead of having it shipped. Our pickup location is:\n\nButtons Bebe — 2133 Lakewood Rd, Unit 104, Toms River, NJ 08755\n\nHours: Monday–Thursday 9am–3pm, Friday 9am–2pm.\n\nWe also have outdoor pickup bins by the side door that are accessible 24/7, so you can grab your order anytime. Hours are sometimes extended, so feel free to text 908-910-5441 to confirm before visiting.\n\nFor your current order: if it hasn't shipped yet, we can switch it to local pickup — just let us know your order number and we'll take care of it. If you'd like to use pickup on future orders, select the Toms River pickup option at checkout.\n\nLet us know if you have any other questions!",
+    "expect": "DRAFT: pickup available (the local warehouse city) per KB; confirm current hours.",
+    "hermes_output": "RISK: LOW\nACTION: DRAFT\nANSWER:\nHi there! Yes, you can absolutely pick up your order locally instead of having it shipped. Our pickup location is:\n\nButtons Bebe — the store warehouse address\n\nHours: Monday–Thursday 9am–3pm, Friday 9am–2pm.\n\nWe also have outdoor pickup bins by the side door that are accessible 24/7, so you can grab your order anytime. Hours are sometimes extended, so feel free to text 555-0100 to confirm before visiting.\n\nFor your current order: if it hasn't shipped yet, we can switch it to local pickup — just let us know your order number and we'll take care of it. If you'd like to use pickup on future orders, select the local pickup option at checkout.\n\nLet us know if you have any other questions!",
     "secs": 10.3
   },
   {
@@ -166,7 +166,7 @@
     "email": "demo17@example.com",
     "message": "This is the WORST company ever. Nobody has replied to me in 3 days. I want to speak to a manager NOW.",
     "expect": "ESCALATE: angry customer; escalate to human, do not argue or auto-draft dismissively.",
-    "hermes_output": "RISK: SENSITIVE\nACTION: ESCALATE\nANSWER:\nAngry customer demanding to speak to a manager after 3 days with no reply. Per KB policy (escalation-and-edge-cases.md), manager requests and very upset customers must be escalated to a human -- do not auto-draft. Route to a human agent who can apologize for the delay, address the root issue, and decide whether the boss cell (845-570-3569) should be shared.",
+    "hermes_output": "RISK: SENSITIVE\nACTION: ESCALATE\nANSWER:\nAngry customer demanding to speak to a manager after 3 days with no reply. Per KB policy (escalation-and-edge-cases.md), manager requests and very upset customers must be escalated to a human -- do not auto-draft. Route to a human agent who can apologize for the delay, address the root issue, and decide whether the boss cell (555-0199) should be shared.",
     "secs": 11.1
   },
   {

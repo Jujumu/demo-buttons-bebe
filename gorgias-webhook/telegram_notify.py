@@ -327,7 +327,7 @@ def send_ticket_notification(ctx_dict):
             lines.append(f"  - {err}")
         lines.append("")
 
-    lines.append(f"🔗 View: https://buttonsbebe.gorgias.com/tickets/{ticket_id}")
+    lines.append(f"🔗 View: https://your-helpdesk.gorgias.com/tickets/{ticket_id}")
     lines.append(f"🕐 Fetched: {fetched_at}")
 
     text = "\n".join(lines)
@@ -399,7 +399,7 @@ _TRUNC_MARKER = "\n…(truncated)"
 # Gorgias ticket deep-link. Configurable via env / config.json
 # (gorgias_ticket_url_template, with a "{id}" placeholder) so the owner can tap
 # straight through to the ticket. Defaults to the Buttons Bebe Gorgias app URL.
-DEFAULT_TICKET_URL_TEMPLATE = "https://buttonsbebe.gorgias.com/app/ticket/{id}"
+DEFAULT_TICKET_URL_TEMPLATE = "https://your-helpdesk.gorgias.com/app/ticket/{id}"
 
 
 def _ticket_url(ticket_id):
@@ -511,7 +511,7 @@ def send_escalation_alert(ticket_id, *, category, priority, reason,
                           customer_message=None, dry_run=False):
     """Owner alert for an URGENT/sensitive escalation. OWNER chat(s) only.
 
-    Concise, plain-text alert so Chaim can jump on a sensitive ticket
+    Concise, plain-text alert so the store owner can jump on a sensitive ticket
     (refund/chargeback/dispute/legal/etc.). Includes a short, sanitized snippet
     of the customer's message and a deep-link to the Gorgias ticket if known.
 

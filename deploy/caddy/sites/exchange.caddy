@@ -1,9 +1,9 @@
 # Exchange service.
 #
-# This fragment owns exchange.buttonsbebe.com only. The upstream is kept on
+# This fragment owns exchange.example.com only. The upstream is kept on
 # loopback; Caddy is the public TLS boundary.
 
-exchange.buttonsbebe.com {
+exchange.example.com {
 	reverse_proxy 127.0.0.1:4100
 	header {
 		X-Robots-Tag "noindex, nofollow"

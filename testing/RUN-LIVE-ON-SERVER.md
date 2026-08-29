@@ -14,7 +14,7 @@ You'll copy two files to the server, run one command, then send the results back
 SSH into the VPS, then confirm the brain and its knowledge base are up:
 
 ```bash
-ssh root@srv1766050.hstgr.cloud       # or: ssh root@2.25.137.77
+ssh root@support.example.com       # or: ssh root@<YOUR_SERVER_IP>
 hermes mcp list                        # should list the 3 tools, all enabled
 hermes mcp test buttonsbebe_kb         # should say: Connected
 ```
@@ -29,13 +29,12 @@ From your Mac (in the project folder), copy the scenario list and the runner int
 on the VPS:
 
 ```bash
-cd "/Users/teddyburtonburger/Desktop/Code-hub/Shopify/Shopify help desk"
 scp testing/scenarios.json testing/run_live_tests.py \
-    root@srv1766050.hstgr.cloud:"/root/Buttonsbebe Agent/testing/"
+    root@support.example.com:"/opt/buttonsbebe/testing/"
 ```
 
 (If the `testing/` folder doesn't exist yet on the server, first run:
-`ssh root@srv1766050.hstgr.cloud 'mkdir -p "/root/Buttonsbebe Agent/testing"'`)
+`ssh root@support.example.com 'mkdir -p "/opt/buttonsbebe/testing"'`)
 
 ---
 
@@ -44,7 +43,7 @@ scp testing/scenarios.json testing/run_live_tests.py \
 On the server:
 
 ```bash
-cd "/root/Buttonsbebe Agent/testing"
+cd "/opt/buttonsbebe/testing"
 python3 run_live_tests.py --limit 1
 ```
 
@@ -77,8 +76,8 @@ Copy `results-live.json` back to your Mac (into this `testing/` folder) and tell
 "judge these":
 
 ```bash
-scp root@srv1766050.hstgr.cloud:"/root/Buttonsbebe Agent/testing/results-live.json" \
-    "/Users/teddyburtonburger/Desktop/Code-hub/Shopify/Shopify help desk/testing/"
+scp root@support.example.com:"/opt/buttonsbebe/testing/results-live.json" \
+    "./testing/"
 ```
 
 I'll score every reply with the same rubric and compare the live `glm-5.2` results against the

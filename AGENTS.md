@@ -12,7 +12,7 @@
 AI support agent for **Buttons Bebe** (Shopify store, ~2k tickets/month in
 **Gorgias**). Per incoming ticket: read message → pull order/return/product
 context → search KB → draft a reply **into the review console** (not into
-Gorgias) where a human sends / notes / edits / discards. Client: **Chaim**.
+Gorgias) where a human sends / notes / edits / discards. Client: **the store owner**.
 
 ## 2. Safety model (never violate)
 
@@ -35,8 +35,8 @@ Gorgias) where a human sends / notes / edits / discards. Client: **Chaim**.
 
 ## 3. Where it runs
 
-- Production: VPS **`srv1766050`** (2.25.137.77), Ubuntu, everything under
-  `/root/Buttonsbebe Agent/`. This repo mirrors that tree.
+- Typical install root: `/opt/buttonsbebe/` (or any directory you choose).
+  Point `.env` at **your** Shopify shop — see `CONNECT.md`.
 - Brain: **Hermes Agent** CLI (Nous Research), model **`glm-5.2`** via Ollama
   Cloud (`~/.hermes/config.yaml`).
 - **A push to `main` that passes CI auto-deploys to production** — see §8.
@@ -172,9 +172,9 @@ hermes mcp list && hermes mcp test buttonsbebe_kb
 systemctl status buttonsbebe-processor buttonsbebe-kb-mcp buttonsbebe-redo-mcp \
   buttonsbebe-gorgias-mcp buttonsbebe-kb-admin
 journalctl -u buttonsbebe-processor -n 50
-cd "/root/Buttonsbebe Agent/KB" && ./search.sh "do you ship to canada"
+cd "/opt/buttonsbebe/KB" && ./search.sh "do you ship to canada"
 ./sync-products.sh                     # manual product refresh (else every 3 days)
-sqlite3 "/root/Buttonsbebe Agent/webhook/data/webhook.db" \
+sqlite3 "/opt/buttonsbebe/webhook/data/webhook.db" \
   "select status,count(*) from job_queue group by status"   # table is job_queue, not jobs
 ```
 

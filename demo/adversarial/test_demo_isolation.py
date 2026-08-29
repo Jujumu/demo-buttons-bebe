@@ -61,7 +61,7 @@ class DemoIsolationTests(unittest.TestCase):
         settings = ProcessorSettings(_env_file=None, **PROCESSOR_DEMO)
         self.assertTrue(settings.demo_mode)
         for key, value in (
-            ("SHOPIFY_SHOP", "buttonsbebe"),
+            ("SHOPIFY_SHOP", "other-shop.myshopify.com"),
             ("WEBHOOK_DB_PATH", "./data/webhook.db"),
             ("WEBHOOK_DB_PATH", "../client-data/demo-webhook.db"),
             ("KB_MCP_URL", "http://127.0.0.1:8077/mcp"),
@@ -76,8 +76,8 @@ class DemoIsolationTests(unittest.TestCase):
         settings = WebhookSettings(_env_file=None, **WEBHOOK_DEMO)
         self.assertTrue(settings.demo_mode)
         for key, value in (
-            ("SHOPIFY_SHOP", "buttonsbebe"),
-            ("GORGIAS_BASE_URL", "https://buttonsbebe.gorgias.com"),
+            ("SHOPIFY_SHOP", "other-shop.myshopify.com"),
+            ("GORGIAS_BASE_URL", "https://other-helpdesk.gorgias.com"),
             ("WEBHOOK_HOST", "0.0.0.0"),
             ("WEBHOOK_DB_PATH", "./data/webhook.db"),
             ("WEBHOOK_DB_PATH", "../client-data/demo-webhook.db"),

@@ -6,8 +6,8 @@ Wants=network-online.target
 [Service]
 Type=simple
 Environment=KB_ADMIN_PORT=8087
-Environment="KB_DIR=/root/Buttonsbebe Agent/KB"
-ExecStart=/bin/bash -c 'exec /usr/local/bin/node "/root/Buttonsbebe Agent/kb-admin/server.js"'
+Environment="KB_DIR=/opt/buttonsbebe/KB"
+ExecStart=/bin/bash -c 'exec /usr/local/bin/node "/opt/buttonsbebe/kb-admin/server.js"'
 Restart=on-failure
 RestartSec=3
 

@@ -18,7 +18,7 @@ Checked against the current repo on 2026-07-29:
 
 | Claim in the old plan | Reality now |
 |---|---|
-| "processor and webhook read different `.env` files" | **Already fixed in code.** Both `processor/config.py` and `webhook/src/bb_webhook/config.py` load the single `/root/Buttonsbebe Agent/.env` (consolidated 2026-07-08). |
+| "processor and webhook read different `.env` files" | **Already fixed in code.** Both `processor/config.py` and `webhook/src/bb_webhook/config.py` load the single `/opt/buttonsbebe/.env` (consolidated 2026-07-08). |
 | "delete the dead `SHOPIFY_ADMIN_API_TOKEN`" | **Already gone** from both config files. Only `SHOPIFY_CLIENT_ID` / `SHOPIFY_CLIENT_SECRET` remain. Some docs still mention it — that is stale text, not live code. |
 | "secrets may be in git history" | **They are not.** A full-history scan for Shopify (`shpat_`, `shpca_`, `shpss_`), OpenRouter (`sk-or-v1-`), Slack (`xoxb-`), GitHub (`ghp_`) and AWS (`AKIA`) token prefixes found only redaction patterns and placeholder examples. No `.env` file has ever been committed. `_VPS-FULL-BACKUP-*/` is gitignored and was never committed. |
 
@@ -31,7 +31,7 @@ that are sitting in plaintext in the backup folder on disk.
 
 ```bash
 ssh root@<vps>
-cd "/root/Buttonsbebe Agent"
+cd "/opt/buttonsbebe"
 
 # 1. Snapshot both env files OUTSIDE the repo, with the date in the name.
 mkdir -p /root/env-snapshots
@@ -59,7 +59,7 @@ Read `env-sources.txt` carefully. **Any `EnvironmentFile=` still pointing at
 ## Part 2 — Merge
 
 ```bash
-cd "/root/Buttonsbebe Agent"
+cd "/opt/buttonsbebe"
 
 # Which keys exist only in webhook/.env?
 comm -23 <(grep -oE '^[A-Z_][A-Z0-9_]*' webhook/.env | sort -u) \
@@ -79,7 +79,7 @@ For each key that appears:
 Then lock the file down and remove the duplicate:
 
 ```bash
-chmod 600 "/root/Buttonsbebe Agent/.env"
+chmod 600 "/opt/buttonsbebe/.env"
 mv webhook/.env /root/env-snapshots/webhook.env.retired.$(date +%F)
 ```
 
@@ -121,12 +121,12 @@ the console. A human still clicks send — that never changes.
 
 ## Part 4 — Rotate the exposed credentials
 
-`_VPS-FULL-BACKUP-20260706/secrets/root.env` holds **live secrets in
-plaintext** on disk. It is gitignored and was never committed, so this is a
-local-disk exposure, not a public one — but it has been copied around, so
-treat every value in it as burned.
+Leftover backup trees (gitignored `_VPS-FULL-BACKUP-*` and similar) may hold
+**plaintext secrets**. Never restore, commit, or copy values from them. Delete
+them and configure a fresh `.env` from `.env.example` / `CONNECT.md`.
 
-Rotate in this order. Each is independent; do one, verify, then the next.
+If you still have an old backup on disk, treat every value in it as burned and
+rotate. Each rotation is independent; do one, verify, then the next.
 
 | # | Credential | Where to rotate | What to update afterwards |
 |---|---|---|---|
@@ -144,10 +144,8 @@ After all of them:
 # Verify nothing you rotated still appears anywhere on disk outside the .env.
 grep -rl "<the OLD value>" /root --exclude-dir=env-snapshots 2>/dev/null
 
-# Then get rid of the plaintext backup.
-tar -czf /root/vps-backup-20260706.tar.gz "_VPS-FULL-BACKUP-20260706"
-gpg -c /root/vps-backup-20260706.tar.gz && rm /root/vps-backup-20260706.tar.gz
-rm -rf "_VPS-FULL-BACKUP-20260706"
+# Delete leftover plaintext backup trees. Do not restore from them.
+rm -rf "_VPS-FULL-BACKUP-"*
 ```
 
 (Or simply delete it — you have git for the code, and the secrets in it are
@@ -171,9 +169,9 @@ Only after every service has been green for 24 hours:
 At any point:
 
 ```bash
-cp /root/env-snapshots/main.env.<date> "/root/Buttonsbebe Agent/.env"
-cp /root/env-snapshots/webhook.env.<date> "/root/Buttonsbebe Agent/webhook/.env"
-chmod 600 "/root/Buttonsbebe Agent/.env" "/root/Buttonsbebe Agent/webhook/.env"
+cp /root/env-snapshots/main.env.<date> "/opt/buttonsbebe/.env"
+cp /root/env-snapshots/webhook.env.<date> "/opt/buttonsbebe/webhook/.env"
+chmod 600 "/opt/buttonsbebe/.env" "/opt/buttonsbebe/webhook/.env"
 systemctl restart buttonsbebe-webhook buttonsbebe-processor
 ```
 

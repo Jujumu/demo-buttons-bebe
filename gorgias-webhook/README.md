@@ -7,8 +7,8 @@ Based on the [Gorgias tutorial](https://developers.gorgias.com/docs/receive-and-
 
 ## Live Endpoint
 
-    https://srv1766050.hstgr.cloud/webhook      (HTTPS, Let's Encrypt cert)
-    https://srv1766050.hstgr.cloud/health       (health check)
+    https://support.example.com/webhook      (HTTPS, Let's Encrypt cert)
+    https://support.example.com/health       (health check)
 
 ## Architecture
 
@@ -54,7 +54,7 @@ python3 /root/gorgias-webhook/crypto_util.py decrypt '<encrypted-token>'
 ## HTTPS
 
 Caddy acts as a TLS-terminating reverse proxy. It automatically:
-- Obtains a Let's Encrypt certificate for srv1766050.hstgr.cloud
+- Obtains a Let's Encrypt certificate for support.example.com
 - Renews the certificate before expiry
 - Redirects HTTP to HTTPS
 - Proxies requests to the Python server on localhost:8080

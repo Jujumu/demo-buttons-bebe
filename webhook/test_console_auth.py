@@ -42,15 +42,15 @@ class ConsoleSessionTests(unittest.TestCase):
     _now = datetime(2026, 8, 23, 14, 0, tzinfo=timezone.utc)
 
     def test_session_round_trip(self) -> None:
-        token = build_session_token("chaim", "session-secret", now=self._now)
+        token = build_session_token("owner", "session-secret", now=self._now)
 
         self.assertEqual(
             verify_session_token(token, "session-secret", now=self._now),
-            "chaim",
+            "owner",
         )
 
     def test_expired_or_tampered_session_fails_closed(self) -> None:
-        token = build_session_token("chaim", "session-secret", now=self._now)
+        token = build_session_token("owner", "session-secret", now=self._now)
         tampered = token[:-1] + ("0" if token[-1] != "0" else "1")
 
         self.assertIsNone(

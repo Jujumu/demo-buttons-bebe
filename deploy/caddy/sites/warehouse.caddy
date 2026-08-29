@@ -8,7 +8,7 @@
 # excluded from Caddy Basic Auth and remains protected by the warehouse
 # application's X-Shopify-Hmac-Sha256 verification over the raw request body.
 
-wh.buttonsbebe.com {
+warehouse.example.com {
 	@protected not path /api/shopify/webhook/*
 	basicauth @protected {
 		warehouse <WAREHOUSE_PASSWORD_HASH>

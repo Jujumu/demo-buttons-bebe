@@ -90,7 +90,7 @@ KNOWLEDGE BASE
 Full spec: PHASE1_KB_ARCHITECTURE.md. Summary below.
 
 ARCHITECTURE (single-editor Phase 1):
-  Git repo (Markdown = source of truth)  -- Chaim is the only editor
+  Git repo (Markdown = source of truth)  -- the store owner is the only editor
     -> ingestion worker (git diff -> push changes)
     -> Supermemory (self-hosted hybrid-search retrieval: embeddings + graph)
     -> Caddy fronts ONE public endpoint: memory.<domain> (basic_auth + bearer)
@@ -137,7 +137,7 @@ WORKFLOW A — CUSTOMER MESSAGE TRIGGER
 TRIGGER: Gorgias fires "ticket.message.created" webhook with from_agent=false
 
 STEP A0: WEBHOOK RECEIPT
-  - Gorgias POSTs to https://srv1766050.hstgr.cloud/webhook
+  - Gorgias POSTs to https://support.example.com/webhook
   - Caddy terminates TLS, proxies to server.py on localhost:8080
   - server.py validates X-Webhook-Secret against config.json
   - Parses JSON, extracts:

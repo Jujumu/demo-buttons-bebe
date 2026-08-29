@@ -2,7 +2,7 @@
 
 > **SUPERSEDED (2026-07-14):** This historical handover chapter is not current operational documentation. Do not use its counts, runtime status, write-path descriptions, or instructions. Use the repository-root `CLAUDE.md`, the user-provided `AGENTS.md`, and live verification instead.
 
-**What this doc covers:** the client-facing Phase 2 & 3 roadmap presented to Chaim on 2026-07-12 — the three phases at a glance, what's live today (Phase 1), every Phase 2 feature group (A–E) with its estimate **and a "Maps to" column tying each item to the real file/stub**, the Phase 2 timeline, the 5 policy questions the owner must answer, the Phase 3 capabilities with their architecture notes, and the whole-program timeline plus the estimate assumptions.
+**What this doc covers:** the client-facing Phase 2 & 3 roadmap presented to the store owner on 2026-07-12 — the three phases at a glance, what's live today (Phase 1), every Phase 2 feature group (A–E) with its estimate **and a "Maps to" column tying each item to the real file/stub**, the Phase 2 timeline, the 5 policy questions the owner must answer, the Phase 3 capabilities with their architecture notes, and the whole-program timeline plus the estimate assumptions.
 
 **Sources read:** `HANDOVER/_assets/phase-2-3-plan-fulltext.txt` (full extracted text of `Buttons-Bebe-Phase-2-3-Plan.pptx`, the authoritative deck — 19 slides); `SPRINT-feedback-collector.md`; `SPRINT-notice-board-2026-07-12.md`; `DEV-ISSUES.md`; `CLAUDE.md` (§4, §5, §8); `INCONSISTENCIES.md` (H2); plus repo file-existence checks (`tools/redo_mcp.py`, `feedback/`, `kb/learned/`, `kb/scripts/`, `dashboard/`, `console-src/` — and confirmation that `processor/` and `webhook/` are **not in this repo**).
 
@@ -22,7 +22,7 @@ Compact tags point back to the exact source so the new team can verify every cla
 | `H2` | Item H2 in `INCONSISTENCIES.md`. |
 | `QA#03` | The QA-run finding referenced by that number inside `DEV-ISSUES.md`. |
 | `SPR-FB` / `SPR-NB` | `SPRINT-feedback-collector.md` / `SPRINT-notice-board-2026-07-12.md`. |
-| ⚠️ **VPS-only** | The named file/dir is **not in this repo** — it lives only on the VPS (`/root/Buttonsbebe Agent/…`). Obtain it during handover. |
+| ⚠️ **VPS-only** | The named file/dir is **not in this repo** — it lives only on the VPS (`/opt/buttonsbebe/…`). Obtain it during handover. |
 | ✅ **in repo** | Verified present in this repo clone. |
 
 ---
@@ -145,7 +145,7 @@ The deck's technical appendix (`S18`) maps each item to the real system "from CL
 | Auto-send pilot — stretch (Group E) | **~1 week** |
 | **Phase 2 total** | **~4–6 weeks** — core A–D ~4 weeks · pilot E adds ~1 week |
 
-### 4.2 The 5 policy questions Chaim must answer (`S10`)
+### 4.2 The 5 policy questions the store owner must answer (`S10`)
 
 *"The AI is only as accurate as the policies it's given. A few confirmed answers replace today's cautious placeholders."* These directly **unblock KB accuracy** (they resolve the placeholder/DRAFT wording in `DI#10` and the location mix-up in `DI#11`).
 
@@ -155,7 +155,7 @@ The deck's technical appendix (`S18`) maps each item to the real system "from CL
 | 2 | **Return shipping** | Who pays return postage — you or the customer? | Return-policy accuracy (`DI#10`). |
 | 3 | **Sale-season rules** | Are sale / clearance items final, or returnable? | Return-policy edge cases (`DI#10`). |
 | 4 | **International rates** | What's the real shipping cost outside the country? | Removes the invented-price slip (**QA#03**; `DI#7`) and lets Group A4 quote a real rate. |
-| 5 | **Pickup vs return bin** | Confirm the pickup spot **and** the 24/7 return-bin address. | Fixes the conflation of the 2133 Lakewood pickup spot vs the 24/7 return bin at 6 Kenyon Drive (**QA#08**; `DI#11`). |
+| 5 | **Pickup vs return bin** | Confirm the pickup spot **and** the 24/7 return-bin address. | Fixes the conflation of the warehouse pickup spot vs the 24/7 return bin at the published after-hours return drop-off (**QA#08**; `DI#11`). |
 
 ### 4.3 From today's meeting — what to decide (`S17`)
 
@@ -223,7 +223,7 @@ These are the deck's own technical notes for how each capability is intended to 
 
 - **One focused builder** (Tony + Claude), working **sequentially**.
 - Estimates are **build + test time**; the ranges absorb testing & surprises.
-- **Chaim's 5 policy answers and any channel/action logins arrive promptly.**
+- **the store owner's 5 policy answers and any channel/action logins arrive promptly.**
 - **Scope stays fixed per item**; features can be re-ordered to taste.
 - **Days = focused work-days, not calendar days; ~1 week ≈ 5 build-days.**
 
@@ -247,4 +247,4 @@ Every file the Phase-2 appendix names, and whether it is in this repo or VPS-onl
 | Learning loop | `feedback/validate.py`, `feedback_collector.py` STUB, timer | `feedback/*` ✅ **in repo** (incl. `validate.py`); `processor/feedback_collector.py` + `buttonsbebe-kb-learn.timer` ⚠️ **VPS-only** (also see the two-design note in §3-B). |
 | Dashboard | `webhook.db` + `KB/learned/_ledger.json` | both ⚠️ **VPS-only** ("no analytics code exists yet"); existing `dashboard/index.html`/`console-src/index.html` ✅ **in repo** but are the *current console*, not the new metrics screen. |
 
-> **Bottom line for the new team:** most of Phase 2 Group A and all of the write-path work live in the **`processor/` and `webhook/` directories, which are not in this repo** — they must be obtained from the VPS (`/root/Buttonsbebe Agent/`) at handover (this matches the finding in `HANDOVER/05 §1`). The pieces you *can* open and work on locally today are the `feedback/` learning package, the `kb/` search + notices + scripts, `tools/redo_mcp.py`/`gorgias_mcp.py`, `whatsapp-connect/`, and the console/dashboard HTML.
+> **Bottom line for the new team:** most of Phase 2 Group A and all of the write-path work live in the **`processor/` and `webhook/` directories, which are not in this repo** — they must be obtained from the VPS (`/opt/buttonsbebe/`) at handover (this matches the finding in `HANDOVER/05 §1`). The pieces you *can* open and work on locally today are the `feedback/` learning package, the `kb/` search + notices + scripts, `tools/redo_mcp.py`/`gorgias_mcp.py`, `whatsapp-connect/`, and the console/dashboard HTML.

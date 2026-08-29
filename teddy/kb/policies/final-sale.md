@@ -49,8 +49,8 @@ Any exception must be warehouse-only and approved by staff.
 
 **Warehouse address for in-person exchange only:**
 > Buttons Bebe
-> 2133 Lakewood Road Unit 104
-> Toms River, NJ
+> the store warehouse address
+> Example City
 
 The item must be:
 - Unworn
@@ -64,6 +64,6 @@ The item must be:
 4. Escalate or request staff approval if exception may be considered.
 
 **Customer response:**
-> Hi! Since this item was final sale and the order already shipped, it is not eligible for a regular return or exchange by mail. If we are able to make an exception, it would need to be exchanged in person at our warehouse only. Our warehouse address is: Buttons Bebe, 2133 Lakewood Road Unit 104, Toms River, NJ. The item would need to be unworn, unused, and with tags attached. Please let us know if you'd like us to check whether an in-person exchange exception is possible.
+> Hi! Since this item was final sale and the order already shipped, it is not eligible for a regular return or exchange by mail. If we are able to make an exception, it would need to be exchanged in person at our warehouse only. Our warehouse address is: Buttons Bebe, the store warehouse address. The item would need to be unworn, unused, and with tags attached. Please let us know if you'd like us to check whether an in-person exchange exception is possible.
 
 **Note:** Any in-person exception must be approved by staff — escalate this to a human.

@@ -25,7 +25,7 @@ For every incoming ticket, the agent:
    prefixed and raised for human review; they are not suppressed. A human can
    edit, send, post an internal note, request a rewrite, or discard the draft.
 
-The client is **Chaim**. The builder handing this over is **Tony**.
+The client is **the store owner**. The builder handing this over is **Tony**.
 
 ## The safety model (the most important thing)
 
@@ -85,4 +85,4 @@ send or external write capabilities.
 
 ## Where the system runs
 
-Production VPS **`srv1766050`** (IP `2.25.137.77`), Ubuntu. Everything lives under `/root/Buttonsbebe Agent/`. Services are managed by **systemd** and fronted by **Caddy** (HTTPS). Full inventory of ports, services, and credentials is in doc `05`.
+Production VPS **`your-host`** (IP `<YOUR_SERVER_IP>`), Ubuntu. Everything lives under `/opt/buttonsbebe/`. Services are managed by **systemd** and fronted by **Caddy** (HTTPS). Full inventory of ports, services, and credentials is in doc `05`.

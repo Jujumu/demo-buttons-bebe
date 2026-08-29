@@ -265,6 +265,7 @@ body{background:#e8e5d8;font-family:Inter,Arial,sans-serif}
 <script>
 const API="/console/api", KBAPI="/console/kbapi";
 let stats={},tickets=[],learn={},tab="overview",openTk=null,filter="all";
+let connInfo={shopify_shop:"",gorgias_host:""};
 let kbData=null,kbHealth=null,kbHealthError="",kbSel=null,kbBuf="",kbMsg="",kbReindexing=false,kbLoaded=false,kbLoadError="";
 let waData=null,waMsg="",waMode=null,waNumber=null,waPoll=null;
 const WAAPI="/console/waapi";
@@ -306,7 +307,7 @@ async function boot(){
  const [s,t,lg,kh,nd,wd]=await Promise.all([jget(API+"/stats"),jget(API+"/tickets?limit=100"),jget(API+"/learning"),jget(KBAPI+"/health"),jget(API+"/notifications"),jget(WAAPI+"/status")]);
  loadErrors=[];if(s===null)loadErrors.push("stats");if(t===null)loadErrors.push("tickets");if(lg===null)loadErrors.push("learning");
  loadFailed=loadErrors.length>0;
- if(s!==null)stats=s;if(Array.isArray(t))tickets=t;if(lg!==null)learn=lg;
+ if(s!==null){stats=s;connInfo={shopify_shop:s.shopify_shop||"",gorgias_host:s.gorgias_host||""};}if(Array.isArray(t))tickets=t;if(lg!==null)learn=lg;
  if(kh!==null){kbHealth=kh;kbHealthError="";}else{kbHealth=null;kbHealthError="Knowledge-base health data is unavailable";}
  if(nd!==null){notificationData=nd;notificationError="";}else{notificationError="Live notifications are unavailable. Refresh to retry.";}
  if(wd!==null){waData=wd;waSig=wd.state+"|"+(wd.owner||"")+"|"+(wd.qr||"");}
@@ -507,7 +508,11 @@ function conns(){
  const productDetail=products.last_modified?`Product files last changed ${age||"recently"} ago${products.fresh?"":" — refresh overdue"}`:"Product file freshness unavailable";
  const kbState=h&&h.ok?(products.fresh?"Content current":"Content stale"):"Files unavailable";
  const wa=whatsappConnectionSummary(waData);
- const cs=[["G","Gorgias","buttonsbebe.gorgias.com","Help desk - tickets in & drafts out","Configured",true],["S","Shopify","buttons-bebe.myshopify.com",`${productCount} product files`,products.fresh?"Current":"Needs refresh",!!products.fresh],["R","Redo","Returns & refunds","Live return status","Configured",true],["W","WhatsApp alerts","Owner escalations",wa.detail,wa.label,wa.healthy],["KB","Knowledge base",`${count("intents","intents")} - ${count("policies","policies")} - ${count("faq","FAQs")}`,productDetail,kbState,h&&h.ok&&products.fresh]];
+ const gorgiasHost=connInfo.gorgias_host||"Not configured — set GORGIAS_SUBDOMAIN";
+ const shopHost=connInfo.shopify_shop||"Not configured — set SHOPIFY_SHOP";
+ const gorgiasOk=!!connInfo.gorgias_host;
+ const shopOk=!!connInfo.shopify_shop&&!!products.fresh;
+ const cs=[["G","Gorgias",gorgiasHost,"Help desk - tickets in & drafts out",gorgiasOk?"Configured":"Not configured",gorgiasOk],["S","Shopify",shopHost,`${productCount} product files`,products.fresh?"Current":(connInfo.shopify_shop?"Needs refresh":"Not configured"),shopOk],["R","Redo","Returns & refunds","Live return status","Configured",true],["W","WhatsApp alerts","Owner escalations",wa.detail,wa.label,wa.healthy],["KB","Knowledge base",`${count("intents","intents")} - ${count("policies","policies")} - ${count("faq","FAQs")}`,productDetail,kbState,h&&h.ok&&products.fresh]];
  const healthTitle=kbHealthError?"Knowledge-base file status unavailable":(h&&h.ok&&products.fresh?"Knowledge-base content files are current":"Knowledge-base content files need attention");
  const healthDetail=kbHealthError||(!h||!h.ok?"One or more knowledge-base folders could not be read.":productDetail+`. ${h.editable_files??"Unknown"} editable files detected.`);
  return `<div class="conns">${cs.map(c=>`<div class="conn"><div class="h"><div class="ic">${c[0]}</div><div><b>${c[1]}</b><small>${esc(c[2])}</small></div></div><span class="stt"><span class="dot ${c[5]?'':'off'}"></span> ${esc(c[4])}</span><div class="dt">${esc(c[3])}</div></div>`).join("")}</div>

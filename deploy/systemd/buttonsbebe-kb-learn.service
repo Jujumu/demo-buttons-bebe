@@ -5,5 +5,5 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-WorkingDirectory=/root/Buttonsbebe Agent/KB
-ExecStart=/bin/bash "/root/Buttonsbebe Agent/KB/learn-nightly.sh"
+WorkingDirectory=/opt/buttonsbebe/KB
+ExecStart=/bin/bash "/opt/buttonsbebe/KB/learn-nightly.sh"

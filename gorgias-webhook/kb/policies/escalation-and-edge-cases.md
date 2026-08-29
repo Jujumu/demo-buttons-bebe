@@ -80,6 +80,6 @@ the US. There are **no prepaid international return labels**. See
 For very upset customers, chargeback threats, manager requests, privacy issues
 (received another customer's items), or order value over ~$200 with an unresolved
 complaint: acknowledge, apologize, fix the root issue, and **escalate to a human**.
-The boss cell **845-570-3569** is escalation-only and must be **confirmed with the
+The boss cell **555-0199** is escalation-only and must be **confirmed with the
 boss before sharing**. Chargebacks and disputes are never auto-answered (see
 `refunds-and-disputes.md`).

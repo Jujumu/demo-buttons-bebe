@@ -23,8 +23,8 @@ except Exception:  # pragma: no cover - depends on deployment packaging
 router = APIRouter(prefix="/dashboard/api")
 logger = get_logger(__name__)
 
-_HERMES_BIN = _os.environ.get("HERMES_BIN", "/usr/local/bin/hermes")
-_HERMES_HOME = _os.environ.get("HERMES_OS_HOME", "/root")
+_HERMES_BIN = _os.environ.get("HERMES_BIN", "hermes")
+_HERMES_HOME = _os.environ.get("HERMES_OS_HOME") or _os.path.expanduser("~")
 _HERMES_PROFILE = _os.environ.get("HERMES_PROFILE", "").strip()
 _HERMES_REWRITE_TOOLSETS = _os.environ.get("HERMES_REWRITE_TOOLSETS", "todo").strip()
 _HERMES_IGNORE_RULES = _os.environ.get("HERMES_IGNORE_RULES", "").strip().lower() in {

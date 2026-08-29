@@ -760,7 +760,7 @@ def _self_test():
         ar_path = record_approved_reply(
             question="Where is my order?",
             reply_text=("Hi Mike, your order shipped! Track it at "
-                        "https://track.me/xyz?id=7 — email us at help@buttonsbebe.com "
+                        "https://track.me/xyz?id=7 — email us at help@example.com "
                         "if it doesn't arrive in 5 business days."),
             ticket_id="12345",
             tags=["shipping"],
@@ -772,7 +772,7 @@ def _self_test():
         assert ar_chunks and ar_chunks[0].status == "review_pending", ar_chunks
         with open(ar_path, "r", encoding="utf-8") as fh:
             ar_content = fh.read()
-        assert "help@buttonsbebe.com" not in ar_content, "email leaked"
+        assert "help@example.com" not in ar_content, "email leaked"
         assert "https://track.me" not in ar_content, "url leaked"
         assert "REVIEW PENDING" in ar_content, "review banner missing"
         print(f"OK  approved-reply -> {os.path.basename(ar_path)} "

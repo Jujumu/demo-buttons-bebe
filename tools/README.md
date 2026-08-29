@@ -30,7 +30,7 @@ Reads `REDO_API_KEY` + `REDO_STORE_ID` from the agent `.env`.
 - `list_recent_tickets`, `get_ticket`, `get_ticket_messages`, `get_customer`, `search_customer`
 
 Basic Auth: `GORGIAS_API_EMAIL` (the Username from the Gorgias REST API page) +
-`GORGIAS_API_KEY`, subdomain `GORGIAS_SUBDOMAIN` (bare, e.g. `buttonsbebe`).
+`GORGIAS_API_KEY`, subdomain `GORGIAS_SUBDOMAIN` (bare, e.g. `your-helpdesk`).
 Note: Gorgias pagination uses `limit` (not `per_page`).
 
 ## Managing any module
@@ -41,7 +41,7 @@ Note: Gorgias pagination uses `limit` (not `per_page`).
 - remove:  `hermes mcp remove buttonsbebe_redo && systemctl disable --now buttonsbebe-redo-mcp`
 
 All services auto-start on boot and auto-restart on failure. Credentials live in
-the agent `.env` (`/root/Buttonsbebe Agent/.env`).
+the agent `.env` (`/opt/buttonsbebe/.env`).
 
 ## Shopify content-write safety monitor
 

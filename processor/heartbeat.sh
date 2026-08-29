@@ -19,7 +19,7 @@
 #  systemd/journal state and (best effort) POSTs one message.
 #
 #  INSTALL (VPS):
-#    1. install -m 755 processor/heartbeat.sh "/root/Buttonsbebe Agent/processor/heartbeat.sh"
+#    1. install -m 755 processor/heartbeat.sh "/opt/buttonsbebe/processor/heartbeat.sh"
 #    2. cp deploy/systemd/buttonsbebe-heartbeat.{service,timer} /etc/systemd/system/
 #    3. systemctl daemon-reload
 #       systemctl enable --now buttonsbebe-heartbeat.timer

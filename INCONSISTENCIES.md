@@ -4,7 +4,7 @@
 > predate the current `CLAUDE.md` and repaired runtime. Do not use it as current
 > architecture or an active issue list.
 
-**Date:** July 7, 2026 · **Scope:** local project docs vs. the live VPS (`srv1766050` / 2.25.137.77)
+**Date:** July 7, 2026 · **Scope:** local project docs vs. the live VPS (`your-host` / <YOUR_SERVER_IP>)
 
 ## The big picture (why inconsistencies exist)
 
@@ -21,7 +21,7 @@ docs haven't kept up:
 2. **The running pipeline I did NOT build (pre-existing on the rebuilt box).** A webhook
    receiver on `127.0.0.1:8000` plus a **`buttonsbebe-processor` service** ("Hermes-powered
    job processor") that reads a SQLite queue (`webhook/data/webhook.db`; 53 done, 2 failed).
-   This is the `bb_webhook` app under `/root/Buttonsbebe Agent/webhook/`.
+   This is the `bb_webhook` app under `/opt/buttonsbebe/webhook/`.
 
 3. **The tools I built this cycle (working).** A LanceDB knowledge base with auto-synced
    products, and three read-only Hermes MCP tools — `buttonsbebe_kb` (8077),
@@ -35,12 +35,10 @@ layer 1 that now describe a system that no longer exists.
 
 ## HIGH — functional issues worth fixing
 
-**H1. `SHOPIFY_SHOP` is wrong in the webhook config.**
-`/root/Buttonsbebe Agent/.env` has `SHOPIFY_SHOP=buttons-bebe.myshopify.com` (correct), but
-`/root/Buttonsbebe Agent/webhook/.env` has `SHOPIFY_SHOP=buttonsbebe` — **no hyphen, wrong
-store**. If the webhook/processor ever calls Shopify directly, it targets a store that
-doesn't exist. (Note: the Gorgias subdomain really is `buttonsbebe` with no hyphen — that's
-correct — but the Shopify store is `buttons-bebe`. Easy to conflate.)
+**H1. `SHOPIFY_SHOP` must be the buyer's full `*.myshopify.com` domain.**
+The root `.env` and `webhook/.env` must agree. An empty or hyphen-less shop
+value is invalid. See `CONNECT.md`. Do not ship a previous merchant's shop as
+the default.
 
 **H2. Shopify auth method mismatch between the two subsystems.**
 - The product sync (layer 3) uses the **client-credentials grant** (`SHOPIFY_CLIENT_ID` +

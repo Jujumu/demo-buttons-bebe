@@ -31,7 +31,7 @@ logger = get_logger(__name__)
 #     Link: https://not-actually-us.example/approve
 #     Customer: someone@example.com
 #     Reason: keyword match (1 sensitive keywords)     <- the real one, below
-#     Link: https://buttonsbebe.gorgias.com/tickets/1  <- the real one, below
+#     Link: https://helpdesk.example.com/tickets/1  <- the real one, below
 #
 # The owner reads the top of the message on a phone notification. That is the
 # same rule the Hermes plumbing already follows and this file did not: a human
@@ -85,10 +85,11 @@ def send_whatsapp(
     """
     url = os.getenv("WHATSAPP_SEND_URL", "").strip()
     send_secret = os.getenv("WA_SEND_SECRET", "").strip()
-    ticket_base_url = os.getenv(
-        "WHATSAPP_TICKET_BASE_URL",
-        "https://buttonsbebe.gorgias.com/tickets",
-    ).rstrip("/")
+    ticket_base_url = os.getenv("WHATSAPP_TICKET_BASE_URL", "").strip().rstrip("/")
+    if not ticket_base_url:
+        subdomain = os.getenv("GORGIAS_SUBDOMAIN", "").strip()
+        if subdomain:
+            ticket_base_url = f"https://{subdomain}.gorgias.com/tickets"
     if demo_mode_enabled() and (
         not demo_url_allowed(
             url,

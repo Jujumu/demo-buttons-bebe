@@ -45,6 +45,21 @@ class TestSyncProducts(unittest.TestCase):
         tags_line = next(line for line in body.splitlines() if line.startswith("tags:"))
 
         self.assertEqual(tags_line, 'tags: ["product", "tee", "1758"]')
+        self.assertIn("/products/basic-tee", body)
+        self.assertNotIn("your-store.myshopify.com", body)
+
+    def test_product_page_url_uses_configured_shop(self) -> None:
+        product = {
+            "title": "Basic Tee",
+            "handle": "basic-tee",
+            "vendor": "1758",
+            "productType": "Tee",
+            "status": "ACTIVE",
+        }
+        _filename, body = sync_products._render_product(
+            product, {}, "gid://shopify/Product/1", shop="buyer-shop.myshopify.com"
+        )
+        self.assertIn("https://buyer-shop.myshopify.com/products/basic-tee", body)
 
     def test_duplicate_or_unrecognized_export_records_are_rejected(self) -> None:
         with self.assertRaisesRegex(SystemExit, "duplicate Shopify product"):

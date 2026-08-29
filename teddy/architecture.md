@@ -99,7 +99,7 @@ timestamp: 2026-06-28
 You can return any item within **30 days** of delivery for a full refund.
 Items must be unworn and unwashed with original tags attached.
 
-To start a return, email us at returns@buttonsbebe.com with your order number.
+To start a return, email us at returns@example.com with your order number.
 We will email you a prepaid return label within 24 hours.
 
 Refunds are processed within 5-7 business days after we receive the item.
@@ -279,13 +279,13 @@ LLM_API_KEY=...
 LLM_MODEL=mimo-v2.5-pro
 
 # Gorgias
-GORGIAS_DOMAIN=buttonsbebe
+GORGIAS_DOMAIN=
 GORGIAS_EMAIL=...
 GORGIAS_API_KEY=...
 WEBHOOK_SECRET=...
 
 # Shopify (for ORDER_STATUS skill)
-SHOPIFY_STORE=buttons-bebe
+SHOPIFY_STORE=
 SHOPIFY_ACCESS_TOKEN=shpat_...
 
 # Telegram
