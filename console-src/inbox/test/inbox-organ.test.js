@@ -43,6 +43,16 @@ test("inbox organ renders four panes and an ink selected bar", async () => {
   assert.match(snap.html, /#1002 · Paid · Fulfilled/);
 });
 
+test("discarding the AI strip does not restore the draft", async () => {
+  const organ = createInboxOrgan({ viewId: "mine" });
+  let snap = await organ.ready();
+  assert.match(snap.html, /data-draft-strip/);
+  organ.discardStrip();
+  snap = organ.snapshot();
+  assert.doesNotMatch(snap.html, /data-draft-strip/);
+  assert.equal(snap.sendDisabled, true);
+});
+
 test("Send stays disabled until the body has text", async () => {
   const organ = createInboxOrgan({ viewId: "mine" });
   let snap = await organ.ready();

@@ -64,6 +64,7 @@ export function createInboxOrgan(opts = {}) {
   let body = "";
   let strip = "";
   let summarizeText = "";
+  let discarded = false;
   let sent = [];
 
   function visibleTickets() {
@@ -95,13 +96,14 @@ export function createInboxOrgan(opts = {}) {
 
   function composerInput(ticket) {
     const ai = caduceusStub(ticket);
+    const activeStrip = discarded ? "" : (strip || summarizeText || ai.draft || "");
     return {
       ticket: withRecipient(ticket, shop),
       draft: ai.draft,
       summarize: summarizeText || ai.summarize,
       macros,
       body,
-      strip: strip === "" && !summarizeText ? ai.draft : strip,
+      strip: activeStrip,
     };
   }
 
@@ -192,6 +194,7 @@ export function createInboxOrgan(opts = {}) {
       body = "";
       strip = "";
       summarizeText = "";
+      discarded = false;
       ensureSelection();
       refreshRail().then(paint);
     });
@@ -200,6 +203,7 @@ export function createInboxOrgan(opts = {}) {
       body = "";
       strip = "";
       summarizeText = "";
+      discarded = false;
       refreshRail().then(paint);
     });
     mailbox.subscribe(MAILBOX_TOPICS.COMPOSER_BODY, ({ text }) => {
@@ -210,12 +214,14 @@ export function createInboxOrgan(opts = {}) {
     });
     mailbox.subscribe(MAILBOX_TOPICS.COMPOSER_DISCARD, () => {
       strip = "";
+      discarded = true;
       paint();
     });
     mailbox.subscribe(MAILBOX_TOPICS.COMPOSER_SUMMARIZE, () => {
       const ticket = selectedTicket();
       summarizeText = caduceusStub(ticket).summarize;
       strip = summarizeText;
+      discarded = false;
       paint();
     });
     mailbox.subscribe(MAILBOX_TOPICS.COMPOSER_SEND, ({ text, close }) => {
@@ -259,6 +265,11 @@ export function createInboxOrgan(opts = {}) {
     },
     setBody(text) {
       body = text;
+      composerTissue.update(composerInput(selectedTicket()));
+    },
+    discardStrip() {
+      discarded = true;
+      strip = "";
       composerTissue.update(composerInput(selectedTicket()));
     },
     async ready() {

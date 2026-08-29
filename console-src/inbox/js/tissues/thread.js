@@ -35,6 +35,7 @@ export function createThreadTissue({ mailbox }) {
       return `<div class="pane-inner"><p class="empty-pane">Select a ticket.</p></div>`;
     }
     const count = (ticket.messages || []).filter((msg) => msg.kind !== "status").length;
+    const summarizeLabel = count === 1 ? "Summarize 1 message" : `Summarize ${count} messages`;
     const messages = (ticket.messages || []).map(renderMessage).join("");
     return `<div class="pane-inner thread-inner">
       <header class="thread-head">
@@ -46,7 +47,7 @@ export function createThreadTissue({ mailbox }) {
       </header>
       <div class="thread-scroll">${messages}</div>
       <div class="summarize-row">
-        <button type="button" class="btn-quiet" data-summarize="${esc(ticket.id)}">Summarize ${esc(count)} messages</button>
+        <button type="button" class="btn-quiet" data-summarize="${esc(ticket.id)}">${esc(summarizeLabel)}</button>
       </div>
     </div>`;
   }

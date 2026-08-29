@@ -57,9 +57,13 @@ export function createRailOrgan({ shop, mailbox }) {
     const returnsHtml = models.returns.error
       ? renderError("returns", "Returns", models.returns.peek, models.returns.error)
       : renderReturns(models.returns, { open: returnsOpen });
+    const historyRows = (models.history.rows || []).filter((row) => row.id !== currentOrderId);
+    const historyView = models.history.error
+      ? models.history
+      : { ...models.history, peek: String(historyRows.length), rows: historyRows };
     const historyHtml = models.history.error
       ? renderError("order-history", "Past orders", models.history.peek, models.history.error)
-      : renderOrderHistory(models.history, { open: open["order-history"], peekedId: peekedHistoryId });
+      : renderOrderHistory(historyView, { open: open["order-history"], peekedId: peekedHistoryId });
     return `<div class="pane-inner rail-inner">
       ${customerHtml}
       ${orderHtml}
