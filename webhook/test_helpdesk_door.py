@@ -15,13 +15,18 @@ sys.path.insert(0, str(ROOT / "webhook" / "src"))
 from helpdesk.dispatch import dispatch, invoke
 from helpdesk.fixtures_sample import ADA, ORDER_ADA
 from helpdesk.http import handle_http
+from helpdesk.fixtures_intake import ADA_TRACKING, CHAT_WITH_1001
 from helpdesk.names import SAMPLE_SHOP, TOOL_NAMES
+from helpdesk.tickets import reset as reset_tickets
 
 from bb_webhook.helpdesk_door import handle_tool, helpdesk_root
 
 
 class HelpdeskDoorTests(unittest.TestCase):
-    def test_http_matches_dispatch_for_all_ten_tools(self) -> None:
+    def setUp(self) -> None:
+        reset_tickets()
+
+    def test_http_matches_dispatch_for_all_twelve_tools(self) -> None:
         cases = [
             ("helpdesk.list_tickets", {"view": "open", "limit": 5}),
             ("helpdesk.get_ticket", {"ticketId": "1001"}),
@@ -33,6 +38,8 @@ class HelpdeskDoorTests(unittest.TestCase):
             ("helpdesk.summarize_thread", {"ticketId": "1001"}),
             ("helpdesk.search_macros", {"query": "shipping"}),
             ("helpdesk.apply_macro", {"macroId": "shipping-delay", "mode": "replace"}),
+            ("helpdesk.ingest_email", dict(ADA_TRACKING)),
+            ("helpdesk.ingest_chat", dict(CHAT_WITH_1001)),
         ]
         for tool, args in cases:
             handled = dispatch(tool, args)

@@ -1,4 +1,4 @@
-"""Shopify helpdesk organ: ten tissues, one handler path for MCP, CLI, and HTTP."""
+"""Shopify helpdesk organ: twelve tissues, one handler path for MCP, CLI, and HTTP."""
 
 from .dispatch import TOOLS, dispatch, list_tools
 from .names import CLI_COMMANDS, TOOL_NAMES

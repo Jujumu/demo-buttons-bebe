@@ -23,7 +23,7 @@ export function createListTissue({ mailbox }) {
     return `<button type="button" class="ticket-row${on ? " is-selected" : ""}" data-ticket="${esc(ticket.id)}" aria-current="${on ? "true" : "false"}">
       <span class="ticket-bar" aria-hidden="true"></span>
       <span class="ticket-top">
-        <span class="ticket-name">${esc(ticket.customerName || "Customer")}</span>
+        <span class="ticket-name">${esc(ticket.customerName || "")}</span>
         <time class="ticket-time">${esc(formatWhen(ticket.updatedAt))}</time>
       </span>
       <span class="ticket-subject">${esc(ticket.subject)}</span>

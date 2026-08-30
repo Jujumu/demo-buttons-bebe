@@ -65,6 +65,17 @@ test("mount first-paints the Ada draft strip before paint", async () => {
   assert.match(composer, /disabled/);
 });
 
+test("selected list row CSS is a 4px ink bar with no wash", () => {
+  const css = readFileSync(join(here, "../styles.css"), "utf8");
+  assert.match(css, /--ink:\s*#1C1916/);
+  assert.match(css, /\.ticket-row \.ticket-bar[\s\S]*width:\s*4px/);
+  assert.match(css, /\.ticket-row\.is-selected\s*\{[^}]*background:\s*var\(--surface\)/);
+  assert.match(css, /One leading-edge ink bar on the selected ticket \(4px\)/);
+  assert.doesNotMatch(css, /\.ticket-row\.is-selected\s*\{[^}]*background:\s*(?:#e|#E|rgba?\(\s*\d+)/);
+  assert.doesNotMatch(css, /\.ticket-row\.is-selected\s*\{[^}]*box-shadow:\s*inset/);
+  assert.doesNotMatch(css, /#6B46C1|#7C3AED|#5B21B6/);
+});
+
 test("inbox organ renders four panes and an ink selected bar", async () => {
   const organ = createInboxOrgan({ viewId: "mine" });
   const snap = await organ.ready();

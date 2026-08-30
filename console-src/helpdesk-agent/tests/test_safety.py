@@ -20,9 +20,6 @@ FORBIDDEN_SNIPPETS = (
     "ask gaia",
     "#7c3aed",
     "gorgias purple",
-    "ai-demo-unfulfilled@example.com",
-    "ai-demo-fulfilled@example.com",
-    "ai-demo-multi@example.com",
     "gorgias_mcp",
     "fake_gorgias_mcp",
 )

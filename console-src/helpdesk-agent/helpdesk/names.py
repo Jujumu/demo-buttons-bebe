@@ -12,6 +12,8 @@ TOOL_DRAFT_REPLY = "helpdesk.draft_reply"
 TOOL_SUMMARIZE_THREAD = "helpdesk.summarize_thread"
 TOOL_SEARCH_MACROS = "helpdesk.search_macros"
 TOOL_APPLY_MACRO = "helpdesk.apply_macro"
+TOOL_INGEST_EMAIL = "helpdesk.ingest_email"
+TOOL_INGEST_CHAT = "helpdesk.ingest_chat"
 
 TOOL_NAMES = (
     TOOL_LIST_TICKETS,
@@ -24,6 +26,8 @@ TOOL_NAMES = (
     TOOL_SUMMARIZE_THREAD,
     TOOL_SEARCH_MACROS,
     TOOL_APPLY_MACRO,
+    TOOL_INGEST_EMAIL,
+    TOOL_INGEST_CHAT,
 )
 
 CLI_COMMANDS = {
@@ -37,6 +41,8 @@ CLI_COMMANDS = {
     TOOL_SUMMARIZE_THREAD: "summarize-thread",
     TOOL_SEARCH_MACROS: "search-macros",
     TOOL_APPLY_MACRO: "apply-macro",
+    TOOL_INGEST_EMAIL: "ingest-email",
+    TOOL_INGEST_CHAT: "ingest-chat",
 }
 
 SAMPLE_SHOP = "demo-helpdesk.example"

@@ -16,6 +16,8 @@ from .names import (
     TOOL_GET_ORDER,
     TOOL_GET_RETURNS,
     TOOL_GET_TICKET,
+    TOOL_INGEST_CHAT,
+    TOOL_INGEST_EMAIL,
     TOOL_LIST_PAST_ORDERS,
     TOOL_LIST_TICKETS,
     TOOL_SEARCH_MACROS,
@@ -37,7 +39,7 @@ def _add_shop_gid(parser: argparse.ArgumentParser, gid_flag: str, dest: str) -> 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="helpdesk", description="Shopify helpdesk organ (MCP + CLI).")
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("tools", help="list the ten v1 tools")
+    sub.add_parser("tools", help="list the twelve v1 tools")
     sub.add_parser("serve", help="run the MCP stdio server")
     tickets = sub.add_parser(CLI_COMMANDS[TOOL_LIST_TICKETS])
     tickets.add_argument("--view", default="open")
@@ -60,6 +62,15 @@ def build_parser() -> argparse.ArgumentParser:
     apply_macro.add_argument("--macro-id", dest="macroId", required=True)
     apply_macro.add_argument("--mode", default="replace", choices=("replace", "append"))
     apply_macro.add_argument("--current-body", dest="currentBody", default="")
+    ingest_email = sub.add_parser(CLI_COMMANDS[TOOL_INGEST_EMAIL])
+    ingest_email.add_argument("--from", dest="from", required=True)
+    ingest_email.add_argument("--subject", dest="subject", required=True)
+    ingest_email.add_argument("--body", dest="body", required=True)
+    ingest_email.add_argument("--received-at", dest="receivedAt", required=True)
+    ingest_chat = sub.add_parser(CLI_COMMANDS[TOOL_INGEST_CHAT])
+    ingest_chat.add_argument("--from-name", dest="fromName", required=True)
+    ingest_chat.add_argument("--body", dest="body", required=True)
+    ingest_chat.add_argument("--received-at", dest="receivedAt", required=True)
     return parser
 
 

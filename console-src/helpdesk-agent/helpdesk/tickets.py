@@ -1,10 +1,13 @@
-"""First-party ticket tissue. Not Gorgias. Sample threads only.
+"""First-party ticket tissue. Not Gorgias. Sample threads plus intake.
 
 Ticket status is ours: open / closed / snoozed.
 Never Return.status OPEN and never Customer.displayName.
+Spam never becomes a ticket and never appears in list_tickets.
 """
 
 from __future__ import annotations
+
+import copy
 
 from .errors import bad_request, not_found
 from .fixtures_live_holes import (
@@ -44,7 +47,7 @@ LIVE_GIDS = {
 
 STORE_NAME = "Demo Shop"
 
-TICKETS = (
+SEED_TICKETS = (
     {
         "id": "t-ada-track",
         "customerName": "Ada Demo",
@@ -169,14 +172,94 @@ TICKETS = (
     },
 )
 
+_store: list[dict] = []
+_intake: list[dict] = []
+_by_dedupe: dict[tuple, dict] = {}
+_next_seq = 1
+
+
+def reset() -> None:
+    global _store, _intake, _by_dedupe, _next_seq
+    _store = [copy.deepcopy(row) for row in SEED_TICKETS]
+    _intake = []
+    _by_dedupe = {}
+    _next_seq = 1
+
+
+reset()
+
+
+def remember_intake(record: dict) -> None:
+    _intake.append(dict(record))
+
+
+def intake_records() -> list[dict]:
+    return [dict(row) for row in _intake]
+
+
+def _snippet(body: str) -> str:
+    return " ".join(str(body or "").split())[:140]
+
+
+def add_ticket(
+    *,
+    customer_name: str,
+    subject: str,
+    body: str,
+    received_at: str,
+    customer_id: str | None,
+    order_id: str | None,
+    channel: str,
+    from_email: str | None,
+    dedupe_key: tuple,
+) -> dict:
+    existing = _by_dedupe.get(dedupe_key)
+    if existing:
+        return _row(existing, gid_source="joined")
+    global _next_seq
+    ticket_id = f"t-in-{_next_seq}"
+    _next_seq += 1
+    ticket = {
+        "id": ticket_id,
+        "customerName": customer_name,
+        "subject": subject,
+        "snippet": _snippet(body),
+        "status": "open",
+        "assignee": None,
+        "updatedAt": received_at,
+        "joined": True,
+        "customerId": customer_id,
+        "orderId": order_id,
+        "channel": channel,
+        "fromEmail": from_email,
+        "messages": [
+            {
+                "id": f"m-{ticket_id}-1",
+                "from": "customer",
+                "fromAgent": False,
+                "name": customer_name,
+                "body": body,
+                "at": received_at,
+            }
+        ],
+        "statusEvents": [
+            {"at": received_at, "status": "open", "note": "created"},
+        ],
+    }
+    _store.insert(0, ticket)
+    _by_dedupe[dedupe_key] = ticket
+    return _row(ticket, gid_source="joined")
+
 
 def _resolve_id(ticket_id: str) -> str:
     return ALIASES.get(str(ticket_id), str(ticket_id))
 
 
-def _gids_for(ticket_id: str, gid_source: str = "sample") -> tuple[str, str | None]:
+def _gids_for(ticket: dict, gid_source: str = "sample") -> tuple[str | None, str | None]:
+    if ticket.get("joined"):
+        return ticket.get("customerId"), ticket.get("orderId")
     table = LIVE_GIDS if gid_source in {"live", "live-holes"} else SAMPLE_GIDS
-    return table.get(ticket_id, (None, None))
+    return table.get(ticket["id"], (None, None))
 
 
 def ticket_in_view(ticket: dict, view: str) -> bool:
@@ -197,7 +280,7 @@ def ticket_in_view(ticket: dict, view: str) -> bool:
 
 
 def _row(ticket: dict, gid_source: str = "sample") -> dict:
-    customer_id, order_id = _gids_for(ticket["id"], gid_source)
+    customer_id, order_id = _gids_for(ticket, gid_source)
     return {
         "id": ticket["id"],
         "customerName": ticket["customerName"],
@@ -219,7 +302,7 @@ def list_tickets(view: str = "open", limit: int = 20, gid_source: str = "sample"
         raise bad_request("limit must be an integer", field="limit") from exc
     if cap < 1 or cap > 100:
         raise bad_request("limit must be 1..100", field="limit")
-    rows = [t for t in TICKETS if ticket_in_view(t, view)]
+    rows = [t for t in _store if ticket_in_view(t, view)]
     return [_row(t, gid_source) for t in rows[:cap]]
 
 
@@ -227,7 +310,7 @@ def get_ticket(ticket_id: str, gid_source: str = "sample") -> dict:
     if not ticket_id:
         raise bad_request("ticketId is required", field="ticketId")
     canonical = _resolve_id(ticket_id)
-    for ticket in TICKETS:
+    for ticket in _store:
         if ticket["id"] == canonical:
             row = _row(ticket, gid_source)
             row["messages"] = [dict(message) for message in ticket["messages"]]

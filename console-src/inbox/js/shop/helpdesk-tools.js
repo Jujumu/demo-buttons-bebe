@@ -1,4 +1,4 @@
-/** Locked v1 tool names. Same ten as MCP/CLI. No send/refund/cancel. */
+/** Locked v1 tool names. Same twelve as MCP/CLI. No send/refund/cancel. */
 export const TOOL_NAMES = Object.freeze([
   "helpdesk.list_tickets",
   "helpdesk.get_ticket",
@@ -10,6 +10,8 @@ export const TOOL_NAMES = Object.freeze([
   "helpdesk.summarize_thread",
   "helpdesk.search_macros",
   "helpdesk.apply_macro",
+  "helpdesk.ingest_email",
+  "helpdesk.ingest_chat",
 ]);
 
 export const WRITE_TOOLS = Object.freeze([
@@ -35,4 +37,9 @@ export const COMPOSER_TOOLS = Object.freeze({
 export const INBOX_TOOLS = Object.freeze({
   list: "helpdesk.list_tickets",
   thread: "helpdesk.get_ticket",
+});
+
+export const INTAKE_TOOLS = Object.freeze({
+  email: "helpdesk.ingest_email",
+  chat: "helpdesk.ingest_chat",
 });

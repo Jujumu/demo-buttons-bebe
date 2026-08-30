@@ -1,7 +1,7 @@
 # Helpdesk agent organ
 
 MCP server + CLI for the Shopify helpdesk. UI is a client, not the product.
-Each of the ten v1 tools is a tissue: one handler, two doors (MCP and CLI).
+Each of the twelve v1 tools is a tissue: one handler, two doors (MCP and CLI).
 
 ```text
 helpdesk list-tickets --view mine --limit 20
@@ -14,13 +14,18 @@ helpdesk draft-reply --ticket 1001
 helpdesk summarize-thread --ticket 1001
 helpdesk search-macros --query shipping
 helpdesk apply-macro --macro-id shipping-delay --mode replace
+helpdesk ingest-email --from "Ada <ada.tracking@example.com>" \
+  --subject "Tracking on order #1001" --body "Where is #1001?" \
+  --received-at 2026-08-30T14:02:00Z
+helpdesk ingest-chat --from-name Ada --body "Any update on #1001?" \
+  --received-at 2026-08-30T15:02:00Z
 helpdesk serve          # MCP stdio
-helpdesk tools          # list the ten tool names
+helpdesk tools          # list the twelve tool names
 ```
 
 JSON on stdout. Failures are structured JSON (no stack traces).
 
-The inbox is a client of the same ten tools. The console HTTP door is
+The inbox is a client of the same twelve tools. The console HTTP door is
 `POST /console/api/helpdesk` (`{ tool, arguments }`) and calls `invoke()`.
 Mint/Admin failure falls back to the inbox fixture shop. `SHOPIFY_MUTATIONS_ENABLED`
 stays `0`. Env names (values live only in `.env`): `SHOPIFY_SHOP`,

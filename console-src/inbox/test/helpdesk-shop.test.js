@@ -51,6 +51,21 @@ function pythonInvoke(tool, args) {
   } else if (tool === "helpdesk.apply_macro") {
     argv.push("apply-macro", "--macro-id", String(args.macroId), "--mode", String(args.mode || "replace"));
     if (args.currentBody) argv.push("--current-body", String(args.currentBody));
+  } else if (tool === "helpdesk.ingest_email") {
+    argv.push(
+      "ingest-email",
+      "--from", String(args.from),
+      "--subject", String(args.subject),
+      "--body", String(args.body),
+      "--received-at", String(args.receivedAt),
+    );
+  } else if (tool === "helpdesk.ingest_chat") {
+    argv.push(
+      "ingest-chat",
+      "--from-name", String(args.fromName),
+      "--body", String(args.body),
+      "--received-at", String(args.receivedAt),
+    );
   } else {
     throw new Error(`unknown tool ${tool}`);
   }
@@ -77,16 +92,18 @@ function clientFromPython(source = "sample") {
   });
 }
 
-test("client exposes exactly the ten helpdesk tools", () => {
+test("client exposes exactly the twelve helpdesk tools", () => {
   const client = createHelpdeskClient({ invoke: async () => ({ ok: true }) });
   assert.deepEqual(client.tools, TOOL_NAMES);
-  assert.equal(TOOL_NAMES.length, 10);
+  assert.equal(TOOL_NAMES.length, 12);
   assert.ok(TOOL_NAMES.includes("helpdesk.list_tickets"));
   assert.ok(TOOL_NAMES.includes("helpdesk.get_ticket"));
   assert.ok(TOOL_NAMES.includes("helpdesk.draft_reply"));
   assert.ok(TOOL_NAMES.includes("helpdesk.summarize_thread"));
   assert.ok(TOOL_NAMES.includes("helpdesk.search_macros"));
   assert.ok(TOOL_NAMES.includes("helpdesk.apply_macro"));
+  assert.ok(TOOL_NAMES.includes("helpdesk.ingest_email"));
+  assert.ok(TOOL_NAMES.includes("helpdesk.ingest_chat"));
   assert.deepEqual([...WRITE_TOOLS], ["helpdesk.send", "helpdesk.refund", "helpdesk.cancel"]);
   for (const name of WRITE_TOOLS) {
     assert.ok(!TOOL_NAMES.includes(name));
@@ -154,6 +171,84 @@ test("ticket customerName is not displayName and status is not Return.status", a
   assert.equal(ticket.status, "open");
   assert.equal(returns.returns.nodes[0].status, "OPEN");
   assert.notEqual(ticket.status, returns.returns.nodes[0].status);
+});
+
+test("inbox ingestEmail and ingestChat call the same intake tools", async () => {
+  const calls = [];
+  const shop = createHelpdeskShop({
+    client: createHelpdeskClient({
+      async invoke(tool, args) {
+        calls.push(tool);
+        if (tool === "helpdesk.ingest_email") {
+          return {
+            ok: true,
+            spam: false,
+            ticketId: "t-in-1",
+            id: "t-in-1",
+            customerName: "Ada",
+            subject: args.subject,
+            snippet: args.body,
+            status: "open",
+            updatedAt: args.receivedAt,
+            customerId: LIVE_IDS.C_UNFULFILLED,
+            orderId: LIVE_IDS.O_1001,
+          };
+        }
+        if (tool === "helpdesk.ingest_chat") {
+          return {
+            ok: true,
+            spam: false,
+            ticketId: "t-in-2",
+            id: "t-in-2",
+            customerName: args.fromName,
+            subject: args.body,
+            snippet: args.body,
+            status: "open",
+            updatedAt: args.receivedAt,
+            customerId: null,
+            orderId: null,
+          };
+        }
+        if (tool === "helpdesk.list_tickets") {
+          return { ok: true, tickets: [] };
+        }
+        if (tool === "helpdesk.get_ticket") {
+          return {
+            ok: true,
+            ticket: {
+              id: args.ticketId,
+              customerName: "Ada",
+              subject: "Tracking",
+              snippet: "",
+              status: "open",
+              updatedAt: "2026-08-30T14:02:00Z",
+              customerId: LIVE_IDS.C_UNFULFILLED,
+              orderId: LIVE_IDS.O_1001,
+              messages: [],
+              statusEvents: [],
+            },
+          };
+        }
+        return { ok: false };
+      },
+    }),
+  });
+  const organ = createInboxOrgan({ shop, viewId: "open" });
+  const ingested = await organ.ingestEmail({
+    from: "Ada <ada.tracking@example.com>",
+    subject: "Tracking on order #1001 has not moved",
+    body: "Where is my order #1001?",
+    receivedAt: "2026-08-30T14:02:00Z",
+  });
+  assert.equal(ingested.id, "t-in-1");
+  assert.ok(calls.includes("helpdesk.ingest_email"));
+  const chat = await organ.ingestChat({
+    fromName: "Sam",
+    body: "The rattle is broken.",
+    receivedAt: "2026-08-30T15:10:00Z",
+  });
+  assert.equal(chat.id, "t-in-2");
+  assert.ok(calls.includes("helpdesk.ingest_chat"));
 });
 
 test("inbox panes call list_tickets and get_ticket on invoke", async () => {
@@ -235,7 +330,7 @@ test("CLI payloads match the JS shop adapter for sample rail tools", async () =>
   assert.equal(projectOrderHistory(history).rows[0].fulfillmentStatus, history[0].displayFulfillmentStatus);
 });
 
-test("all ten CLI tools return ok on the same handler path", () => {
+test("all twelve CLI tools return ok on the same handler path", () => {
   const cases = [
     ["helpdesk.list_tickets", { view: "open", limit: 5 }],
     ["helpdesk.get_ticket", { ticketId: "1001" }],
@@ -247,6 +342,17 @@ test("all ten CLI tools return ok on the same handler path", () => {
     ["helpdesk.summarize_thread", { ticketId: "1001" }],
     ["helpdesk.search_macros", { query: "shipping" }],
     ["helpdesk.apply_macro", { macroId: "shipping-delay", mode: "replace" }],
+    ["helpdesk.ingest_email", {
+      from: "Ada <ada.tracking@example.com>",
+      subject: "Tracking on order #1001 has not moved",
+      body: "Where is my order #1001? The tracking has not updated.",
+      receivedAt: "2026-08-30T14:02:00Z",
+    }],
+    ["helpdesk.ingest_chat", {
+      fromName: "Ada",
+      body: "Any update on #1001? Tracking looks stuck.",
+      receivedAt: "2026-08-30T15:02:00Z",
+    }],
   ];
   for (const [tool, args] of cases) {
     const payload = pythonInvoke(tool, args);
@@ -411,6 +517,33 @@ test("CLI draft-reply and summarize-thread return text", () => {
   assert.equal(summary.ok, true);
   assert.match(summary.summary, /Ada/);
   assert.doesNotMatch(summary.summary, />Send</);
+});
+
+test("ingest_email Ada joins Cute Things and prize spam is not a ticket", () => {
+  const ada = pythonInvoke("helpdesk.ingest_email", {
+    from: "Ada <ada.tracking@example.com>",
+    subject: "Tracking on order #1001 has not moved",
+    body: "Where is my order #1001? The tracking has not updated.",
+    receivedAt: "2026-08-30T14:02:00Z",
+  });
+  assert.equal(ada.ok, true);
+  assert.equal(ada.spam, false);
+  assert.equal(ada.customerName, "Ada");
+  assert.equal(ada.displayName, undefined);
+  assert.equal(ada.customerId, LIVE_IDS.C_UNFULFILLED);
+  assert.equal(ada.orderId, LIVE_IDS.O_1001);
+  assert.equal(ada.status, "open");
+  assert.notEqual(ada.status, "OPEN");
+
+  const prize = pythonInvoke("helpdesk.ingest_email", {
+    from: "Prize Desk <winner@prize-farm.example>",
+    subject: "You won a $10,000 prize!",
+    body: "Claim your lottery winnings today. Unsubscribe from this farm of cash prize emails.",
+    receivedAt: "2026-08-30T14:16:00Z",
+  });
+  assert.equal(prize.ok, true);
+  assert.equal(prize.spam, true);
+  assert.equal(prize.ticketId, null);
 });
 
 test("CLI search-macros and apply-macro share dispatch and never send", () => {

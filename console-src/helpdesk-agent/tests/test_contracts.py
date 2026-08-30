@@ -14,25 +14,32 @@ from helpdesk.cli import main as cli_main
 from helpdesk.dispatch import TOOLS, dispatch, invoke, list_tools
 from helpdesk.http import handle_http
 from helpdesk.mcp_server import handle_rpc, tool_descriptors
+from helpdesk.fixtures_intake import ADA_TRACKING, CHAT_WITH_1001
 from helpdesk.names import SAMPLE_SHOP, TOOL_NAMES
 from helpdesk.fixtures_sample import ADA, ORDER_ADA
+from helpdesk.tickets import reset as reset_tickets
 
 
 class ContractTests(unittest.TestCase):
-    def test_ten_tools_only(self) -> None:
+    def setUp(self) -> None:
+        reset_tickets()
+
+    def test_twelve_tools_only(self) -> None:
         self.assertEqual(tuple(list_tools()), TOOL_NAMES)
-        self.assertEqual(len(TOOLS), 10)
+        self.assertEqual(len(TOOLS), 12)
         self.assertEqual([item["name"] for item in tool_descriptors()], list(TOOL_NAMES))
         self.assertIn("helpdesk.draft_reply", TOOL_NAMES)
         self.assertIn("helpdesk.summarize_thread", TOOL_NAMES)
         self.assertIn("helpdesk.search_macros", TOOL_NAMES)
         self.assertIn("helpdesk.apply_macro", TOOL_NAMES)
+        self.assertIn("helpdesk.ingest_email", TOOL_NAMES)
+        self.assertIn("helpdesk.ingest_chat", TOOL_NAMES)
 
-    def test_mcp_lists_ten_tools(self) -> None:
+    def test_mcp_lists_twelve_tools(self) -> None:
         reply = handle_rpc({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
         names = [tool["name"] for tool in reply["result"]["tools"]]
         self.assertEqual(names, list(TOOL_NAMES))
-        self.assertEqual(len(names), 10)
+        self.assertEqual(len(names), 12)
 
     def _cli(self, argv: list[str]) -> dict:
         buf = io.StringIO()
@@ -85,6 +92,34 @@ class ContractTests(unittest.TestCase):
                 "helpdesk.apply_macro",
                 ["apply-macro", "--macro-id", "shipping-delay", "--mode", "replace"],
                 {"macroId": "shipping-delay", "mode": "replace"},
+            ),
+            (
+                "helpdesk.ingest_email",
+                [
+                    "ingest-email",
+                    "--from",
+                    ADA_TRACKING["from"],
+                    "--subject",
+                    ADA_TRACKING["subject"],
+                    "--body",
+                    ADA_TRACKING["body"],
+                    "--received-at",
+                    ADA_TRACKING["receivedAt"],
+                ],
+                dict(ADA_TRACKING),
+            ),
+            (
+                "helpdesk.ingest_chat",
+                [
+                    "ingest-chat",
+                    "--from-name",
+                    CHAT_WITH_1001["fromName"],
+                    "--body",
+                    CHAT_WITH_1001["body"],
+                    "--received-at",
+                    CHAT_WITH_1001["receivedAt"],
+                ],
+                dict(CHAT_WITH_1001),
             ),
         ]
         for tool, argv, args in cases:

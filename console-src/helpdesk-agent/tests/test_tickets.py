@@ -14,9 +14,13 @@ from helpdesk.dispatch import WRITE_TOOLS, dispatch, invoke
 from helpdesk.fixtures_live_holes import C_FULFILLED, C_UNFULFILLED, O_1001, O_1002
 from helpdesk.fixtures_sample import ADA, ORDER_ADA
 from helpdesk.names import SAMPLE_SHOP
+from helpdesk.tickets import reset as reset_tickets
 
 
 class TicketContractTests(unittest.TestCase):
+    def setUp(self) -> None:
+        reset_tickets()
+
     def test_list_tickets_rows_include_gids(self) -> None:
         payload = dispatch("helpdesk.list_tickets", {"view": "open", "limit": 20})
         self.assertTrue(payload["ok"])
