@@ -6,7 +6,9 @@ The shop tissue is a client of `helpdesk.get_customer` / `get_order` /
 `get_returns` / `list_past_orders` (same payloads as MCP/CLI). Composer
 Insert/Discard and the mute summarize peek are clients of
 `helpdesk.draft_reply` and `helpdesk.summarize_thread` on that same
-`invoke()` path. Live reads target Cute Things (`SHOPIFY_SHOP` pinned to
+`invoke()` path. In-box macro search is a client of `helpdesk.search_macros`;
+Insert/Append call `helpdesk.apply_macro` (`replace` or `append`) and never
+send. Live reads target Cute Things (`SHOPIFY_SHOP` pinned to
 `yznyc1-ez.myshopify.com`) when mint works. Mint/Admin failure falls back
 to `demo-inbox.example` fixtures. `SHOPIFY_MUTATIONS_ENABLED` stays `0`.
 No live store writes. The Ada OPEN return is invented fixture-only and is
@@ -57,7 +59,8 @@ Demo names only (Ada Demo, Casey Sandbox, Jordan Preview). No customer PII.
 
 - **In:** `{ ticket, draft, summarize, macros, body }`
 - **Out:** body / insert / discard / send
-- To is visible. Macros live inside the box. AI draft is a strip **above** the textarea with Insert / Discard — never Send. The AI draft kicker is mute (accent is unread/error only). Draft text comes from `helpdesk.draft_reply`.
+- To is visible. Macro search lives **inside** the composer box (not a floating panel over the thread). Pick a row, then Replace or Append. Those fill the textarea via `helpdesk.apply_macro` and never Send. Replace (not Insert) is the macro verb so it does not collide with the signed draft-strip Insert. After Replace/Append the picker closes.
+- AI draft is a strip **above** the textarea with Insert / Discard — never Send. The AI draft kicker is mute (accent is unread/error only). Draft text comes from `helpdesk.draft_reply`.
 - Summarize is a mute peek **above** the composer box, never a send. It does not enable Send by itself.
 - Send is ink fill (min-height 40px; 44px on coarse pointers) and disabled while the body is empty
 - Send & close is hairline secondary, not a second ink primary. It hides on a closed ticket
@@ -110,8 +113,9 @@ Clerk DTO field names are locked. In for each: `{ shop, customerId? , orderId? }
 - **Out:** the Clerk DTOs above (same as helpdesk MCP/CLI)
 - Client: `console-src/inbox/js/shop/helpdesk-shop.js` via
   `POST /console/api/helpdesk` → `helpdesk.invoke()`
-- Composer uses the same client for `helpdesk.draft_reply` and
-  `helpdesk.summarize_thread`. Insert/Discard never call send.
+- Composer uses the same client for `helpdesk.draft_reply`,
+  `helpdesk.summarize_thread`, `helpdesk.search_macros`, and
+  `helpdesk.apply_macro`. Draft-strip Insert/Discard and macro Replace/Append never call send.
 - Fallback: `console-src/inbox/js/shop/fixture-shop.js` when mint/Admin/HTTP
   is unavailable, or when the requested GID is only on the fixture catalog
 - Live Cute Things (`source=live`) remounts the inbox onto live GIDs. Empty

@@ -1,5 +1,5 @@
 import { MAILBOX_TOPICS } from "./contracts.js";
-import { SHOP, STORE_NAME, macros, ticketInView, tickets as fixtureTickets, viewCounts, views } from "./fixtures/demo-inbox.js";
+import { SHOP, STORE_NAME, macros as fixtureMacros, ticketInView, tickets as fixtureTickets, viewCounts, views } from "./fixtures/demo-inbox.js";
 import { createMailbox } from "./mailbox.js";
 import { createHelpdeskShop } from "./shop/helpdesk-shop.js";
 import { createComposerTissue } from "./tissues/composer.js";
@@ -51,6 +51,10 @@ export function createInboxOrgan(opts = {}) {
   let discarded = false;
   let sent = [];
   let toEmail = "";
+  let macros = fixtureMacros;
+  let macroQuery = "";
+  let selectedMacroId = "";
+  let macrosOpen = true;
 
   function visibleTickets() {
     return catalog.filter((ticket) => ticketInView(ticket, viewId));
@@ -128,6 +132,26 @@ export function createInboxOrgan(opts = {}) {
     strip = ticket ? await loadDraft(ticket) : "";
   }
 
+  async function refreshMacros(query = "") {
+    macroQuery = query;
+    if (typeof shop.searchMacros === "function") {
+      try {
+        const result = await shop.searchMacros({ query });
+        if (Array.isArray(result?.macros)) {
+          macros = result.macros;
+          return;
+        }
+      } catch {
+        // fixture fallback below
+      }
+    }
+    const needle = String(query || "").trim().toLowerCase();
+    macros = fixtureMacros.filter((macro) => {
+      if (!needle) return true;
+      return `${macro.id} ${macro.title} ${(macro.tags || []).join(" ")} ${macro.body}`.toLowerCase().includes(needle);
+    });
+  }
+
   function composerInput(ticket) {
     return {
       ticket: withRecipient(ticket, toEmail),
@@ -136,6 +160,9 @@ export function createInboxOrgan(opts = {}) {
       macros,
       body,
       strip: discarded ? "" : strip,
+      query: macroQuery,
+      selectedMacroId,
+      searchOpen: macrosOpen,
     };
   }
 
@@ -176,6 +203,10 @@ export function createInboxOrgan(opts = {}) {
       sent,
       strip: composerModel.strip,
       summarize: summarizeText,
+      macros: composerModel.macros,
+      query: composerModel.query,
+      selectedMacroId: composerModel.selectedMacroId,
+      searchOpen: composerModel.searchOpen,
     };
   }
 
@@ -202,6 +233,7 @@ export function createInboxOrgan(opts = {}) {
     ensureSelection();
     await refreshRail();
     await refreshComposer();
+    await refreshMacros("");
 
     const paint = () => {
       const ticket = selectedTicket();
@@ -231,8 +263,10 @@ export function createInboxOrgan(opts = {}) {
       strip = "";
       summarizeText = "";
       discarded = false;
+      selectedMacroId = "";
+      macrosOpen = true;
       ensureSelection();
-      refreshRail().then(refreshComposer).then(paint);
+      refreshRail().then(refreshComposer).then(() => refreshMacros(macroQuery)).then(paint);
     });
     mailbox.subscribe(MAILBOX_TOPICS.LIST_SELECTED, ({ ticketId }) => {
       selectedId = ticketId;
@@ -240,12 +274,20 @@ export function createInboxOrgan(opts = {}) {
       strip = "";
       summarizeText = "";
       discarded = false;
-      refreshRail().then(refreshComposer).then(paint);
+      selectedMacroId = "";
+      macrosOpen = true;
+      refreshRail().then(refreshComposer).then(() => refreshMacros(macroQuery)).then(paint);
     });
     mailbox.subscribe(MAILBOX_TOPICS.COMPOSER_BODY, ({ text }) => {
       body = text;
     });
-    mailbox.subscribe(MAILBOX_TOPICS.COMPOSER_INSERT, () => {
+    mailbox.subscribe(MAILBOX_TOPICS.COMPOSER_INSERT, (payload) => {
+      if (payload?.macroId) {
+        selectedMacroId = "";
+        macrosOpen = false;
+        macroQuery = "";
+      }
+      if (payload?.text) body = payload.text;
       strip = "";
       discarded = true;
       paint();
@@ -298,8 +340,10 @@ export function createInboxOrgan(opts = {}) {
       strip = "";
       summarizeText = "";
       discarded = false;
+      selectedMacroId = "";
+      macrosOpen = true;
       ensureSelection();
-      return refreshRail().then(refreshComposer);
+      return refreshRail().then(refreshComposer).then(() => refreshMacros(macroQuery));
     },
     selectTicket(id) {
       selectedId = id;
@@ -307,7 +351,9 @@ export function createInboxOrgan(opts = {}) {
       strip = "";
       summarizeText = "";
       discarded = false;
-      return refreshRail().then(refreshComposer);
+      selectedMacroId = "";
+      macrosOpen = true;
+      return refreshRail().then(refreshComposer).then(() => refreshMacros(macroQuery));
     },
     toggleRail(key) {
       return rail.toggle(key);
@@ -328,6 +374,39 @@ export function createInboxOrgan(opts = {}) {
       discarded = true;
       composerTissue.update(composerInput(selectedTicket()));
     },
+    async searchMacros(query = "") {
+      macrosOpen = true;
+      await refreshMacros(query);
+      composerTissue.update(composerInput(selectedTicket()));
+      return snapshot();
+    },
+    async applyMacro(macroId, mode = "replace") {
+      selectedMacroId = macroId;
+      macrosOpen = false;
+      macroQuery = "";
+      let text = "";
+      if (typeof shop.applyMacro === "function") {
+        try {
+          const result = await shop.applyMacro({
+            macroId,
+            mode,
+            currentBody: body,
+          });
+          text = result?.text || "";
+        } catch {
+          text = "";
+        }
+      }
+      if (!text) {
+        const macro = macros.find((item) => item.id === macroId) || fixtureMacros.find((item) => item.id === macroId);
+        if (macro) {
+          text = mode === "append" && body.trim() ? `${body.trimEnd()}\n\n${macro.body}` : macro.body;
+        }
+      }
+      if (text) body = text;
+      composerTissue.update(composerInput(selectedTicket()));
+      return snapshot();
+    },
     async requestSummarize() {
       const ticket = selectedTicket();
       summarizeText = await loadSummary(ticket);
@@ -338,6 +417,7 @@ export function createInboxOrgan(opts = {}) {
       ensureSelection();
       await refreshRail();
       await refreshComposer();
+      await refreshMacros(macroQuery);
       return snapshot();
     },
   };

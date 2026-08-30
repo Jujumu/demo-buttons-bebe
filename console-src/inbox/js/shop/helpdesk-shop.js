@@ -108,6 +108,35 @@ export function createHelpdeskShop(opts = {}) {
       if (record?.summary) return record;
       return fallback.summarizeThread(args);
     },
+    async searchMacros(args = {}) {
+      const record = await read(
+        "helpdesk.search_macros",
+        { query: args.query || "" },
+        (payload) => ({ macros: payload.macros || [], source: payload.source || "live" }),
+      );
+      if (record?.macros) return record;
+      return fallback.searchMacros(args);
+    },
+    async applyMacro(args = {}) {
+      const record = await read(
+        "helpdesk.apply_macro",
+        {
+          macroId: args.macroId,
+          mode: args.mode || "replace",
+          currentBody: args.currentBody || "",
+        },
+        (payload) => ({
+          text: payload.text || "",
+          title: payload.title || "",
+          mode: payload.mode || "replace",
+          body: payload.body || "",
+          macroId: payload.macroId,
+          source: payload.source || "live",
+        }),
+      );
+      if (record?.text) return record;
+      return fallback.applyMacro(args);
+    },
   };
 }
 

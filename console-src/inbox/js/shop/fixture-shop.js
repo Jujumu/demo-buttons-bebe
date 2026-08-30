@@ -1,4 +1,4 @@
-import { customers, emptyReturns, orders, returnsForOrder, SHOP } from "../fixtures/demo-inbox.js";
+import { customers, emptyReturns, macros as fixtureMacros, orders, returnsForOrder, SHOP } from "../fixtures/demo-inbox.js";
 
 function assertShop(shop) {
   if (shop && shop !== SHOP) {
@@ -76,6 +76,34 @@ export function createFixtureShop(opts = {}) {
       return {
         source: "sample",
         summary: thread.stubSummary || "",
+      };
+    },
+    searchMacros(args = {}) {
+      maybeFail("macros");
+      const needle = String(args.query || "").trim().toLowerCase();
+      const rows = fixtureMacros.filter((macro) => {
+        if (!needle) return true;
+        const hay = `${macro.id} ${macro.title} ${(macro.tags || []).join(" ")} ${macro.body}`.toLowerCase();
+        return hay.includes(needle);
+      });
+      return { source: "sample", macros: rows.map((macro) => ({ ...macro })) };
+    },
+    applyMacro(args = {}) {
+      maybeFail("apply-macro");
+      const macro = fixtureMacros.find((item) => item.id === args.macroId);
+      if (!macro) {
+        throw new Error("macro not found");
+      }
+      const mode = args.mode === "append" ? "append" : "replace";
+      const current = String(args.currentBody || "");
+      const text = mode === "append" && current.trim() ? `${current.trimEnd()}\n\n${macro.body}` : macro.body;
+      return {
+        source: "sample",
+        text,
+        title: macro.title,
+        mode,
+        body: macro.body,
+        macroId: macro.id,
       };
     },
   };

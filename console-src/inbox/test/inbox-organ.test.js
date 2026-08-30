@@ -119,12 +119,31 @@ test("Send stays disabled until the body has text", async () => {
   const organ = createInboxOrgan({ viewId: "mine" });
   let snap = await organ.ready();
   assert.equal(snap.sendDisabled, true);
+  const emptySend = [...snap.html.matchAll(/<button\b[^>]*>/g)]
+    .map((match) => match[0])
+    .find((html) => /\bdata-send\b/.test(html) && !/\bdata-send-close\b/.test(html));
+  assert.ok(emptySend, "Send is present on an empty box");
+  assert.match(emptySend, /\bdisabled\b/);
+  assert.match(emptySend, /is-disabled/);
+  const css = readFileSync(join(here, "../styles.css"), "utf8");
+  assert.match(css, /\.btn-send:disabled[\s\S]*background:\s*var\(--ground\)/);
+  assert.match(css, /\.btn-send:disabled[\s\S]*color:\s*var\(--mute\)/);
   organ.setBody("   ");
   snap = organ.snapshot();
   assert.equal(snap.sendDisabled, true);
+  const blankSend = [...snap.html.matchAll(/<button\b[^>]*>/g)]
+    .map((match) => match[0])
+    .find((html) => /\bdata-send\b/.test(html) && !/\bdata-send-close\b/.test(html));
+  assert.match(blankSend, /\bdisabled\b/);
+  assert.match(blankSend, /is-disabled/);
   organ.setBody("Thanks Ada — checking the carrier now.");
   snap = organ.snapshot();
   assert.equal(snap.sendDisabled, false);
+  const readySend = [...snap.html.matchAll(/<button\b[^>]*>/g)]
+    .map((match) => match[0])
+    .find((html) => /\bdata-send\b/.test(html) && !/\bdata-send-close\b/.test(html));
+  assert.doesNotMatch(readySend, /\bdisabled\b/);
+  assert.doesNotMatch(readySend, /is-disabled/);
 });
 
 test("closed ticket keeps composer and hides Send & close", async () => {
@@ -262,6 +281,84 @@ test("Summarize fills a mute peek and does not enable Send", async () => {
   assert.equal(snap.sendDisabled, true);
   assert.equal(snap.sent.length, 0);
   assert.match(snap.html, /Summarize 2 messages/);
+});
+
+test("macro search lives in the composer box and Insert fills the textarea", async () => {
+  const organ = createInboxOrgan({ viewId: "mine" });
+  let snap = await organ.ready();
+  assert.match(snap.html, /data-macro-search/);
+  assert.match(snap.html, /data-macro-list/);
+  assert.match(snap.html, /data-macro-insert/);
+  assert.match(snap.html, />Replace</);
+  assert.match(snap.html, /data-macro-append/);
+  assert.match(snap.html, /Shipping delay/);
+  assert.match(snap.html, /Return how-to/);
+  assert.match(snap.html, /Order status/);
+  const boxStart = snap.html.indexOf("composer-box");
+  const boxEnd = snap.html.indexOf("composer-actions");
+  const box = snap.html.slice(boxStart, boxEnd);
+  assert.match(box, /data-macro-search/);
+  assert.match(box, /Shipping delay/);
+  assert.doesNotMatch(box, /data-pane="ai"|floating-macro|macro-panel/);
+  assert.equal(snap.sendDisabled, true);
+  assert.equal(snap.sent.length, 0);
+
+  snap = await organ.searchMacros("delay");
+  assert.equal(snap.macros.length, 1);
+  assert.equal(snap.macros[0].id, "shipping-delay");
+  assert.match(snap.html, /Shipping delay/);
+  assert.doesNotMatch(snap.html, /Return how-to/);
+  assert.equal(snap.sendDisabled, true);
+
+  snap = await organ.applyMacro("shipping-delay", "replace");
+  assert.match(snap.html, /running behind the usual window/);
+  assert.equal(snap.sendDisabled, false);
+  assert.equal(snap.sent.length, 0);
+  assert.match(snap.html, /data-macro-open="false"/);
+  assert.doesNotMatch(snap.html, /data-macro-list/);
+  assert.doesNotMatch(snap.html, /data-macro-insert/);
+  assert.doesNotMatch(snap.html, />Replace</);
+  const filledSend = [...snap.html.matchAll(/<button\b[^>]*>/g)]
+    .map((match) => match[0])
+    .find((html) => /\bdata-send\b/.test(html) && !/\bdata-send-close\b/.test(html));
+  assert.doesNotMatch(filledSend, /\bdisabled\b/);
+
+  organ.setBody("Hi Ada — looking now.");
+  snap = await organ.applyMacro("order-status", "append");
+  assert.match(snap.html, /Hi Ada — looking now/);
+  assert.match(snap.html, /I looked at this order/);
+  assert.equal(snap.sendDisabled, false);
+  assert.equal(snap.sent.length, 0);
+});
+
+test("composer macro Insert and Append never publish send", () => {
+  const mailbox = createMailbox();
+  const events = [];
+  mailbox.subscribe(MAILBOX_TOPICS.COMPOSER_SEND, (payload) => events.push(["send", payload]));
+  mailbox.subscribe(MAILBOX_TOPICS.COMPOSER_INSERT, (payload) => events.push(["insert", payload]));
+  const composer = createComposerTissue({ mailbox });
+  const ticket = fixtureTickets[0];
+  composer.update({
+    ticket,
+    body: "",
+    macros: [
+      { id: "shipping-delay", title: "Shipping delay", tags: ["shipping"], body: "Hi — delay body." },
+    ],
+    selectedMacroId: "shipping-delay",
+  });
+  const el = { innerHTML: "", querySelector() { return null; } };
+  composer.mount(el);
+  el.onclick({ target: { closest: (sel) => (sel === "[data-macro-insert]" ? {} : null) } });
+  assert.equal(composer.sendDisabled(), false);
+  assert.deepEqual(events.map((row) => row[0]), ["insert"]);
+  assert.equal(events[0][1].mode, "replace");
+  assert.equal(events[0][1].macroId, "shipping-delay");
+  composer.update({ searchOpen: true, selectedMacroId: "shipping-delay" });
+  composer.mount(el);
+  el.onclick({ target: { closest: (sel) => (sel === "[data-macro-append]" ? {} : null) } });
+  assert.deepEqual(events.map((row) => row[0]), ["insert", "insert"]);
+  assert.equal(events[1][1].mode, "append");
+  assert.ok(events.every((row) => row[0] !== "send"));
 });
 
 test("history peek does not swap the open order", async () => {

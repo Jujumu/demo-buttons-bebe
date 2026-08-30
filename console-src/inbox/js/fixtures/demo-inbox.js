@@ -239,9 +239,24 @@ export const views = [
 ];
 
 export const macros = [
-  { id: "where", name: "Where is my order", tags: ["shipping"], body: "Thanks for writing in — I am checking the shipment on this order now." },
-  { id: "ship", name: "Shipping timeline", tags: ["shipping"], body: "Demo shop shipping usually leaves within a few days of the paid order." },
-  { id: "care", name: "Care notes", tags: ["product"], body: "Happy to share care notes for the item on this order." },
+  {
+    id: "shipping-delay",
+    title: "Shipping delay",
+    tags: ["shipping", "delay"],
+    body: "Hi — this shipment is running behind the usual window. I am watching the carrier update and will write back when it moves.",
+  },
+  {
+    id: "return-how-to",
+    title: "Return how-to",
+    tags: ["return", "howto"],
+    body: "You can start a return from the link in your order email. Pack the unused item, add the label, and drop it with the carrier. Write back if the link is missing and I will point you to it.",
+  },
+  {
+    id: "order-status",
+    title: "Order status",
+    tags: ["order", "status", "shipping"],
+    body: "I looked at this order. Once it is paid I can share fulfillment and tracking from the catalog. Write back if you want the latest carrier note.",
+  },
 ];
 
 export const tickets = [
