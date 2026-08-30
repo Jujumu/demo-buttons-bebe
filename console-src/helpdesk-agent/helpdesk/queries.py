@@ -45,6 +45,29 @@ query HelpdeskOrder($id: ID!) {
 }
 """
 
+ORDER_BY_NAME_QUERY = """
+query HelpdeskOrderByName($query: String!) {
+  orders(first: 1, query: $query) {
+    nodes {
+      id
+      name
+      customer { id }
+    }
+  }
+}
+"""
+
+CUSTOMER_BY_EMAIL_QUERY = """
+query HelpdeskCustomerByEmail($query: String!) {
+  customers(first: 1, query: $query) {
+    nodes {
+      id
+      defaultEmailAddress { emailAddress }
+    }
+  }
+}
+"""
+
 PAST_ORDERS_QUERY = """
 query HelpdeskPastOrders($id: ID!) {
   customer(id: $id) {

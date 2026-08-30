@@ -14,6 +14,8 @@ from .names import (
     TOOL_GET_ORDER,
     TOOL_GET_RETURNS,
     TOOL_GET_TICKET,
+    TOOL_INGEST_CHAT,
+    TOOL_INGEST_EMAIL,
     TOOL_LIST_PAST_ORDERS,
     TOOL_LIST_TICKETS,
     TOOL_SEARCH_MACROS,
@@ -65,6 +67,17 @@ SCHEMAS = {
         "macroId": {"type": "string"},
         "mode": {"type": "string", "description": "replace | append — never a send"},
         "currentBody": {"type": "string", "description": "textarea text to append onto"},
+    },
+    TOOL_INGEST_EMAIL: {
+        "from": {"type": "string", "description": "From name and email"},
+        "subject": {"type": "string"},
+        "body": {"type": "string"},
+        "receivedAt": {"type": "string"},
+    },
+    TOOL_INGEST_CHAT: {
+        "fromName": {"type": "string"},
+        "body": {"type": "string"},
+        "receivedAt": {"type": "string"},
     },
 }
 

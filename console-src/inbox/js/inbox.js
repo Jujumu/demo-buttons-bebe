@@ -482,5 +482,25 @@ export function createInboxOrgan(opts = {}) {
       await refreshMacros(macroQuery);
       return snapshot();
     },
+    async ingestEmail(args) {
+      if (typeof shop.ingestEmail !== "function") return null;
+      const result = await shop.ingestEmail(args);
+      await refreshList();
+      if (result?.id) selectedId = result.id;
+      await refreshThread();
+      await refreshRail();
+      await refreshComposer();
+      return result;
+    },
+    async ingestChat(args) {
+      if (typeof shop.ingestChat !== "function") return null;
+      const result = await shop.ingestChat(args);
+      await refreshList();
+      if (result?.id) selectedId = result.id;
+      await refreshThread();
+      await refreshRail();
+      await refreshComposer();
+      return result;
+    },
   };
 }

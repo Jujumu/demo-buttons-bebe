@@ -1,4 +1,4 @@
-"""Ten tissue handlers. Input → output only."""
+"""Twelve tissue handlers. Input → output only."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ from typing import Any
 
 from . import tickets
 from .composer import handle_draft_reply, handle_summarize_thread
+from .intake import handle_ingest_chat, handle_ingest_email
 from .macros import handle_apply_macro, handle_search_macros
 from .names import (
     TOOL_APPLY_MACRO,
@@ -14,6 +15,8 @@ from .names import (
     TOOL_GET_ORDER,
     TOOL_GET_RETURNS,
     TOOL_GET_TICKET,
+    TOOL_INGEST_CHAT,
+    TOOL_INGEST_EMAIL,
     TOOL_LIST_PAST_ORDERS,
     TOOL_LIST_TICKETS,
     TOOL_SEARCH_MACROS,
@@ -77,4 +80,6 @@ HANDLERS = {
     TOOL_SUMMARIZE_THREAD: handle_summarize_thread,
     TOOL_SEARCH_MACROS: handle_search_macros,
     TOOL_APPLY_MACRO: handle_apply_macro,
+    TOOL_INGEST_EMAIL: handle_ingest_email,
+    TOOL_INGEST_CHAT: handle_ingest_chat,
 }

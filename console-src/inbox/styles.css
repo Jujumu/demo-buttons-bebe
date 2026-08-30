@@ -98,8 +98,16 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   width: 4px;
   background: var(--ink);
 }
-.ticket-row.is-selected { background: transparent; }
-.ticket-row.is-selected .ticket-bar { display: block; }
+/* One leading-edge ink bar on the selected ticket (4px). That is the only selection treatment. No wash. */
+.ticket-row.is-selected {
+  background: var(--surface);
+  box-shadow: none;
+}
+.ticket-row.is-selected .ticket-bar {
+  display: block;
+  width: 4px;
+  background: #1C1916;
+}
 .ticket-top { display: flex; justify-content: space-between; gap: 8px; }
 .ticket-name { font-weight: 600; font-size: 13px; }
 .ticket-time { color: var(--mute); font-size: 11px; }

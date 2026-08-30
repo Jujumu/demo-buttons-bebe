@@ -10,7 +10,8 @@ rows carry `customerId` / `orderId` GIDs so the rail lights when a ticket is
 selected. Composer Insert/Discard and the mute summarize peek are clients of
 `helpdesk.draft_reply` and `helpdesk.summarize_thread`. In-box macro search is
 a client of `helpdesk.search_macros`; Insert/Append call `helpdesk.apply_macro`
-(`replace` or `append`) and never send. Live reads target Cute Things
+(`replace` or `append`) and never send. Email/chat intake is a client of
+`helpdesk.ingest_email` / `helpdesk.ingest_chat` on that same path. Live reads target Cute Things
 (`SHOPIFY_SHOP` pinned to `yznyc1-ez.myshopify.com`) when mint works.
 Mint/Admin failure falls back to `demo-inbox.example` fixtures.
 `SHOPIFY_MUTATIONS_ENABLED` stays `0`. No live store writes. The Ada OPEN
@@ -47,7 +48,7 @@ Demo names only (Ada Demo, Casey Sandbox, Jordan Preview). No customer PII.
 - **In:** `{ tickets, selectedTicketId, viewLabel }` from `helpdesk.list_tickets`
 - **Out:** `{ ticketId }` on `list/selected`
 - Row copy uses first-party `customerName` and `snippet` (never `displayName`)
-- **Selected row:** 4px ink leading bar, no wash
+- **Selected row:** One leading-edge ink bar on the selected ticket (4px). That is the only selection treatment. No wash, no purple. Surface only (`#FFFDF9`); bar is `#1C1916`.
 - **Degrade:** “No tickets in this view”
 
 ### thread

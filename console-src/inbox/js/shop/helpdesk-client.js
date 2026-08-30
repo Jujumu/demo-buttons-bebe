@@ -3,7 +3,7 @@ import { TOOL_NAMES } from "./helpdesk-tools.js";
 export const HELPDESK_HTTP_PATH = "/console/api/helpdesk";
 
 /**
- * Browser/Node client for the ten helpdesk.* tools.
+ * Browser/Node client for the twelve helpdesk.* tools.
  * Same payloads as MCP and CLI. No GraphQL here.
  *
  * @param {{ invoke?: Function, url?: string, fetch?: typeof fetch }} [opts]
@@ -64,6 +64,12 @@ export function createHelpdeskClient(opts = {}) {
     },
     applyMacro(args) {
       return invoke("helpdesk.apply_macro", args);
+    },
+    ingestEmail(args) {
+      return invoke("helpdesk.ingest_email", args);
+    },
+    ingestChat(args) {
+      return invoke("helpdesk.ingest_chat", args);
     },
   };
 }

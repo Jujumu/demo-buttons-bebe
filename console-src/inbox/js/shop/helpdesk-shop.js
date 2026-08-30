@@ -1,8 +1,15 @@
 import { tickets as fixtureTickets, SHOP as FIXTURE_SHOP } from "../fixtures/demo-inbox.js";
 import { createHelpdeskClient } from "./helpdesk-client.js";
 import { createFixtureShop } from "./fixture-shop.js";
-import { LIVE_PROBE_CUSTOMER, LIVE_SHOP, liveTickets } from "./live-catalog.js";
+import { LIVE_IDS, LIVE_PROBE_CUSTOMER, LIVE_SHOP, liveTickets } from "./live-catalog.js";
 import { WRITE_TOOLS } from "./helpdesk-tools.js";
+
+const LIVE_GID_SET = new Set(Object.values(LIVE_IDS));
+
+function shopForGid(shop, gid) {
+  if (gid && LIVE_GID_SET.has(gid)) return LIVE_SHOP;
+  return shop;
+}
 
 function extractReturns(payload) {
   return {
@@ -55,7 +62,7 @@ export function createHelpdeskShop(opts = {}) {
       if (!customerId) return null;
       const record = await read(
         "helpdesk.get_customer",
-        { shop: shop || activeShop, customerId },
+        { shop: shopForGid(shop || activeShop, customerId), customerId },
         (payload) => payload.customer,
       );
       if (record) return record;
@@ -65,7 +72,7 @@ export function createHelpdeskShop(opts = {}) {
       if (!orderId) return null;
       const record = await read(
         "helpdesk.get_order",
-        { shop: shop || activeShop, orderId },
+        { shop: shopForGid(shop || activeShop, orderId), orderId },
         (payload) => payload.order,
       );
       if (record) return record;
@@ -74,7 +81,7 @@ export function createHelpdeskShop(opts = {}) {
     async getReturns({ shop, orderId }) {
       const record = await read(
         "helpdesk.get_returns",
-        { shop: shop || activeShop, orderId },
+        { shop: shopForGid(shop || activeShop, orderId), orderId },
         extractReturns,
       );
       if (record) return record;
@@ -84,7 +91,7 @@ export function createHelpdeskShop(opts = {}) {
       if (!customerId) return [];
       const rows = await read(
         "helpdesk.list_past_orders",
-        { shop: shop || activeShop, customerId },
+        { shop: shopForGid(shop || activeShop, customerId), customerId },
         (payload) => payload.orders,
       );
       if (rows) return rows;
@@ -155,6 +162,24 @@ export function createHelpdeskShop(opts = {}) {
       );
       if (record) return record;
       return fallback.getTicket({ ticketId });
+    },
+    async ingestEmail(args = {}) {
+      const record = await read(
+        "helpdesk.ingest_email",
+        args,
+        (payload) => payload,
+      );
+      if (record) return record;
+      return { ok: false, spam: false, ticketId: null };
+    },
+    async ingestChat(args = {}) {
+      const record = await read(
+        "helpdesk.ingest_chat",
+        args,
+        (payload) => payload,
+      );
+      if (record) return record;
+      return { ok: false, spam: false, ticketId: null };
     },
   };
 }

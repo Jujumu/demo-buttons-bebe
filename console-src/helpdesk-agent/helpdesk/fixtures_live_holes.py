@@ -32,11 +32,11 @@ LINE = {
 EMPTY_RETURNS = {"nodes": []}
 
 
-def _customer(gid: str, name: str, orders: str, spent: str) -> dict:
+def _customer(gid: str, name: str, orders: str, spent: str, email: str | None = None) -> dict:
     return {
         "id": gid,
         "displayName": name,
-        "defaultEmailAddress": None,
+        "defaultEmailAddress": {"emailAddress": email} if email else None,
         "createdAt": "2026-08-01T12:00:00Z",
         "numberOfOrders": orders,
         "amountSpent": {"amount": spent, "currencyCode": "USD"},
@@ -66,9 +66,15 @@ def _order(gid: str, name: str, created: str, fulfill: str, customer_id: str, tr
 
 
 CUSTOMERS = {
-    C_UNFULFILLED: _customer(C_UNFULFILLED, "Demo Unfulfilled", "1", "28.00"),
-    C_FULFILLED: _customer(C_FULFILLED, "Demo Fulfilled", "1", "28.00"),
-    C_MULTI: _customer(C_MULTI, "Demo Multiple Orders", "2", "56.00"),
+    C_UNFULFILLED: _customer(
+        C_UNFULFILLED, "Demo Unfulfilled", "1", "28.00", "ai-demo-unfulfilled@example.com"
+    ),
+    C_FULFILLED: _customer(
+        C_FULFILLED, "Demo Fulfilled", "1", "28.00", "ai-demo-fulfilled@example.com"
+    ),
+    C_MULTI: _customer(
+        C_MULTI, "Demo Multiple Orders", "2", "56.00", "ai-demo-multi@example.com"
+    ),
 }
 
 ORDERS = {

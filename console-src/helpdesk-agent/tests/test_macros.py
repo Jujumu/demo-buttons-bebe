@@ -100,9 +100,11 @@ class MacroTissueTests(unittest.TestCase):
         reply = handle_rpc({"jsonrpc": "2.0", "id": 11, "method": "tools/list"})
         names = [tool["name"] for tool in reply["result"]["tools"]]
         self.assertEqual(names, list(TOOL_NAMES))
-        self.assertEqual(len(names), 10)
+        self.assertEqual(len(names), 12)
         self.assertIn("helpdesk.search_macros", names)
         self.assertIn("helpdesk.apply_macro", names)
+        self.assertIn("helpdesk.ingest_email", names)
+        self.assertIn("helpdesk.ingest_chat", names)
 
     def test_payload_has_no_token_or_gorgias_keys(self) -> None:
         payload = dispatch("helpdesk.search_macros", {"query": ""})

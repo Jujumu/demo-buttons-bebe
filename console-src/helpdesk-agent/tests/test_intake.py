@@ -1,0 +1,128 @@
+"""Intake organ: email + chat → signed ticket or spam. Cute Things join only."""
+
+from __future__ import annotations
+
+import os
+import re
+import unittest
+from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from helpdesk.dispatch import WRITE_TOOLS, dispatch, invoke
+from helpdesk.fixtures_intake import (
+    ADA_TRACKING,
+    CHAT_WITH_1001,
+    CHAT_WITHOUT_ORDER,
+    JORDAN_WRONG,
+    PRIYA_RETURN,
+    PRIZE_SPAM,
+    SAM_RATTLE,
+)
+from helpdesk.fixtures_live_holes import C_UNFULFILLED, O_1001
+from helpdesk.fixtures_sample import ADA
+from helpdesk.names import SAMPLE_SHOP, TOOL_INGEST_CHAT, TOOL_INGEST_EMAIL, TOOL_NAMES
+from helpdesk.queries import CUSTOMER_BY_EMAIL_QUERY, CUSTOMER_QUERY, ORDER_BY_NAME_QUERY
+from helpdesk.tickets import reset as reset_tickets
+
+
+class IntakeTests(unittest.TestCase):
+    def setUp(self) -> None:
+        reset_tickets()
+        os.environ["SHOPIFY_MUTATIONS_ENABLED"] = "0"
+
+    def test_ingest_email_ada_joins_unfulfilled_1001(self) -> None:
+        payload = dispatch(TOOL_INGEST_EMAIL, ADA_TRACKING)
+        self.assertTrue(payload["ok"])
+        self.assertFalse(payload["spam"])
+        self.assertEqual(payload["customerName"], "Ada")
+        self.assertNotEqual(payload["customerName"], "Demo Unfulfilled")
+        self.assertNotIn("displayName", payload)
+        self.assertEqual(payload["customerId"], C_UNFULFILLED)
+        self.assertEqual(payload["orderId"], O_1001)
+        self.assertEqual(payload["status"], "open")
+        self.assertNotEqual(payload["status"], "OPEN")
+        listed = dispatch("helpdesk.list_tickets", {"view": "open", "limit": 20})["tickets"]
+        self.assertTrue(any(row["id"] == payload["id"] for row in listed))
+        ticket = dispatch("helpdesk.get_ticket", {"ticketId": payload["id"]})["ticket"]
+        self.assertEqual(ticket["messages"][0]["body"], ADA_TRACKING["body"])
+        self.assertEqual(ticket["messages"][0]["name"], "Ada")
+        self.assertNotIn("displayName", ticket["messages"][0])
+        self.assertNotIn("customerId", ticket["messages"][0])
+        self.assertNotIn("orderId", ticket["messages"][0])
+
+    def test_ingest_email_prize_is_spam_and_not_listed(self) -> None:
+        payload = dispatch(TOOL_INGEST_EMAIL, PRIZE_SPAM)
+        self.assertTrue(payload["ok"])
+        self.assertTrue(payload["spam"])
+        self.assertIsNone(payload["ticketId"])
+        listed = dispatch("helpdesk.list_tickets", {"view": "all", "limit": 100})["tickets"]
+        self.assertFalse(any("prize" in f"{row['subject']} {row['snippet']}".lower() for row in listed))
+        self.assertFalse(any(row.get("id") == payload.get("id") for row in listed))
+
+    def test_ingest_email_without_order_number_stays_gid_null(self) -> None:
+        for fixture in (SAM_RATTLE, PRIYA_RETURN, JORDAN_WRONG):
+            reset_tickets()
+            payload = dispatch(TOOL_INGEST_EMAIL, fixture)
+            self.assertTrue(payload["ok"], fixture["subject"])
+            self.assertFalse(payload["spam"])
+            self.assertIsNone(payload["customerId"])
+            self.assertIsNone(payload["orderId"])
+            self.assertEqual(payload["status"], "open")
+            listed = dispatch("helpdesk.list_tickets", {"view": "open", "limit": 20})["tickets"]
+            self.assertTrue(any(row["id"] == payload["id"] for row in listed))
+
+    def test_ingest_chat_joins_or_stays_null(self) -> None:
+        joined = dispatch(TOOL_INGEST_CHAT, CHAT_WITH_1001)
+        self.assertTrue(joined["ok"])
+        self.assertFalse(joined["spam"])
+        self.assertEqual(joined["customerName"], "Ada")
+        self.assertEqual(joined["customerId"], C_UNFULFILLED)
+        self.assertEqual(joined["orderId"], O_1001)
+        lonely = dispatch(TOOL_INGEST_CHAT, CHAT_WITHOUT_ORDER)
+        self.assertTrue(lonely["ok"])
+        self.assertEqual(lonely["customerName"], "Sam")
+        self.assertIsNone(lonely["customerId"])
+        self.assertIsNone(lonely["orderId"])
+
+    def test_customer_name_is_from_name_not_display_name(self) -> None:
+        payload = dispatch(TOOL_INGEST_EMAIL, ADA_TRACKING)
+        customer = dispatch(
+            "helpdesk.get_customer",
+            {"shop": "yznyc1-ez.myshopify.com", "customerId": C_UNFULFILLED},
+        )["customer"]
+        self.assertEqual(payload["customerName"], "Ada")
+        self.assertEqual(customer["displayName"], "Demo Unfulfilled")
+        self.assertNotEqual(payload["customerName"], customer["displayName"])
+        sample = dispatch("helpdesk.get_customer", {"shop": SAMPLE_SHOP, "customerId": ADA})["customer"]
+        self.assertNotEqual(payload["customerName"], sample["displayName"])
+
+    def test_join_uses_default_email_address_never_customer_email_field(self) -> None:
+        for document in (CUSTOMER_QUERY, CUSTOMER_BY_EMAIL_QUERY, ORDER_BY_NAME_QUERY):
+            self.assertNotRegex(document, r"customer\s*\{[^}]*\bemail\b")
+            self.assertFalse(re.search(r"^\s*email\s*$", document, re.M))
+        self.assertIn("defaultEmailAddress", CUSTOMER_QUERY)
+        self.assertIn("defaultEmailAddress", CUSTOMER_BY_EMAIL_QUERY)
+        join_src = (ROOT / "helpdesk" / "join.py").read_text(encoding="utf-8")
+        self.assertIn('email:"', join_src)
+        self.assertIn("name:", join_src)
+        query_src = (ROOT / "helpdesk" / "queries.py").read_text(encoding="utf-8")
+        self.assertNotIn("customerCreate", query_src)
+        self.assertNotRegex(query_src, r"(?m)^\s*mutation\b")
+        self.assertNotIn("Customer.email", query_src)
+        self.assertIn("defaultEmailAddress", query_src)
+
+    def test_mutations_still_refused(self) -> None:
+        for tool in WRITE_TOOLS:
+            payload = invoke(tool, {"ticketId": "t-in-1"})
+            self.assertFalse(payload["ok"])
+            self.assertEqual(payload["error"], "forbidden")
+        self.assertIn(TOOL_INGEST_EMAIL, TOOL_NAMES)
+        self.assertIn(TOOL_INGEST_CHAT, TOOL_NAMES)
+        self.assertNotIn(TOOL_INGEST_EMAIL, WRITE_TOOLS)
+
+
+if __name__ == "__main__":
+    unittest.main()
