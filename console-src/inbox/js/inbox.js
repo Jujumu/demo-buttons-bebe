@@ -1,7 +1,7 @@
 import { MAILBOX_TOPICS } from "./contracts.js";
 import { SHOP, STORE_NAME, macros, ticketInView, tickets as fixtureTickets, viewCounts, views } from "./fixtures/demo-inbox.js";
 import { createMailbox } from "./mailbox.js";
-import { createFixtureShop } from "./shop/fixture-shop.js";
+import { createHelpdeskShop } from "./shop/helpdesk-shop.js";
 import { createComposerTissue } from "./tissues/composer.js";
 import { createListTissue } from "./tissues/list.js";
 import { createRailOrgan } from "./tissues/rail.js";
@@ -17,20 +17,11 @@ function caduceusStub(ticket) {
   };
 }
 
-function withRecipient(ticket, shop) {
+function withRecipient(ticket, email) {
   if (!ticket) return null;
-  let email = "";
-  try {
-    const customer = ticket.customerId
-      ? shop.getCustomer({ shop: SHOP, customerId: ticket.customerId })
-      : null;
-    email = customer?.defaultEmailAddress?.emailAddress || "";
-  } catch {
-    email = "";
-  }
   return {
     ...ticket,
-    toEmail: email,
+    toEmail: email || "",
   };
 }
 
@@ -51,7 +42,8 @@ function safeMount(tissue, el, input) {
  */
 export function createInboxOrgan(opts = {}) {
   const mailbox = opts.mailbox || createMailbox();
-  const shop = opts.shop || createFixtureShop({ fail: opts.fail });
+  const shop = opts.shop || createHelpdeskShop({ fail: opts.fail });
+  const shopHost = opts.shopHost || shop.shop || SHOP;
   const catalog = opts.tickets || fixtureTickets;
   const viewTissue = createViewTissue({ mailbox });
   const listTissue = createListTissue({ mailbox });
@@ -66,6 +58,7 @@ export function createInboxOrgan(opts = {}) {
   let summarizeText = "";
   let discarded = false;
   let sent = [];
+  let toEmail = "";
 
   function visibleTickets() {
     return catalog.filter((ticket) => ticketInView(ticket, viewId));
@@ -99,7 +92,7 @@ export function createInboxOrgan(opts = {}) {
     const ai = caduceusStub(ticket);
     const activeStrip = discarded ? "" : (strip || summarizeText || ai.draft || "");
     return {
-      ticket: withRecipient(ticket, shop),
+      ticket: withRecipient(ticket, toEmail),
       draft: ai.draft,
       summarize: summarizeText || ai.summarize,
       macros,
@@ -151,11 +144,12 @@ export function createInboxOrgan(opts = {}) {
   async function refreshRail() {
     const ticket = selectedTicket();
     await rail.load({
-      shop: SHOP,
+      shop: shopHost,
       customerId: ticket?.customerId,
       orderId: ticket?.orderId,
       ticketId: ticket?.id,
     });
+    toEmail = rail.snapshot().models.customer?.record?.defaultEmailAddress?.emailAddress || "";
   }
 
   async function mount(root) {

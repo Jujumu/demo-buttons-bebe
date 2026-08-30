@@ -255,6 +255,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 .tissue-empty, .tissue-error, .empty-pane { color: var(--mute); font-size: 13px; padding: 16px; }
 .tissue-error { color: var(--warn); }
 .rail-card.is-error { border-color: rgba(154, 107, 18, .35); }
+.rail-card.is-error .btn-hairline { margin: 0 12px 12px; }
 
 .skip-link {
   position: absolute;

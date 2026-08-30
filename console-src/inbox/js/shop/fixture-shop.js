@@ -7,20 +7,20 @@ function assertShop(shop) {
 }
 
 function historyRow(order) {
+  const shopMoney = order.currentTotalPriceSet?.shopMoney;
   return {
     id: order.id,
     name: order.name,
     createdAt: order.createdAt,
-    total: order.currentTotalPriceSet?.shopMoney?.amount
-      ? `${order.currentTotalPriceSet.shopMoney.amount} ${order.currentTotalPriceSet.shopMoney.currencyCode}`
-      : "",
-    fulfillmentStatus: order.displayFulfillmentStatus,
+    displayFulfillmentStatus: order.displayFulfillmentStatus,
+    currentTotalPriceSet: shopMoney ? { shopMoney: { ...shopMoney } } : { shopMoney: { amount: "0.00", currencyCode: "USD" } },
   };
 }
 
 /**
- * Fixture shop tissue. Clerk replaces this later with a read-only Admin
- * GraphQL client. No network, no mutations.
+ * Fixture shop tissue. Fallback when helpdesk mint/Admin is unavailable.
+ * Same Clerk DTO shapes as helpdesk.get_customer / get_order / get_returns /
+ * list_past_orders. No network, no mutations.
  *
  * @param {{ fail?: Record<string, Error | string> }} [opts]
  */

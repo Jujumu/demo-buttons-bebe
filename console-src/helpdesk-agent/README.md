@@ -16,6 +16,12 @@ helpdesk tools          # list the six tool names
 
 JSON on stdout. Failures are structured JSON (no stack traces).
 
+The inbox rail is a client of the same six tools. The console HTTP door is
+`POST /console/api/helpdesk` (`{ tool, arguments }`) and calls `invoke()`.
+Mint/Admin failure falls back to the inbox fixture shop. `SHOPIFY_MUTATIONS_ENABLED`
+stays `0`. Env names (values live only in `.env`): `SHOPIFY_SHOP`,
+`SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`.
+
 From this directory:
 
 ```bash

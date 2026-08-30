@@ -36,6 +36,7 @@ export function createRailOrgan({ shop, mailbox }) {
   let peekedHistoryId = null;
   let currentOrderId = null;
   let currentTicketKey = null;
+  let lastLoad = { shop: "", customerId: "", orderId: "", ticketId: "" };
 
   function ticketKey({ ticketId, customerId, orderId }) {
     if (ticketId) return `ticket:${ticketId}`;
@@ -48,35 +49,49 @@ export function createRailOrgan({ shop, mailbox }) {
     open.shipment = Boolean(orderModel?.hasTracking);
   }
 
-  function renderError(tissueId, label, peek, message) {
+  const ERROR_LABEL = {
+    customer: "Customer",
+    order: "Order",
+    returns: "Returns",
+    "order-history": "History",
+  };
+
+  function errorCopy(tissueId) {
+    return `Couldn't load ${ERROR_LABEL[tissueId] || "section"}. Retry.`;
+  }
+
+  function renderError(tissueId, label, peek) {
     return `<section class="rail-card is-error" data-tissue="${esc(tissueId)}" data-open="true">
       <button type="button" class="rail-toggle" data-toggle="${esc(tissueId)}" aria-expanded="true">
         <h2>${esc(label)}</h2><span class="peek">${esc(peek)}</span>
       </button>
-      <div class="rail-body"><p class="tissue-error">${esc(message || "Unavailable")}</p></div>
+      <div class="rail-body">
+        <p class="tissue-error">${esc(errorCopy(tissueId))}</p>
+        <button type="button" class="btn-hairline" data-retry="${esc(tissueId)}">Retry</button>
+      </div>
     </section>`;
   }
 
   function render() {
     const customerHtml = models.customer.error
-      ? renderError("customer", "Customer", models.customer.peek, models.customer.error)
+      ? renderError("customer", "Customer", models.customer.peek)
       : renderCustomer(models.customer, { open: open.customer });
     const orderHtml = models.order.error
-      ? renderError("order", "This order", models.order.peek, models.order.error)
+      ? renderError("order", "This order", models.order.peek)
       : renderOrder(models.order, {
         open: open.order,
         addressesOpen: open.addresses,
         shipmentOpen: models.order.hasTracking ? open.shipment : false,
       });
     const returnsHtml = models.returns.error
-      ? renderError("returns", "Returns", models.returns.peek, models.returns.error)
+      ? renderError("returns", "Returns", models.returns.peek)
       : renderReturns(models.returns, { open: open.returns });
     const historyRows = (models.history.rows || []).filter((row) => row.id !== currentOrderId);
     const historyView = models.history.error
       ? models.history
       : { ...models.history, peek: formatOrderCount(historyRows.length), rows: historyRows };
     const historyHtml = models.history.error
-      ? renderError("order-history", "Past orders", models.history.peek, models.history.error)
+      ? renderError("order-history", "Past orders", models.history.peek)
       : renderOrderHistory(historyView, { open: open["order-history"], peekedId: peekedHistoryId });
     return `<div class="pane-inner rail-inner">
       ${customerHtml}
@@ -86,17 +101,39 @@ export function createRailOrgan({ shop, mailbox }) {
     </div>`;
   }
 
+  async function loadTissue(tissueId, { shop: shopId, customerId, orderId }) {
+    if (tissueId === "customer") {
+      return customer.load({ shop: shopId, customerId }).catch((err) => ({
+        ok: false, peek: "Customer error", error: String(err?.message || err), record: null,
+      }));
+    }
+    if (tissueId === "order") {
+      return order.load({ shop: shopId, orderId }).catch((err) => ({
+        ok: false, peek: "Order error", error: String(err?.message || err), record: null, skuLabels: [], addressPeek: "—",
+      }));
+    }
+    if (tissueId === "returns") {
+      return returns.load({ shop: shopId, orderId }).catch((err) => ({
+        ok: false, peek: "Returns error", error: String(err?.message || err), collapsedDefault: true, inProgress: false,
+      }));
+    }
+    return history.load({ shop: shopId, customerId }).catch((err) => ({
+      ok: false, peek: formatOrderCount(0), rows: [], error: String(err?.message || err),
+    }));
+  }
+
   async function load({ shop: shopId, customerId, orderId, ticketId }) {
+    lastLoad = { shop: shopId, customerId, orderId, ticketId };
     const nextKey = ticketKey({ ticketId, customerId, orderId });
     const switched = nextKey !== currentTicketKey;
     currentTicketKey = nextKey;
     currentOrderId = orderId || null;
     peekedHistoryId = null;
     const [customerModel, orderModel, returnsModel, historyModel] = await Promise.all([
-      customer.load({ shop: shopId, customerId }).catch((err) => ({ ok: false, peek: "Customer error", error: String(err?.message || err), record: null })),
-      order.load({ shop: shopId, orderId }).catch((err) => ({ ok: false, peek: "Order error", error: String(err?.message || err), record: null })),
-      returns.load({ shop: shopId, orderId }).catch((err) => ({ ok: false, peek: "Returns error", error: String(err?.message || err), collapsedDefault: true })),
-      history.load({ shop: shopId, customerId }).catch((err) => ({ ok: false, peek: formatOrderCount(0), rows: [], error: String(err?.message || err) })),
+      loadTissue("customer", lastLoad),
+      loadTissue("order", lastLoad),
+      loadTissue("returns", lastLoad),
+      loadTissue("order-history", lastLoad),
     ]);
     models = {
       customer: customerModel,
@@ -111,9 +148,24 @@ export function createRailOrgan({ shop, mailbox }) {
     return models;
   }
 
+  async function retry(tissueId) {
+    const key = tissueId === "order-history" ? "history" : tissueId;
+    const next = await loadTissue(tissueId, lastLoad);
+    models[key] = next;
+    if (next.error) mailbox.publish(MAILBOX_TOPICS.TISSUE_ERROR, { tissueId, message: next.error });
+    return next;
+  }
+
   function mount(el) {
     el.innerHTML = render();
     el.onclick = (event) => {
+      const retryBtn = event.target.closest("[data-retry]");
+      if (retryBtn) {
+        retry(retryBtn.dataset.retry).then(() => {
+          el.innerHTML = render();
+        });
+        return;
+      }
       const historyRow = event.target.closest("[data-history]");
       if (historyRow) {
         peekedHistoryId = historyRow.dataset.history;
@@ -139,6 +191,7 @@ export function createRailOrgan({ shop, mailbox }) {
       open[key] = !open[key];
       return open[key];
     },
+    retry,
     snapshot() {
       return {
         models,

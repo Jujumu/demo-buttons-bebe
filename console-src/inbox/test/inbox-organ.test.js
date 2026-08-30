@@ -21,6 +21,8 @@ function sourceTree() {
     "../js/tissues/thread.js",
     "../js/tissues/composer.js",
     "../js/tissues/rail.js",
+    "../js/shop/helpdesk-shop.js",
+    "../js/shop/helpdesk-client.js",
     "../js/fixtures/demo-inbox.js",
   ];
   return files.map((file) => readFileSync(join(here, file), "utf8")).join("\n");
@@ -122,7 +124,8 @@ test("one rail tissue error leaves thread and other rail sections up", async () 
   assert.match(snap.html, /data-tissue="order"/);
   assert.match(snap.html, /Oak Demo Rattle/);
   assert.match(snap.html, /data-tissue="returns"/);
-  assert.match(snap.html, /Returns error|fixture returns down/);
+  assert.match(snap.html, /Couldn(?:'|&#39;)t load Returns\. Retry\./);
+  assert.match(snap.html, /data-retry="returns"/);
   assert.equal(snap.rail.models.customer.ok, true);
   assert.equal(snap.rail.models.order.ok, true);
   assert.equal(snap.rail.models.returns.ok, false);

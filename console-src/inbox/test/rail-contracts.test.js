@@ -217,6 +217,15 @@ test("switching tickets resets expand to lock defaults", async () => {
 
 test("order-history is newest first and does not replace This order", async () => {
   const rows = await shop.getOrderHistory({ shop: SHOP, customerId: IDS.CASEY });
+  assert.deepEqual(Object.keys(rows[0]).sort(), [
+    "createdAt",
+    "currentTotalPriceSet",
+    "displayFulfillmentStatus",
+    "id",
+    "name",
+  ]);
+  assert.ok(rows[0].currentTotalPriceSet.shopMoney.amount);
+  assert.equal(rows[0].total, undefined);
   const model = projectOrderHistory(rows);
   assert.deepEqual(model.rows.map((row) => row.name), ["#1003", "#1002"]);
   assert.deepEqual(Object.keys(model.rows[0]).sort(), [
@@ -252,6 +261,30 @@ test("order-history is newest first and does not replace This order", async () =
   assert.equal(rail.snapshot().models.order.record.name, before);
   assert.equal(rail.snapshot().peekedHistoryId, IDS.ORDER_1003);
   assert.equal(peeks[0].orderId, IDS.ORDER_1003);
+});
+
+test("rail error copy is isolated and Retry reloads one tissue", async () => {
+  const base = createFixtureShop();
+  let returnsCalls = 0;
+  const shop = {
+    ...base,
+    getReturns(req) {
+      returnsCalls += 1;
+      if (returnsCalls === 1) throw new Error("down");
+      return base.getReturns(req);
+    },
+  };
+  const rail = createRailOrgan({ shop, mailbox: createMailbox() });
+  await rail.load({ shop: SHOP, customerId: IDS.ADA, orderId: IDS.ORDER_1001, ticketId: "t-ada-track" });
+  assert.equal(rail.snapshot().models.returns.ok, false);
+  const host = { innerHTML: "", onclick: null };
+  rail.mount(host);
+  assert.match(host.innerHTML, /Couldn(?:'|&#39;)t load Returns\. Retry\./);
+  assert.match(host.innerHTML, /Ada Demo/);
+  assert.match(host.innerHTML, /Oak Demo Rattle/);
+  await rail.retry("returns");
+  assert.equal(rail.snapshot().models.returns.ok, true);
+  assert.equal(rail.snapshot().models.returns.inProgress, true);
 });
 
 test("shop tissue has no mutation surface", () => {
