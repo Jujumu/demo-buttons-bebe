@@ -119,12 +119,31 @@ test("Send stays disabled until the body has text", async () => {
   const organ = createInboxOrgan({ viewId: "mine" });
   let snap = await organ.ready();
   assert.equal(snap.sendDisabled, true);
+  const emptySend = [...snap.html.matchAll(/<button\b[^>]*>/g)]
+    .map((match) => match[0])
+    .find((html) => /\bdata-send\b/.test(html) && !/\bdata-send-close\b/.test(html));
+  assert.ok(emptySend, "Send is present on an empty box");
+  assert.match(emptySend, /\bdisabled\b/);
+  assert.match(emptySend, /is-disabled/);
+  const css = readFileSync(join(here, "../styles.css"), "utf8");
+  assert.match(css, /\.btn-send:disabled[\s\S]*background:\s*var\(--ground\)/);
+  assert.match(css, /\.btn-send:disabled[\s\S]*color:\s*var\(--mute\)/);
   organ.setBody("   ");
   snap = organ.snapshot();
   assert.equal(snap.sendDisabled, true);
+  const blankSend = [...snap.html.matchAll(/<button\b[^>]*>/g)]
+    .map((match) => match[0])
+    .find((html) => /\bdata-send\b/.test(html) && !/\bdata-send-close\b/.test(html));
+  assert.match(blankSend, /\bdisabled\b/);
+  assert.match(blankSend, /is-disabled/);
   organ.setBody("Thanks Ada — checking the carrier now.");
   snap = organ.snapshot();
   assert.equal(snap.sendDisabled, false);
+  const readySend = [...snap.html.matchAll(/<button\b[^>]*>/g)]
+    .map((match) => match[0])
+    .find((html) => /\bdata-send\b/.test(html) && !/\bdata-send-close\b/.test(html));
+  assert.doesNotMatch(readySend, /\bdisabled\b/);
+  assert.doesNotMatch(readySend, /is-disabled/);
 });
 
 test("closed ticket keeps composer and hides Send & close", async () => {
@@ -270,6 +289,7 @@ test("macro search lives in the composer box and Insert fills the textarea", asy
   assert.match(snap.html, /data-macro-search/);
   assert.match(snap.html, /data-macro-list/);
   assert.match(snap.html, /data-macro-insert/);
+  assert.match(snap.html, />Replace</);
   assert.match(snap.html, /data-macro-append/);
   assert.match(snap.html, /Shipping delay/);
   assert.match(snap.html, /Return how-to/);
@@ -294,6 +314,14 @@ test("macro search lives in the composer box and Insert fills the textarea", asy
   assert.match(snap.html, /running behind the usual window/);
   assert.equal(snap.sendDisabled, false);
   assert.equal(snap.sent.length, 0);
+  assert.match(snap.html, /data-macro-open="false"/);
+  assert.doesNotMatch(snap.html, /data-macro-list/);
+  assert.doesNotMatch(snap.html, /data-macro-insert/);
+  assert.doesNotMatch(snap.html, />Replace</);
+  const filledSend = [...snap.html.matchAll(/<button\b[^>]*>/g)]
+    .map((match) => match[0])
+    .find((html) => /\bdata-send\b/.test(html) && !/\bdata-send-close\b/.test(html));
+  assert.doesNotMatch(filledSend, /\bdisabled\b/);
 
   organ.setBody("Hi Ada — looking now.");
   snap = await organ.applyMacro("order-status", "append");
@@ -325,6 +353,8 @@ test("composer macro Insert and Append never publish send", () => {
   assert.deepEqual(events.map((row) => row[0]), ["insert"]);
   assert.equal(events[0][1].mode, "replace");
   assert.equal(events[0][1].macroId, "shipping-delay");
+  composer.update({ searchOpen: true, selectedMacroId: "shipping-delay" });
+  composer.mount(el);
   el.onclick({ target: { closest: (sel) => (sel === "[data-macro-append]" ? {} : null) } });
   assert.deepEqual(events.map((row) => row[0]), ["insert", "insert"]);
   assert.equal(events[1][1].mode, "append");

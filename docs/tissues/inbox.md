@@ -59,7 +59,7 @@ Demo names only (Ada Demo, Casey Sandbox, Jordan Preview). No customer PII.
 
 - **In:** `{ ticket, draft, summarize, macros, body }`
 - **Out:** body / insert / discard / send
-- To is visible. Macro search lives **inside** the composer box (not a floating panel over the thread). Pick a row, then Insert (replace) or Append. Those fill the textarea via `helpdesk.apply_macro` and never Send.
+- To is visible. Macro search lives **inside** the composer box (not a floating panel over the thread). Pick a row, then Replace or Append. Those fill the textarea via `helpdesk.apply_macro` and never Send. Replace (not Insert) is the macro verb so it does not collide with the signed draft-strip Insert. After Replace/Append the picker closes.
 - AI draft is a strip **above** the textarea with Insert / Discard — never Send. The AI draft kicker is mute (accent is unread/error only). Draft text comes from `helpdesk.draft_reply`.
 - Summarize is a mute peek **above** the composer box, never a send. It does not enable Send by itself.
 - Send is ink fill (min-height 40px; 44px on coarse pointers) and disabled while the body is empty
@@ -115,7 +115,7 @@ Clerk DTO field names are locked. In for each: `{ shop, customerId? , orderId? }
   `POST /console/api/helpdesk` → `helpdesk.invoke()`
 - Composer uses the same client for `helpdesk.draft_reply`,
   `helpdesk.summarize_thread`, `helpdesk.search_macros`, and
-  `helpdesk.apply_macro`. Insert/Discard/Append never call send.
+  `helpdesk.apply_macro`. Draft-strip Insert/Discard and macro Replace/Append never call send.
 - Fallback: `console-src/inbox/js/shop/fixture-shop.js` when mint/Admin/HTTP
   is unavailable, or when the requested GID is only on the fixture catalog
 - Live Cute Things (`source=live`) remounts the inbox onto live GIDs. Empty

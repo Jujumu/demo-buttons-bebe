@@ -54,6 +54,7 @@ export function createInboxOrgan(opts = {}) {
   let macros = fixtureMacros;
   let macroQuery = "";
   let selectedMacroId = "";
+  let macrosOpen = true;
 
   function visibleTickets() {
     return catalog.filter((ticket) => ticketInView(ticket, viewId));
@@ -161,6 +162,7 @@ export function createInboxOrgan(opts = {}) {
       strip: discarded ? "" : strip,
       query: macroQuery,
       selectedMacroId,
+      searchOpen: macrosOpen,
     };
   }
 
@@ -204,6 +206,7 @@ export function createInboxOrgan(opts = {}) {
       macros: composerModel.macros,
       query: composerModel.query,
       selectedMacroId: composerModel.selectedMacroId,
+      searchOpen: composerModel.searchOpen,
     };
   }
 
@@ -261,6 +264,7 @@ export function createInboxOrgan(opts = {}) {
       summarizeText = "";
       discarded = false;
       selectedMacroId = "";
+      macrosOpen = true;
       ensureSelection();
       refreshRail().then(refreshComposer).then(() => refreshMacros(macroQuery)).then(paint);
     });
@@ -271,13 +275,18 @@ export function createInboxOrgan(opts = {}) {
       summarizeText = "";
       discarded = false;
       selectedMacroId = "";
+      macrosOpen = true;
       refreshRail().then(refreshComposer).then(() => refreshMacros(macroQuery)).then(paint);
     });
     mailbox.subscribe(MAILBOX_TOPICS.COMPOSER_BODY, ({ text }) => {
       body = text;
     });
     mailbox.subscribe(MAILBOX_TOPICS.COMPOSER_INSERT, (payload) => {
-      if (payload?.macroId) selectedMacroId = payload.macroId;
+      if (payload?.macroId) {
+        selectedMacroId = "";
+        macrosOpen = false;
+        macroQuery = "";
+      }
       if (payload?.text) body = payload.text;
       strip = "";
       discarded = true;
@@ -332,6 +341,7 @@ export function createInboxOrgan(opts = {}) {
       summarizeText = "";
       discarded = false;
       selectedMacroId = "";
+      macrosOpen = true;
       ensureSelection();
       return refreshRail().then(refreshComposer).then(() => refreshMacros(macroQuery));
     },
@@ -342,6 +352,7 @@ export function createInboxOrgan(opts = {}) {
       summarizeText = "";
       discarded = false;
       selectedMacroId = "";
+      macrosOpen = true;
       return refreshRail().then(refreshComposer).then(() => refreshMacros(macroQuery));
     },
     toggleRail(key) {
@@ -364,12 +375,15 @@ export function createInboxOrgan(opts = {}) {
       composerTissue.update(composerInput(selectedTicket()));
     },
     async searchMacros(query = "") {
+      macrosOpen = true;
       await refreshMacros(query);
       composerTissue.update(composerInput(selectedTicket()));
       return snapshot();
     },
     async applyMacro(macroId, mode = "replace") {
       selectedMacroId = macroId;
+      macrosOpen = false;
+      macroQuery = "";
       let text = "";
       if (typeof shop.applyMacro === "function") {
         try {
