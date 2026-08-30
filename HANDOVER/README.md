@@ -11,7 +11,7 @@ This folder was prepared as a self-contained handover package for the team
 taking over the Buttons Bebe AI support agent. It is retained for historical
 context, not as a runbook.
 
-> **Prepared:** 2026‑07‑13 · **Handover from:** Tony (builder) → client's development team · **Client:** Chaim (Buttons Bebe, a Shopify store)
+> **Prepared:** 2026‑07‑13 · **Handover from:** Tony (builder) → client's development team · **Client:** the store owner (Buttons Bebe, a Shopify store)
 
 ---
 

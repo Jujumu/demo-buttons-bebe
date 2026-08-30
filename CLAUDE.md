@@ -54,7 +54,7 @@ does not write to Gorgias.
 
 ## Knowledge base
 
-- Live root: `/root/Buttonsbebe Agent/KB`
+- Live root: `/opt/buttonsbebe/KB`
 - Sources: `intents/`, `faq/`, `policies/`, `tickets/`, `products/`, and
   lower-trust Shopify platform background in `shopify/`
 - Index: LanceDB hybrid vector + FTS search
@@ -83,7 +83,7 @@ does not write to Gorgias.
 | — | Queue processor | `buttonsbebe-processor` |
 
 Caddy exposes the session-protected support console at
-`https://srv1766050.hstgr.cloud/console/`; all application services bind to
+`https://support.example.com/console/`; all application services bind to
 localhost. The internal `/dashboard/*` namespace is explicitly blocked. The
 public Caddy allowlist includes only the login/auth paths needed to establish a
 session, `/webhook/gorgias/*`, `/health`, and `/ready`; all other unmatched paths
@@ -99,9 +99,10 @@ purgeable.
 
 ## Credentials
 
-- `/root/Buttonsbebe Agent/.env`: Gorgias/Shopify/Redo credentials for server
+- Copy `.env.example` to `.env` and connect **your** Shopify shop. See `CONNECT.md`.
+- `/opt/buttonsbebe/.env`: Gorgias/Shopify/Redo credentials for server
   modules and maintenance scripts.
-- `/root/Buttonsbebe Agent/webhook/.env`: **legacy**. The webhook and processor
+- `/opt/buttonsbebe/webhook/.env`: **legacy**. The webhook and processor
   both read the root `.env` now; this file is pending removal on the VPS
   (`deploy/ENV-CONSOLIDATION-RUNBOOK.md`).
 - Hermes skills must never read either file. The authenticated MCP services are
@@ -115,11 +116,10 @@ purgeable.
   learning path is console action capture in `webhook/.../learning.py`.
 - Environment values: the CODE is consolidated — `processor/config.py` and
   `webhook/src/bb_webhook/config.py` both read the single root `.env` (since
-  2026-07-08). What remains is the VPS-side merge of the leftover
-  `webhook/.env` and rotating the credentials that sit in plaintext in
-  `_VPS-FULL-BACKUP-20260706/`. Step-by-step:
-  `deploy/ENV-CONSOLIDATION-RUNBOOK.md`. No secret has ever been committed to
-  git (full-history prefix scan, 2026-07-29).
+  2026-07-08). Leftover backup trees are gitignored and must never be
+  restored or committed. Configure a fresh `.env` from `.env.example`
+  (`CONNECT.md`). No secret has ever been committed to git
+  (full-history prefix scan, 2026-07-29).
 - Hermes runs with an explicit tool allow-list, not `--yolo`. The processor
   passes `-t buttonsbebe_kb,buttonsbebe_redo,buttonsbebe_gorgias`
   (see `build_hermes_command()` in `processor/hermes_runner.py`), so the
@@ -136,8 +136,8 @@ hermes mcp list
 hermes mcp test buttonsbebe_kb
 systemctl status buttonsbebe-processor buttonsbebe-kb-mcp \
   buttonsbebe-redo-mcp buttonsbebe-gorgias-mcp buttonsbebe-kb-admin
-cd "/root/Buttonsbebe Agent/KB" && ./search.sh "do you ship to canada"
-sqlite3 "/root/Buttonsbebe Agent/webhook/data/webhook.db" \
+cd "/opt/buttonsbebe/KB" && ./search.sh "do you ship to canada"
+sqlite3 "/opt/buttonsbebe/webhook/data/webhook.db" \
   "select status,count(*) from job_queue group by status"
 ```
 

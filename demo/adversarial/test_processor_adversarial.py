@@ -57,8 +57,8 @@ def fake_settings(timeout: int = 2) -> SimpleNamespace:
         hermes_profile="",
         hermes_ignore_rules=False,
         hermes_bin="hermes",
-        hermes_home="/root",
-        hermes_path="/root/.local/bin:/usr/local/bin:/usr/bin:/bin",
+        hermes_home=os.path.expanduser("~"),
+        hermes_path=f"{os.path.expanduser('~')}/.local/bin:/usr/local/bin:/usr/bin:/bin",
         support_store_name="Buttons Bebe",
     )
 

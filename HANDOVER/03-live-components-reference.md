@@ -94,7 +94,7 @@
 ### 1.6 Shared env loader — `tools/_common.py`
 
 - **Purpose:** one tiny helper shared by `redo_mcp.py` + `gorgias_mcp.py` for reading the agent `.env`.
-- **Key function:** `load_env() -> dict` — reads, in order, `/root/Buttonsbebe Agent/.env` then `/root/Buttonsbebe Agent/webhook/.env`; **first non-empty value wins** (so MAIN `.env` takes precedence). `_clean()` strips paste artifacts (surrounding quotes/space, trailing backslashes, CR). Skips blanks / comments / lines without `=`.
+- **Key function:** `load_env() -> dict` — reads, in order, `/opt/buttonsbebe/.env` then `/opt/buttonsbebe/webhook/.env`; **first non-empty value wins** (so MAIN `.env` takes precedence). `_clean()` strips paste artifacts (surrounding quotes/space, trailing backslashes, CR). Skips blanks / comments / lines without `=`.
 - **Env vars:** reads whatever keys the callers ask for (Redo + Gorgias creds). **How it runs:** pure library.
 
 ### 1.7 `tools/README.md`
@@ -118,7 +118,7 @@ Documents the two integration modules as their own module + MCP server + service
 - **Key functions:** `load_creds()` (reads `.env` candidates), `mint_token()` (client-credentials grant → 24 h Admin API token), `gql()` (Admin GraphQL POST), `run_bulk_export()` (Shopify **Bulk Operations** query for `products`, then polls `currentBulkOperation` until `COMPLETED`), `download_jsonl()`, `split_records()` (separates products from their variants via `__parentId`), `write_files()` (clears old `product-*.md`, writes `product-{handle}.md` with title/type/vendor, in-stock flag, options, up to 60 variants w/ SKU + price + availability, truncated description, product URL, tags).
 - **Inputs/outputs:** in = Shopify catalog; out = markdown files in `kb/products/` (returns count written).
 - **Env vars:** `SHOPIFY_SHOP` (required), `SHOPIFY_CLIENT_ID` (required), `SHOPIFY_CLIENT_SECRET` (required), `SHOPIFY_API_VERSION` (default `2026-04`), `SHOPIFY_PRODUCT_QUERY` (default `status:active`; set `""` for all). **Shopify auth = client-credentials**, so no manual token needed.
-- **How it runs:** CLI via `kb/sync-products.sh` (runs `sync_products.py`, then `index_kb.py`, then `systemctl restart buttonsbebe-kb-mcp`). Scheduled by unit **`buttonsbebe-kb-sync.service`** (`Type=oneshot`, `ExecStart="/root/Buttonsbebe Agent/KB/sync-products.sh"`, 1800 s timeout) + **`buttonsbebe-kb-sync.timer`** (`OnActiveSec=3d`, `OnUnitActiveSec=3d`, `Persistent=true`) → **every 3 days**.
+- **How it runs:** CLI via `kb/sync-products.sh` (runs `sync_products.py`, then `index_kb.py`, then `systemctl restart buttonsbebe-kb-mcp`). Scheduled by unit **`buttonsbebe-kb-sync.service`** (`Type=oneshot`, `ExecStart="/opt/buttonsbebe/KB/sync-products.sh"`, 1800 s timeout) + **`buttonsbebe-kb-sync.timer`** (`OnActiveSec=3d`, `OnUnitActiveSec=3d`, `Persistent=true`) → **every 3 days**.
 
 ### 2.3 Notice Board library — `kb/scripts/notices_lib.py`
 
@@ -176,7 +176,7 @@ CommonJS package `buttonsbebe-whatsapp-connect` v1.0.0. Dependencies: `@whiskeys
 
 ### 3.3 `Caddyfile` (public entry / reverse proxy)
 
-For host `srv1766050.hstgr.cloud` (Caddy auto-manages Let's Encrypt TLS):
+For host `support.example.com` (Caddy auto-manages Let's Encrypt TLS):
 - `handle /connect-whatsapp/*` → `reverse_proxy 127.0.0.1:8085` (the WhatsApp service).
 - `handle { … }` (everything else) → `reverse_proxy 127.0.0.1:8000` (the webhook / dashboard FastAPI app) with `Host`, `X-Real-IP`, `X-Forwarded-For`, `X-Forwarded-Proto` set.
 - Global: `request_body max_size 256KB`, security headers (`X-Content-Type-Options nosniff`, `Referrer-Policy no-referrer`), `encode gzip zstd`, JSON access log to `/var/log/bb-webhook/caddy.log`.
@@ -184,7 +184,7 @@ For host `srv1766050.hstgr.cloud` (Caddy auto-manages Let's Encrypt TLS):
 
 ### 3.4 `buttonsbebe-whatsapp-connect.service`
 
-`WorkingDirectory=/root/Buttonsbebe Agent/whatsapp-connect`; `ExecStart=/bin/bash -c 'exec __NODE__ ".../server.js"'`; `Restart=on-failure`. The unit reads `whatsapp-connect/.env` through `EnvironmentFile` for `WA_TOKEN`, `WA_PASSWORD`, and `WA_SEND_SECRET`; it sets `WA_PORT=8085` and `WA_AUTH_DIR` directly. The `__HERMES_BIN__` and `__NODE__` tokens are **placeholders substituted at deploy time** (absolute executable paths).
+`WorkingDirectory=/opt/buttonsbebe/whatsapp-connect`; `ExecStart=/bin/bash -c 'exec __NODE__ ".../server.js"'`; `Restart=on-failure`. The unit reads `whatsapp-connect/.env` through `EnvironmentFile` for `WA_TOKEN`, `WA_PASSWORD`, and `WA_SEND_SECRET`; it sets `WA_PORT=8085` and `WA_AUTH_DIR` directly. The `__HERMES_BIN__` and `__NODE__` tokens are **placeholders substituted at deploy time** (absolute executable paths).
 
 ---
 
@@ -231,7 +231,7 @@ Zero-dependency Node HTTP server bound to `127.0.0.1:8087`, exposed behind the c
 
 ## 5. `deploy/patch_app.py` (retired)
 
-- **Purpose:** an **idempotent deploy-time patcher** that injects the (older) **feedback "review console"** routes into the live webhook app at `/root/Buttonsbebe Agent/webhook/src/bb_webhook/app.py` (a file that lives on the VPS, **not** in this repo).
+- **Purpose:** an **idempotent deploy-time patcher** that injects the (older) **feedback "review console"** routes into the live webhook app at `/opt/buttonsbebe/webhook/src/bb_webhook/app.py` (a file that lives on the VPS, **not** in this repo).
 - **What it patches in:**
   1. A `sys.path` **shim** (inserts the agent root, `parents[3]`, so `from feedback import …` works), placed right after the existing `from pathlib import Path` import.
   2. A block of **routes** inserted just before the anchor `@app.post("/webhook/gorgias/{tenant_id}")`:
@@ -250,7 +250,7 @@ Zero-dependency Node HTTP server bound to `127.0.0.1:8087`, exposed behind the c
 
 ## 6. Space-free launchers (⚠️ on the VPS, not in this repo)
 
-The `*.service` units above call three wrapper scripts by **space-free absolute paths** because the deploy directory `"/root/Buttonsbebe Agent/…"` contains a space that systemd/Hermes command runners can't pass cleanly. These deployed launchers live on the VPS:
+The `*.service` units above call three wrapper scripts by **space-free absolute paths** because the deploy directory `"/opt/buttonsbebe/…"` contains a space that systemd/Hermes command runners can't pass cleanly. These deployed launchers live on the VPS:
 
 | VPS launcher (⚠️ on VPS) | Repo source | Execs |
 |---|---|---|
@@ -275,4 +275,4 @@ The repo `run-*.sh` / `run_mcp.sh` files are the source-of-truth copies; the `/r
 | — | — | `buttonsbebe-kb-notices-gc` `.service`+`.timer` | Expired-notice GC every 15 min |
 | 8000 | 127.0.0.1 | *(unit not in this repo)* | Webhook receiver + `/console`/`/dashboard` (FastAPI) — source in `_VPS-FULL-BACKUP` only |
 
-Public entry: **Caddy** on `srv1766050.hstgr.cloud` → `/connect-whatsapp/*` to `:8085`, everything else to `:8000`.
+Public entry: **Caddy** on `support.example.com` → `/connect-whatsapp/*` to `:8085`, everything else to `:8000`.

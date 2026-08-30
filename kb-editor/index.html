@@ -177,7 +177,7 @@ function newNote(){
   if(!name) return;
   name=name.trim().replace(/^\/+/,""); if(!name.endsWith(".md")) name+=".md";
   ensureEditor();
-  editor.setValue("---\ntitle: \ncategory: faq\nstatus: DRAFT\ntags: []\n---\n\n> DRAFT - pending owner (Chaim) confirmation.\n\n## \n\n");
+  editor.setValue("---\ntitle: \ncategory: faq\nstatus: DRAFT\ntags: []\n---\n\n> DRAFT - pending store-owner confirmation.\n\n## \n\n");
   curPath=name; lastSaved=" "; lastPublished=" ";
   $("#curfile").textContent=name+"  (new)"; $("#saveBtn").disabled=false;
   setStatus("new note - just start typing, it auto-saves","work"); highlight(); scheduleAuto();

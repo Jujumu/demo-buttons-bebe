@@ -104,7 +104,7 @@ means approving without seeing it.
 - **Search result count** ("14 matches") and highlight of the matched term.
 - **Dark mode** — the token system makes this a ~30-line `prefers-color-scheme` block.
 - **Stats trends** — the KPI cards are point-in-time; a 14-day sparkline under each gives
-  Chaim the "is this getting better?" answer at a glance.
+  the store owner the "is this getting better?" answer at a glance.
 
 ---
 

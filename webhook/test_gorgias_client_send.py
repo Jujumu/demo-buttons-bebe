@@ -35,7 +35,7 @@ class _FakeAsyncClient:
                             "channel": "email",
                             "source": {
                                 "from": {"address": "customer@example.com"},
-                                "to": [{"address": "support@buttonsbebe.com"}],
+                                "to": [{"address": "support@example.com"}],
                             },
                             "sender": {"email": "customer@example.com"},
                         }
@@ -65,22 +65,22 @@ class GorgiasClientSendTests(unittest.IsolatedAsyncioTestCase):
         _FakeAsyncClient.calls = []
         with patch("bb_webhook.gorgias_client.httpx.AsyncClient", _FakeAsyncClient):
             result = await GorgiasClient(
-                subdomain="buttons-bebe",
-                email="agent@buttonsbebe.com",
+                subdomain="helpdesk",
+                email="agent@example.com",
                 api_key="test-key",
-                base_url="https://buttons-bebe.gorgias.com",
+                base_url="https://helpdesk.example.com",
             ).send_public_reply(123, "Your order is on the way.")
 
         self.assertEqual(result["delivery_status"], "sent")
         self.assertEqual(result["message_id"], 9001)
-        self.assertEqual(_FakeAsyncClient.calls[0][1], "https://buttons-bebe.gorgias.com/api/messages")
+        self.assertEqual(_FakeAsyncClient.calls[0][1], "https://helpdesk.example.com/api/messages")
         post = next(call for call in _FakeAsyncClient.calls if call[0] == "POST")
         payload = post[2]["json"]
         self.assertEqual(payload["channel"], "email")
         self.assertEqual(payload["via"], "api")
         self.assertEqual(payload["receiver"], {"email": "customer@example.com"})
-        self.assertEqual(payload["sender"], {"email": "agent@buttonsbebe.com"})
-        self.assertEqual(payload["source"]["from"]["address"], "support@buttonsbebe.com")
+        self.assertEqual(payload["sender"], {"email": "agent@example.com"})
+        self.assertEqual(payload["source"]["from"]["address"], "support@example.com")
 
 
 if __name__ == "__main__":

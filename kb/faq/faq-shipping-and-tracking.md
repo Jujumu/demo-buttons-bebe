@@ -47,7 +47,7 @@ date the carrier controls. See `../intents/intent-18-order-needed-urgently.md`.
 
 ## Can I pick up locally / what are the hours?
 
-Yes — local customers can pick up at the Toms River warehouse during posted
+Yes — local customers can pick up at the store warehouse during posted
 hours, and there are bins by the side door available outside business hours
 ("the bins stay outside by the side door 24 hours a day"). Hours vary and are
 sometimes extended, so confirm the day's hours before quoting them.

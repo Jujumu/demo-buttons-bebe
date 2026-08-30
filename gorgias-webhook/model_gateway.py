@@ -70,7 +70,7 @@ except ImportError:
 # --------------------------------------------------------------------------- #
 CONFIG_PATH = "/root/gorgias-webhook/config.json"
 HERMES_CONFIG_PATH = os.path.expanduser("~/.hermes/config.yaml")
-USER_AGENT = "Hermes-Agent/1.0 (+buttons-bebe; model-gateway)"
+USER_AGENT = "Hermes-Agent/1.0 (+support-agent; model-gateway)"
 MACHINE_KEY_FILE = "/etc/gorgias-wh-key"
 
 DEFAULTS = {
@@ -346,7 +346,7 @@ def _http_chat(cfg, payload, timeout, max_retries=3):
         "Content-Type": "application/json",
         "Accept": "application/json",
         # Harmless for non-OpenRouter providers; identifies the app on OpenRouter.
-        "HTTP-Referer": "https://buttonsbebe.com",
+        "HTTP-Referer": "https://example.com",
         "X-Title": "Hermes Agent",
     }
 

@@ -85,7 +85,7 @@ def _human_public_reply_msg(message_id, body_text, *, created="2026-06-26T12:18:
         "channel": "email",
         "public": True,
         "from_agent": True,
-        "sender": {"id": 66260768, "email": "rochel@buttonsbebe.com"},
+        "sender": {"id": 66260768, "email": "agent@example.com"},
         "body_text": body_text,
         "stripped_text": body_text,
         "created_datetime": created,
@@ -100,7 +100,7 @@ def _our_internal_note_msg(message_id, body_text, *, created="2026-06-26T12:00:0
         "channel": gorgias_api.INTERNAL_NOTE_CHANNEL,   # "internal-note"
         "public": False,
         "from_agent": True,
-        "sender": {"id": gorgias_api.DEFAULT_AGENT_USER_ID, "email": "bot@buttonsbebe.com"},
+        "sender": {"id": gorgias_api.DEFAULT_AGENT_USER_ID, "email": "bot@example.com"},
         "body_text": body_text,
         "stripped_text": body_text,
         "created_datetime": created,

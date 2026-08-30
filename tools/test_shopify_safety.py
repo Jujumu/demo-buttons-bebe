@@ -77,7 +77,7 @@ class FakeRunner:
 
 class FakeHTTP:
     def __init__(self, *, webhooks: dict[str, str] | None = None) -> None:
-        self.webhooks = webhooks or expected_webhooks("https://wh.buttonsbebe.com")
+        self.webhooks = webhooks or expected_webhooks("https://warehouse.example.com")
         self.calls: list[str] = []
 
     def __call__(self, url: str, _timeout: float) -> HttpResponse:
@@ -93,11 +93,11 @@ class FakeHTTP:
                 }
             )
             return HttpResponse(200, {}, body)
-        if url == "https://wh.buttonsbebe.com/api/health":
+        if url == "https://warehouse.example.com/api/health":
             return HttpResponse(401, {"WWW-Authenticate": 'Basic realm="restricted"'})
-        if url == "https://wh.buttonsbebe.com/api/shopify/webhook/products-update":
+        if url == "https://warehouse.example.com/api/shopify/webhook/products-update":
             return HttpResponse(404, {"X-Powered-By": "Express"}, "Cannot GET")
-        if url == "https://support.buttonsbebe.com/health":
+        if url == "https://support.example.com/health":
             return HttpResponse(200)
         raise AssertionError(f"unexpected URL: {url}")
 
@@ -135,9 +135,9 @@ class ShopifySafetyTests(unittest.TestCase):
                 "import sites/exchange.caddy\n"
                 "import sites/warehouse.caddy\n"
             ),
-            "sites/support.caddy": "support.buttonsbebe.com { respond 200 }\n",
-            "sites/exchange.caddy": "exchange.buttonsbebe.com { respond 200 }\n",
-            "sites/warehouse.caddy": "wh.buttonsbebe.com { respond 200 }\n",
+            "sites/support.caddy": "support.example.com { respond 200 }\n",
+            "sites/exchange.caddy": "exchange.example.com { respond 200 }\n",
+            "sites/warehouse.caddy": "warehouse.example.com { respond 200 }\n",
         }
         manifest_lines = []
         for relative, contents in caddy_files.items():
@@ -259,7 +259,7 @@ class ShopifySafetyTests(unittest.TestCase):
         original = deps.http_get
 
         def http_get(url: str, timeout: float) -> HttpResponse:
-            if url == "https://wh.buttonsbebe.com/api/health":
+            if url == "https://warehouse.example.com/api/health":
                 return HttpResponse(200)
             return original(url, timeout)
 
@@ -278,8 +278,8 @@ class ShopifySafetyTests(unittest.TestCase):
         self.assertIn("protected", health.detail)
 
     def test_webhook_set_must_be_exact_and_callback_urls_must_match(self) -> None:
-        callbacks = expected_webhooks("https://wh.buttonsbebe.com")
-        callbacks["PRODUCTS_UPDATE"] = "https://wh.buttonsbebe.com/wrong"
+        callbacks = expected_webhooks("https://warehouse.example.com")
+        callbacks["PRODUCTS_UPDATE"] = "https://warehouse.example.com/wrong"
         config, deps, temp_dir = self.make_fixture(webhooks=callbacks)
         self.addCleanup(temp_dir.cleanup)
         report = run_monitor(config, deps)
@@ -292,7 +292,7 @@ class ShopifySafetyTests(unittest.TestCase):
         self.addCleanup(temp_dir.cleanup)
         unsafe = SafetyConfig(
             shopify_source_path=config.shopify_source_path,
-            webhook_endpoint="https://wh.buttonsbebe.com/api/shopify/webhooks",
+            webhook_endpoint="https://warehouse.example.com/api/shopify/webhooks",
         )
         report = run_monitor(unsafe, deps)
         webhooks = next(check for check in report.checks if check.name == "shopify.webhooks_exact")
@@ -303,7 +303,7 @@ class ShopifySafetyTests(unittest.TestCase):
         config, deps, temp_dir = self.make_fixture()
         self.addCleanup(temp_dir.cleanup)
         support = config.caddy_manifest_path.parent / "sites/support.caddy"
-        support.write_text("support.buttonsbebe.com { respond 500 }\n", encoding="utf-8")
+        support.write_text("support.example.com { respond 500 }\n", encoding="utf-8")
         report = run_monitor(config, deps)
         caddy = next(check for check in report.checks if check.name == "caddy.config_manifest")
         self.assertFalse(caddy.ok)

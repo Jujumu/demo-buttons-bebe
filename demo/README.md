@@ -7,7 +7,7 @@ This profile is for testing the support app against the isolated Shopify develop
 The latest adversarial campaign, fixes, evidence, and remaining limits are recorded in
 [`TEST-REPORT.md`](TEST-REPORT.md).
 
-It is deliberately separate from the live Buttons Bebe target. The demo profile keeps
+It is deliberately separate from any buyer production shop. The demo profile keeps
 Shopify mutations disabled, uses a separate queue database, and uses fixture-backed
 localhost services for Gorgias, Redo, the knowledge base, and WhatsApp.
 
@@ -32,15 +32,14 @@ with `example.com` tracking URLs. No receipt or customer notification was sent.
 ## Prepare the local profile
 
 ```bash
-cd "/Users/teddyburtonburger/Desktop/Code-hub/Shopify/Shopify help desk"
 cp demo/.env.example demo/.env
 # Fill only the separate Cute Things Shopify credentials if a read-only sync is needed.
 python3 demo/verify_config.py demo/.env
 ```
 
-The verifier is local-only. It rejects the Buttons Bebe Shopify domain, the Buttons Bebe
-Gorgias workspace, a non-demo queue database, enabled Shopify mutations, and static admin
-tokens. Keep `demo/.env` private.
+The verifier is local-only. It requires the Cute Things demo shop, a demo-only
+queue database, disabled Shopify mutations, and no static admin tokens. Keep
+`demo/.env` private.
 
 ## What must be isolated
 
@@ -62,7 +61,6 @@ tokens. Keep `demo/.env` private.
 ## Run the local dependency simulators
 
 ```bash
-cd "/Users/teddyburtonburger/Desktop/Code-hub/Shopify/Shopify help desk"
 cp demo/.env.example demo/.env
 python3 demo/verify_config.py demo/.env
 

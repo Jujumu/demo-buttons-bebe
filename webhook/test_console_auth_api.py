@@ -49,7 +49,7 @@ def request_for(
 class ConsoleAuthEndpointTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         self.settings = SimpleNamespace(
-            console_username="chaim",
+            console_username="owner",
             console_password_hash=hash_password("correct password", salt=b"0123456789abcdef"),
             console_session_secret="session-secret",
             demo_mode=True,
@@ -63,7 +63,7 @@ class ConsoleAuthEndpointTests(unittest.IsolatedAsyncioTestCase):
     async def test_login_sets_session_and_session_check_accepts_it(self) -> None:
         request = request_for(
             "POST", "/auth/login",
-            body={"username": "chaim", "password": "correct password", "next": "/console/tickets"},
+            body={"username": "owner", "password": "correct password", "next": "/console/tickets"},
         )
         with patch.object(auth.deps, "get_settings", return_value=self.settings), \
              patch.object(auth, "_login_allowed", return_value=True):
@@ -81,7 +81,7 @@ class ConsoleAuthEndpointTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("SameSite=strict", response.headers["set-cookie"])
 
     async def test_bad_credentials_and_unconfigured_auth_fail_closed(self) -> None:
-        bad = request_for("POST", "/auth/login", body={"username": "chaim", "password": "wrong"})
+        bad = request_for("POST", "/auth/login", body={"username": "owner", "password": "wrong"})
         with patch.object(auth.deps, "get_settings", return_value=self.settings), \
              patch.object(auth, "_login_allowed", return_value=True):
             response = await auth.auth_login(bad)
@@ -89,7 +89,7 @@ class ConsoleAuthEndpointTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("correct", response.body.decode())
 
         unconfigured = SimpleNamespace(
-            console_username="chaim", console_password_hash="", console_session_secret="", demo_mode=False
+            console_username="owner", console_password_hash="", console_session_secret="", demo_mode=False
         )
         with patch.object(auth.deps, "get_settings", return_value=unconfigured), \
              patch.object(auth, "_login_allowed", return_value=True):
@@ -102,7 +102,7 @@ class ConsoleAuthEndpointTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(redirect.status_code, 302)
             self.assertEqual(redirect.headers["location"], "/console/login")
 
-            token = build_session_token("chaim", self.settings.console_session_secret)
+            token = build_session_token("owner", self.settings.console_session_secret)
             logged_out = await auth.auth_logout()
 
         self.assertEqual(logged_out.status_code, 200)

@@ -50,7 +50,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-USER_AGENT = "Hermes-Agent/1.0 (+buttons-bebe; gorgias-skill)"
+USER_AGENT = "Hermes-Agent/1.0 (+support-agent; gorgias-skill)"
 DEFAULT_AGENT_USER_ID = 777419526
 CONFIG_FALLBACK = "/root/gorgias-webhook/config.json"
 INTERNAL_NOTE_CHANNEL = "internal-note"

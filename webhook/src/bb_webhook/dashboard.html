@@ -395,7 +395,7 @@ function renderTicket(t) {
     draftHtml = '<div class="draft-empty">Not yet processed.</div>';
   }
 
-  const gorgiasUrl = `https://buttonsbebe.gorgias.com/tickets/${t.ticket_id}`;
+  const gorgiasUrl = `https://your-helpdesk.gorgias.com/tickets/${t.ticket_id}`;
 
   return `<div class="ticket-card priority-${priorityClass(pri)}" data-search="${esc((t.ticket_subject||'') + ' ' + (t.customer_email||'') + ' ' + t.ticket_id + ' ' + (t.message_text||'') + ' ' + (t.draft_text||'') + ' ' + (t.reason||'')).toLowerCase()}">
     <div class="ticket-header">

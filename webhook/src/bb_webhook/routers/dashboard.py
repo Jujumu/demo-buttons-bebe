@@ -27,8 +27,18 @@ async def dashboard_messages(
 
 @router.get("/stats")
 async def dashboard_stats() -> JSONResponse:
-    """Return aggregate processing statistics."""
-    return JSONResponse(content=await deps.database_function("get_result_stats")())
+    """Return aggregate processing statistics plus configured store hosts."""
+    stats = await deps.database_function("get_result_stats")()
+    settings = deps.get_settings()
+    shop = (getattr(settings, "shopify_shop", "") or "").strip()
+    subdomain = (getattr(settings, "gorgias_subdomain", "") or "").strip()
+    if isinstance(stats, dict):
+        stats = {
+            **stats,
+            "shopify_shop": shop,
+            "gorgias_host": f"{subdomain}.gorgias.com" if subdomain else "",
+        }
+    return JSONResponse(content=stats)
 
 
 @router.get("/tickets")

@@ -65,7 +65,7 @@ def git_commit(abs_path, rel):
                        check=True, capture_output=True, timeout=30)
         subprocess.run(
             ["git", "-C", REPO_ROOT, "commit", "-m", "KB edit: " + rel + " (via editor)",
-             "--author", "Chaim via KB Editor <chaim@buttonsbebe.local>"],
+             "--author", "Owner via KB Editor <owner@localhost>"],
             capture_output=True, text=True, timeout=30)
         return True
     except Exception:

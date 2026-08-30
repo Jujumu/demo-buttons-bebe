@@ -20,7 +20,7 @@ everything so the rest can be run in one go.
 loop each scenario's `message` through Hermes the same way the earlier run did, e.g.:
 
 ```bash
-# on the VPS, in "/root/Buttonsbebe Agent"
+# on the VPS, in "/opt/buttonsbebe"
 # for each scenario: feed .message to a one-shot Hermes run and save the reply
 hermes --yolo -z "process ticket: <message text>"
 ```

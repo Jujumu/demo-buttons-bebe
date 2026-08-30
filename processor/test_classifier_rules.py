@@ -2609,13 +2609,13 @@ class QuotedStoreTextTests(unittest.TestCase):
         self.assertEqual(_c(f"Thank you, got it!\n\n{self.FOOTER}")["priority"], NORMAL)
 
     def test_an_outlook_style_quote_block_is_not_the_customer(self):
-        body = ("Thanks, all good!\n\nFrom: Buttons Bebe <hello@buttonsbebe.com>\n"
+        body = ("Thanks, all good!\n\nFrom: Buttons Bebe <hello@example.com>\n"
                 "Subject: your order\n\nIf an item is missing from your parcel "
                 "just reply.")
         self.assertEqual(_c(body)["priority"], NORMAL)
 
     def test_a_quoted_store_promo_does_not_escalate_the_question_below_it(self):
-        body = ("From: Buttons Bebe <hello@buttonsbebe.com>\nSubject: FLASH SALE\n\n"
+        body = ("From: Buttons Bebe <hello@example.com>\nSubject: FLASH SALE\n\n"
                 "FLASH SALE!!! 30% OFF EVERYTHING!!! HURRY!!!\n\n"
                 "Do you restock the cream romper?")
         self.assertEqual(_c(body)["priority"], NORMAL)

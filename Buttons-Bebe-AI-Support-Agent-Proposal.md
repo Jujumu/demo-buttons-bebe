@@ -1,6 +1,6 @@
 # AI Customer Support Agent — Project Proposal
 
-**Prepared for:** Chaim — Buttons Bebe
+**Prepared for:** the store owner — Buttons Bebe
 **Prepared by:** Tony
 **Date:** 31 July 2026
 **Rate:** $25 / hour

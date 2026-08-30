@@ -12,10 +12,8 @@ from dotenv import load_dotenv
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Load .env from the project root (consolidated 2026-07-08).
-# Previously loaded from webhook/.env; now all components share the single
-# main .env at /root/Buttonsbebe Agent/.env
-# config.py is at: processor/config.py → parents[1]=processor, parents[2]=Buttonsbebe Agent
+# Load .env from the project root (one file for webhook + processor).
+# config.py is at: processor/config.py → parents[1]=processor, parents[2]=repo root
 _ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
 _DEMO_MODE_AT_IMPORT = os.environ.get("DEMO_MODE", "").strip().lower() in {
     "1", "true", "yes", "on",
@@ -36,7 +34,7 @@ class ProcessorSettings(BaseSettings):
     demo_mode: bool = Field(default=False, alias="DEMO_MODE")
 
     # ── Gorgias ───────────────────────────────────────────
-    gorgias_subdomain: str = Field(default="buttonsbebe", alias="GORGIAS_SUBDOMAIN")
+    gorgias_subdomain: str = Field(default="", alias="GORGIAS_SUBDOMAIN")
     gorgias_api_email: str = Field(default="", alias="GORGIAS_API_EMAIL")
     gorgias_api_key: str = Field(default="", alias="GORGIAS_API_KEY")
 
@@ -53,7 +51,7 @@ class ProcessorSettings(BaseSettings):
     llm_api_key: str = Field(default="", alias="LLM_API_KEY")
 
     # ── Shopify (client-credentials grant) ───────────────
-    shopify_shop: str = Field(default="buttonsbebe", alias="SHOPIFY_SHOP")
+    shopify_shop: str = Field(default="", alias="SHOPIFY_SHOP")
     shopify_client_id: str = Field(default="", alias="SHOPIFY_CLIENT_ID")
     shopify_client_secret: str = Field(default="", alias="SHOPIFY_CLIENT_SECRET")
     support_store_name: str = Field(default="Buttons Bebe", alias="SUPPORT_STORE_NAME")
@@ -88,9 +86,14 @@ class ProcessorSettings(BaseSettings):
     hermes_profile: str = Field(default="", alias="HERMES_PROFILE")
     hermes_ignore_rules: bool = Field(default=False, alias="HERMES_IGNORE_RULES")
     hermes_bin: str = Field(default="hermes", alias="HERMES_BIN")
-    hermes_home: str = Field(default="/root", alias="HERMES_OS_HOME")
+    hermes_home: str = Field(
+        default_factory=lambda: os.path.expanduser("~"),
+        alias="HERMES_OS_HOME",
+    )
     hermes_path: str = Field(
-        default="/root/.local/bin:/usr/local/bin:/usr/bin:/bin",
+        default_factory=lambda: (
+            f"{os.path.expanduser('~')}/.local/bin:/usr/local/bin:/usr/bin:/bin"
+        ),
         alias="HERMES_PATH",
     )
 
@@ -139,6 +142,8 @@ class ProcessorSettings(BaseSettings):
 
     @property
     def gorgias_base_url(self) -> str:
+        if not self.gorgias_subdomain:
+            return ""
         return f"https://{self.gorgias_subdomain}.gorgias.com"
 
     @property

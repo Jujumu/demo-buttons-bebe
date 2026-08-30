@@ -34,11 +34,11 @@ kb/
 
 ## Status of this content (read this)
 
-- **`policies/` = DRAFT placeholders.** We do **not** yet have Chaim's real
+- **`policies/` = DRAFT placeholders.** We do **not** yet have the store owner's real
   policy wording. Each policy file is marked `status: confirmed` in front-matter and
-  shows a `> ⚠️ DRAFT — pending owner (Chaim) confirmation.` banner. The defaults
+  shows a `> ⚠️ DRAFT — pending store-owner confirmation.` banner. The defaults
   are conservative and informed by how agents actually replied in the export, but
-  Chaim must confirm specifics (return window, who pays return shipping, exact
+  the store owner must confirm specifics (return window, who pays return shipping, exact
   sale-season exchange rules, etc.) before these are trusted.
 - **`faq/` = derived from real tickets** (`source: derived-from-tickets`). These
   capture the store's actual tone and real answers, scrubbed of PII. Still

@@ -26,7 +26,7 @@ The team will **clone this repo from GitHub**, but the running system lives on a
 
 ## 1. What the system is & why
 
-An **AI support agent for Buttons Bebe**, a Shopify store that receives **~2,000 support tickets/month** in **Gorgias** (the help desk). **Client: Chaim.**
+An **AI support agent for Buttons Bebe**, a Shopify store that receives **~2,000 support tickets/month** in **Gorgias** (the help desk). **Client: the store owner.**
 
 For each incoming ticket the agent:
 
@@ -134,14 +134,14 @@ Each subsection is tagged with the repo-vs-VPS legend from §0.
 Source of tickets and customer/order context; destination for internal-note drafts and human-sent public replies. Auth = **Basic** (`GORGIAS_API_EMAIL` + `GORGIAS_API_KEY`, subdomain `GORGIAS_SUBDOMAIN`). Read access is exposed to Hermes via the Gorgias MCP tool (§4.6); writes go through `gorgias_writer.py` (§4.8). Note (`tools/README.md`): Gorgias pagination uses `limit`, not `per_page`.
 
 ### 4.2 Webhook receiver (`bb_webhook`)  🔴 **Source NOT in repo — ⚠️ see doc 06 for the VPS pull procedure**
-FastAPI app on `127.0.0.1:8000` at `/root/Buttonsbebe Agent/webhook` (`src/bb_webhook/`). Receives `POST /webhook/gorgias/{tenant}`, verifies the HMAC (`WEBHOOK_SECRET`), dedupes, enqueues jobs, and **also serves the Console** (and its `/console/api/*`, `/console/kbapi/*`, `/console/waapi/*` back-end endpoints). systemd unit: **`buttonsbebe-webhook`** (uvicorn). The **front-end HTML** it serves *is* in the repo (`console-src/`, `dashboard/`); the **Python back-end serving it is not.**
+FastAPI app on `127.0.0.1:8000` at `/opt/buttonsbebe/webhook` (`src/bb_webhook/`). Receives `POST /webhook/gorgias/{tenant}`, verifies the HMAC (`WEBHOOK_SECRET`), dedupes, enqueues jobs, and **also serves the Console** (and its `/console/api/*`, `/console/kbapi/*`, `/console/waapi/*` back-end endpoints). systemd unit: **`buttonsbebe-webhook`** (uvicorn). The **front-end HTML** it serves *is* in the repo (`console-src/`, `dashboard/`); the **Python back-end serving it is not.**
 
 ### 4.3 Job queue (SQLite)  🔴 **DB file lives on the VPS**
-SQLite database at `/root/Buttonsbebe Agent/webhook/data/webhook.db` (WAL mode). Written by the receiver (enqueue), drained by the processor (dequeue). Inspect on the VPS with:
+SQLite database at `/opt/buttonsbebe/webhook/data/webhook.db` (WAL mode). Written by the receiver (enqueue), drained by the processor (dequeue). Inspect on the VPS with:
 `sqlite3 "…/webhook/data/webhook.db" "select status,count(*) from jobs group by status"`. The DB is a runtime artifact, not source.
 
 ### 4.4 Processor / orchestrator  🔴 **Source NOT in repo — ⚠️ see doc 06 for the VPS pull procedure**
-`/root/Buttonsbebe Agent/processor`, systemd **`buttonsbebe-processor`**, runs `python -m orchestrator`. Polls the queue (~2 s), runs Hermes once per job via `hermes_runner.py`, records the outcome, and triggers escalation. Contains: `orchestrator.py`, `hermes_runner.py`, `gorgias_writer.py`, `kb_client.py`, the `whatsapp_notifier.py` caller, and the stubs `classifier.py`, `feedback_collector.py` (§7). Reads config from the single root `.env` via `processor/config.py` (consolidated 2026-07-08; the leftover `webhook/.env` is pending removal on the VPS — see `deploy/ENV-CONSOLIDATION-RUNBOOK.md`). Runs Hermes with an **explicit toolset allow-list** (`-t buttonsbebe_kb,buttonsbebe_redo,buttonsbebe_gorgias`) and **no `--yolo`**, so the `terminal`/`file` toolsets are out of scope. Verify with `tools/verify_hermes_toolset.sh` before restarting.
+`/opt/buttonsbebe/processor`, systemd **`buttonsbebe-processor`**, runs `python -m orchestrator`. Polls the queue (~2 s), runs Hermes once per job via `hermes_runner.py`, records the outcome, and triggers escalation. Contains: `orchestrator.py`, `hermes_runner.py`, `gorgias_writer.py`, `kb_client.py`, the `whatsapp_notifier.py` caller, and the stubs `classifier.py`, `feedback_collector.py` (§7). Reads config from the single root `.env` via `processor/config.py` (consolidated 2026-07-08; the leftover `webhook/.env` is pending removal on the VPS — see `deploy/ENV-CONSOLIDATION-RUNBOOK.md`). Runs Hermes with an **explicit toolset allow-list** (`-t buttonsbebe_kb,buttonsbebe_redo,buttonsbebe_gorgias`) and **no `--yolo`**, so the `terminal`/`file` toolsets are out of scope. Verify with `tools/verify_hermes_toolset.sh` before restarting.
 
 ### 4.5 Hermes — the brain  🔴 **Source/config NOT in repo — ⚠️ see doc 06 for the VPS pull procedure**
 Nous **Hermes Agent** CLI, home at `~/.hermes/`. Model **`glm-5.2` via Ollama Cloud** (`~/.hermes/config.yaml`). Behaviour is steered by:
@@ -163,11 +163,11 @@ All three are always-on HTTP MCP services bound to `127.0.0.1`, each its own sys
 
 Notes:
 - **Redo** reads `REDO_API_KEY` + `REDO_STORE_ID` (Bearer auth) from the MAIN `.env`. **Gorgias** uses Basic auth from MAIN `.env`.
-- Each unit's `ExecStart` points at a **space-free launcher on the VPS** — `/root/kb-mcp-run.sh`, `/root/redo-mcp-run.sh`, `/root/gorgias-mcp-run.sh` (🔴, needed because the project path `/root/Buttonsbebe Agent/` contains a space). The repo ships equivalent runners (`tools/run-gorgias.sh`, `tools/run-redo.sh`, `kb/run_mcp.sh`) and the `.service` files themselves.
+- Each unit's `ExecStart` points at a **space-free launcher on the VPS** — `/root/kb-mcp-run.sh`, `/root/redo-mcp-run.sh`, `/root/gorgias-mcp-run.sh` (🔴, needed because the project path `/opt/buttonsbebe/` contains a space). The repo ships equivalent runners (`tools/run-gorgias.sh`, `tools/run-redo.sh`, `kb/run_mcp.sh`) and the `.service` files themselves.
 - Verify on the VPS: `hermes mcp test buttonsbebe_kb` (expect "Connected, 1 tool").
 
 ### 4.7 Knowledge base (LanceDB)  🟢 **Source in repo: `kb/`**
-Markdown content at `/root/Buttonsbebe Agent/KB` (repo: `kb/`), organized into `intents/ faq/ policies/ tickets/ products/`, indexed into **LanceDB hybrid search** — keyword **and** a small **local multilingual embedding model** blended, so it matches exact tokens (order numbers, SKUs, Hebrew) *and* paraphrases. Fully local: no API keys, no per-search cost, nothing leaves the box (`kb/SEARCH-ENGINE.md`).
+Markdown content at `/opt/buttonsbebe/KB` (repo: `kb/`), organized into `intents/ faq/ policies/ tickets/ products/`, indexed into **LanceDB hybrid search** — keyword **and** a small **local multilingual embedding model** blended, so it matches exact tokens (order numbers, SKUs, Hebrew) *and* paraphrases. Fully local: no API keys, no per-search cost, nothing leaves the box (`kb/SEARCH-ENGINE.md`).
 
 - **Indexed:** `intents/`, `faq/`, `policies/`, `tickets/`, `products/` (each `##` section → one chunk). **Not indexed:** `learned/`, folder `README.md`s, and any file starting with `_`.
 - **Products** (`products/`, currently **~4,246**) are **auto-synced from Shopify every 3 days** by `kb/scripts/sync_products.py` (via `sync-products.sh`), which mints a fresh 24 h Shopify token (client-credentials grant, scope `read_products`), bulk-exports the catalog, and writes one markdown file per product, then re-indexes. Timer: **`buttonsbebe-kb-sync.timer`** → oneshot **`buttonsbebe-kb-sync.service`**.
@@ -179,7 +179,7 @@ Markdown content at `/root/Buttonsbebe Agent/KB` (repo: `kb/`), organized into `
 
 ### 4.9 WhatsApp escalation  🟢 **Source in repo: `whatsapp-connect/`** (+ 🔴 caller in `processor/`)
 Node + **Baileys** service on `127.0.0.1:8085` (`whatsapp-connect/server.js`), systemd **`buttonsbebe-whatsapp-connect`**. Two jobs:
-1. **Owner pairing** — the owner scans a QR at `https://srv1766050.hstgr.cloud/connect-whatsapp/<WA_TOKEN>/` (auth-gated, auto-refreshing QR page).
+1. **Owner pairing** — the owner scans a QR at `https://support.example.com/connect-whatsapp/<WA_TOKEN>/` (auth-gated, auto-refreshing QR page).
 2. **Escalation delivery + 2-way bridge** — authenticated `POST /connect-whatsapp/<WA_TOKEN>/send` delivers IMMEDIATE-ticket alerts; the same service bridges the owner's WhatsApp replies back to Hermes. The send endpoint requires the separate `WA_SEND_SECRET`; additional routes are `/wa/status`, `/wa/notify`, `/wa/test`, `/wa/logout`.
 
 The **caller** is `processor/whatsapp_notifier.py` (🔴, POSTing here with `Authorization: Bearer <WA_SEND_SECRET>`; delivery URL `WHATSAPP_SEND_URL` via a processor drop-in). The service unit reads `WA_TOKEN`, `WA_PASSWORD`, and `WA_SEND_SECRET` from the dedicated `whatsapp-connect/.env`; executable-path placeholders are still patched at deploy time. **⚠️ Rollout coordination:** deploy the coupled caller and receiver configuration before restarting WhatsApp Connect.
@@ -219,10 +219,10 @@ All services bind to **`127.0.0.1`** (localhost only); public access is via Cadd
 | — | Notice Board GC (every ~15 min) | `buttonsbebe-kb-notices-gc` (+ `.timer`) | 🟢 `kb/` |
 | — | Learned-lesson nightly promote (03:30) | `buttonsbebe-kb-learn` (+ `.timer`) | 🔴 **not in repo** |
 
-**Caddy public entry** (HTTPS on `srv1766050.hstgr.cloud`, auto TLS via Let's Encrypt; config `whatsapp-connect/Caddyfile`):
+**Caddy public entry** (HTTPS on `support.example.com`, auto TLS via Let's Encrypt; config `whatsapp-connect/Caddyfile`):
 
 ```
-srv1766050.hstgr.cloud {
+support.example.com {
     handle /connect-whatsapp/*  →  reverse_proxy 127.0.0.1:8085   # WhatsApp connect
     handle              (everything else)  →  reverse_proxy 127.0.0.1:8000   # webhook + Console
     request_body max_size 256KB
@@ -263,12 +263,12 @@ Reproduced from `CLAUDE.md` §8, annotated.
 
 ## 7. Where it runs
 
-- **VPS:** `srv1766050` (IP `2.25.137.77`), Ubuntu. Public host `srv1766050.hstgr.cloud`.
-- **Project root on the box:** `/root/Buttonsbebe Agent/` (note the space in the path — the reason for the space-free `/root/*-mcp-run.sh` launchers).
+- **VPS:** `your-host` (IP `<YOUR_SERVER_IP>`), Ubuntu. Public host `support.example.com`.
+- **Project root on the box:** `/opt/buttonsbebe/` (note the space in the path — the reason for the space-free `/root/*-mcp-run.sh` launchers).
 - **Hermes home:** `~/.hermes/` (i.e. `/root/.hermes/`).
 - **Credentials** (`CLAUDE.md` §7) live in **two `.env` files** — a known wart:
-  - `/root/Buttonsbebe Agent/.env` (**MAIN**) — `GORGIAS_*`, `SHOPIFY_SHOP`/`SHOPIFY_CLIENT_ID`/`SHOPIFY_CLIENT_SECRET` (client-credentials), `REDO_API_KEY`, `REDO_STORE_ID`. Read by the **3 MCP tool modules**.
-  - `/root/Buttonsbebe Agent/webhook/.env` — **legacy, pending removal.** Since 2026-07-08 the webhook app and the processor both read the single root `.env` (`processor/config.py`, `webhook/src/bb_webhook/config.py`). See `deploy/ENV-CONSOLIDATION-RUNBOOK.md`.
+  - `/opt/buttonsbebe/.env` (**MAIN**) — `GORGIAS_*`, `SHOPIFY_SHOP`/`SHOPIFY_CLIENT_ID`/`SHOPIFY_CLIENT_SECRET` (client-credentials), `REDO_API_KEY`, `REDO_STORE_ID`. Read by the **3 MCP tool modules**.
+  - `/opt/buttonsbebe/webhook/.env` — **legacy, pending removal.** Since 2026-07-08 the webhook app and the processor both read the single root `.env` (`processor/config.py`, `webhook/src/bb_webhook/config.py`). See `deploy/ENV-CONSOLIDATION-RUNBOOK.md`.
   - Gorgias creds are duplicated across both (kept in sync); Redo lives only in MAIN (the processor reaches Redo *through* the `buttonsbebe_redo` tool). Auth: Shopify = client-credentials (24 h token), Gorgias = Basic, Redo = Bearer.
   - **⚠️ Security note:** a populated `.env` (and `.env.bak-20260708`) is present in the repo working tree at the repo root. **No secret values are reproduced in this doc.** Confirm these are git-ignored / scrubbed before the repo is shared, and rotate anything that may have been committed. (`env.example` / `.env.example` are the safe templates.)
 
@@ -278,8 +278,8 @@ hermes mcp list                     # the 3 tools, all enabled
 hermes mcp test buttonsbebe_kb      # (or _redo / _gorgias) → Connected, N tools
 systemctl status buttonsbebe-processor buttonsbebe-kb-mcp buttonsbebe-redo-mcp buttonsbebe-gorgias-mcp
 journalctl -u buttonsbebe-processor -n 50
-cd "/root/Buttonsbebe Agent/KB" && ./search.sh "do you ship to canada"
-sqlite3 "/root/Buttonsbebe Agent/webhook/data/webhook.db" "select status,count(*) from jobs group by status"
+cd "/opt/buttonsbebe/KB" && ./search.sh "do you ship to canada"
+sqlite3 "/opt/buttonsbebe/webhook/data/webhook.db" "select status,count(*) from jobs group by status"
 ```
 
 ---
@@ -288,11 +288,11 @@ sqlite3 "/root/Buttonsbebe Agent/webhook/data/webhook.db" "select status,count(*
 
 | Component | Runs as | Source location | In this repo? |
 |---|---|---|---|
-| Webhook receiver `bb_webhook` (:8000) | `buttonsbebe-webhook` | `/root/Buttonsbebe Agent/webhook/src/bb_webhook/` | 🔴 **No — doc 06** |
+| Webhook receiver `bb_webhook` (:8000) | `buttonsbebe-webhook` | `/opt/buttonsbebe/webhook/src/bb_webhook/` | 🔴 **No — doc 06** |
 | Console back-end APIs (`/console/api`, `/console/kbapi`, `/console/waapi`) | part of :8000 | `webhook/` (VPS) | 🔴 **No — doc 06** |
 | Console front-end (HTML/JS) | served by :8000 | `console-src/index.html`, `dashboard/index.html` | 🟢 Yes |
 | Job queue DB | file | `webhook/data/webhook.db` (VPS runtime) | 🔴 runtime file |
-| Processor / orchestrator | `buttonsbebe-processor` | `/root/Buttonsbebe Agent/processor/` | 🔴 **No — doc 06** |
+| Processor / orchestrator | `buttonsbebe-processor` | `/opt/buttonsbebe/processor/` | 🔴 **No — doc 06** |
 | `gorgias_writer.py`, `whatsapp_notifier.py`, `classifier.py`, `kb_client.py`, `feedback_collector.py` | in processor | `processor/` (VPS) | 🔴 **No — doc 06** |
 | Hermes config / SOUL / skill | `~/.hermes/` | `config.yaml`, `SOUL.md`, `skills/buttonsbebe/` | 🔴 **No — doc 06** |
 | KB MCP + search engine (:8077) | `buttonsbebe-kb-mcp` | `kb/` | 🟢 Yes |

@@ -1,4 +1,4 @@
-"""sync_products.py -- fetch Buttons Bebe products from Shopify into the KB.
+"""sync_products.py -- fetch the configured shop's products from Shopify into the KB.
 
 What it does:
   1. Mints a short-lived (24h) access token using the client-credentials grant
@@ -12,7 +12,7 @@ Reads credentials from the app's .env (searched in a few standard spots).
 Values are sanitized (paste artifacts like trailing spaces/backslashes removed).
 
 Env vars:
-  SHOPIFY_SHOP            e.g. buttons-bebe.myshopify.com   (required)
+  SHOPIFY_SHOP            e.g. your-store.myshopify.com     (required)
   SHOPIFY_CLIENT_ID                                          (required)
   SHOPIFY_CLIENT_SECRET                                      (required)
   SHOPIFY_API_VERSION    default 2026-04
@@ -36,7 +36,7 @@ import requests
 KB_DIR = pathlib.Path(__file__).resolve().parent.parent
 PRODUCTS_DIR = KB_DIR / "products"
 ENV_CANDIDATES = [KB_DIR.parent / ".env", KB_DIR / ".env", KB_DIR.parent / "webhook" / ".env"]
-DEFAULT_API_VERSION = "2026-04"
+DEFAULT_API_VERSION = "2026-07"
 MAX_BULK_POLLS = 180  # 12 minutes at the four-second polling interval
 MIN_CATALOG_RETENTION_RATIO = 0.75
 SYNC_LOCK_PATH = KB_DIR / ".products-sync.lock"
@@ -82,6 +82,16 @@ def load_creds() -> dict:
             k, v = k.strip(), _clean(v)
             if v and not env.get(k):
                 env[k] = v
+    for key in (
+        "SHOPIFY_SHOP",
+        "SHOPIFY_CLIENT_ID",
+        "SHOPIFY_CLIENT_SECRET",
+        "SHOPIFY_API_VERSION",
+        "SHOPIFY_PRODUCT_QUERY",
+    ):
+        override = os.environ.get(key, "").strip()
+        if override:
+            env[key] = _clean(override)
     shop, cid, sec = env.get("SHOPIFY_SHOP"), env.get("SHOPIFY_CLIENT_ID"), env.get("SHOPIFY_CLIENT_SECRET")
     if not (shop and cid and sec):
         raise SystemExit("Missing SHOPIFY_SHOP / SHOPIFY_CLIENT_ID / SHOPIFY_CLIENT_SECRET in .env")
@@ -440,7 +450,16 @@ def split_records(records):
     return products, variants
 
 
-def _render_product(p: dict, variants: dict, pid: str) -> tuple[str, str]:
+def _storefront_url(shop: str, handle: str) -> str:
+    shop = (shop or os.environ.get("SHOPIFY_SHOP") or "").strip().rstrip("/")
+    if shop:
+        if not shop.startswith("http"):
+            shop = f"https://{shop}"
+        return f"{shop}/products/{handle}"
+    return f"/products/{handle}"
+
+
+def _render_product(p: dict, variants: dict, pid: str, shop: str = "") -> tuple[str, str]:
     title = p.get("title") or "Untitled product"
     raw_handle = p.get("handle") or _slug(title)
     handle = _slug(raw_handle) or "untitled-product"
@@ -463,7 +482,7 @@ def _render_product(p: dict, variants: dict, pid: str) -> tuple[str, str]:
     if len(desc) > 800:
         desc = desc[:800].rsplit(" ", 1)[0] + "…"
 
-    url = p.get("onlineStoreUrl") or f"https://buttons-bebe.myshopify.com/products/{handle}"
+    url = p.get("onlineStoreUrl") or _storefront_url(shop, handle)
     tags = ["product"] + [t for t in (_slug(p.get("productType")), _slug(p.get("vendor"))) if t]
 
     body = (
@@ -518,6 +537,7 @@ def write_files(
     products,
     variants,
     *,
+    shop: str = "",
     require_active: bool = False,
     allow_large_shrink: bool = False,
     rebuild_index: Callable[[], None] | None = None,
@@ -560,7 +580,7 @@ def write_files(
     names: set[str] = set()
     try:
         for pid, p in products.items():
-            filename, body = _render_product(p, variants, pid)
+            filename, body = _render_product(p, variants, pid, shop=shop)
             if filename in names:
                 raise SystemExit(f"duplicate product filename in export: {filename}")
             names.add(filename)
@@ -598,6 +618,7 @@ def main():
         n = write_files(
             products,
             variants,
+            shop=creds["shop"],
             require_active=require_active,
             allow_large_shrink=allow_large_shrink,
             rebuild_index=rebuild_index_locked,

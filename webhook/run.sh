@@ -29,7 +29,7 @@ PORT=$(grep -E '^WEBHOOK_PORT=' .env | cut -d= -f2 || echo "8000")
 
 echo "Starting webhook receiver on ${HOST}:${PORT}"
 echo "  Health:     http://${HOST}:${PORT}/health"
-echo "  Webhook:    https://srv1766050.hstgr.cloud/webhook/gorgias/buttonsbebe"
+echo "  Webhook:    https://support.example.com/webhook/gorgias/buttonsbebe"
 echo ""
 
 if [ "${1:-}" = "--reload" ]; then

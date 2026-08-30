@@ -41,12 +41,11 @@ class CaddyConfigTests(unittest.TestCase):
     def test_each_fragment_owns_only_its_declared_hosts(self) -> None:
         expected = {
             "support": {
-                "hermes.buttonsbebe.com",
-                "srv1766050.hstgr.cloud",
-                "support.buttonsbebe.com",
+                "hermes.example.com",
+                "support.example.com",
             },
-            "exchange": {"exchange.buttonsbebe.com"},
-            "warehouse": {"wh.buttonsbebe.com"},
+            "exchange": {"exchange.example.com"},
+            "warehouse": {"warehouse.example.com"},
         }
         self.assertEqual(set(self.fragments), set(expected))
         declared: dict[str, str] = {}
@@ -92,7 +91,7 @@ class CaddyConfigTests(unittest.TestCase):
 
     def test_support_preserves_hermes_dashboard_route(self) -> None:
         text = self.fragments["support"]
-        self.assertIn("hermes.buttonsbebe.com {", text)
+        self.assertIn("hermes.example.com {", text)
         self.assertIn("reverse_proxy 127.0.0.1:9119", text)
         self.assertIn("output file /var/log/bb-webhook/caddy-hermes.log", text)
 

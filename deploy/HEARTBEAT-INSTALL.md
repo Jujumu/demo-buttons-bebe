@@ -11,15 +11,15 @@ up in the morning.
 
 | File | Where it goes on the VPS | What it is |
 |---|---|---|
-| `processor/heartbeat.sh` | `/root/Buttonsbebe Agent/processor/heartbeat.sh` | The check itself |
+| `processor/heartbeat.sh` | `/opt/buttonsbebe/processor/heartbeat.sh` | The check itself |
 | `deploy/systemd/buttonsbebe-heartbeat.service` | `/etc/systemd/system/` | How to run the check |
 | `deploy/systemd/buttonsbebe-heartbeat.timer` | `/etc/systemd/system/` | How often to run it (every 5 min) |
 
 ## Install
 
 ```bash
-cd "/root/Buttonsbebe Agent"
-install -m 755 processor/heartbeat.sh "/root/Buttonsbebe Agent/processor/heartbeat.sh"
+cd "/opt/buttonsbebe"
+install -m 755 processor/heartbeat.sh "/opt/buttonsbebe/processor/heartbeat.sh"
 cp deploy/systemd/buttonsbebe-heartbeat.service /etc/systemd/system/
 cp deploy/systemd/buttonsbebe-heartbeat.timer   /etc/systemd/system/
 

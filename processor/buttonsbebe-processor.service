@@ -6,12 +6,12 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/root/Buttonsbebe Agent/processor
-ExecStart=/bin/bash -c 'exec "/root/Buttonsbebe Agent/processor/.venv/bin/python" -m orchestrator'
+WorkingDirectory=/opt/buttonsbebe/processor
+ExecStart=/bin/bash -c 'exec "/opt/buttonsbebe/processor/.venv/bin/python" -m orchestrator'
 Restart=always
 RestartSec=5
-Environment=PATH=/root/.local/bin:/usr/local/bin:/usr/bin:/bin
-Environment="PYTHONPATH=/root/Buttonsbebe Agent/processor:/root/Buttonsbebe Agent/webhook/src"
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment="PYTHONPATH=/opt/buttonsbebe/processor:/opt/buttonsbebe/webhook/src"
 
 StandardOutput=journal
 StandardError=journal

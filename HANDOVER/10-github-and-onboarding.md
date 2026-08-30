@@ -96,8 +96,8 @@ If you pull the `webhook/`/`processor/` source off the VPS (doc 06), **strip its
 - [ ] Read the repo‑root `CLAUDE.md` (current source of truth for the live system).
 - [ ] Skim `03`, `04`, `05` to see how the pieces map to code.
 
-**Day 1–2 — get access** (request these from Tony / Chaim — see §6)
-- [ ] SSH access to the VPS `srv1766050` (`2.25.137.77`).
+**Day 1–2 — get access** (request these from the previous operator / store owner — see §6)
+- [ ] SSH access to the VPS `your-host` (`<YOUR_SERVER_IP>`).
 - [ ] Gorgias, Shopify, and Redo credentials/logins.
 - [ ] Ollama Cloud account/key used by the Hermes brain.
 - [ ] The GitHub repo (owner/admin access).
@@ -111,24 +111,24 @@ If you pull the `webhook/`/`processor/` source off the VPS (doc 06), **strip its
 
 **Week 1 — decide & plan**
 - [ ] Read `07` and decide: continue Fable, fold it into `main`, or shelve it.
-- [ ] Read `08`, confirm Phase 2 scope, and get Chaim's answers to the **5 policy questions**.
+- [ ] Read `08`, confirm Phase 2 scope, and get the store owner's answers to the **5 policy questions**.
 - [ ] Work through the day‑one remediation checklist in `06` (rotate weak WhatsApp creds, rotate `.env` keys, consolidate the two `.env` files).
 
 ---
 
 ## 6. Access & credentials to collect at handover
 
-Ask Tony / Chaim for the following (this is the "keys to the car" list). **Do not** paste any of these into the repo or this handover.
+Ask the previous operator / store owner for the following (this is the "keys to the car" list). **Do not** paste any of these into the repo or this handover.
 
 | Item | Why you need it | Where it's used |
 |---|---|---|
-| SSH key/login for VPS `srv1766050` | Run/verify the live system; pull the missing source | The production server |
+| SSH key/login for VPS `your-host` | Run/verify the live system; pull the missing source | The production server |
 | Gorgias account + API key (email + key, "Basic" auth) | Read tickets, write internal notes | The 3 MCP tools + webhook |
 | Shopify store + API client id/secret ("client‑credentials") | Read order/product data; product sync | MCP tools + KB sync |
 | Redo API key + store id ("Bearer" auth) | Returns/refunds status | Redo MCP tool |
 | Ollama Cloud key | Runs the `glm-5.2` model that is the AI brain | Hermes config (`~/.hermes/config.yaml`) |
 | GitHub repo owner access | Push, protect branches, manage the team | GitHub |
-| Domain/Caddy access (`srv1766050.hstgr.cloud`) | The public HTTPS entry point | Caddy reverse proxy |
+| Domain/Caddy access (`support.example.com`) | The public HTTPS entry point | Caddy reverse proxy |
 | WhatsApp number/session for escalations | Owner escalation alerts | `whatsapp-connect` service |
 
 Doc `05` maps each credential to the exact service and environment variable that consumes it.

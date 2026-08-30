@@ -5,9 +5,9 @@ live in `sites/`, one owned fragment per service boundary:
 
 | Fragment | Hostnames owned | Upstream |
 | --- | --- | --- |
-| `sites/support.caddy` | `hermes.buttonsbebe.com`, `srv1766050.hstgr.cloud`, `support.buttonsbebe.com` | `127.0.0.1:8000`, `:8085`, `:8087`, `:9119` |
-| `sites/exchange.caddy` | `exchange.buttonsbebe.com` | `127.0.0.1:4100` |
-| `sites/warehouse.caddy` | `wh.buttonsbebe.com` | `127.0.0.1:4000` |
+| `sites/support.caddy` | `hermes.example.com`, `support.example.com` | `127.0.0.1:8000`, `:8085`, `:8087`, `:9119` |
+| `sites/exchange.caddy` | `exchange.example.com` | `127.0.0.1:4100` |
+| `sites/warehouse.caddy` | `warehouse.example.com` | `127.0.0.1:4000` |
 
 The tracked files are redacted templates. `<WA_TOKEN>` and
 `<WAREHOUSE_PASSWORD_HASH>` are placeholders, not credentials. Production

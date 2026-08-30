@@ -10,7 +10,7 @@
 
 ## 0. Read this before anything else — what is *not* in this clone
 
-This repo is a **partial snapshot**, confirmed by `SPRINT-notice-board-2026-07-12.md` (risk R2) and by directory inspection. Several things `CLAUDE.md` describes as LIVE **cannot be found by cloning this repo** — they live only on the VPS at `/root/Buttonsbebe Agent/`. This matters most for the learning loop.
+This repo is a **partial snapshot**, confirmed by `SPRINT-notice-board-2026-07-12.md` (risk R2) and by directory inspection. Several things `CLAUDE.md` describes as LIVE **cannot be found by cloning this repo** — they live only on the VPS at `/opt/buttonsbebe/`. This matters most for the learning loop.
 
 | Referenced in `CLAUDE.md` | Present in this repo? | Notes |
 |---|---|---|
@@ -23,7 +23,7 @@ This repo is a **partial snapshot**, confirmed by `SPRINT-notice-board-2026-07-1
 
 **Present and usable in this clone:** the entire `kb/` content + search engine + scripts + systemd units, the `feedback/` Python package + tests, `kb-admin/server.js` (Notice Board + KB-edit API), and both SPRINT docs.
 
-**Path casing:** locally the folder is `kb/` (lowercase); on the VPS it is `KB/` (uppercase) — see `SPRINT-notice-board` R3. The Python scripts resolve paths relative to their own location, so both work. This doc uses lowercase `kb/` for repo paths and flags VPS-only absolute paths (`/root/Buttonsbebe Agent/...`) explicitly.
+**Path casing:** locally the folder is `kb/` (lowercase); on the VPS it is `KB/` (uppercase) — see `SPRINT-notice-board` R3. The Python scripts resolve paths relative to their own location, so both work. This doc uses lowercase `kb/` for repo paths and flags VPS-only absolute paths (`/opt/buttonsbebe/...`) explicitly.
 
 ---
 
@@ -311,7 +311,7 @@ Key facts and cautions for the new team:
 
 - **Auto-promotion.** Unlike the repo's `feedback/` design, this path promotes **automatically** each night and writes exemplars already at `status: confirmed` (`source: learned-auto`). The only PII guard is `feedback/pii.py` masking **plus a hardcoded known-customer-name mask** — and `pii.py` itself warns it **does not catch names in general** (§5.2, `pii.py`). This is a real risk surface to review on the VPS.
 - **The masking module is shared.** `feedback/pii.py` (in this repo) is the masker the LIVE nightly job calls — so this repo file *is* load-bearing for production even though the surrounding LIVE scripts are not here.
-- **Where to find the LIVE code:** `/root/Buttonsbebe Agent/webhook/src/bb_webhook/learning.py`, `/root/Buttonsbebe Agent/KB/scripts/auto_promote_learned.py`, `/root/Buttonsbebe Agent/KB/learn-nightly.sh`, and the `buttonsbebe-kb-learn.service/.timer` units — all on the VPS. **Pull these into the repo during handover; they are currently unversioned here.**
+- **Where to find the LIVE code:** `/opt/buttonsbebe/webhook/src/bb_webhook/learning.py`, `/opt/buttonsbebe/KB/scripts/auto_promote_learned.py`, `/opt/buttonsbebe/KB/learn-nightly.sh`, and the `buttonsbebe-kb-learn.service/.timer` units — all on the VPS. **Pull these into the repo during handover; they are currently unversioned here.**
 
 ### 5.2 The `feedback/` package (IN this repo) — the poll-based, human-gated design
 
@@ -321,7 +321,7 @@ Module-by-module:
 
 | File | Job |
 |---|---|
-| `feedback/config.py` | Loads the shared `.env` (Gorgias creds + `FEEDBACK_*` knobs) from `[/root/Buttonsbebe Agent/.env, …/webhook/.env, <repo>/.env]`. Defines KB paths: `LEARNED_DIR` (holding pen, not indexed), `TICKETS_DIR` (indexed promotion target), `ARCHIVE_DIR` (`kb/_archive_learned/` — leading underscore ⇒ never indexed). `ENABLED` defaults to `shadow`. |
+| `feedback/config.py` | Loads the shared `.env` (Gorgias creds + `FEEDBACK_*` knobs) from `[/opt/buttonsbebe/.env, …/webhook/.env, <repo>/.env]`. Defines KB paths: `LEARNED_DIR` (holding pen, not indexed), `TICKETS_DIR` (indexed promotion target), `ARCHIVE_DIR` (`kb/_archive_learned/` — leading underscore ⇒ never indexed). `ENABLED` defaults to `shadow`. |
 | `feedback/gorgias_read.py` | **Read-only** Gorgias client (GET only — no write methods exist by design). Basic auth + explicit User-Agent (Gorgias' WAF 403s the default urllib UA). Lists tickets by `updated_datetime:asc`, fetches messages. |
 | `feedback/pairing.py` | The heart. For one ticket's messages, finds the trustworthy pair: **AI draft** = `from_agent=true AND public=false` (internal note); **human reply** = `from_agent=true AND public=true` (public reply) sent *after* the draft. Prefers the bot's note (`FEEDBACK_BOT_EMAIL`/`_USER_ID`). Returns a `Pair` or a `Skip(reason)`. Skip reasons: `no_ai_draft`, `empty_draft`, `no_human_reply`, `empty_reply`, `macro`, `multi_turn`. **Never** decides capture on similarity. |
 | `feedback/text_clean.py` | `clean_draft()` strips glm-5.2 self-commentary tails (e.g. "the response above was complete") and de-dupes the "answer emitted twice" block (DEV-ISSUES #5); `normalize()` does light whitespace/quote cleanup. Conservative: keeps text when unsure. |
@@ -373,13 +373,13 @@ VPS-side (paths are the uppercase `KB/` on the server):
 
 ```bash
 # KB search sanity
-cd "/root/Buttonsbebe Agent/KB" && ./search.sh "do you ship to canada"
+cd "/opt/buttonsbebe/KB" && ./search.sh "do you ship to canada"
 
 # rebuild the index after editing content
-cd "/root/Buttonsbebe Agent/KB" && ./update.sh
+cd "/opt/buttonsbebe/KB" && ./update.sh
 
 # product sync on demand (else every 3 days)
-cd "/root/Buttonsbebe Agent/KB" && ./sync-products.sh
+cd "/opt/buttonsbebe/KB" && ./sync-products.sh
 
 # services / timers
 systemctl status buttonsbebe-kb-mcp buttonsbebe-kb-admin

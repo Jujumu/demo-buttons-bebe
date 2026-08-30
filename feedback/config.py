@@ -3,11 +3,10 @@
 Reads the same .env the rest of the agent uses (Gorgias creds), plus a handful of
 feedback-specific knobs. No secrets are hard-coded. Everything has a safe default.
 
-Env resolution order (first hit wins), matching tools/_common.py on the VPS but
-also falling back to a local .env so the package is testable off the box:
-    /root/Buttonsbebe Agent/.env
-    /root/Buttonsbebe Agent/webhook/.env
+Env resolution order (first hit wins), matching tools/_common.py:
     <repo-root>/.env
+    <repo-root>/webhook/.env
+    then GORGIAS_* / FEEDBACK_* process environment overrides.
 """
 from __future__ import annotations
 
@@ -22,9 +21,8 @@ PKG_DIR = pathlib.Path(__file__).resolve().parent
 REPO_ROOT = PKG_DIR.parent
 
 ENV_CANDIDATES = [
-    pathlib.Path("/root/Buttonsbebe Agent/.env"),
-    pathlib.Path("/root/Buttonsbebe Agent/webhook/.env"),
     REPO_ROOT / ".env",
+    REPO_ROOT / "webhook" / ".env",
 ]
 
 

@@ -1,8 +1,8 @@
 # Sprint Plan: Notice Board
 
 **Date:** Sunday, 2026-07-12 (one-day sprint) · **Go-live target:** today
-**Builder:** Claude (with Tony reviewing/approving) · **Client:** Chaim
-**Branch:** `main` → deploy to VPS `srv1766050`
+**Builder:** Claude (with Tony reviewing/approving) · **Client:** the store owner
+**Branch:** `main` → deploy to VPS `your-host`
 
 ---
 
@@ -91,7 +91,7 @@ SOUL gains one rule: *if a `search_kb` result is a NOTICE BOARD entry, follow it
 |------|--------|------------|
 | **R1 — Console page source isn't in `main`** (it lives only on the server at `/var/www/console/index.html`) | Owner panel (F) can't be built purely on main | Build the panel directly on the server file (backed up first); optionally copy it back into the repo afterward. **Decision needed — see below.** |
 | **R2 — `main` is a partial snapshot** (has `kb/` + `kb-admin/`, not the console/webhook) | "Build on main then deploy" only fully applies to B–E, G | Commit B–E, G to main; treat D (SOUL) and F (console) as server-side edits; document in deploy notes |
-| **R3 — Folder name casing** (`kb/` local vs `KB/` on server) | Wrong path breaks deploy | Deploy script targets server `KB_DIR=/root/Buttonsbebe Agent/KB` explicitly |
+| **R3 — Folder name casing** (`kb/` local vs `KB/` on server) | Wrong path breaks deploy | Deploy script targets server `KB_DIR=/opt/buttonsbebe/KB` explicitly |
 | **R4 — Bad/missing notices file** | Could break all searches | `search_kb` wraps notice-loading in try/except → empty list on any error; search never fails because of the board |
 | **R5 — Same-day full scope is tight** | UI may slip past today | UI (F) is the only P1 that can drop to "tomorrow"; the override brain (B–D) ships today regardless |
 

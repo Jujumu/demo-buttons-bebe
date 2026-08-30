@@ -19,39 +19,39 @@ final-sale/warehouse-exchange exception.
 
 The warehouse / pickup location is:
 
-**Buttons Bebe — 2133 Lakewood Rd, Unit 104, Toms River, NJ 08755**
+**Buttons Bebe — the store warehouse address**
 Hours: **Mon–Thu 9am–3pm · Fri 9am–2pm**
 
 Customers are welcome to visit during hours to browse, try items on, pick up, or
-return. Extended hours are sometimes available — customers can text 908-910-5441 to
+return. Extended hours are sometimes available — customers can text 555-0100 to
 confirm hours before visiting.
 
-## Lakewood return drop-off
+## after-hours return drop-off
 
-There is a 24/7 return bin in Lakewood:
+There is a 24/7 return bin at the after-hours drop-off:
 
-**6 Kenyon Drive — side door (return bin, available 24 hours a day, 7 days a
+**the published after-hours return drop-off — side door (return bin, available 24 hours a day, 7 days a
 week).**
 
 No label is needed for a drop-off. This is in addition to mailing a return or
-dropping off at the Toms River warehouse during hours.
+dropping off at the store warehouse during hours.
 
 ## Outdoor pickup bins — 24/7
 
-Warehouse pickup orders are placed in **outdoor pickup bins** at the Toms River
+Warehouse pickup orders are placed in **outdoor pickup bins** at the warehouse
 address, accessible **24/7**. Orders stay in the bin for approximately **2 months**.
-To pick up, the customer selects the Toms River pickup option at checkout. For any
-pickup trouble, text **848-240-8260**.
+To pick up, the customer selects the local pickup option at checkout. For any
+pickup trouble, text **555-0101**.
 
 ## Public contacts
 
 Buttons Bebe handles inquiries primarily by email. Public business contacts:
 
-- **Email:** customerservice@buttonsbebe.com
-- **Text / WhatsApp 908-910-5441** — warehouse hours and new-arrival announcements.
-- **848-240-8260** — pickup questions.
-- **General phone 973-741-0170** — reported intermittently active; confirm current
+- **Email:** support@example.com
+- **Text / WhatsApp 555-0100** — warehouse hours and new-arrival announcements.
+- **555-0101** — pickup questions.
+- **General phone 555-0102** — reported intermittently active; confirm current
   status with the team before quoting it.
-- **Boss cell 845-570-3569** — escalation only. **Confirm with the boss before
+- **Boss cell 555-0199** — escalation only. **Confirm with the boss before
   sharing this number** with a customer (see `agent-core-rules.md` and
   `escalation-and-edge-cases.md`).

@@ -16,7 +16,7 @@ See `PHASE1_KB_ARCHITECTURE.md` for the surrounding system design.
 ---
 title: Return & Exchange Policy
 category: policies
-status: confirmed            # DRAFT until owner (Chaim) confirms; else "confirmed"
+status: confirmed            # DRAFT until store owner confirms; else "confirmed"
 source: derived-from-tickets   # OPTIONAL — see §3
 tags: [returns, exchanges, final-sale]
 ---
@@ -62,13 +62,13 @@ documented here so nothing collides: `ticket_id`, `source_type`,
 
 - We do **not** have the owner's real policy text yet. Every hand-written policy
   is therefore `status: confirmed` and carries a visible
-  `> ⚠️ DRAFT — pending owner (Chaim) confirmation.` line as the first line of
-  the body. Chaim flips `status: confirmed` → `status: confirmed` and removes the
+  `> ⚠️ DRAFT — pending store-owner confirmation.` line as the first line of
+  the body. the store owner flips `status: confirmed` → `status: confirmed` and removes the
   banner once he validates the text.
 - FAQ entries **mined from the real ticket exports** carry
   `source: derived-from-tickets`. They reflect what agents actually did, so they
   are more trustworthy than the placeholder policies, but they are still
-  `status: confirmed` until Chaim confirms wording/edge cases.
+  `status: confirmed` until the store owner confirms wording/edge cases.
 
 ## 4. Chunking guidance (so retrieval is good)
 

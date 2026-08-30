@@ -99,9 +99,9 @@ right team** rather than making the promise itself.
 
 - **#08 (pickup):** address and hours are correct, but it described the 24/7 *"outdoor
   pickup bins by the side door."* In the KB, the **"side door" 24/7 bin is the Lakewood
-  return drop-off** (6 Kenyon Drive) — a different thing from the Toms River pickup bins.
-  It also didn't need to, but watch that the pickup-problem number (848-240-8260) and the
-  hours number (908-910-5441) don't get swapped.
+  return drop-off** (the published after-hours return drop-off) — a different thing from the local pickup bins.
+  It also didn't need to, but watch that the pickup-problem number (555-0101) and the
+  hours number (555-0100) don't get swapped.
 
 ---
 

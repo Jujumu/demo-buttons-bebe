@@ -50,7 +50,7 @@ To make this testable and offline, Fable ships **emulators** — small local Fas
 | The only "write" | Internal note into Gorgias (`gorgias_writer.py`) | Human-initiated **Send** (per-channel transport) + internal note; both local |
 | Risk classification | Done by the LLM; deterministic `classifier.py` is a **stub** on `main` | **Deterministic `risk.py`** (implemented) + parity test against the VPS classifier port |
 | Testability | Human-graded live runs | **~180 automated checks**, one command, **zero network** |
-| Deployment | Running on VPS `srv1766050` | **Not deployed anywhere** |
+| Deployment | Running on VPS `your-host` | **Not deployed anywhere** |
 
 ### 1.4 Why it maps to the roadmap
 

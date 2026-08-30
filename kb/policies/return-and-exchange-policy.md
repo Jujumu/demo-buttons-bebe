@@ -28,9 +28,9 @@ in-person exchange** that is approved. The item must be **unworn, unused, and wi
 tags attached**. The warehouse exchange address is:
 
 Buttons Bebe
-2133 Lakewood Road
+the store warehouse address
 Unit 104
-Toms River, NJ
+Example City
 
 Do not promise an exception — escalate or ask staff for approval (see
 `agent-core-rules.md`).

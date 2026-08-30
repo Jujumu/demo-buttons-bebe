@@ -4,7 +4,7 @@
 > issue register. Several items below are now fixed. Use `CLAUDE.md`, `AGENTS.md`,
 > the current tests, and live verification; do not implement work from this file.
 
-Server: `srv1766050` (2.25.137.77), everything under `/root/Buttonsbebe Agent/`.
+Server: `your-host` (<YOUR_SERVER_IP>), everything under `/opt/buttonsbebe/`.
 Architecture reference: `CLAUDE.md` (single source of truth).
 Two sections: **A. Open issues to fix**, then **B. Already fixed (context only)**.
 
@@ -90,26 +90,26 @@ Two sections: **A. Open issues to fix**, then **B. Already fixed (context only)*
    - Pinned by `processor/test_hermes_toolset.py`.
 
 9. **`.env` duplication — make one source of truth.**
-   - Where: `/root/Buttonsbebe Agent/.env` (read by the MCP tools) and
-     `/root/Buttonsbebe Agent/webhook/.env` (read by webhook + processor).
+   - Where: `/opt/buttonsbebe/.env` (read by the MCP tools) and
+     `/opt/buttonsbebe/webhook/.env` (read by webhook + processor).
    - Problem: values live in two files and drifted (this caused a long Gorgias-key debugging
      detour — one file was edited while the code read the other).
    - Fix: consolidate to one `.env` (merge webhook-only vars into the main file, point both
      `config.py` files at it or symlink), then restart services and verify. See `.env.example`
      for the full variable list.
 
-### Content (needs the owner / Chaim)
+### Content (needs the owner / the store owner)
 
 10. **KB policies still contain placeholder/DRAFT wording.**
     - Where: `KB/policies/*` and `KB/intents/*` (some marked `status: confirmed` but with
       conservative defaults pending owner confirmation).
-    - Fix: get Chaim to confirm the real policy specifics (return window, who pays return
+    - Fix: get the store owner to confirm the real policy specifics (return window, who pays return
       shipping, sale-season rules, international rates, etc.) and replace placeholders.
 
 11. **Minor KB accuracy — pickup vs return-bin location.**
     - Where: KB pickup/returns content.
-    - Problem: QA #08 — the answer implied the 24/7 "side door bin" is at the 2133 Lakewood
-      pickup spot, but the KB says the 24/7 return bin is at **6 Kenyon Drive**.
+    - Problem: QA #08 — the answer implied the 24/7 "side door bin" is at the warehouse
+      pickup spot, but the KB says the 24/7 return bin is at **the published after-hours return drop-off**.
     - Fix: tighten the KB wording so the two locations aren't conflated.
 
 ### Security / hardening
@@ -131,13 +131,13 @@ These were found and fixed during setup; listed so the dev has the history.
 
 - **Paste artifacts in `.env`:** `SHOPIFY_SHOP` had a trailing `\`; `SHOPIFY_CLIENT_ID` and
   `SHOPIFY_CLIENT_SECRET` each had 2 trailing junk characters → auth failures. Cleaned.
-- **`GORGIAS_SUBDOMAIN`** was set to a full URL (`https://buttonsbebe.gorgias.com`) → doubled
+- **`GORGIAS_SUBDOMAIN`** was set to a full URL (`https://your-helpdesk.gorgias.com`) → doubled
   domain. Fixed to the bare `buttonsbebe`.
 - **Gorgias API key** was wrong/mismatched across the two `.env` files (401). Corrected and
   synced. (Reminder: Gorgias REST auth = Basic, username = the exact email on the REST-API
   page, password = the key; use `limit` for pagination, not `per_page`.)
 - **Redo creds were commented out** in `.env` → not loaded. Uncommented; Redo works.
-- **`SHOPIFY_SHOP` wrong in `webhook/.env`** (`buttonsbebe` vs `buttons-bebe.myshopify.com`).
+- **`SHOPIFY_SHOP` wrong in `webhook/.env`** (`buttonsbebe` vs `your-store.myshopify.com`).
   Corrected.
 - **`database.py:114` missing `await`** on `conn.execute("PRAGMA busy_timeout=3000")`
   (un-awaited coroutine → RuntimeWarning, PRAGMA never applied). Fixed.
@@ -163,4 +163,4 @@ These were found and fixed during setup; listed so the dev has the history.
   verbose (see open item #5).
 - Services (all systemd, localhost-bound): `buttonsbebe-webhook` (8000), `-kb-mcp` (8077),
   `-redo-mcp` (8078), `-gorgias-mcp` (8079), `-whatsapp-connect` (8085), `-processor`,
-  `-kb-sync.timer`. Public entry via Caddy on `srv1766050.hstgr.cloud`.
+  `-kb-sync.timer`. Public entry via Caddy on `support.example.com`.

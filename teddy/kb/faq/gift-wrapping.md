@@ -41,7 +41,7 @@ The recipient can use the gift receipt for exchanges.
 
 ## Can I add gift wrapping after ordering?
 
-If you forgot to add gift wrapping, email us at **support@buttonsbebe.com** within **12 hours** of placing your order with your order number and gift message.
+If you forgot to add gift wrapping, email us at **support@example.com** within **12 hours** of placing your order with your order number and gift message.
 We will do our best to accommodate the request, though we cannot guarantee it if the order has already been packed.
 
 ## Delivery directly to recipient

@@ -41,7 +41,7 @@ timestamp: 2026-06-28
 - The code requires a minimum cart total. Add more items to qualify.
 
 **Forgot to apply code before completing order:**
-- Email support@buttonsbebe.com within 24 hours with the order number and code.
+- Email support@example.com within 24 hours with the order number and code.
 - Handled case by case (and only while the order has not shipped). Since it would mean refunding a difference, surface it to a human rather than promising a refund automatically.
 
 ## One code per order

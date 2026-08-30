@@ -26,7 +26,7 @@ If a customer needs an order by a specific date, recommend a faster shipping opt
 
 ## Where we ship from and how
 
-Orders ship from our warehouse in Toms River, NJ. Customers receive a tracking
+Orders ship from our warehouse in Example City. Customers receive a tracking
 number once the order ships. If a customer asks "where is my order," look up the
 order's fulfillment status and tracking and share it. See
 `intents/intent-17-when-will-order-ship.md` and
@@ -42,7 +42,7 @@ guarantee delivery unless the shipping method/carrier supports it. See
 
 ## Local pickup
 
-Local customers can pick up from the Toms River warehouse. A pickup order can be
+Local customers can pick up from the store warehouse. A pickup order can be
 switched to shipping (even after it was processed for pickup) as long as it has not
 been picked up; a shipping order can be switched to pickup only if it has not
 shipped. See `intents/intent-02-pickup-to-shipping.md` and

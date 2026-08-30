@@ -224,7 +224,7 @@ Every task follows the same shape: **What · Why · Files · Risk · Test · Don
 
 ### ☐ Task 6 — Consolidate the two `.env` files and rotate secrets
 
-- **What:** merge `/root/Buttonsbebe Agent/.env` and `/root/Buttonsbebe Agent/webhook/.env`
+- **What:** merge `/opt/buttonsbebe/.env` and `/opt/buttonsbebe/webhook/.env`
   into one source of truth, delete the dead `SHOPIFY_ADMIN_API_TOKEN`, `chmod 600` everything,
   and rotate any credential that has ever been pasted into a chat or a backup folder.
 - **Why:** the split already cost a long debugging detour once (`IMPROVEMENT-PLAN.md` #6), and

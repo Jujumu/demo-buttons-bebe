@@ -23,7 +23,7 @@ os.environ['LLM_MODEL']          = 'deepseek-v4-flash:cloud'
 os.environ['LLM_API_KEY']        = os.environ.get('OLLAMA_API_KEY', '')
 os.environ['KB_SERVICE_ENABLED'] = '0'
 # creds presence so shopify_lookup.is_configured() is True (values unused — patched)
-os.environ.setdefault('SHOPIFY_STORE', 'buttons-bebe')
+os.environ.setdefault('SHOPIFY_STORE', '')
 os.environ.setdefault('SHOPIFY_API_KEY', 'mock'); os.environ.setdefault('SHOPIFY_API_SECRET', 'mock')
 
 sys.path.insert(0, SCRIPT_DIR); sys.path.insert(0, '/root/qa_v3'); sys.path.insert(0, '/root')

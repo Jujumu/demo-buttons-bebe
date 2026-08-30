@@ -18,7 +18,7 @@ Check if shipped.
 If not shipped, check requested size availability and change if possible.
 If shipped, do not promise exception.
 If exception may be considered, escalate or ask staff approval.
-Warehouse-only exchange address: Buttons Bebe, 2133 Lakewood Road, Unit 104, Toms River, NJ.
+Warehouse-only exchange address: Buttons Bebe, the store warehouse address, Example City.
 
 ## Customer response if changed before shipping
 
@@ -31,7 +31,7 @@ Hi! Since this item was final sale and the order already shipped, it is not elig
 If we are able to make an exception, it would need to be exchanged in person at our warehouse only.
 Our warehouse address is:
 Buttons Bebe
-2133 Lakewood Road
+the store warehouse address
 Unit 104
-Toms River, NJ
+Example City
 The item would need to be unworn, unused, and with tags attached. Please let us know if you’d like us to check whether an in-person exchange exception is possible.

@@ -11,7 +11,7 @@ Trustworthy & Visible
 3
 PHASE 3
 Autonomous & Multi-channel
-Prepared for the meeting with Chaim   ·   July 12, 2026
+Prepared for the meeting with the store owner   ·   July 12, 2026
 --- SLIDE 2 ---
 PHASE 1  ·  LIVE TODAY
 Where we are today
@@ -348,7 +348,7 @@ Model evaluation: test a less verbose / cheaper model than glm-5.2 to cut cost &
 What the estimates assume
 One focused builder (Tony + Claude), working sequentially.
 Estimates are build + test time; ranges absorb testing & surprises.
-Chaim's 5 policy answers and any channel/action logins arrive promptly.
+the store owner's 5 policy answers and any channel/action logins arrive promptly.
 Scope stays fixed per item; features can be re-ordered to taste.
 Days = focused work-days, not calendar days; ~1 week ≈ 5 build-days.
 Buttons Bebe  ·  AI Support Agent — Phase 2 & 3 Plan

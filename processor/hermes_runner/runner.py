@@ -98,15 +98,11 @@ def _run_environment(settings: Any) -> dict[str, str]:
     """Build the Hermes environment without loading credentials in this module."""
 
     environment = dict(os.environ)
-    hermes_home = str(getattr(settings, "hermes_home", "/root") or "").strip()
-    hermes_path = str(
-        getattr(
-            settings,
-            "hermes_path",
-            "/root/.local/bin:/usr/local/bin:/usr/bin:/bin",
-        )
-        or ""
+    hermes_home = str(
+        getattr(settings, "hermes_home", "") or os.path.expanduser("~")
     ).strip()
+    default_path = f"{os.path.expanduser('~')}/.local/bin:/usr/local/bin:/usr/bin:/bin"
+    hermes_path = str(getattr(settings, "hermes_path", "") or default_path).strip()
     if hermes_home:
         environment["HOME"] = hermes_home
     if hermes_path:

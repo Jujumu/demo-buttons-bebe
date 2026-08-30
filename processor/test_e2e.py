@@ -39,10 +39,10 @@ import httpx
 # ── Config ───────────────────────────────────────────────
 BASE_URL = "http://127.0.0.1:8000"
 WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "")
-TENANT_ID = "buttonsbebe"
+TENANT_ID = os.environ.get("GORGIAS_SUBDOMAIN", "test-tenant")
 
 # Gorgias
-GORGIAS_SUBDOMAIN = os.environ.get("GORGIAS_SUBDOMAIN", "buttonsbebe")
+GORGIAS_SUBDOMAIN = os.environ.get("GORGIAS_SUBDOMAIN", "")
 GORGIAS_API_EMAIL = os.environ.get("GORGIAS_API_EMAIL", "")
 GORGIAS_API_KEY = os.environ.get("GORGIAS_API_KEY", "")
 GORGIAS_BASE = f"https://{GORGIAS_SUBDOMAIN}.gorgias.com/api"
@@ -153,8 +153,8 @@ def test_kb_search() -> None:
              'query "return policy" and k 3. Print the results. '
              "Do not do anything else."],
             capture_output=True, text=True, timeout=60,
-            env={**dict(os.environ), "HOME": "/root",
-                 "PATH": "/root/.local/bin:/usr/local/bin:/usr/bin:/bin"},
+            env={**dict(os.environ), "HOME": os.path.expanduser("~"),
+                 "PATH": os.path.expanduser("~") + "/.local/bin:/usr/local/bin:/usr/bin:/bin"},
         )
         if result.returncode == 0 and "return" in result.stdout.lower():
             pass_test("KB search returns results", f"output len={len(result.stdout)}")
@@ -462,8 +462,8 @@ def test_live_hermes() -> None:
         result = subprocess.run(
             [*HERMES_BASE_CMD, "-z", prompt],
             capture_output=True, text=True, timeout=120,
-            env={**dict(os.environ), "HOME": "/root",
-                 "PATH": "/root/.local/bin:/usr/local/bin:/usr/bin:/bin"},
+            env={**dict(os.environ), "HOME": os.path.expanduser("~"),
+                 "PATH": os.path.expanduser("~") + "/.local/bin:/usr/local/bin:/usr/bin:/bin"},
         )
 
         stdout = result.stdout.strip()

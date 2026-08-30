@@ -8,7 +8,7 @@
 
 ## Products & external services
 
-- **Buttons Bebe** — the client's e‑commerce store (baby/children's clothing). Runs on Shopify; does support in Gorgias. The end customer of this whole project. Owner contact: **Chaim**.
+- **Buttons Bebe** — the client's e‑commerce store (baby/children's clothing). Runs on Shopify; does support in Gorgias. The end customer of this whole project. Owner contact: **the store owner**.
 - **Gorgias** — the **help‑desk** software Buttons Bebe uses. All customer support "tickets" (email conversations) live here. Our agent reads tickets from Gorgias and writes its draft replies back into Gorgias as internal notes. Auth method: **Basic** (email + API key).
 - **Shopify** — the **e‑commerce platform** the store runs on. Source of order, product, and customer data. The agent reads it (read‑only). Auth method: **client‑credentials** (mint a 24‑hour Admin API token from a client id + secret).
 - **Redo** — a **returns/refunds** service. The agent reads return/refund status from it (read‑only). Auth method: **Bearer** token.
@@ -49,7 +49,7 @@
 
 ## Infrastructure & operations
 
-- **VPS** — the **Virtual Private Server** (a rented Linux machine) where everything runs. This one is `srv1766050` at IP `2.25.137.77`, running Ubuntu.
+- **VPS** — the **Virtual Private Server** (a rented Linux machine) where everything runs. This one is `your-host` at IP `<YOUR_SERVER_IP>`, running Ubuntu.
 - **systemd** — Linux's **service manager**. Each part of the system (webhook, the three tools, WhatsApp, processor, timers) is a systemd "unit" that starts on boot and restarts on failure.
 - **Timer** — a systemd unit that **runs a job on a schedule** (like a cron job) — e.g. product sync every 3 days, notices cleanup, nightly learning promotion.
 - **Caddy** — the **web server / reverse proxy** that provides HTTPS and routes public traffic to the right internal service (e.g. `/connect-whatsapp/*` → port 8085, everything else → port 8000).

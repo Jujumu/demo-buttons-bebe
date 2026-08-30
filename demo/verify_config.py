@@ -2,7 +2,7 @@
 """Validate the Cute Things demo boundary without making network calls.
 
 This is intentionally a small, dependency-free gate. It prevents a demo run
-from inheriting the Buttons Bebe shop, production Gorgias, or the production
+from inheriting a live merchant shop, a production helpdesk, or the production
 queue database through a typo or an unset environment override.
 """
 
@@ -14,8 +14,6 @@ import sys
 
 
 TARGET_SHOP = "yznyc1-ez.myshopify.com"
-CLIENT_SHOP = "buttons-bebe.myshopify.com"
-CLIENT_GORGIAS = "buttonsbebe"
 
 
 def load_env(path: pathlib.Path) -> dict[str, str]:
@@ -40,10 +38,6 @@ def validate(values: dict[str, str]) -> list[str]:
         errors.append(f"DEMO_SHOP_DOMAIN must be {TARGET_SHOP}")
     if values.get("SHOPIFY_SHOP") != TARGET_SHOP:
         errors.append(f"SHOPIFY_SHOP must be {TARGET_SHOP}")
-    if values.get("SHOPIFY_SHOP") == CLIENT_SHOP:
-        errors.append("refusing the Buttons Bebe Shopify shop")
-    if values.get("GORGIAS_SUBDOMAIN", "").strip().lower() == CLIENT_GORGIAS:
-        errors.append("refusing the Buttons Bebe Gorgias workspace")
     if values.get("SHOPIFY_MUTATIONS_ENABLED") != "0":
         errors.append("SHOPIFY_MUTATIONS_ENABLED must be 0")
     if values.get("DEMO_FAKE_SERVICES") != "1":

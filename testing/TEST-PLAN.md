@@ -162,6 +162,6 @@ change to `SOUL.md`, the `buttonsbebe` skill, or the KB.
   first* for address/size/pickup changes, but the safety model marks those same actions
   as **sensitive → escalate**. Today the escalate behavior wins (correct and safe), but
   the KB wording should be reconciled so the AI isn't getting mixed signals.
-- **A couple of contact numbers are role-specific** (908-910-5441 = hours/announcements;
-  848-240-8260 = pickup problems; 845-570-3569 = boss, escalation-only). Watch that the
+- **A couple of contact numbers are role-specific** (555-0100 = hours/announcements;
+  555-0101 = pickup problems; 555-0199 = boss, escalation-only). Watch that the
   AI quotes the right one for the right purpose.

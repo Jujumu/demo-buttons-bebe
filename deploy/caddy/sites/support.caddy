@@ -5,7 +5,7 @@
 #   environment. This source file is an audit/template reference, not a
 #   deployable credential bundle.
 
-hermes.buttonsbebe.com {
+hermes.example.com {
 	# Hermes Agent web dashboard. Authentication is enforced by Hermes.
 	reverse_proxy 127.0.0.1:9119 {
 		header_up Host {host}
@@ -31,7 +31,7 @@ hermes.buttonsbebe.com {
 	}
 }
 
-srv1766050.hstgr.cloud, support.buttonsbebe.com {
+support.example.com {
 	@whatsapp path /connect-whatsapp/<WA_TOKEN> /connect-whatsapp/<WA_TOKEN>/*
 	handle @whatsapp {
 		reverse_proxy 127.0.0.1:8085

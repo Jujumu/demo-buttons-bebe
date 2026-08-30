@@ -9,11 +9,9 @@ from dotenv import load_dotenv
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Load .env from the project root (consolidated 2026-07-08).
-# Previously loaded from webhook/.env; now all components share the single
-# main .env at /root/Buttonsbebe Agent/.env
+# Load .env from the project root (one file for webhook + processor).
 # config.py is at: webhook/src/bb_webhook/config.py
-# parents[0]=bb_webhook, [1]=src, [2]=webhook, [3]=Buttonsbebe Agent (project root)
+# parents[0]=bb_webhook, [1]=src, [2]=webhook, [3]=repo root
 _AGENT_ROOT = Path(__file__).resolve().parents[3]
 _ENV_PATH = _AGENT_ROOT / ".env"
 _DEMO_MODE_AT_IMPORT = os.environ.get("DEMO_MODE", "").strip().lower() in {
@@ -35,7 +33,7 @@ class Settings(BaseSettings):
     demo_mode: bool = Field(default=False, alias="DEMO_MODE")
 
     # ── Gorgias ───────────────────────────────────────────
-    gorgias_subdomain: str = Field(default="buttonsbebe", alias="GORGIAS_SUBDOMAIN")
+    gorgias_subdomain: str = Field(default="", alias="GORGIAS_SUBDOMAIN")
     gorgias_api_email: str = Field(default="", alias="GORGIAS_API_EMAIL")
     gorgias_api_key: str = Field(default="", alias="GORGIAS_API_KEY")
     gorgias_base_url_override: str = Field(default="", alias="GORGIAS_BASE_URL")
@@ -51,7 +49,7 @@ class Settings(BaseSettings):
     # The password is stored as a PBKDF2 hash and sessions are signed with a
     # separate secret. Neither value is safe to replace with a plaintext
     # password or to check into the repository.
-    console_username: str = Field(default="chaim", alias="CONSOLE_USERNAME")
+    console_username: str = Field(default="owner", alias="CONSOLE_USERNAME")
     console_password_hash: str = Field(default="", alias="CONSOLE_PASSWORD_HASH")
     console_session_secret: str = Field(default="", alias="CONSOLE_SESSION_SECRET")
 
@@ -59,7 +57,7 @@ class Settings(BaseSettings):
     webhook_db_path: str = Field(default="./data/webhook.db", alias="WEBHOOK_DB_PATH")
 
     # ── Shopify (client-credentials grant) ───────────────
-    shopify_shop: str = Field(default="buttonsbebe", alias="SHOPIFY_SHOP")
+    shopify_shop: str = Field(default="", alias="SHOPIFY_SHOP")
     shopify_client_id: str = Field(default="", alias="SHOPIFY_CLIENT_ID")
     shopify_client_secret: str = Field(default="", alias="SHOPIFY_CLIENT_SECRET")
 
@@ -79,6 +77,8 @@ class Settings(BaseSettings):
     def gorgias_base_url(self) -> str:
         if self.gorgias_base_url_override:
             return self.gorgias_base_url_override.rstrip("/")
+        if not self.gorgias_subdomain:
+            return ""
         return f"https://{self.gorgias_subdomain}.gorgias.com"
 
     @property

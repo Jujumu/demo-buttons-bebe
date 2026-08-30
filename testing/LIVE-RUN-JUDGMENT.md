@@ -104,7 +104,7 @@ it wants to fix them directly. That's where it needs a firmer guardrail.
    — especially "prepaid return label," "free replacement," refund amounts. (Directly fixes S05.)
 3. **For sensitive tickets, keep the customer draft out of the note** (or clearly separate it), so
    nothing is one click from being sent on an escalation ticket (tightens E05, S10).
-4. **Minor:** R17 called the 24/7 Toms River pickup bins "by the side door" — the "side door" bin
+4. **Minor:** R17 called the 24/7 local pickup bins "by the side door" — the "side door" bin
    is the Lakewood *return* drop-off. Small KB wording cleanup.
 
 After changing the prompt/skill, re-run `run_live_tests.py` and confirm S04, S05, S10, E07 turn

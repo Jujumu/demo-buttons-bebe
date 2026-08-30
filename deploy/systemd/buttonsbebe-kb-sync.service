@@ -7,5 +7,5 @@ Wants=network-online.target
 Type=oneshot
 # Quoted because the path contains a space. The script fetches products,
 # rebuilds the index, and restarts the KB service.
-ExecStart="/root/Buttonsbebe Agent/KB/sync-products.sh"
+ExecStart="/opt/buttonsbebe/KB/sync-products.sh"
 TimeoutStartSec=1800

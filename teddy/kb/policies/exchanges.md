@@ -86,14 +86,14 @@ During an active sale season, **mail returns are not accepted and exchanges can 
 
 **Warehouse for in-person exchange:**
 > Buttons Bebe
-> 2133 Lakewood Road, Unit 104
-> Toms River, NJ 08755
+> the store warehouse address
+> Example City
 > Hours: Mon–Thu 9am–3pm · Fri 9am–2pm
 
 See [Pickup and Warehouse](../faq/pickup-and-warehouse.md) for full details and how to confirm hours.
 
 **Customer response:**
-> Hi! During our sale season we're only able to process exchanges in person at our warehouse — we apologize for the inconvenience! You're welcome to stop by at 2133 Lakewood Road, Unit 104, Toms River, NJ 08755 (Mon–Thu 9am–3pm, Fri 9am–2pm). You can also text us to confirm our hours that day before you come.
+> Hi! During our sale season we're only able to process exchanges in person at our warehouse — we apologize for the inconvenience! You're welcome to stop by at the store warehouse address (Mon–Thu 9am–3pm, Fri 9am–2pm). You can also text us to confirm our hours that day before you come.
 
 ---
 

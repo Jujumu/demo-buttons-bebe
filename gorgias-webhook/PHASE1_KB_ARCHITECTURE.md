@@ -17,7 +17,7 @@ Supermemory + Ollama Cloud + Caddy** — six tiers. That sync tier
 (Obsidian/LiveSync/CouchDB) exists to reconcile edits across many
 devices/editors.
 
-**For Phase 1, Chaim is the only knowledge editor.** With a single editor,
+**For Phase 1, the store owner is the only knowledge editor.** With a single editor,
 the sync tier pays all of its operational cost (a database to run, sync
 conflicts to debug, E2E keys to manage, a third backup target) for none of its
 benefit. So it is **cut**. Git replaces it as the source of truth.
@@ -32,7 +32,7 @@ detection becomes `git diff`).
 ## Architecture
 
 ```
-   Chaim edits Markdown                Hermes agent (server.py / draft_engine.py)
+   the store owner edits Markdown                Hermes agent (server.py / draft_engine.py)
         |                                        |
         | git commit/push                        | hybrid-search query (HTTPS)
         v                                        v
@@ -76,17 +76,17 @@ kb/
   learned/         auto-committed agent replies + owner Q&A (reviewable)
 ```
 
-- **policies / faq / tickets** — written and curated by Chaim (manual, the
+- **policies / faq / tickets** — written and curated by the store owner (manual, the
   static-ish corpus that is most of Phase 1).
 - **learned/** — where the feedback loop deposits machine-grown knowledge as
   Markdown (see "Integration" below). Keeping it in a separate folder lets
-  Chaim review/prune what the system learned, and keeps **Git as the single
+  the store owner review/prune what the system learned, and keeps **Git as the single
   write path into Supermemory** (no second ingestion route to maintain).
 
 > **Alternative authoring surface:** Notion. Since the project already lives in
-> Notion, Chaim could maintain the KB there and the worker ingests from Notion
+> Notion, the store owner could maintain the KB there and the worker ingests from Notion
 > instead of Git. Slightly more ingestion glue; zero new editing tools for
-> Chaim. Git is the recommendation for Phase 1 (versioning + trivial change
+> the store owner. Git is the recommendation for Phase 1 (versioning + trivial change
 > detection); Notion is a drop-in swap of the source tier only.
 
 ---
