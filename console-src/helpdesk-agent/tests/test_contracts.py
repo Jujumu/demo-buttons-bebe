@@ -19,15 +19,18 @@ from helpdesk.fixtures_sample import ADA, ORDER_ADA
 
 
 class ContractTests(unittest.TestCase):
-    def test_six_tools_only(self) -> None:
+    def test_eight_tools_only(self) -> None:
         self.assertEqual(tuple(list_tools()), TOOL_NAMES)
-        self.assertEqual(len(TOOLS), 6)
+        self.assertEqual(len(TOOLS), 8)
         self.assertEqual([item["name"] for item in tool_descriptors()], list(TOOL_NAMES))
+        self.assertIn("helpdesk.draft_reply", TOOL_NAMES)
+        self.assertIn("helpdesk.summarize_thread", TOOL_NAMES)
 
-    def test_mcp_lists_six_tools(self) -> None:
+    def test_mcp_lists_eight_tools(self) -> None:
         reply = handle_rpc({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
         names = [tool["name"] for tool in reply["result"]["tools"]]
         self.assertEqual(names, list(TOOL_NAMES))
+        self.assertEqual(len(names), 8)
 
     def _cli(self, argv: list[str]) -> dict:
         buf = io.StringIO()
@@ -60,6 +63,16 @@ class ContractTests(unittest.TestCase):
                 "helpdesk.list_past_orders",
                 ["list-past-orders", "--shop", SAMPLE_SHOP, "--customer-id", ADA],
                 {"shop": SAMPLE_SHOP, "customerId": ADA},
+            ),
+            (
+                "helpdesk.draft_reply",
+                ["draft-reply", "--ticket", "1001"],
+                {"ticketId": "1001", "shop": SAMPLE_SHOP},
+            ),
+            (
+                "helpdesk.summarize_thread",
+                ["summarize-thread", "--ticket", "1001"],
+                {"ticketId": "1001", "shop": SAMPLE_SHOP},
             ),
         ]
         for tool, argv, args in cases:

@@ -1,17 +1,20 @@
-"""Six tissue handlers. Input → output only."""
+"""Eight tissue handlers. Input → output only."""
 
 from __future__ import annotations
 
 from typing import Any
 
 from . import tickets
+from .composer import handle_draft_reply, handle_summarize_thread
 from .names import (
+    TOOL_DRAFT_REPLY,
     TOOL_GET_CUSTOMER,
     TOOL_GET_ORDER,
     TOOL_GET_RETURNS,
     TOOL_GET_TICKET,
     TOOL_LIST_PAST_ORDERS,
     TOOL_LIST_TICKETS,
+    TOOL_SUMMARIZE_THREAD,
 )
 from .shop import rail_get_customer, rail_get_order, rail_get_returns, rail_list_past_orders
 
@@ -54,4 +57,6 @@ HANDLERS = {
     TOOL_GET_ORDER: handle_get_order,
     TOOL_GET_RETURNS: handle_get_returns,
     TOOL_LIST_PAST_ORDERS: handle_list_past_orders,
+    TOOL_DRAFT_REPLY: handle_draft_reply,
+    TOOL_SUMMARIZE_THREAD: handle_summarize_thread,
 }

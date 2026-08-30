@@ -6,7 +6,10 @@ Agent-native organ. The UI is a client. Every tissue is a black box
 This organ does **not** wrap Gorgias. Ticket tissues are first-party.
 Shopify rail tissues speak Admin GraphQL **2026-07** field names only.
 
-## Tools (v1, exactly six)
+## Tools (v1, eight)
+
+Six rail/inbox reads plus two Caduceus composer tools. Composer tools return
+text. They never send, refund, or cancel.
 
 | Tool | Tissue | CLI | In | Out |
 |---|---|---|---|---|
@@ -16,15 +19,23 @@ Shopify rail tissues speak Admin GraphQL **2026-07** field names only.
 | `helpdesk.get_order` | order | `helpdesk get-order` | `{ shop, orderId }` GID | `ClerkOrder` |
 | `helpdesk.get_returns` | returns | `helpdesk get-returns` | `{ shop, orderId }` GID | returns payload |
 | `helpdesk.list_past_orders` | order-history | `helpdesk list-past-orders` | `{ shop, customerId }` GID | `ClerkOrderHistoryRow[]` newest first |
+| `helpdesk.draft_reply` | composer draft | `helpdesk draft-reply --ticket …` | `{ ticketId, shop?, thread?, rail DTOs? }` | `{ draft }` for Insert/Discard |
+| `helpdesk.summarize_thread` | composer peek | `helpdesk summarize-thread --ticket …` | `{ ticketId, thread? }` | `{ summary }` mute peek, never a send |
 
-No `draft_reply`, `summarize_thread`, `send`, `refund`, or `cancel`.
+No `helpdesk.send`, `helpdesk.refund`, or `helpdesk.cancel`. Those stay in
+`WRITE_TOOLS` and are refused. `SHOPIFY_MUTATIONS_ENABLED` stays `0`.
 
-The inbox rail is a client of these six tools. MCP, CLI, and
+The inbox is a client of these eight tools. MCP, CLI, and
 `POST /console/api/helpdesk` (`{ tool, arguments }`) share `invoke()`.
 The UI must not open a second GraphQL client.
 
 Rail IDs are Shopify GIDs (`gid://shopify/Customer/…`, `gid://shopify/Order/…`),
 not bare ticket numbers. Ticket tissues keep `view` / `limit` / `ticketId`.
+Composer `--ticket` is the ticket id (sample `1001` or an already-loaded inbox thread).
+
+Drafts are merchant replies the human Inserts or Discards. Summaries are a
+short mute peek of the thread, not a reply. Missing LLM keys return a labeled
+`source: fixture` draft. Never auto-send.
 
 ## Clerk types (do not invent names)
 

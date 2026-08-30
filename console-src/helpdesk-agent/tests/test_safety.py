@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from helpdesk.client import assert_query_only
-from helpdesk.dispatch import invoke
+from helpdesk.dispatch import WRITE_TOOLS, invoke
 from helpdesk.errors import HelpdeskError
 
 FORBIDDEN_SNIPPETS = (
@@ -58,6 +58,10 @@ class SafetyTests(unittest.TestCase):
                 assert_query_only("mutation Refund { refundCreate { refund { id } } }")
             payload = invoke("helpdesk.refund", {"orderId": "gid://shopify/Order/1"})
             self.assertEqual(payload["error"], "forbidden")
+            for tool in ("helpdesk.send", "helpdesk.cancel"):
+                blocked = invoke(tool, {})
+                self.assertEqual(blocked["error"], "forbidden")
+            self.assertEqual(WRITE_TOOLS, frozenset({"helpdesk.send", "helpdesk.refund", "helpdesk.cancel"}))
         finally:
             if previous is None:
                 os.environ.pop("SHOPIFY_MUTATIONS_ENABLED", None)

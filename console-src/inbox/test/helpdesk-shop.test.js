@@ -40,6 +40,12 @@ function pythonInvoke(tool, args) {
     argv.push("get-returns", "--shop", args.shop, "--order-id", args.orderId);
   } else if (tool === "helpdesk.list_past_orders") {
     argv.push("list-past-orders", "--shop", args.shop, "--customer-id", args.customerId);
+  } else if (tool === "helpdesk.draft_reply") {
+    argv.push("draft-reply", "--ticket", String(args.ticketId));
+    if (args.shop) argv.push("--shop", args.shop);
+  } else if (tool === "helpdesk.summarize_thread") {
+    argv.push("summarize-thread", "--ticket", String(args.ticketId));
+    if (args.shop) argv.push("--shop", args.shop);
   } else {
     throw new Error(`unknown tool ${tool}`);
   }
@@ -66,10 +72,13 @@ function clientFromPython(source = "sample") {
   });
 }
 
-test("client exposes exactly the six helpdesk tools", () => {
+test("client exposes exactly the eight helpdesk tools", () => {
   const client = createHelpdeskClient({ invoke: async () => ({ ok: true }) });
   assert.deepEqual(client.tools, TOOL_NAMES);
-  assert.equal(TOOL_NAMES.length, 6);
+  assert.equal(TOOL_NAMES.length, 8);
+  assert.ok(TOOL_NAMES.includes("helpdesk.draft_reply"));
+  assert.ok(TOOL_NAMES.includes("helpdesk.summarize_thread"));
+  assert.deepEqual([...WRITE_TOOLS], ["helpdesk.send", "helpdesk.refund", "helpdesk.cancel"]);
   for (const name of WRITE_TOOLS) {
     assert.ok(!TOOL_NAMES.includes(name));
   }
@@ -103,7 +112,7 @@ test("CLI payloads match the JS shop adapter for sample rail tools", async () =>
   assert.equal(projectOrderHistory(history).rows[0].fulfillmentStatus, history[0].displayFulfillmentStatus);
 });
 
-test("all six CLI tools return ok on the same handler path", () => {
+test("all eight CLI tools return ok on the same handler path", () => {
   const cases = [
     ["helpdesk.list_tickets", { view: "open", limit: 5 }],
     ["helpdesk.get_ticket", { ticketId: "1001" }],
@@ -111,6 +120,8 @@ test("all six CLI tools return ok on the same handler path", () => {
     ["helpdesk.get_order", { shop: SAMPLE_SHOP, orderId: SAMPLE_ADA_ORDER }],
     ["helpdesk.get_returns", { shop: SAMPLE_SHOP, orderId: SAMPLE_ADA_ORDER }],
     ["helpdesk.list_past_orders", { shop: SAMPLE_SHOP, customerId: SAMPLE_ADA }],
+    ["helpdesk.draft_reply", { ticketId: "1001", shop: SAMPLE_SHOP }],
+    ["helpdesk.summarize_thread", { ticketId: "1001" }],
   ];
   for (const [tool, args] of cases) {
     const payload = pythonInvoke(tool, args);
@@ -226,6 +237,39 @@ test("one helpdesk tissue failure isolates to its pane", async () => {
   assert.equal(snap.rail.models.customer.ok, true);
   assert.equal(snap.rail.models.order.ok, true);
   assert.equal(snap.rail.models.returns.ok, false);
+});
+
+test("composer tools share invoke and are not writes", async () => {
+  const calls = [];
+  const shop = createHelpdeskShop({
+    client: createHelpdeskClient({
+      async invoke(tool, args) {
+        calls.push([tool, args.ticketId]);
+        if (tool === "helpdesk.draft_reply") return { ok: true, source: "fixture", draft: "Hi Ada — fixture draft." };
+        if (tool === "helpdesk.summarize_thread") return { ok: true, source: "fixture", summary: "Ada asked about #1001." };
+        return { ok: false };
+      },
+    }),
+  });
+  const draft = await shop.draftReply({ ticketId: "t-ada-track" });
+  const summary = await shop.summarizeThread({ ticketId: "t-ada-track" });
+  assert.equal(draft.draft, "Hi Ada — fixture draft.");
+  assert.equal(summary.summary, "Ada asked about #1001.");
+  assert.deepEqual(calls, [
+    ["helpdesk.draft_reply", "t-ada-track"],
+    ["helpdesk.summarize_thread", "t-ada-track"],
+  ]);
+});
+
+test("CLI draft-reply and summarize-thread return text", () => {
+  const draft = pythonInvoke("helpdesk.draft_reply", { ticketId: "1001", shop: SAMPLE_SHOP });
+  assert.equal(draft.ok, true);
+  assert.match(draft.draft, /Ada|#9001/);
+  assert.doesNotMatch(draft.draft, /gorgias|Malky|Rivky|refund you/i);
+  const summary = pythonInvoke("helpdesk.summarize_thread", { ticketId: "1001" });
+  assert.equal(summary.ok, true);
+  assert.match(summary.summary, /Ada/);
+  assert.doesNotMatch(summary.summary, />Send</);
 });
 
 test("shop adapter has no mutation surface", async () => {

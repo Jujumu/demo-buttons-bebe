@@ -4,9 +4,12 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { IDS } from "../js/fixtures/demo-inbox.js";
+import { IDS, tickets as fixtureTickets } from "../js/fixtures/demo-inbox.js";
 import { createInboxOrgan } from "../js/inbox.js";
+import { createMailbox } from "../js/mailbox.js";
 import { createFixtureShop } from "../js/shop/fixture-shop.js";
+import { createComposerTissue } from "../js/tissues/composer.js";
+import { MAILBOX_TOPICS } from "../js/contracts.js";
 import { railWriteControlHits } from "../js/util.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -27,10 +30,39 @@ function sourceTree() {
     "../js/tissues/order.js",
     "../js/shop/helpdesk-shop.js",
     "../js/shop/helpdesk-client.js",
+    "../js/shop/helpdesk-tools.js",
     "../js/fixtures/demo-inbox.js",
   ];
   return files.map((file) => readFileSync(join(here, file), "utf8")).join("\n");
 }
+
+function fakeRoot() {
+  const nodes = new Map();
+  return {
+    innerHTML: "",
+    querySelector(sel) {
+      if (!nodes.has(sel)) {
+        nodes.set(sel, { innerHTML: "", querySelector() { return null; } });
+      }
+      return nodes.get(sel);
+    },
+    _node(sel) {
+      return nodes.get(sel);
+    },
+  };
+}
+
+test("mount first-paints the Ada draft strip before paint", async () => {
+  const organ = createInboxOrgan({ viewId: "mine" });
+  const root = fakeRoot();
+  await organ.mount(root);
+  const composer = root._node("[data-slot=composer]").innerHTML;
+  assert.match(composer, /data-draft-strip/);
+  assert.match(composer, /data-insert/);
+  assert.match(composer, /data-discard/);
+  assert.match(composer, /AI draft/);
+  assert.match(composer, /disabled/);
+});
 
 test("inbox organ renders four panes and an ink selected bar", async () => {
   const organ = createInboxOrgan({ viewId: "mine" });
@@ -181,6 +213,55 @@ test("switching tickets resets rail expand and does not leak Ada OPEN returns", 
   assert.equal(snap.rail.open.returns, true);
   assert.equal(snap.rail.open["order-history"], false);
   assert.match(snap.html, /In transit · 1 item/);
+});
+
+test("composer Insert and Discard never publish send", () => {
+  const mailbox = createMailbox();
+  const events = [];
+  mailbox.subscribe(MAILBOX_TOPICS.COMPOSER_SEND, (payload) => events.push(["send", payload]));
+  mailbox.subscribe(MAILBOX_TOPICS.COMPOSER_INSERT, (payload) => events.push(["insert", payload]));
+  mailbox.subscribe(MAILBOX_TOPICS.COMPOSER_DISCARD, () => events.push(["discard"]));
+  const composer = createComposerTissue({ mailbox });
+  const ticket = fixtureTickets[0];
+  composer.update({ ticket, strip: ticket.stubDraft, body: "" });
+  const el = { innerHTML: "", querySelector() { return null; } };
+  composer.mount(el);
+  el.onclick({ target: { closest: (sel) => (sel === "[data-insert]" ? {} : null) } });
+  assert.equal(composer.sendDisabled(), false);
+  assert.deepEqual(events.map((row) => row[0]), ["insert"]);
+  el.onclick({ target: { closest: (sel) => (sel === "[data-discard]" ? {} : null) } });
+  assert.deepEqual(events.map((row) => row[0]), ["insert", "discard"]);
+  assert.ok(events.every((row) => row[0] !== "send"));
+});
+
+test("Insert puts the draft in the textarea and does not send", async () => {
+  const organ = createInboxOrgan({ viewId: "mine" });
+  let snap = await organ.ready();
+  assert.match(snap.html, /data-draft-strip/);
+  assert.match(snap.html, /draft-kicker">AI draft</);
+  assert.doesNotMatch(snap.html.slice(snap.html.indexOf("data-draft-strip"), snap.html.indexOf("data-body")), />Send</);
+  assert.equal(snap.sendDisabled, true);
+  assert.equal(snap.sent.length, 0);
+  organ.insertDraft();
+  snap = organ.snapshot();
+  assert.doesNotMatch(snap.html, /data-draft-strip/);
+  assert.match(snap.html, /Hi Ada/);
+  assert.equal(snap.sendDisabled, false);
+  assert.equal(snap.sent.length, 0);
+});
+
+test("Summarize fills a mute peek and does not enable Send", async () => {
+  const organ = createInboxOrgan({ viewId: "mine" });
+  let snap = await organ.ready();
+  assert.doesNotMatch(snap.html, /data-summarize-peek/);
+  assert.match(snap.html, /Summarize 2 messages/);
+  snap = await organ.requestSummarize();
+  assert.match(snap.html, /data-summarize-peek/);
+  assert.match(snap.html, /Ada asked/);
+  assert.doesNotMatch(snap.html, /data-pane="ai"|ai-sidebar|fifth-column|Ask Gaia/i);
+  assert.equal(snap.sendDisabled, true);
+  assert.equal(snap.sent.length, 0);
+  assert.match(snap.html, /Summarize 2 messages/);
 });
 
 test("history peek does not swap the open order", async () => {

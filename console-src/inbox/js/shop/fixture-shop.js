@@ -62,5 +62,21 @@ export function createFixtureShop(opts = {}) {
         .map(historyRow)
         .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
     },
+    draftReply(args = {}) {
+      maybeFail("draft");
+      const thread = args.thread || {};
+      return {
+        source: "sample",
+        draft: thread.stubDraft || "",
+      };
+    },
+    summarizeThread(args = {}) {
+      maybeFail("summarize");
+      const thread = args.thread || {};
+      return {
+        source: "sample",
+        summary: thread.stubSummary || "",
+      };
+    },
   };
 }

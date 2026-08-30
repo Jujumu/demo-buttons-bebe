@@ -12,8 +12,6 @@ TOOLS = TOOL_NAMES
 
 WRITE_TOOLS = frozenset(
     {
-        "helpdesk.draft_reply",
-        "helpdesk.summarize_thread",
         "helpdesk.send",
         "helpdesk.refund",
         "helpdesk.cancel",

@@ -57,6 +57,12 @@ export function createComposerTissue({ mailbox }) {
     const macroItems = macros.map((macro) => (
       `<label class="macro-row"><input type="checkbox" data-macro="${esc(macro.id)}"> <span>${esc(macro.name)}</span></label>`
     )).join("");
+    const peek = next.summarize
+      ? `<div class="summarize-peek" data-summarize-peek>
+          <p class="draft-kicker">Thread</p>
+          <p class="summarize-text">${esc(next.summarize)}</p>
+        </div>`
+      : "";
     const strip = next.strip
       ? `<div class="draft-strip" data-draft-strip>
           <div>
@@ -73,6 +79,7 @@ export function createComposerTissue({ mailbox }) {
       ? ""
       : `<button type="button" class="btn-hairline" data-send-close ${sendDisabled(next) ? "disabled" : ""}>Send &amp; close</button>`;
     return `<section class="composer" data-composer>
+      ${peek}
       <div class="composer-to"><span>To</span> <strong>${esc(to.name)}</strong> <span class="mute">${esc(to.email)}</span></div>
       <div class="composer-box">
         <input class="macro-search" data-macro-search type="search" placeholder="Search macros by name or tags" value="${esc(next.query)}">
@@ -123,8 +130,9 @@ export function createComposerTissue({ mailbox }) {
         const text = model.strip || model.draft || "";
         const next = model.body ? `${model.body}\n\n${text}` : text;
         emitBody(next);
+        model = { ...model, body: next, strip: "" };
         mailbox.publish(MAILBOX_TOPICS.COMPOSER_INSERT, { text });
-        el.innerHTML = render({ ...model, body: next });
+        el.innerHTML = render(model);
         return;
       }
       if (event.target.closest("[data-discard]")) {

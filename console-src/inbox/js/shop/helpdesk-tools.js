@@ -1,4 +1,4 @@
-/** Locked v1 tool names. Same six as MCP/CLI. No send/refund/cancel. */
+/** Locked v1 tool names. Same eight as MCP/CLI. No send/refund/cancel. */
 export const TOOL_NAMES = Object.freeze([
   "helpdesk.list_tickets",
   "helpdesk.get_ticket",
@@ -6,11 +6,11 @@ export const TOOL_NAMES = Object.freeze([
   "helpdesk.get_order",
   "helpdesk.get_returns",
   "helpdesk.list_past_orders",
+  "helpdesk.draft_reply",
+  "helpdesk.summarize_thread",
 ]);
 
 export const WRITE_TOOLS = Object.freeze([
-  "helpdesk.draft_reply",
-  "helpdesk.summarize_thread",
   "helpdesk.send",
   "helpdesk.refund",
   "helpdesk.cancel",
@@ -21,4 +21,9 @@ export const RAIL_TOOLS = Object.freeze({
   order: "helpdesk.get_order",
   returns: "helpdesk.get_returns",
   history: "helpdesk.list_past_orders",
+});
+
+export const COMPOSER_TOOLS = Object.freeze({
+  draft: "helpdesk.draft_reply",
+  summarize: "helpdesk.summarize_thread",
 });

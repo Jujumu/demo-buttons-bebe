@@ -21,7 +21,7 @@ from bb_webhook.helpdesk_door import handle_tool, helpdesk_root
 
 
 class HelpdeskDoorTests(unittest.TestCase):
-    def test_http_matches_dispatch_for_all_six_tools(self) -> None:
+    def test_http_matches_dispatch_for_all_eight_tools(self) -> None:
         cases = [
             ("helpdesk.list_tickets", {"view": "open", "limit": 5}),
             ("helpdesk.get_ticket", {"ticketId": "1001"}),
@@ -29,6 +29,8 @@ class HelpdeskDoorTests(unittest.TestCase):
             ("helpdesk.get_order", {"shop": SAMPLE_SHOP, "orderId": ORDER_ADA}),
             ("helpdesk.get_returns", {"shop": SAMPLE_SHOP, "orderId": ORDER_ADA}),
             ("helpdesk.list_past_orders", {"shop": SAMPLE_SHOP, "customerId": ADA}),
+            ("helpdesk.draft_reply", {"ticketId": "1001", "shop": SAMPLE_SHOP}),
+            ("helpdesk.summarize_thread", {"ticketId": "1001"}),
         ]
         for tool, args in cases:
             handled = dispatch(tool, args)
@@ -57,9 +59,17 @@ class HelpdeskDoorTests(unittest.TestCase):
         self.assertEqual(tuple(TOOL_NAMES), TOOL_NAMES)
 
     def test_unknown_tool_is_structured(self) -> None:
-        payload = invoke("helpdesk.draft_reply", {})
+        payload = invoke("helpdesk.send", {})
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["error"], "forbidden")
+
+    def test_composer_tools_are_text_not_writes(self) -> None:
+        draft = handle_tool("helpdesk.draft_reply", {"ticketId": "1001", "shop": SAMPLE_SHOP})
+        self.assertTrue(draft["ok"])
+        self.assertIn("draft", draft)
+        summary = handle_tool("helpdesk.summarize_thread", {"ticketId": "1001"})
+        self.assertTrue(summary["ok"])
+        self.assertIn("summary", summary)
 
     def test_helpdesk_root_points_at_the_organ(self) -> None:
         root = helpdesk_root()
