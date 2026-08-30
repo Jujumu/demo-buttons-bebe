@@ -48,10 +48,12 @@ onto a live shop query.
 ## Auth
 
 Reads use `SHOPIFY_SHOP`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`.
-Mint a 24h Admin token via OAuth `client_credentials`. Missing env or mint
-failure falls back to labeled sample/live-hole fixtures. Tokens are never
-written to disk or printed. `SHOPIFY_MUTATIONS_ENABLED` stays `0`; writes
-are refused.
+Mint reads shop from `SHOPIFY_SHOP` only (strip `https://`, trailing slash,
+lowercase) and pins it to Cute Things (`yznyc1-ez.myshopify.com`). Unset or
+any other host refuses mint. The token POST never follows 3xx redirects, so
+the client secret is never sent to another host. Missing env or mint failure
+falls back to labeled sample/live-hole fixtures. Tokens are never written to
+disk or printed. `SHOPIFY_MUTATIONS_ENABLED` stays `0`; writes are refused.
 
 Docs: [Customer](https://shopify.dev/docs/api/admin-graphql/2026-07/objects/Customer),
 [Order](https://shopify.dev/docs/api/admin-graphql/2026-07/objects/Order),

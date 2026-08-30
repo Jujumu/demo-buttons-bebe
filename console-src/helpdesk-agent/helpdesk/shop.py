@@ -7,7 +7,7 @@ from typing import Any
 from . import fixtures_live_holes as live_holes
 from . import fixtures_sample as sample
 from . import queries
-from .auth import cached_token
+from .auth import PINNED_LIVE_SHOP, cached_token, normalize_shop
 from .client import graphql
 from .dto import clerk_customer, clerk_history_row, clerk_order, clerk_returns
 from .env import load_shopify_env
@@ -64,6 +64,7 @@ class LiveShop:
             document,
             {"id": ident},
             api_version=self.env.get("SHOPIFY_API_VERSION") or "2026-07",
+            env=self.env,
         )
 
     def get_customer(self, shop: str, customer_id: str) -> dict[str, Any]:
@@ -113,11 +114,13 @@ def resolve_shop(shop: str | None, env: dict[str, str] | None = None):
 
 
 def _can_mint(shop: str, env: dict[str, str]) -> bool:
-    configured = env.get("SHOPIFY_SHOP", "").lower()
+    configured = normalize_shop(env.get("SHOPIFY_SHOP", ""))
+    request = normalize_shop(shop)
     return bool(
         env.get("SHOPIFY_CLIENT_ID")
         and env.get("SHOPIFY_CLIENT_SECRET")
-        and (not configured or configured == shop)
+        and configured == PINNED_LIVE_SHOP
+        and request == PINNED_LIVE_SHOP
     )
 
 
@@ -127,7 +130,7 @@ def _try_live(shop: str, env: dict[str, str]) -> LiveShop | None:
     if not _can_mint(shop, env):
         return None
     try:
-        cached_token(shop, env["SHOPIFY_CLIENT_ID"], env["SHOPIFY_CLIENT_SECRET"])
+        cached_token(env["SHOPIFY_CLIENT_ID"], env["SHOPIFY_CLIENT_SECRET"], env=env)
     except HelpdeskError:
         return None
     return LiveShop(env)
