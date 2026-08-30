@@ -26,7 +26,7 @@ export function projectCustomer(record) {
 export function renderCustomer(model, { open = true } = {}) {
   const record = model.record;
   const body = !model.ok || !record
-    ? `<p class="tissue-empty">Customer unavailable</p>`
+    ? `<p class="tissue-empty">No customer on this ticket</p>`
     : `<dl class="rail-dl">
         <div><dt>Name</dt><dd>${esc(record.displayName)}</dd></div>
         <div><dt>Email</dt><dd>${esc(record.defaultEmailAddress?.emailAddress || "—")}</dd></div>

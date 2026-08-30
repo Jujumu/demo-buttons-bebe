@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { IDS, SHOP, emptyReturns, orders } from "../js/fixtures/demo-inbox.js";
 import { formatSku, railWriteControlHits } from "../js/util.js";
 import { createFixtureShop } from "../js/shop/fixture-shop.js";
-import { projectCustomer } from "../js/tissues/customer.js";
+import { projectCustomer, renderCustomer } from "../js/tissues/customer.js";
 import { projectOrderHistory } from "../js/tissues/order-history.js";
 import { projectOrder, renderOrder } from "../js/tissues/order.js";
 import { projectReturns, renderReturns } from "../js/tissues/returns.js";
@@ -34,6 +34,17 @@ function assertMoneyBag(bag) {
   assert.equal(typeof bag.shopMoney.amount, "string");
   assert.equal(typeof bag.presentmentMoney.amount, "string");
 }
+
+test("null customer GID uses the empty-ticket voice, not unavailable", () => {
+  const model = projectCustomer(null);
+  assert.equal(model.ok, false);
+  assert.equal(model.peek, "No customer");
+  assert.equal(model.record, null);
+  const html = renderCustomer(model);
+  assert.match(html, /<h2>Customer<\/h2>\s*<span class="peek">No customer<\/span>/);
+  assert.match(html, /<p class="tissue-empty">No customer on this ticket<\/p>/);
+  assert.doesNotMatch(html, /Customer unavailable|unavailable/);
+});
 
 test("customer DTO uses Clerk Admin GraphQL field names", async () => {
   const record = await shop.getCustomer({ shop: SHOP, customerId: IDS.ADA });

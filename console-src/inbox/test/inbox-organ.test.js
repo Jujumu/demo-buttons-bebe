@@ -234,6 +234,42 @@ test("one rail tissue error leaves thread and other rail sections up", async () 
   assert.ok(snap.html.includes("data-tissue=\"order-history\""));
 });
 
+test("Sam unjoined ticket with null GIDs says No customer on this ticket", async () => {
+  const organ = createInboxOrgan({
+    viewId: "unassigned",
+    ticketId: "t-sam-unjoined",
+    tickets: [{
+      id: "t-sam-unjoined",
+      customerName: "Sam",
+      subject: "Broken rattle",
+      snippet: "The wooden rattle arrived cracked. Can you help?",
+      status: "open",
+      view: "unassigned",
+      assignee: null,
+      customerId: null,
+      orderId: null,
+      updatedAt: "2026-08-30T14:10:00Z",
+      messages: [{
+        id: "m-sam",
+        fromAgent: false,
+        name: "Sam",
+        at: "2026-08-30T14:10:00Z",
+        body: "The wooden rattle arrived cracked. Can you help?",
+      }],
+      statusEvents: [],
+    }],
+  });
+  const snap = await organ.ready();
+  assert.equal(snap.selectedId, "t-sam-unjoined");
+  assert.match(snap.html, /<h2>Customer<\/h2>\s*<span class="peek">No customer<\/span>/);
+  assert.match(snap.html, /No customer on this ticket/);
+  assert.doesNotMatch(snap.html, /Customer unavailable/);
+  assert.match(snap.html, /No order on this ticket/);
+  assert.equal(snap.rail.models.customer.ok, false);
+  assert.equal(snap.rail.models.customer.record, null);
+  assert.equal(snap.rail.currentOrderId, null);
+});
+
 test("Jordan ticket without an order does not blank the thread", async () => {
   const organ = createInboxOrgan({ viewId: "snoozed", ticketId: "t-jordan-ship" });
   const snap = await organ.ready();
