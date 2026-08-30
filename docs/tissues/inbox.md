@@ -81,7 +81,7 @@ Clerk DTO field names are locked. In for each: `{ shop, customerId? , orderId? }
 - **Out:** `displayName`, `defaultEmailAddress.emailAddress` (not deprecated `Customer.email`), `createdAt`, `numberOfOrders` (JSON string), `amountSpent`, `tags`
 - Default open. Peek: name
 - No Customer Edit link. No `customerUpdate` / address writes.
-- **Degrade:** “Customer unavailable” in this card only
+- **Degrade:** “No customer on this ticket” in this card only
 
 ### order (This order)
 
