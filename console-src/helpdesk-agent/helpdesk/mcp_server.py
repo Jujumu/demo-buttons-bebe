@@ -8,6 +8,7 @@ from typing import Any
 
 from .dispatch import invoke, list_tools
 from .names import (
+    TOOL_APPLY_MACRO,
     TOOL_DRAFT_REPLY,
     TOOL_GET_CUSTOMER,
     TOOL_GET_ORDER,
@@ -15,6 +16,7 @@ from .names import (
     TOOL_GET_TICKET,
     TOOL_LIST_PAST_ORDERS,
     TOOL_LIST_TICKETS,
+    TOOL_SEARCH_MACROS,
     TOOL_SUMMARIZE_THREAD,
 )
 
@@ -55,6 +57,14 @@ SCHEMAS = {
         "ticketId": {"type": "string"},
         "shop": {"type": "string"},
         "thread": {"type": "object", "description": "already-loaded ticket thread"},
+    },
+    TOOL_SEARCH_MACROS: {
+        "query": {"type": "string", "description": "name, tag, or body substring"},
+    },
+    TOOL_APPLY_MACRO: {
+        "macroId": {"type": "string"},
+        "mode": {"type": "string", "description": "replace | append — never a send"},
+        "currentBody": {"type": "string", "description": "textarea text to append onto"},
     },
 }
 

@@ -46,6 +46,11 @@ function pythonInvoke(tool, args) {
   } else if (tool === "helpdesk.summarize_thread") {
     argv.push("summarize-thread", "--ticket", String(args.ticketId));
     if (args.shop) argv.push("--shop", args.shop);
+  } else if (tool === "helpdesk.search_macros") {
+    argv.push("search-macros", "--query", String(args.query || ""));
+  } else if (tool === "helpdesk.apply_macro") {
+    argv.push("apply-macro", "--macro-id", String(args.macroId), "--mode", String(args.mode || "replace"));
+    if (args.currentBody) argv.push("--current-body", String(args.currentBody));
   } else {
     throw new Error(`unknown tool ${tool}`);
   }
@@ -72,12 +77,14 @@ function clientFromPython(source = "sample") {
   });
 }
 
-test("client exposes exactly the eight helpdesk tools", () => {
+test("client exposes exactly the ten helpdesk tools", () => {
   const client = createHelpdeskClient({ invoke: async () => ({ ok: true }) });
   assert.deepEqual(client.tools, TOOL_NAMES);
-  assert.equal(TOOL_NAMES.length, 8);
+  assert.equal(TOOL_NAMES.length, 10);
   assert.ok(TOOL_NAMES.includes("helpdesk.draft_reply"));
   assert.ok(TOOL_NAMES.includes("helpdesk.summarize_thread"));
+  assert.ok(TOOL_NAMES.includes("helpdesk.search_macros"));
+  assert.ok(TOOL_NAMES.includes("helpdesk.apply_macro"));
   assert.deepEqual([...WRITE_TOOLS], ["helpdesk.send", "helpdesk.refund", "helpdesk.cancel"]);
   for (const name of WRITE_TOOLS) {
     assert.ok(!TOOL_NAMES.includes(name));
@@ -112,7 +119,7 @@ test("CLI payloads match the JS shop adapter for sample rail tools", async () =>
   assert.equal(projectOrderHistory(history).rows[0].fulfillmentStatus, history[0].displayFulfillmentStatus);
 });
 
-test("all eight CLI tools return ok on the same handler path", () => {
+test("all ten CLI tools return ok on the same handler path", () => {
   const cases = [
     ["helpdesk.list_tickets", { view: "open", limit: 5 }],
     ["helpdesk.get_ticket", { ticketId: "1001" }],
@@ -122,6 +129,8 @@ test("all eight CLI tools return ok on the same handler path", () => {
     ["helpdesk.list_past_orders", { shop: SAMPLE_SHOP, customerId: SAMPLE_ADA }],
     ["helpdesk.draft_reply", { ticketId: "1001", shop: SAMPLE_SHOP }],
     ["helpdesk.summarize_thread", { ticketId: "1001" }],
+    ["helpdesk.search_macros", { query: "shipping" }],
+    ["helpdesk.apply_macro", { macroId: "shipping-delay", mode: "replace" }],
   ];
   for (const [tool, args] of cases) {
     const payload = pythonInvoke(tool, args);
@@ -244,20 +253,36 @@ test("composer tools share invoke and are not writes", async () => {
   const shop = createHelpdeskShop({
     client: createHelpdeskClient({
       async invoke(tool, args) {
-        calls.push([tool, args.ticketId]);
+        calls.push([tool, args.ticketId || args.macroId || args.query]);
         if (tool === "helpdesk.draft_reply") return { ok: true, source: "fixture", draft: "Hi Ada — fixture draft." };
         if (tool === "helpdesk.summarize_thread") return { ok: true, source: "fixture", summary: "Ada asked about #1001." };
+        if (tool === "helpdesk.search_macros") {
+          return {
+            ok: true,
+            source: "fixture",
+            macros: [{ id: "shipping-delay", title: "Shipping delay", tags: ["shipping"], body: "Hi — delay." }],
+          };
+        }
+        if (tool === "helpdesk.apply_macro") {
+          return { ok: true, source: "fixture", text: "Hi — delay.", title: "Shipping delay", mode: "replace", body: "Hi — delay." };
+        }
         return { ok: false };
       },
     }),
   });
   const draft = await shop.draftReply({ ticketId: "t-ada-track" });
   const summary = await shop.summarizeThread({ ticketId: "t-ada-track" });
+  const found = await shop.searchMacros({ query: "delay" });
+  const applied = await shop.applyMacro({ macroId: "shipping-delay", mode: "replace" });
   assert.equal(draft.draft, "Hi Ada — fixture draft.");
   assert.equal(summary.summary, "Ada asked about #1001.");
+  assert.equal(found.macros[0].id, "shipping-delay");
+  assert.equal(applied.text, "Hi — delay.");
   assert.deepEqual(calls, [
     ["helpdesk.draft_reply", "t-ada-track"],
     ["helpdesk.summarize_thread", "t-ada-track"],
+    ["helpdesk.search_macros", "delay"],
+    ["helpdesk.apply_macro", "shipping-delay"],
   ]);
 });
 
@@ -270,6 +295,20 @@ test("CLI draft-reply and summarize-thread return text", () => {
   assert.equal(summary.ok, true);
   assert.match(summary.summary, /Ada/);
   assert.doesNotMatch(summary.summary, />Send</);
+});
+
+test("CLI search-macros and apply-macro share dispatch and never send", () => {
+  const found = pythonInvoke("helpdesk.search_macros", { query: "return" });
+  assert.equal(found.ok, true);
+  assert.equal(found.macros.length, 1);
+  assert.equal(found.macros[0].id, "return-how-to");
+  assert.equal(found.macros[0].title, "Return how-to");
+  const applied = pythonInvoke("helpdesk.apply_macro", { macroId: "order-status", mode: "replace" });
+  assert.equal(applied.ok, true);
+  assert.match(applied.text, /I looked at this order/);
+  assert.doesNotMatch(applied.text, /gorgias|refund you|i cancelled/i);
+  assert.ok(!WRITE_TOOLS.includes("helpdesk.search_macros"));
+  assert.ok(!WRITE_TOOLS.includes("helpdesk.apply_macro"));
 });
 
 test("shop adapter has no mutation surface", async () => {

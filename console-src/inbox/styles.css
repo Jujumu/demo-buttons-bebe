@@ -158,8 +158,37 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   background: transparent;
   padding: 6px 8px;
 }
-.macro-list { max-height: 88px; overflow: auto; padding: 0 8px 6px; }
-.macro-row { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--mute); padding: 3px 0; }
+.macro-list { max-height: 88px; overflow: auto; padding: 0 0 4px; }
+.macro-row {
+  position: relative;
+  width: 100%;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--mute);
+  padding: 5px 8px 5px 12px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+.macro-row .macro-bar {
+  display: none;
+  position: absolute;
+  left: 0; top: 2px; bottom: 2px;
+  width: 3px;
+  background: var(--ink);
+}
+.macro-row.is-selected { color: var(--ink); font-weight: 500; }
+.macro-row.is-selected .macro-bar { display: block; }
+.macro-title { font-size: 12px; }
+.macro-empty { color: var(--mute); font-size: 12px; padding: 4px 8px; }
+.macro-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  padding: 0 8px 8px;
+}
 .composer-box textarea {
   width: 100%;
   min-height: 88px;

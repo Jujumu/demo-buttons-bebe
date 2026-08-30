@@ -21,7 +21,7 @@ from bb_webhook.helpdesk_door import handle_tool, helpdesk_root
 
 
 class HelpdeskDoorTests(unittest.TestCase):
-    def test_http_matches_dispatch_for_all_eight_tools(self) -> None:
+    def test_http_matches_dispatch_for_all_ten_tools(self) -> None:
         cases = [
             ("helpdesk.list_tickets", {"view": "open", "limit": 5}),
             ("helpdesk.get_ticket", {"ticketId": "1001"}),
@@ -31,6 +31,8 @@ class HelpdeskDoorTests(unittest.TestCase):
             ("helpdesk.list_past_orders", {"shop": SAMPLE_SHOP, "customerId": ADA}),
             ("helpdesk.draft_reply", {"ticketId": "1001", "shop": SAMPLE_SHOP}),
             ("helpdesk.summarize_thread", {"ticketId": "1001"}),
+            ("helpdesk.search_macros", {"query": "shipping"}),
+            ("helpdesk.apply_macro", {"macroId": "shipping-delay", "mode": "replace"}),
         ]
         for tool, args in cases:
             handled = dispatch(tool, args)
@@ -70,6 +72,13 @@ class HelpdeskDoorTests(unittest.TestCase):
         summary = handle_tool("helpdesk.summarize_thread", {"ticketId": "1001"})
         self.assertTrue(summary["ok"])
         self.assertIn("summary", summary)
+        found = handle_tool("helpdesk.search_macros", {"query": "shipping"})
+        self.assertTrue(found["ok"])
+        self.assertGreaterEqual(len(found["macros"]), 1)
+        applied = handle_tool("helpdesk.apply_macro", {"macroId": "shipping-delay", "mode": "replace"})
+        self.assertTrue(applied["ok"])
+        self.assertIn("text", applied)
+        self.assertNotIn("sent", applied)
 
     def test_helpdesk_root_points_at_the_organ(self) -> None:
         root = helpdesk_root()

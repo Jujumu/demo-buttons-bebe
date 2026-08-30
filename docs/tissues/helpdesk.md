@@ -6,10 +6,10 @@ Agent-native organ. The UI is a client. Every tissue is a black box
 This organ does **not** wrap Gorgias. Ticket tissues are first-party.
 Shopify rail tissues speak Admin GraphQL **2026-07** field names only.
 
-## Tools (v1, eight)
+## Tools (v1, ten)
 
-Six rail/inbox reads plus two Caduceus composer tools. Composer tools return
-text. They never send, refund, or cancel.
+Six rail/inbox reads, two Caduceus composer tools, and two macro tools.
+Composer and macro tools return text. They never send, refund, or cancel.
 
 | Tool | Tissue | CLI | In | Out |
 |---|---|---|---|---|
@@ -21,11 +21,19 @@ text. They never send, refund, or cancel.
 | `helpdesk.list_past_orders` | order-history | `helpdesk list-past-orders` | `{ shop, customerId }` GID | `ClerkOrderHistoryRow[]` newest first |
 | `helpdesk.draft_reply` | composer draft | `helpdesk draft-reply --ticket …` | `{ ticketId, shop?, thread?, rail DTOs? }` | `{ draft }` for Insert/Discard |
 | `helpdesk.summarize_thread` | composer peek | `helpdesk summarize-thread --ticket …` | `{ ticketId, thread? }` | `{ summary }` mute peek, never a send |
+| `helpdesk.search_macros` | composer macros | `helpdesk search-macros --query …` | `{ query? }` | `{ macros: [{ id, title, body, tags }] }` |
+| `helpdesk.apply_macro` | composer insert | `helpdesk apply-macro --macro-id … --mode replace\|append` | `{ macroId, mode?, currentBody? }` | `{ text, title, mode, body }` for the textarea |
+
+**Macro contract.** `search_macros` always returns the fixture body so a client
+can insert without a second call. `apply_macro` is the insert path: `replace`
+overwrites the box, `append` adds after existing text. Neither tool sends.
+The human still hits Send. Fixtures (offline): Shipping delay, Return how-to,
+Order status.
 
 No `helpdesk.send`, `helpdesk.refund`, or `helpdesk.cancel`. Those stay in
 `WRITE_TOOLS` and are refused. `SHOPIFY_MUTATIONS_ENABLED` stays `0`.
 
-The inbox is a client of these eight tools. MCP, CLI, and
+The inbox is a client of these ten tools. MCP, CLI, and
 `POST /console/api/helpdesk` (`{ tool, arguments }`) share `invoke()`.
 The UI must not open a second GraphQL client.
 
