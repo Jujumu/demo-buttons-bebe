@@ -201,6 +201,7 @@ export function createInboxOrgan(opts = {}) {
     };
     ensureSelection();
     await refreshRail();
+    await refreshComposer();
 
     const paint = () => {
       const ticket = selectedTicket();

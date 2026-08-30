@@ -36,6 +36,34 @@ function sourceTree() {
   return files.map((file) => readFileSync(join(here, file), "utf8")).join("\n");
 }
 
+function fakeRoot() {
+  const nodes = new Map();
+  return {
+    innerHTML: "",
+    querySelector(sel) {
+      if (!nodes.has(sel)) {
+        nodes.set(sel, { innerHTML: "", querySelector() { return null; } });
+      }
+      return nodes.get(sel);
+    },
+    _node(sel) {
+      return nodes.get(sel);
+    },
+  };
+}
+
+test("mount first-paints the Ada draft strip before paint", async () => {
+  const organ = createInboxOrgan({ viewId: "mine" });
+  const root = fakeRoot();
+  await organ.mount(root);
+  const composer = root._node("[data-slot=composer]").innerHTML;
+  assert.match(composer, /data-draft-strip/);
+  assert.match(composer, /data-insert/);
+  assert.match(composer, /data-discard/);
+  assert.match(composer, /AI draft/);
+  assert.match(composer, /disabled/);
+});
+
 test("inbox organ renders four panes and an ink selected bar", async () => {
   const organ = createInboxOrgan({ viewId: "mine" });
   const snap = await organ.ready();
