@@ -19,6 +19,10 @@ Shopify rail tissues speak Admin GraphQL **2026-07** field names only.
 
 No `draft_reply`, `summarize_thread`, `send`, `refund`, or `cancel`.
 
+The inbox rail is a client of these six tools. MCP, CLI, and
+`POST /console/api/helpdesk` (`{ tool, arguments }`) share `invoke()`.
+The UI must not open a second GraphQL client.
+
 Rail IDs are Shopify GIDs (`gid://shopify/Customer/…`, `gid://shopify/Order/…`),
 not bare ticket numbers. Ticket tissues keep `view` / `limit` / `ticketId`.
 

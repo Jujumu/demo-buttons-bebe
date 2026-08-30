@@ -39,6 +39,7 @@ class RouterContractTests(unittest.TestCase):
             ("POST", "/dashboard/api/ticket/{ticket_id}/note"),
             ("POST", "/dashboard/api/ticket/{ticket_id}/rewrite"),
             ("GET", "/dashboard/api/learning"),
+            ("POST", "/dashboard/api/helpdesk"),
         }
         actual = {
             (method, path)

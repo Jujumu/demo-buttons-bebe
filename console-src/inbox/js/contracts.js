@@ -99,12 +99,14 @@
  * @property {string} id
  * @property {string} name
  * @property {string} createdAt
- * @property {string} total
- * @property {string} fulfillmentStatus
+ * @property {string} displayFulfillmentStatus
+ * @property {{ shopMoney: MoneyV2 }} currentTotalPriceSet
  */
 
 /**
- * Shop tissue. Clerk swaps the fixture implementation later.
+ * Shop tissue. The inbox rail is a client of helpdesk.* tools
+ * (`get_customer`, `get_order`, `get_returns`, `list_past_orders`) via
+ * `createHelpdeskShop`. Fixtures are the fallback when mint/Admin is down.
  * In: `{ shop, customerId?, orderId? }`. Out: the Clerk DTOs above.
  * Must not mutate Shopify. `SHOPIFY_MUTATIONS_ENABLED` stays 0.
  *
@@ -145,6 +147,10 @@ export const FORBIDDEN_CONTROLS = Object.freeze([
   "gaia",
   "refund",
   "cancel",
+  "edit",
   "edit order",
   "edit-order",
+  "duplicate",
+  "create order",
+  "customerupdate",
 ]);

@@ -52,6 +52,15 @@ export function reviewBlockViolations(html) {
     hits.push("Gorgias purple");
   }
 
+  const rail = text.match(/data-pane="rail"[\s\S]*?(?:data-pane="|$)/);
+  const railHtml = rail ? rail[0] : text;
+  if (/<(button|a)\b[^>]*>\s*(?:customer\s+)?edit\b/i.test(railHtml) || /\bdata-edit\b/i.test(railHtml)) {
+    hits.push("customer Edit");
+  }
+  if (/<(button|a)\b[^>]*>\s*(?:duplicate|refund|cancel|create\s+order)/i.test(railHtml)) {
+    hits.push("rail write control");
+  }
+
   for (const sku of displayedSkus(text)) {
     if (sku === "null" || sku === "undefined") hits.push("literal null SKU");
     if (sku === "—" || sku === "–" || sku === "-") hits.push("em dash SKU");

@@ -2,7 +2,12 @@
 
 Module 9 is an **organ**: view, list, thread, composer, and rail. Rail is itself an organ of customer, this-order, returns, and order-history. Rail section titles are `h2`; nested disclosures are `h3`. Tissues are replaceable black boxes. They talk over a mailbox. They do not import each other's internals. One tissue error stays in its pane.
 
-The shop tissue is fixture-backed in this module (`demo-inbox.example`). Clerk replaces it later with a read-only Admin GraphQL 2026-07 client. `SHOPIFY_MUTATIONS_ENABLED` stays `0`. No live store writes. The fixtures are invented demo records, not a live shop.
+The shop tissue is a client of `helpdesk.get_customer` / `get_order` /
+`get_returns` / `list_past_orders` (same payloads as MCP/CLI). Live reads
+target Cute Things (`SHOPIFY_SHOP` pinned to `yznyc1-ez.myshopify.com`) when
+mint works. Mint/Admin failure falls back to `demo-inbox.example` fixtures.
+`SHOPIFY_MUTATIONS_ENABLED` stays `0`. No live store writes. The Ada OPEN
+return is invented fixture-only and is never injected onto a live shop query.
 
 Demo names only (Ada Demo, Casey Sandbox, Jordan Preview). No customer PII.
 
@@ -40,7 +45,7 @@ Demo names only (Ada Demo, Casey Sandbox, Jordan Preview). No customer PII.
 
 - **In:** `{ ticket }`
 - **Out:** `{ ticketId }` on `composer/summarize`
-- Status-change lines are muted
+- Status-change lines are muted. The ticket badge is title case (`Open`), not `OPEN`.
 - Skip-link copy is `Skip to thread.`
 - Summarize is a stub until Caduceus is wired; it returns a summarize string to the composer contract
 - **Degrade:** “Select a ticket.” Rail and composer keep their last good state
@@ -49,7 +54,7 @@ Demo names only (Ada Demo, Casey Sandbox, Jordan Preview). No customer PII.
 
 - **In:** `{ ticket, draft, summarize, macros, body }`
 - **Out:** body / insert / discard / send
-- To is visible. Macros live inside the box. AI draft is a strip **above** the textarea with Insert / Discard — never Send
+- To is visible. Macros live inside the box. AI draft is a strip **above** the textarea with Insert / Discard — never Send. The AI draft kicker is mute (accent is unread/error only).
 - Send is ink fill (min-height 40px; 44px on coarse pointers) and disabled while the body is empty
 - Send & close is hairline secondary, not a second ink primary. It hides on a closed ticket
 - **Degrade:** “Select a ticket to reply.”
@@ -62,6 +67,7 @@ Clerk DTO field names are locked. In for each: `{ shop, customerId? , orderId? }
 
 - **Out:** `displayName`, `defaultEmailAddress.emailAddress` (not deprecated `Customer.email`), `createdAt`, `numberOfOrders` (JSON string), `amountSpent`, `tags`
 - Default open. Peek: name
+- No Customer Edit link. No `customerUpdate` / address writes.
 - **Degrade:** “Customer unavailable” in this card only
 
 ### order (This order)
@@ -81,12 +87,14 @@ Clerk DTO field names are locked. In for each: `{ shop, customerId? , orderId? }
 - Ada #1001 has one invented OPEN return so default-open can be reviewed on first paint. Peek is lock-style: `In transit · 1 item` (status word + item count when there is no tracking). This OPEN fixture is the only default-open case; other invented tickets stay empty.
 - User toggle wins: clicking Returns closed stays closed. Expand state resets to lock defaults when `ticketId` / `orderId` changes (Customer + This order open; Returns open only if THIS ticket has an OPEN return; Past orders and Addresses collapsed).
 - Empty tickets (Casey / Jordan / no-order) stay collapsed with peek `No returns`
-- **Degrade:** “Returns error” in this card only
+- **Degrade:** “Couldn't load Returns. Retry.” in this card only
+- On-screen status word is title case (`Open`). The data enum stays `OPEN`.
+- No Edit / Duplicate / Refund / Cancel / Create order controls. v1 is read-only.
 - Review block: shipping this section open while empty fails the inbox PR
 
 ### order-history
 
-- **Out:** `{ id, name, createdAt, total, fulfillmentStatus }[]` newest first
+- **Out:** Clerk `list_past_orders` rows (`id`, `name`, `createdAt`, `displayFulfillmentStatus`, `currentTotalPriceSet.shopMoney`) newest first. The view layer projects `total` + `fulfillmentStatus` for render.
 - Default collapsed. Peek: `n orders` (e.g. `15 orders`, `1 order`, `0 orders`)
 - Click peeks a row. It does not change This order
 - **Degrade:** “No past orders” / card error
@@ -95,6 +103,12 @@ Clerk DTO field names are locked. In for each: `{ shop, customerId? , orderId? }
 ## Shop tissue
 
 - **In:** `{ shop, customerId?, orderId? }`
-- **Out:** the Clerk DTOs above
-- Fixture implementation: `console-src/inbox/js/shop/fixture-shop.js`
-- Must refuse writes. Clerk swaps this tissue; the organ contract does not change
+- **Out:** the Clerk DTOs above (same as helpdesk MCP/CLI)
+- Client: `console-src/inbox/js/shop/helpdesk-shop.js` via
+  `POST /console/api/helpdesk` → `helpdesk.invoke()`
+- Fallback: `console-src/inbox/js/shop/fixture-shop.js` when mint/Admin/HTTP
+  is unavailable, or when the requested GID is only on the fixture catalog
+- Live Cute Things (`source=live`) remounts the inbox onto live GIDs. Empty
+  live returns stay empty. Ada OPEN stays fixture-only.
+- Must refuse writes. `SHOPIFY_MUTATIONS_ENABLED` stays `0`.
+- Error copy, isolated per pane: `Couldn't load [Customer/Order/Returns/History]. Retry.`

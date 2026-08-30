@@ -1,14 +1,31 @@
 import { MAILBOX_TOPICS } from "../contracts.js";
 import { esc, formatOrderCount, formatWhen, statusLabel } from "../util.js";
 
+/** Project a helpdesk.list_past_orders Clerk row (or a legacy view row) for render. */
+export function projectHistoryRow(row) {
+  if (!row) return null;
+  const money = row.currentTotalPriceSet?.shopMoney;
+  return {
+    id: row.id,
+    name: row.name,
+    createdAt: row.createdAt,
+    total: row.total ?? (money ? `${money.amount} ${money.currencyCode}` : ""),
+    fulfillmentStatus: row.fulfillmentStatus ?? row.displayFulfillmentStatus ?? "",
+  };
+}
+
 /**
  * Past-orders rail tissue.
  * In: `{ shop, customerId }` via shop tissue.
- * Out: `{ id, name, createdAt, total, fulfillmentStatus }[]` newest first.
+ * Shop out: Clerk `list_past_orders` rows (`displayFulfillmentStatus`,
+ * `currentTotalPriceSet.shopMoney`). View rows keep `total` + `fulfillmentStatus`.
  * Click peeks a row. It does not replace This order.
  */
 export function projectOrderHistory(rows) {
-  const list = [...(rows || [])].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  const list = [...(rows || [])]
+    .map(projectHistoryRow)
+    .filter(Boolean)
+    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
   return {
     ok: true,
     peek: formatOrderCount(list.length),

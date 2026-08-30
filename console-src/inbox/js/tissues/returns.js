@@ -59,7 +59,7 @@ export function renderReturns(model, { open } = {}) {
       `<li>${esc(item.title)} · ${esc(item.reason || "—")} · ${esc(item.type || "—")}</li>`
     )).join("");
     body = `<ul class="return-items">${items || "<li>Return on file</li>"}</ul>
-      <p>Status ${esc(rec.status || "—")}</p>
+      <p>Status ${esc(rec.status ? statusLabel(rec.status) : "—")}</p>
       <p>Refund ${esc(formatMoney(rec.refundTotal, "—"))} · Credit ${esc(formatMoney(rec.creditTotal, "—"))}</p>`;
   }
   return `<section class="rail-card" data-tissue="returns" data-open="${isOpen ? "true" : "false"}">

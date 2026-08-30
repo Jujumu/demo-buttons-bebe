@@ -42,6 +42,11 @@ test("UX Pro blocks fail the default Ada paint", async () => {
   assert.doesNotMatch(snap.html, /data-sku="null"/);
   assert.doesNotMatch(snap.html, />\s*null\s*</);
   assert.match(snap.html, /<h3>Addresses<\/h3>\s*<span class="peek">No billing<\/span>/);
+  assert.match(snap.html, /status-badge">Open</);
+  assert.match(snap.html, /Status Open/);
+  assert.doesNotMatch(snap.html, /status-badge">OPEN</);
+  assert.doesNotMatch(snap.html, /Status OPEN/);
+  assert.doesNotMatch(snap.html, /<(button|a)\b[^>]*>\s*(?:Customer\s+)?Edit\b/i);
 });
 
 test("UX Pro blocks fail Casey and Jordan default paints", async () => {
@@ -133,6 +138,9 @@ test("chrome has no Gaia, Ask Gaia, or Gorgias purple", () => {
   assert.doesNotMatch(page, /#6[Bb]46[Cc]1|#7[Cc]3[Aa][Ee][Dd]|#5[Bb]21[Bb]6|#7[Cc]4[Dd][Ff][Ff]/);
   assert.doesNotMatch(page, /#B5471D.*#6|#6.*#B5471D/);
   assert.match(page, /min-height:\s*40px/);
+  assert.match(page, /\.draft-kicker[^}]*color:\s*var\(--mute\)/);
+  assert.doesNotMatch(page, /\.draft-kicker[^}]*color:\s*var\(--accent\)/);
+  assert.doesNotMatch(page, /\.status-badge\s*\{[^}]*text-transform:\s*uppercase/);
 });
 
 test("review-block detector flags the wall and a printed null SKU", () => {
@@ -146,6 +154,7 @@ test("review-block detector flags the wall and a printed null SKU", () => {
     <td class="mono" data-sku="null">null</td>
     <p class="mono line-sku" data-sku="—">—</p>
     <button>Ask Gaia</button>
+    <aside data-pane="rail"><button>Edit</button></aside>
     <style>:root{--acc:#6B46C1}</style>`;
   const hits = reviewBlockViolations(wall);
   assert.ok(hits.includes("fully-open rail wall"));
@@ -155,4 +164,5 @@ test("review-block detector flags the wall and a printed null SKU", () => {
   assert.ok(hits.includes("em dash SKU"));
   assert.ok(hits.includes("Gaia"));
   assert.ok(hits.includes("Gorgias purple"));
+  assert.ok(hits.includes("customer Edit"));
 });

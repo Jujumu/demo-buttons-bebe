@@ -148,8 +148,10 @@ esac
   tools.test_shopify_safety \
   shopify.test_shopify_read_only \
   -v
-PYTHONPATH="$ROOT_DIR/webhook/src${PYTHONPATH:+:$PYTHONPATH}" \
+PYTHONPATH="$ROOT_DIR/webhook/src:$ROOT_DIR/console-src/helpdesk-agent${PYTHONPATH:+:$PYTHONPATH}" \
   "$PYTHON" -m unittest discover -s webhook -p 'test_notifications.py' -v
+PYTHONPATH="$ROOT_DIR/webhook/src:$ROOT_DIR/console-src/helpdesk-agent${PYTHONPATH:+:$PYTHONPATH}" \
+  "$PYTHON" -m unittest discover -s webhook -p 'test_helpdesk_door.py' -v
 if "$PYTHON" -c 'import aiosqlite' >/dev/null 2>&1; then
   PYTHONPATH="$ROOT_DIR/webhook/src${PYTHONPATH:+:$PYTHONPATH}" \
     "$PYTHON" -m unittest discover -s webhook -p 'test_notification_api.py' -v
@@ -197,7 +199,8 @@ node --test whatsapp-connect/test/security.test.js
 node --test console-src/test/connections.test.js
 node --test console-src/inbox/test/rail-contracts.test.js \
   console-src/inbox/test/inbox-organ.test.js \
-  console-src/inbox/test/ux-review-blocks.test.js
+  console-src/inbox/test/ux-review-blocks.test.js \
+  console-src/inbox/test/helpdesk-shop.test.js
 node --check kb-admin/server.js
 node --test kb-admin/test/server.test.js
 

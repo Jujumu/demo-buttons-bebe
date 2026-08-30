@@ -15,6 +15,7 @@ from .routers import (
     console as _console,
     dashboard as _dashboard,
     health as _health,
+    helpdesk as _helpdesk,
     notifications as _notifications,
     webhook as _webhook,
 )
@@ -82,7 +83,7 @@ def create_app() -> FastAPI:
     )
     for route_router in (
         _health.router, _webhook.router, _auth.router, _dashboard.router,
-        _notifications.router, _console.router,
+        _notifications.router, _console.router, _helpdesk.router,
     ):
         application.include_router(route_router)
     return application

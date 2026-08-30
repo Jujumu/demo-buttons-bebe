@@ -12,6 +12,7 @@ sys.path.insert(0, str(ROOT))
 
 from helpdesk.cli import main as cli_main
 from helpdesk.dispatch import TOOLS, dispatch, invoke, list_tools
+from helpdesk.http import handle_http
 from helpdesk.mcp_server import handle_rpc, tool_descriptors
 from helpdesk.names import SAMPLE_SHOP, TOOL_NAMES
 from helpdesk.fixtures_sample import ADA, ORDER_ADA
@@ -76,6 +77,7 @@ class ContractTests(unittest.TestCase):
             cli.pop("_exit")
             self.assertEqual(handled, cli, tool)
             self.assertEqual(handled, mcp_body, tool)
+            self.assertEqual(handled, handle_http(tool, args), tool)
             self.assertTrue(handled["ok"], tool)
 
     def test_unknown_tool_is_structured_json(self) -> None:
