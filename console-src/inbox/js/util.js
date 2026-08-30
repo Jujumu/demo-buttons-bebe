@@ -80,14 +80,39 @@ export function firstTracking(order) {
   return null;
 }
 
+const WRITE_CONTROL = /<(button|a)\b[^>]*>\s*(?:customer\s+)?(edit|duplicate|refund|cancel|create\s+order)/i;
+const WRITE_ATTR = /\bdata-(?:edit|duplicate|refund|cancel|create-order|customer-update)\b/i;
+
+/** On-screen status word. Enums in data stay OPEN / PAID / etc. */
+export function screenStatus(value) {
+  return statusLabel(value);
+}
+
 export function forbiddenControlHits(html) {
   const text = String(html || "").toLowerCase();
   const hits = [];
   if (/\bgaia\b/.test(text)) hits.push("Gaia");
-  if (/\brefund\b/.test(text) && /<(button|a)\b/i.test(html)) {
-    if (/<(button|a)[^>]*>[^<]*refund/i.test(html)) hits.push("Refund");
+  if (WRITE_CONTROL.test(html) || WRITE_ATTR.test(html) || /\bcustomerupdate\b/i.test(html)) {
+    const labeled = String(html).match(WRITE_CONTROL);
+    const name = labeled?.[2] ? labeled[2].replace(/\s+/g, " ") : "write";
+    const pretty = name.charAt(0).toUpperCase() + name.slice(1);
+    if (/edit/i.test(name)) hits.push("Edit");
+    else if (/refund/i.test(name)) hits.push("Refund");
+    else if (/cancel/i.test(name)) hits.push("Cancel");
+    else if (/duplicate/i.test(name)) hits.push("Duplicate");
+    else if (/create/i.test(name)) hits.push("Create order");
+    else hits.push(pretty);
   }
+  if (/<(button|a)[^>]*>[^<]*refund/i.test(html)) hits.push("Refund");
   if (/<(button|a)[^>]*>[^<]*\bcancel\b/i.test(html)) hits.push("Cancel");
-  if (/<(button|a)[^>]*>[^<]*edit(?:\s+order)?/i.test(html)) hits.push("Edit");
-  return hits;
+  if (/<(button|a)[^>]*>[^<]*\bedit\b/i.test(html)) hits.push("Edit");
+  if (/<(button|a)[^>]*>[^<]*duplicate/i.test(html)) hits.push("Duplicate");
+  if (/<(button|a)[^>]*>[^<]*create\s+order/i.test(html)) hits.push("Create order");
+  return [...new Set(hits)];
+}
+
+export function railWriteControlHits(html) {
+  const rail = String(html || "").match(/data-pane="rail"[\s\S]*?(?:data-pane="|$)/);
+  const slice = rail ? rail[0] : String(html || "");
+  return forbiddenControlHits(slice).filter((hit) => hit !== "Gaia");
 }

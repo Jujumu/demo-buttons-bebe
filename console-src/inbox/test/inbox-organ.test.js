@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { IDS } from "../js/fixtures/demo-inbox.js";
 import { createInboxOrgan } from "../js/inbox.js";
 import { createFixtureShop } from "../js/shop/fixture-shop.js";
+import { railWriteControlHits } from "../js/util.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -21,6 +22,9 @@ function sourceTree() {
     "../js/tissues/thread.js",
     "../js/tissues/composer.js",
     "../js/tissues/rail.js",
+    "../js/tissues/customer.js",
+    "../js/tissues/returns.js",
+    "../js/tissues/order.js",
     "../js/shop/helpdesk-shop.js",
     "../js/shop/helpdesk-client.js",
     "../js/fixtures/demo-inbox.js",
@@ -105,6 +109,8 @@ test("no Edit, Refund, Cancel controls and no Gaia", async () => {
   const organ = createInboxOrgan({ viewId: "all" });
   const snap = await organ.ready();
   assert.deepEqual(snap.forbidden, []);
+  assert.deepEqual(railWriteControlHits(snap.html), []);
+  assert.doesNotMatch(snap.html, /<(button|a)\b[^>]*>\s*(?:Customer\s+)?Edit\b/i);
   assert.doesNotMatch(snap.html, /Gaia/i);
   assert.doesNotMatch(snap.html, /Ask Gaia/i);
   const tree = sourceTree();
@@ -112,6 +118,9 @@ test("no Edit, Refund, Cancel controls and no Gaia", async () => {
   assert.doesNotMatch(tree, /Malky|Rivky|Sperber|Morgenstern/i);
   assert.doesNotMatch(tree, /#6B46C1|#7C3AED|#5B21B6|purple/i);
   assert.doesNotMatch(tree, /SHOPIFY_MUTATIONS_ENABLED\s*=\s*['"]?1/);
+  assert.doesNotMatch(tree, /<(button|a)\b[^>]*>\s*(?:Customer\s+)?Edit\b/i);
+  assert.doesNotMatch(tree, /customerUpdate|addressUpdate|customer_update/i);
+  assert.doesNotMatch(tree, /\bdata-edit\b/);
 });
 
 test("one rail tissue error leaves thread and other rail sections up", async () => {

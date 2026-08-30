@@ -147,6 +147,10 @@ export const FORBIDDEN_CONTROLS = Object.freeze([
   "gaia",
   "refund",
   "cancel",
+  "edit",
   "edit order",
   "edit-order",
+  "duplicate",
+  "create order",
+  "customerupdate",
 ]);

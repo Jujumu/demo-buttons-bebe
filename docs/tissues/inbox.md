@@ -45,7 +45,7 @@ Demo names only (Ada Demo, Casey Sandbox, Jordan Preview). No customer PII.
 
 - **In:** `{ ticket }`
 - **Out:** `{ ticketId }` on `composer/summarize`
-- Status-change lines are muted
+- Status-change lines are muted. The ticket badge is title case (`Open`), not `OPEN`.
 - Skip-link copy is `Skip to thread.`
 - Summarize is a stub until Caduceus is wired; it returns a summarize string to the composer contract
 - **Degrade:** “Select a ticket.” Rail and composer keep their last good state
@@ -54,7 +54,7 @@ Demo names only (Ada Demo, Casey Sandbox, Jordan Preview). No customer PII.
 
 - **In:** `{ ticket, draft, summarize, macros, body }`
 - **Out:** body / insert / discard / send
-- To is visible. Macros live inside the box. AI draft is a strip **above** the textarea with Insert / Discard — never Send
+- To is visible. Macros live inside the box. AI draft is a strip **above** the textarea with Insert / Discard — never Send. The AI draft kicker is mute (accent is unread/error only).
 - Send is ink fill (min-height 40px; 44px on coarse pointers) and disabled while the body is empty
 - Send & close is hairline secondary, not a second ink primary. It hides on a closed ticket
 - **Degrade:** “Select a ticket to reply.”
@@ -67,6 +67,7 @@ Clerk DTO field names are locked. In for each: `{ shop, customerId? , orderId? }
 
 - **Out:** `displayName`, `defaultEmailAddress.emailAddress` (not deprecated `Customer.email`), `createdAt`, `numberOfOrders` (JSON string), `amountSpent`, `tags`
 - Default open. Peek: name
+- No Customer Edit link. No `customerUpdate` / address writes.
 - **Degrade:** “Customer unavailable” in this card only
 
 ### order (This order)
@@ -86,7 +87,9 @@ Clerk DTO field names are locked. In for each: `{ shop, customerId? , orderId? }
 - Ada #1001 has one invented OPEN return so default-open can be reviewed on first paint. Peek is lock-style: `In transit · 1 item` (status word + item count when there is no tracking). This OPEN fixture is the only default-open case; other invented tickets stay empty.
 - User toggle wins: clicking Returns closed stays closed. Expand state resets to lock defaults when `ticketId` / `orderId` changes (Customer + This order open; Returns open only if THIS ticket has an OPEN return; Past orders and Addresses collapsed).
 - Empty tickets (Casey / Jordan / no-order) stay collapsed with peek `No returns`
-- **Degrade:** “Returns error” in this card only
+- **Degrade:** “Couldn't load Returns. Retry.” in this card only
+- On-screen status word is title case (`Open`). The data enum stays `OPEN`.
+- No Edit / Duplicate / Refund / Cancel / Create order controls. v1 is read-only.
 - Review block: shipping this section open while empty fails the inbox PR
 
 ### order-history

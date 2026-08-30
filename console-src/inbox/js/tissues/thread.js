@@ -1,5 +1,5 @@
 import { MAILBOX_TOPICS } from "../contracts.js";
-import { esc, formatWhen, initials } from "../util.js";
+import { esc, formatWhen, initials, screenStatus } from "../util.js";
 
 /**
  * Thread tissue.
@@ -43,7 +43,7 @@ export function createThreadTissue({ mailbox }) {
           <h2>${esc(ticket.messages?.[0]?.name || "Customer")}</h2>
           <p class="thread-subject">${esc(ticket.subject)}</p>
         </div>
-        <span class="status-badge">${esc(ticket.status)}</span>
+        <span class="status-badge">${esc(screenStatus(ticket.status))}</span>
       </header>
       <div class="thread-scroll">${messages}</div>
       <div class="summarize-row">

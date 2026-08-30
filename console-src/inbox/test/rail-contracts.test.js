@@ -5,7 +5,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { IDS, SHOP, emptyReturns, orders } from "../js/fixtures/demo-inbox.js";
-import { formatSku } from "../js/util.js";
+import { formatSku, railWriteControlHits } from "../js/util.js";
 import { createFixtureShop } from "../js/shop/fixture-shop.js";
 import { projectCustomer } from "../js/tissues/customer.js";
 import { projectOrderHistory } from "../js/tissues/order-history.js";
@@ -285,6 +285,19 @@ test("rail error copy is isolated and Retry reloads one tissue", async () => {
   await rail.retry("returns");
   assert.equal(rail.snapshot().models.returns.ok, true);
   assert.equal(rail.snapshot().models.returns.inProgress, true);
+});
+
+test("rail fails the PR if an Edit or write control ships", async () => {
+  const rail = createRailOrgan({ shop, mailbox: createMailbox() });
+  await rail.load({ shop: SHOP, customerId: IDS.ADA, orderId: IDS.ORDER_1001, ticketId: "t-ada-track" });
+  const html = `<aside data-pane="rail">${rail.render()}</aside>`;
+  assert.deepEqual(railWriteControlHits(html), []);
+  assert.doesNotMatch(html, /<(button|a)\b[^>]*>\s*(?:Customer\s+)?Edit\b/i);
+  assert.doesNotMatch(html, /Duplicate|Create order|data-edit|customerUpdate/i);
+  assert.match(html, /Status Open/);
+  assert.doesNotMatch(html, /Status OPEN/);
+  assert.equal(railWriteControlHits(`${html}<button>Edit</button>`).includes("Edit"), true);
+  assert.equal(railWriteControlHits(`${html}<a href="#">Customer Edit</a>`).includes("Edit"), true);
 });
 
 test("shop tissue has no mutation surface", () => {

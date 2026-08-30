@@ -128,8 +128,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 .status-badge {
   font-size: 11px;
   font-weight: 500;
-  letter-spacing: .04em;
-  text-transform: uppercase;
+  letter-spacing: .02em;
   color: var(--mute);
   border: 1px solid var(--line);
   padding: 3px 7px;
@@ -178,7 +177,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   padding: 8px;
   border-bottom: 1px solid var(--line);
 }
-.draft-kicker { font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
+.draft-kicker { font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--mute); }
 .draft-text { font-size: 13px; margin-top: 4px; }
 .draft-actions { display: flex; gap: 6px; align-items: flex-start; }
 .composer-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
