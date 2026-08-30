@@ -92,6 +92,49 @@ class ComposerTissueTests(unittest.TestCase):
         self.assertTrue(summary["ok"])
         self.assertIn("Ada", summary["summary"])
 
+    def test_draft_uses_ticket_customer_name_not_display_name(self) -> None:
+        from helpdesk.fixtures_intake import ADA_TRACKING
+        from helpdesk.tickets import reset as reset_tickets
+
+        reset_tickets()
+        ingested = dispatch("helpdesk.ingest_email", ADA_TRACKING)
+        self.assertTrue(ingested["ok"])
+        self.assertEqual(ingested["customerName"], "Ada")
+        payload = dispatch(
+            "helpdesk.draft_reply",
+            {
+                "ticketId": ingested["id"],
+                "thread": {
+                    "id": ingested["id"],
+                    "customerName": "Ada",
+                    "status": "open",
+                    "subject": ADA_TRACKING["subject"],
+                    "messages": [
+                        {
+                            "fromAgent": False,
+                            "name": "Ada",
+                            "body": ADA_TRACKING["body"],
+                        }
+                    ],
+                },
+                "customer": {"displayName": "Demo Unfulfilled"},
+                "order": {
+                    "name": "#1001",
+                    "displayFinancialStatus": "PAID",
+                    "displayFulfillmentStatus": "UNFULFILLED",
+                },
+            },
+        )
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["source"], "fixture")
+        self.assertIn("Hi Ada", payload["draft"])
+        self.assertIn("#1001", payload["draft"])
+        self.assertNotIn("Demo Unfulfilled", payload["draft"])
+        self.assertNotIn("Hi Demo", payload["draft"])
+        blob = payload["draft"].lower()
+        for snippet in FORBIDDEN_DRAFT:
+            self.assertNotIn(snippet, blob, snippet)
+
     def test_writes_stay_forbidden(self) -> None:
         os.environ["SHOPIFY_MUTATIONS_ENABLED"] = "0"
         for tool in ("helpdesk.send", "helpdesk.refund", "helpdesk.cancel"):

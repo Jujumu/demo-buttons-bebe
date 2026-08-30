@@ -18,6 +18,77 @@ function historyRow(order) {
   };
 }
 
+function titleCase(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function ticketCustomerName(thread) {
+  if (thread.customerName) return String(thread.customerName);
+  for (const message of thread.messages || []) {
+    if (message.kind === "status" || message.fromAgent === true) continue;
+    if (message.name) return String(message.name);
+  }
+  return "";
+}
+
+function trackingOf(order) {
+  for (const fulfillment of order?.fulfillments || []) {
+    for (const info of fulfillment.trackingInfo || []) {
+      const number = String(info.number || "").trim();
+      if (number) return { company: String(info.company || "").trim(), number };
+    }
+  }
+  return { company: "", number: "" };
+}
+
+function hasOpenReturn(returns) {
+  if (!returns) return false;
+  if (returns.inProgress === true) return true;
+  return (returns.returns?.nodes || []).some((node) => String(node.status || "") === "OPEN");
+}
+
+/** Labeled fixture draft from already-loaded thread + rail DTOs. Never displayName. */
+export function fixtureDraftFromThread(thread = {}, rail = {}) {
+  if (thread.stubDraft) return thread.stubDraft;
+  const full = ticketCustomerName(thread);
+  const name = full.trim().split(/\s+/)[0] || "there";
+  const status = String(thread.status || "").toLowerCase();
+  const order = rail.order && typeof rail.order === "object" ? rail.order : {};
+  const orderName = String(order.name || "").trim();
+  const financial = titleCase(order.displayFinancialStatus);
+  const fulfill = titleCase(order.displayFulfillmentStatus);
+  const { company, number } = trackingOf(order);
+  const sentences = [];
+  if (status === "closed") {
+    sentences.push(`Glad this reached you, ${name}.`);
+    sentences.push(orderName
+      ? `${orderName} can stay closed — write back if anything else comes up.`
+      : "I am here if anything else comes up.");
+    return sentences.join(" ");
+  }
+  const greet = `Hi ${name} —`;
+  if (orderName && financial && fulfill) {
+    sentences.push(`${greet} I looked at ${orderName}. It is ${financial} and ${fulfill}.`);
+  } else if (orderName) {
+    sentences.push(`${greet} I looked at ${orderName}.`);
+  } else {
+    sentences.push(`${greet} I can confirm the destination once an order is on this ticket.`);
+  }
+  if (number) {
+    sentences.push(`The carrier update is ${company ? `${company} ${number}` : number}.`);
+  } else if (orderName && fulfill.toLowerCase() === "unfulfilled") {
+    sentences.push("It has not been handed to a carrier yet. I will write back when it ships.");
+  }
+  if (hasOpenReturn(rail.returns)) {
+    sentences.push("There is an open return on this order. I will not refund or cancel from here.");
+  }
+  sentences.push("Let me know if you need anything else.");
+  return sentences.join(" ");
+}
+
 /**
  * Fixture shop tissue. Fallback when helpdesk mint/Admin is unavailable.
  * Same Clerk DTO shapes as helpdesk.get_customer / get_order / get_returns /
@@ -81,7 +152,7 @@ export function createFixtureShop(opts = {}) {
       const thread = args.thread || {};
       return {
         source: "sample",
-        draft: thread.stubDraft || "",
+        draft: thread.stubDraft || fixtureDraftFromThread(thread, args),
       };
     },
     summarizeThread(args = {}) {

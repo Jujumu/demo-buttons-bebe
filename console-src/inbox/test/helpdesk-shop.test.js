@@ -470,6 +470,155 @@ test("one helpdesk tissue failure isolates to its pane", async () => {
   assert.equal(snap.rail.models.returns.ok, false);
 });
 
+test("intake Ada #1001 first-paints a draft strip from draft_reply", async () => {
+  const calls = [];
+  const adaRow = {
+    id: "t-in-1",
+    customerName: "Ada",
+    subject: "Tracking on order #1001 has not moved",
+    snippet: "Where is my order #1001? The tracking has not updated.",
+    status: "open",
+    updatedAt: "2026-08-30T14:02:00Z",
+    customerId: LIVE_IDS.C_UNFULFILLED,
+    orderId: LIVE_IDS.O_1001,
+  };
+  const adaTicket = {
+    ...adaRow,
+    messages: [{
+      id: "m-in-1",
+      fromAgent: false,
+      name: "Ada",
+      body: "Where is my order #1001? The tracking has not updated.",
+      at: "2026-08-30T14:02:00Z",
+    }],
+    statusEvents: [{ at: "2026-08-30T14:02:00Z", status: "open", note: "created" }],
+  };
+  const shop = createHelpdeskShop({
+    shop: LIVE_SHOP,
+    fallback: createFixtureShop({ fail: { draft: "no stubDraft fallback" } }),
+    client: createHelpdeskClient({
+      async invoke(tool, args) {
+        calls.push(tool);
+        if (tool === "helpdesk.ingest_email") {
+          if (/prize|lottery/i.test(`${args.subject} ${args.body}`)) {
+            return { ok: true, spam: true, ticketId: null };
+          }
+          return { ok: true, spam: false, ticketId: "t-in-1", id: "t-in-1", ...adaRow };
+        }
+        if (tool === "helpdesk.list_tickets") {
+          return { ok: true, tickets: [adaRow] };
+        }
+        if (tool === "helpdesk.get_ticket") {
+          return { ok: true, ticket: { ...adaTicket, id: args.ticketId } };
+        }
+        if (tool === "helpdesk.draft_reply") {
+          return {
+            ok: true,
+            source: "fixture",
+            draft: "Hi Ada — I looked at #1001. It is Paid and Unfulfilled. It has not been handed to a carrier yet. I will write back when it ships. Let me know if you need anything else.",
+          };
+        }
+        if (tool === "helpdesk.get_customer") {
+          return {
+            ok: true,
+            customer: {
+              displayName: "Demo Unfulfilled",
+              defaultEmailAddress: { emailAddress: "ai-demo-unfulfilled@example.com" },
+            },
+          };
+        }
+        if (tool === "helpdesk.get_order") {
+          return {
+            ok: true,
+            order: {
+              name: "#1001",
+              displayFinancialStatus: "PAID",
+              displayFulfillmentStatus: "UNFULFILLED",
+              currentTotalPriceSet: { shopMoney: { amount: "28.00", currencyCode: "USD" } },
+              lineItems: { nodes: [{ title: "Organic Cotton Baby Romper", sku: null, quantity: 1 }] },
+              billingAddress: null,
+              fulfillments: [],
+            },
+          };
+        }
+        if (tool === "helpdesk.get_returns") {
+          return { ok: true, returns: { nodes: [] }, inProgress: false, items: [] };
+        }
+        if (tool === "helpdesk.list_past_orders") {
+          return { ok: true, orders: [] };
+        }
+        if (tool === "helpdesk.search_macros") {
+          return { ok: true, macros: [] };
+        }
+        return { ok: false };
+      },
+    }),
+  });
+  const organ = createInboxOrgan({ shop, shopHost: LIVE_SHOP, viewId: "open" });
+  const ingested = await organ.ingestEmail({
+    from: "Ada <ada.tracking@example.com>",
+    subject: "Tracking on order #1001 has not moved",
+    body: "Where is my order #1001? The tracking has not updated.",
+    receivedAt: "2026-08-30T14:02:00Z",
+  });
+  assert.equal(ingested.id, "t-in-1");
+  assert.ok(calls.includes("helpdesk.ingest_email"));
+  assert.ok(calls.includes("helpdesk.draft_reply"));
+  assert.ok(!calls.includes("helpdesk.send"));
+  let snap = organ.snapshot();
+  assert.equal(snap.selectedId, "t-in-1");
+  assert.match(snap.html, /data-draft-strip/);
+  assert.match(snap.html, /Hi Ada/);
+  assert.doesNotMatch(snap.html, /Hi Demo/);
+  const stripAt = snap.html.indexOf("data-draft-strip");
+  const boxAt = snap.html.indexOf("composer-box");
+  assert.ok(stripAt > -1 && boxAt > stripAt, "draft strip sits above the composer box");
+  assert.equal(snap.sendDisabled, true);
+  assert.equal(snap.sent.length, 0);
+
+  organ.insertDraft();
+  snap = organ.snapshot();
+  assert.doesNotMatch(snap.html, /data-draft-strip/);
+  assert.match(snap.html, /Hi Ada — I looked at #1001/);
+  assert.equal(snap.sendDisabled, false);
+  assert.equal(snap.sent.length, 0);
+
+  const prize = await organ.ingestEmail({
+    from: "Prize Desk <winner@prize-farm.example>",
+    subject: "You won a $10,000 prize!",
+    body: "Claim your lottery winnings today. Unsubscribe from this farm of cash prize emails.",
+    receivedAt: "2026-08-30T14:16:00Z",
+  });
+  assert.equal(prize.spam, true);
+  assert.equal(prize.ticketId, null);
+  snap = organ.snapshot();
+  assert.doesNotMatch(snap.html, /You won a \$10,000 prize/i);
+  assert.doesNotMatch(snap.html, /lottery winnings/i);
+  assert.ok(!calls.includes("helpdesk.send"));
+});
+
+test("fixture draft_reply fallback greets ticket customerName not displayName", async () => {
+  const shop = createFixtureShop();
+  const draft = shop.draftReply({
+    ticketId: "t-in-1",
+    thread: {
+      id: "t-in-1",
+      customerName: "Ada",
+      status: "open",
+      messages: [{ fromAgent: false, name: "Ada", body: "Where is my order #1001?" }],
+    },
+    customer: { displayName: "Demo Unfulfilled" },
+    order: {
+      name: "#1001",
+      displayFinancialStatus: "PAID",
+      displayFulfillmentStatus: "UNFULFILLED",
+    },
+  });
+  assert.match(draft.draft, /Hi Ada/);
+  assert.match(draft.draft, /#1001/);
+  assert.doesNotMatch(draft.draft, /Hi Demo|Demo Unfulfilled|gorgias/i);
+});
+
 test("composer tools share invoke and are not writes", async () => {
   const calls = [];
   const shop = createHelpdeskShop({

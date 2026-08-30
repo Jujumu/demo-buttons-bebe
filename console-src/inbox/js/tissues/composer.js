@@ -21,7 +21,7 @@ export function composeMacroText(macro, currentBody = "", mode = "replace") {
  * In: `{ ticket, draft, summarize, macros, body }`
  * Out: body / insert / discard / send. AI strip and macros never Send.
  * Macro search lives inside the composer box. Replace overwrites; Append adds.
- * Draft-strip Insert stays named Insert.
+ * Draft-strip Insert stays named Insert. The strip sits above the composer box.
  */
 export function createComposerTissue({ mailbox }) {
   let model = {
@@ -121,10 +121,10 @@ export function createComposerTissue({ mailbox }) {
     return `<section class="composer" data-composer>
       ${peek}
       <div class="composer-to"><span>To</span> <strong>${esc(to.name)}</strong> <span class="mute">${esc(to.email)}</span></div>
+      ${strip}
       <div class="composer-box" data-macro-open="${searchOpen ? "true" : "false"}">
         <input class="macro-search" data-macro-search type="search" placeholder="Search macros by name or tags" value="${esc(next.query)}" aria-label="Search macros">
         ${picker}
-        ${strip}
         <textarea data-body placeholder="Write the reply. The human always sends.">${esc(next.body)}</textarea>
       </div>
       <div class="composer-actions">
