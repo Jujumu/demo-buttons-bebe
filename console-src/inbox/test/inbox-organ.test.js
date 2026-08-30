@@ -31,6 +31,7 @@ function sourceTree() {
     "../js/shop/helpdesk-shop.js",
     "../js/shop/helpdesk-client.js",
     "../js/shop/helpdesk-tools.js",
+    "../js/shop/clerk-ticket.js",
     "../js/fixtures/demo-inbox.js",
   ];
   return files.map((file) => readFileSync(join(here, file), "utf8")).join("\n");
@@ -82,6 +83,27 @@ test("inbox organ renders four panes and an ink selected bar", async () => {
   assert.match(snap.html, /Skip to thread\./);
   assert.match(snap.html, /<h2>Customer<\/h2>/);
   assert.match(snap.html, /<h3>Addresses<\/h3>/);
+  assert.match(snap.html, /ticket-row is-selected/);
+  assert.match(snap.html, /status-line">Open · Friday/);
+  assert.doesNotMatch(snap.html, /Assigned to me ·/);
+});
+
+test("closed Ada thread mutes Closed · Tuesday", async () => {
+  const organ = createInboxOrgan({ viewId: "closed", ticketId: "t-ada-closed" });
+  const snap = await organ.ready();
+  assert.equal(snap.selectedId, "t-ada-closed");
+  assert.equal(snap.selectedHasInkBar, true);
+  assert.match(snap.html, /status-line">Closed · Tuesday/);
+  assert.match(snap.html, /#1001 · Paid · Fulfilled/);
+  assert.doesNotMatch(snap.html, /#1002 ·/);
+  assert.doesNotMatch(snap.html, /Set status: closed/);
+  assert.doesNotMatch(snap.html, /displayFulfillmentStatus/);
+  assert.match(snap.html, /btn-quiet" data-summarize/);
+  const stripAt = snap.html.indexOf("data-draft-strip");
+  const bodyAt = snap.html.indexOf("data-body");
+  if (stripAt > -1 && bodyAt > stripAt) {
+    assert.doesNotMatch(snap.html.slice(stripAt, bodyAt), />Send</);
+  }
 });
 
 test("discarding the AI strip does not restore the draft", async () => {

@@ -104,21 +104,49 @@
  */
 
 /**
+ * @typedef {object} ClerkTicketRow
+ * @property {string} id
+ * @property {string} customerName
+ * @property {string} subject
+ * @property {string} snippet
+ * @property {"open" | "closed" | "snoozed"} status
+ * @property {string} updatedAt
+ * @property {string} customerId
+ * @property {string | null} orderId
+ */
+
+/**
+ * @typedef {object} ClerkTicket
+ * @property {string} id
+ * @property {string} customerName
+ * @property {string} subject
+ * @property {string} snippet
+ * @property {"open" | "closed" | "snoozed"} status
+ * @property {string} updatedAt
+ * @property {string} customerId
+ * @property {string | null} orderId
+ * @property {object[]} messages
+ * @property {{ at: string, status: string, note?: string }[]} statusEvents
+ */
+
+/**
  * Shop tissue. The inbox rail is a client of helpdesk.* tools
  * (`get_customer`, `get_order`, `get_returns`, `list_past_orders`) via
- * `createHelpdeskShop`. Composer is a client of `draft_reply` and
- * `summarize_thread` / `search_macros` / `apply_macro` on the same invoke().
- * Fixtures are the fallback when mint/Admin is down. In: `{ shop, customerId?,
- * orderId? }` plus composer `{ ticketId, thread? }` or `{ query }` /
- * `{ macroId, mode, currentBody? }`. Out: the Clerk DTOs above, or `{ draft }`
- * / `{ summary }` / `{ macros }` / `{ text }`. Apply fills the textarea and
- * never sends. Must not mutate Shopify. `SHOPIFY_MUTATIONS_ENABLED` stays 0.
+ * `createHelpdeskShop`. Views / list / thread are clients of `list_tickets`
+ * and `get_ticket` on the same invoke(). Composer is a client of `draft_reply`
+ * and `summarize_thread` / `search_macros` / `apply_macro`. Fixtures are the
+ * fallback when mint/Admin is down. Ticket rows carry first-party
+ * `customerName` (never `displayName`) and ticket status open/closed/snoozed
+ * (never Return.status OPEN). Must not mutate Shopify.
+ * `SHOPIFY_MUTATIONS_ENABLED` stays 0.
  *
  * @typedef {object} ShopTissue
  * @property {(req: { shop: string, customerId: string }) => Promise<ClerkCustomer | null> | ClerkCustomer | null} getCustomer
  * @property {(req: { shop: string, orderId: string }) => Promise<ClerkOrder | null> | ClerkOrder | null} getOrder
  * @property {(req: { shop: string, orderId: string }) => Promise<ClerkReturns> | ClerkReturns} getReturns
  * @property {(req: { shop: string, customerId: string }) => Promise<ClerkOrderHistoryRow[]> | ClerkOrderHistoryRow[]} getOrderHistory
+ * @property {(req: { view?: string, limit?: number }) => Promise<ClerkTicketRow[]> | ClerkTicketRow[]} [listTickets]
+ * @property {(req: { ticketId: string }) => Promise<ClerkTicket | null> | ClerkTicket | null} [getTicket]
  */
 
 /**

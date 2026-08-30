@@ -4,8 +4,8 @@ MCP server + CLI for the Shopify helpdesk. UI is a client, not the product.
 Each of the ten v1 tools is a tissue: one handler, two doors (MCP and CLI).
 
 ```text
-helpdesk list-tickets --view open --limit 20
-helpdesk get-ticket --ticket-id 1001
+helpdesk list-tickets --view mine --limit 20
+helpdesk get-ticket --ticket-id 1001   # aliases t-ada-track
 helpdesk get-customer --shop demo-helpdesk.example \
   --customer-id gid://shopify/Customer/9001
 helpdesk get-order --shop yznyc1-ez.myshopify.com \

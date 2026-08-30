@@ -3,16 +3,19 @@
 Module 9 is an **organ**: view, list, thread, composer, and rail. Rail is itself an organ of customer, this-order, returns, and order-history. Rail section titles are `h2`; nested disclosures are `h3`. Tissues are replaceable black boxes. They talk over a mailbox. They do not import each other's internals. One tissue error stays in its pane.
 
 The shop tissue is a client of `helpdesk.get_customer` / `get_order` /
-`get_returns` / `list_past_orders` (same payloads as MCP/CLI). Composer
-Insert/Discard and the mute summarize peek are clients of
-`helpdesk.draft_reply` and `helpdesk.summarize_thread` on that same
-`invoke()` path. In-box macro search is a client of `helpdesk.search_macros`;
-Insert/Append call `helpdesk.apply_macro` (`replace` or `append`) and never
-send. Live reads target Cute Things (`SHOPIFY_SHOP` pinned to
-`yznyc1-ez.myshopify.com`) when mint works. Mint/Admin failure falls back
-to `demo-inbox.example` fixtures. `SHOPIFY_MUTATIONS_ENABLED` stays `0`.
-No live store writes. The Ada OPEN return is invented fixture-only and is
-never injected onto a live shop query. No `helpdesk.send`.
+`get_returns` / `list_past_orders` (same payloads as MCP/CLI). Views, list,
+and thread are clients of `helpdesk.list_tickets` (`{ view, limit }`) and
+`helpdesk.get_ticket` (`{ ticketId }`) on that same `invoke()` path. List
+rows carry `customerId` / `orderId` GIDs so the rail lights when a ticket is
+selected. Composer Insert/Discard and the mute summarize peek are clients of
+`helpdesk.draft_reply` and `helpdesk.summarize_thread`. In-box macro search is
+a client of `helpdesk.search_macros`; Insert/Append call `helpdesk.apply_macro`
+(`replace` or `append`) and never send. Live reads target Cute Things
+(`SHOPIFY_SHOP` pinned to `yznyc1-ez.myshopify.com`) when mint works.
+Mint/Admin failure falls back to `demo-inbox.example` fixtures.
+`SHOPIFY_MUTATIONS_ENABLED` stays `0`. No live store writes. The Ada OPEN
+return is invented fixture-only and is never injected onto a live shop query.
+No `helpdesk.send`.
 
 Demo names only (Ada Demo, Casey Sandbox, Jordan Preview). No customer PII.
 
@@ -41,16 +44,18 @@ Demo names only (Ada Demo, Casey Sandbox, Jordan Preview). No customer PII.
 
 ### list
 
-- **In:** `{ tickets, selectedTicketId, viewLabel }`
+- **In:** `{ tickets, selectedTicketId, viewLabel }` from `helpdesk.list_tickets`
 - **Out:** `{ ticketId }` on `list/selected`
+- Row copy uses first-party `customerName` and `snippet` (never `displayName`)
 - **Selected row:** 4px ink leading bar, no wash
 - **Degrade:** “No tickets in this view”
 
 ### thread
 
-- **In:** `{ ticket }`
+- **In:** `{ ticket }` from `helpdesk.get_ticket` (`ticket` + `messages` + `statusEvents`)
 - **Out:** `{ ticketId }` on `composer/summarize`
-- Status-change lines are muted. The ticket badge is title case (`Open`), not `OPEN`.
+- Status-change events are muted as `Closed · Tuesday` (ticket status + weekday). That is a status event, not `Order.displayFulfillmentStatus`. The Ada fixture includes at least one status event so the mute line is visible.
+- The ticket badge is title case (`Open`), not `OPEN`. Ticket status is `open` / `closed` / `snoozed`, never `Return.status`.
 - Skip-link copy is `Skip to thread.`
 - Summarize publishes `composer/summarize`. Caduceus fills a mute peek via `helpdesk.summarize_thread`. It does not Send and does not open an AI sidebar.
 - **Degrade:** “Select a ticket.” Rail and composer keep their last good state
@@ -113,7 +118,8 @@ Clerk DTO field names are locked. In for each: `{ shop, customerId? , orderId? }
 - **Out:** the Clerk DTOs above (same as helpdesk MCP/CLI)
 - Client: `console-src/inbox/js/shop/helpdesk-shop.js` via
   `POST /console/api/helpdesk` → `helpdesk.invoke()`
-- Composer uses the same client for `helpdesk.draft_reply`,
+- Views / list / thread use the same client for `helpdesk.list_tickets` and
+  `helpdesk.get_ticket`. Composer uses it for `helpdesk.draft_reply`,
   `helpdesk.summarize_thread`, `helpdesk.search_macros`, and
   `helpdesk.apply_macro`. Draft-strip Insert/Discard and macro Replace/Append never call send.
 - Fallback: `console-src/inbox/js/shop/fixture-shop.js` when mint/Admin/HTTP

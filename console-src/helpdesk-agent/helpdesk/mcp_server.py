@@ -22,7 +22,7 @@ from .names import (
 
 SCHEMAS = {
     TOOL_LIST_TICKETS: {
-        "view": {"type": "string", "description": "open | closed | all"},
+        "view": {"type": "string", "description": "open | closed | all | snoozed | mine | unassigned"},
         "limit": {"type": "integer"},
     },
     TOOL_GET_TICKET: {"ticketId": {"type": "string"}},

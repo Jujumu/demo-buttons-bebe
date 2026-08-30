@@ -2,9 +2,10 @@ import { MAILBOX_TOPICS } from "../contracts.js";
 import { esc, formatWhen } from "../util.js";
 
 /**
- * List tissue.
+ * List tissue. Client of helpdesk.list_tickets.
  * In: `{ tickets, selectedTicketId, viewLabel }`
  * Out: `{ ticketId }` on `list/selected`
+ * Selected row: 4px ink bar. Uses first-party customerName + snippet.
  */
 export function createListTissue({ mailbox }) {
   let model = { tickets: [], selectedTicketId: null, viewLabel: "Inbox" };
@@ -19,15 +20,14 @@ export function createListTissue({ mailbox }) {
 
   function renderRow(ticket, selectedId) {
     const on = ticket.id === selectedId;
-    const snippet = (ticket.messages || []).find((msg) => msg.kind !== "status")?.body || "";
     return `<button type="button" class="ticket-row${on ? " is-selected" : ""}" data-ticket="${esc(ticket.id)}" aria-current="${on ? "true" : "false"}">
       <span class="ticket-bar" aria-hidden="true"></span>
       <span class="ticket-top">
-        <span class="ticket-name">${esc(ticket.messages?.[0]?.name || "Customer")}</span>
+        <span class="ticket-name">${esc(ticket.customerName || "Customer")}</span>
         <time class="ticket-time">${esc(formatWhen(ticket.updatedAt))}</time>
       </span>
       <span class="ticket-subject">${esc(ticket.subject)}</span>
-      <span class="ticket-snippet">${esc(snippet)}</span>
+      <span class="ticket-snippet">${esc(ticket.snippet || "")}</span>
     </button>`;
   }
 

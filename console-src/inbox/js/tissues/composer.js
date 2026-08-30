@@ -70,7 +70,7 @@ export function createComposerTissue({ mailbox }) {
   function recipient(ticket) {
     if (!ticket) return { name: "", email: "" };
     return {
-      name: ticket.messages?.[0]?.name || "",
+      name: ticket.customerName || ticket.messages?.[0]?.name || "",
       email: ticket.toEmail || "",
     };
   }
