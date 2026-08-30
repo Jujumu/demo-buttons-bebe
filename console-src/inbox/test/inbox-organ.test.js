@@ -140,6 +140,37 @@ test("Jordan ticket without an order does not blank the thread", async () => {
   assert.equal(snap.rail.currentOrderId, null);
 });
 
+test("switching tickets resets rail expand and does not leak Ada OPEN returns", async () => {
+  const organ = createInboxOrgan({ viewId: "all", ticketId: "t-ada-track" });
+  await organ.ready();
+  assert.equal(organ.snapshot().rail.open.returns, true);
+  organ.toggleRail("returns");
+  organ.toggleRail("order-history");
+  assert.equal(organ.snapshot().rail.open.returns, false);
+  assert.equal(organ.snapshot().rail.open["order-history"], true);
+
+  await organ.selectTicket("t-casey-visor");
+  let snap = organ.snapshot();
+  assert.equal(snap.selectedId, "t-casey-visor");
+  assert.equal(snap.rail.open.returns, false);
+  assert.equal(snap.rail.open["order-history"], false);
+  assert.equal(snap.rail.open.customer, true);
+  assert.equal(snap.rail.open.order, true);
+  assert.equal(snap.rail.open.addresses, false);
+  assert.match(snap.html, /<h2>Returns<\/h2>\s*<span class="peek">No returns<\/span>/);
+
+  await organ.selectTicket("t-jordan-ship");
+  snap = organ.snapshot();
+  assert.equal(snap.rail.open.returns, false);
+  assert.match(snap.html, /No returns/);
+
+  await organ.selectTicket("t-ada-track");
+  snap = organ.snapshot();
+  assert.equal(snap.rail.open.returns, true);
+  assert.equal(snap.rail.open["order-history"], false);
+  assert.match(snap.html, /In transit · 1 item/);
+});
+
 test("history peek does not swap the open order", async () => {
   const organ = createInboxOrgan({ viewId: "unassigned", ticketId: "t-casey-visor" });
   const snap = await organ.ready();

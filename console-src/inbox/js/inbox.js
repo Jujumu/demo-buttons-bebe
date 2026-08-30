@@ -154,6 +154,7 @@ export function createInboxOrgan(opts = {}) {
       shop: SHOP,
       customerId: ticket?.customerId,
       orderId: ticket?.orderId,
+      ticketId: ticket?.id,
     });
   }
 
@@ -264,6 +265,9 @@ export function createInboxOrgan(opts = {}) {
     selectTicket(id) {
       selectedId = id;
       return refreshRail();
+    },
+    toggleRail(key) {
+      return rail.toggle(key);
     },
     setBody(text) {
       body = text;

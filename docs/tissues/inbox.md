@@ -60,13 +60,13 @@ Clerk DTO field names are locked. In for each: `{ shop, customerId? , orderId? }
 
 ### customer
 
-- **Out:** `displayName`, `defaultEmailAddress.emailAddress` (not deprecated `Customer.email`), `createdAt`, `numberOfOrders`, `amountSpent`, `tags`
+- **Out:** `displayName`, `defaultEmailAddress.emailAddress` (not deprecated `Customer.email`), `createdAt`, `numberOfOrders` (JSON string), `amountSpent`, `tags`
 - Default open. Peek: name
 - **Degrade:** “Customer unavailable” in this card only
 
 ### order (This order)
 
-- **Out:** `name`, `createdAt`, `displayFinancialStatus`, `displayFulfillmentStatus`, `currentTotalPriceSet`, `lineItems` (`title`, `sku`, `qty`, `price`), stacked `shippingAddress` / `billingAddress`, `fulfillments.trackingInfo`, plus totals when the order object has them
+- **Out:** `name`, `createdAt`, `displayFinancialStatus`, `displayFulfillmentStatus`, `currentTotalPriceSet` (MoneyBag `{ shopMoney, presentmentMoney }`), `lineItems` (`title`, `sku`, `qty`, `originalUnitPriceSet.shopMoney`), stacked `shippingAddress` / `billingAddress`, `fulfillments.trackingInfo`, plus totals when the order object has them
 - Default open. Peek: order number + Paid + Fulfilled
 - Line items and totals stay visible while open
 - Addresses start collapsed (stack, not two columns). Peek `No billing` when `billingAddress` is missing. `Ship ≠ bill` / `Same address` only when both addresses exist
@@ -77,10 +77,10 @@ Clerk DTO field names are locked. In for each: `{ shop, customerId? , orderId? }
 
 ### returns
 
-- **Out:** `returns`, `returnStatus`, in-progress flag, items + reason/type, refund vs credit totals, return tracking
-- Admin GraphQL 2026-07 `ReturnStatus` in-progress value is `OPEN` (there is no `IN_PROGRESS` enum)
-- Ada #1001 has one invented OPEN return so default-open can be reviewed. Peek is lock-style: `In transit · 1 item` (status word + item count when there is no tracking)
-- Open only when a return is in progress. Empty tickets (Casey / Jordan / no-order) stay collapsed with peek `No returns`
+- **Out:** `returns.nodes[].status` (Return.status). In-progress is `Return.status === "OPEN"` only. Do not read `Order.returnStatus`. There is no `PENDING` ReturnStatus.
+- Ada #1001 has one invented OPEN return so default-open can be reviewed on first paint. Peek is lock-style: `In transit · 1 item` (status word + item count when there is no tracking). This OPEN fixture is the only default-open case; other invented tickets stay empty.
+- User toggle wins: clicking Returns closed stays closed. Expand state resets to lock defaults when `ticketId` / `orderId` changes (Customer + This order open; Returns open only if THIS ticket has an OPEN return; Past orders and Addresses collapsed).
+- Empty tickets (Casey / Jordan / no-order) stay collapsed with peek `No returns`
 - **Degrade:** “Returns error” in this card only
 - Review block: shipping this section open while empty fails the inbox PR
 

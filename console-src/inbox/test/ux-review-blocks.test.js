@@ -82,7 +82,8 @@ test("empty returns stay collapsed with No returns peek", async () => {
 
 test("OPEN return on Ada default-opens Returns", async () => {
   const snap = await createInboxOrgan({ viewId: "mine" }).ready();
-  assert.equal(snap.rail.models.returns.record.returnStatus, "OPEN");
+  assert.equal(snap.rail.models.returns.record.status, "OPEN");
+  assert.equal(snap.rail.models.returns.record.returns.nodes[0].status, "OPEN");
   assert.equal(snap.rail.models.returns.inProgress, true);
   assert.equal(snap.rail.open.returns, true);
   assert.match(snap.html, /data-toggle="returns"[^>]*aria-expanded="true"/);

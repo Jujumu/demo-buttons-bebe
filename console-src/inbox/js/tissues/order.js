@@ -56,7 +56,7 @@ export function renderOrder(model, { open = true, addressesOpen = false, shipmen
     return `<li class="line">
       <p class="line-title">${esc(item.title)}</p>
       ${skuRow}
-      <p class="line-meta">${esc(item.quantity)} · <span class="mono">${esc(item.price)}</span></p>
+      <p class="line-meta">${esc(item.quantity)} · <span class="mono">${esc(formatMoney(item.originalUnitPriceSet, ""))}</span></p>
     </li>`;
   }).join("");
   const tracking = model.tracking;

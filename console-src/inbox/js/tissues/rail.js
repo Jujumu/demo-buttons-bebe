@@ -35,6 +35,18 @@ export function createRailOrgan({ shop, mailbox }) {
   };
   let peekedHistoryId = null;
   let currentOrderId = null;
+  let currentTicketKey = null;
+
+  function ticketKey({ ticketId, customerId, orderId }) {
+    if (ticketId) return `ticket:${ticketId}`;
+    return `order:${customerId || ""}:${orderId || ""}`;
+  }
+
+  function applyLockDefaults(returnsModel, orderModel) {
+    Object.assign(open, RAIL_DEFAULTS);
+    open.returns = Boolean(returnsModel?.inProgress);
+    open.shipment = Boolean(orderModel?.hasTracking);
+  }
 
   function renderError(tissueId, label, peek, message) {
     return `<section class="rail-card is-error" data-tissue="${esc(tissueId)}" data-open="true">
@@ -56,10 +68,9 @@ export function createRailOrgan({ shop, mailbox }) {
         addressesOpen: open.addresses,
         shipmentOpen: models.order.hasTracking ? open.shipment : false,
       });
-    const returnsOpen = open.returns || models.returns.inProgress;
     const returnsHtml = models.returns.error
       ? renderError("returns", "Returns", models.returns.peek, models.returns.error)
-      : renderReturns(models.returns, { open: returnsOpen });
+      : renderReturns(models.returns, { open: open.returns });
     const historyRows = (models.history.rows || []).filter((row) => row.id !== currentOrderId);
     const historyView = models.history.error
       ? models.history
@@ -75,7 +86,10 @@ export function createRailOrgan({ shop, mailbox }) {
     </div>`;
   }
 
-  async function load({ shop: shopId, customerId, orderId }) {
+  async function load({ shop: shopId, customerId, orderId, ticketId }) {
+    const nextKey = ticketKey({ ticketId, customerId, orderId });
+    const switched = nextKey !== currentTicketKey;
+    currentTicketKey = nextKey;
     currentOrderId = orderId || null;
     peekedHistoryId = null;
     const [customerModel, orderModel, returnsModel, historyModel] = await Promise.all([
@@ -90,8 +104,7 @@ export function createRailOrgan({ shop, mailbox }) {
       returns: returnsModel,
       history: historyModel,
     };
-    open.returns = Boolean(returnsModel.inProgress);
-    open.shipment = Boolean(orderModel.hasTracking);
+    if (switched) applyLockDefaults(returnsModel, orderModel);
     for (const [tissueId, model] of Object.entries({ customer: customerModel, order: orderModel, returns: returnsModel, "order-history": historyModel })) {
       if (model.error) mailbox.publish(MAILBOX_TOPICS.TISSUE_ERROR, { tissueId, message: model.error });
     }
@@ -121,12 +134,18 @@ export function createRailOrgan({ shop, mailbox }) {
     load,
     render,
     mount,
+    toggle(key) {
+      if (!(key in open)) return open[key];
+      open[key] = !open[key];
+      return open[key];
+    },
     snapshot() {
       return {
         models,
         open: { ...open },
         peekedHistoryId,
         currentOrderId,
+        currentTicketKey,
       };
     },
   };

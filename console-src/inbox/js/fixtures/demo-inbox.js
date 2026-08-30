@@ -22,7 +22,7 @@ export const customers = {
     displayName: "Ada Demo",
     defaultEmailAddress: { emailAddress: "ada.demo@example.com" },
     createdAt: "2026-06-02T09:00:00Z",
-    numberOfOrders: 1,
+    numberOfOrders: "1",
     amountSpent: { amount: "28.00", currencyCode: "USD" },
     tags: ["DEMO"],
   },
@@ -31,7 +31,7 @@ export const customers = {
     displayName: "Casey Sandbox",
     defaultEmailAddress: { emailAddress: "casey.sandbox@example.com" },
     createdAt: "2026-06-04T11:30:00Z",
-    numberOfOrders: 2,
+    numberOfOrders: "2",
     amountSpent: { amount: "96.00", currencyCode: "USD" },
     tags: ["DEMO"],
   },
@@ -40,14 +40,15 @@ export const customers = {
     displayName: "Jordan Preview",
     defaultEmailAddress: { emailAddress: "jordan.preview@example.com" },
     createdAt: "2026-07-12T14:00:00Z",
-    numberOfOrders: 0,
+    numberOfOrders: "0",
     amountSpent: { amount: "0.00", currencyCode: "USD" },
     tags: ["DEMO"],
   },
 };
 
-function money(amount, currencyCode = "USD") {
-  return { shopMoney: { amount, currencyCode } };
+function moneyBag(amount, currencyCode = "USD") {
+  const money = { amount, currencyCode };
+  return { shopMoney: { ...money }, presentmentMoney: { ...money } };
 }
 
 export const orders = {
@@ -57,17 +58,17 @@ export const orders = {
     createdAt: "2026-08-20T09:05:00Z",
     displayFinancialStatus: "PAID",
     displayFulfillmentStatus: "FULFILLED",
-    currentTotalPriceSet: money("28.00"),
-    currentSubtotalPriceSet: money("24.00"),
-    totalShippingPriceSet: money("4.00"),
-    totalTaxSet: money("0.00"),
+    currentTotalPriceSet: moneyBag("28.00"),
+    currentSubtotalPriceSet: moneyBag("24.00"),
+    totalShippingPriceSet: moneyBag("4.00"),
+    totalTaxSet: moneyBag("0.00"),
     lineItems: {
       nodes: [
         {
           title: "Oak Demo Rattle",
           sku: null,
           quantity: 1,
-          price: "24.00",
+          originalUnitPriceSet: moneyBag("24.00"),
         },
       ],
     },
@@ -100,17 +101,17 @@ export const orders = {
     createdAt: "2026-08-22T10:12:00Z",
     displayFinancialStatus: "PAID",
     displayFulfillmentStatus: "UNFULFILLED",
-    currentTotalPriceSet: money("36.00"),
-    currentSubtotalPriceSet: money("32.00"),
-    totalShippingPriceSet: money("4.00"),
-    totalTaxSet: money("0.00"),
+    currentTotalPriceSet: moneyBag("36.00"),
+    currentSubtotalPriceSet: moneyBag("32.00"),
+    totalShippingPriceSet: moneyBag("4.00"),
+    totalTaxSet: moneyBag("0.00"),
     lineItems: {
       nodes: [
         {
           title: "Canvas Demo Visor",
           sku: null,
           quantity: 1,
-          price: "32.00",
+          originalUnitPriceSet: moneyBag("32.00"),
         },
       ],
     },
@@ -133,17 +134,17 @@ export const orders = {
     createdAt: "2026-08-24T08:40:00Z",
     displayFinancialStatus: "PAID",
     displayFulfillmentStatus: "FULFILLED",
-    currentTotalPriceSet: money("60.00"),
-    currentSubtotalPriceSet: money("54.00"),
-    totalShippingPriceSet: money("6.00"),
-    totalTaxSet: money("0.00"),
+    currentTotalPriceSet: moneyBag("60.00"),
+    currentSubtotalPriceSet: moneyBag("54.00"),
+    totalShippingPriceSet: moneyBag("6.00"),
+    totalTaxSet: moneyBag("0.00"),
     lineItems: {
       nodes: [
         {
           title: "Merino Demo Throw",
           sku: null,
           quantity: 1,
-          price: "54.00",
+          originalUnitPriceSet: moneyBag("54.00"),
         },
       ],
     },
@@ -180,34 +181,29 @@ export const orders = {
   },
 };
 
-/** Empty returns. Used for Casey / Jordan / tickets with no in-progress return. */
+/** Empty returns. Casey / Jordan / no-order stay empty. */
 export const emptyReturns = {
   returns: { nodes: [] },
-  returnStatus: null,
-  inProgress: false,
   items: [],
   refundTotal: null,
   creditTotal: null,
   tracking: null,
 };
 
-/** One in-progress return on Ada #1001 so Returns default-open can be reviewed. */
+/** Invented OPEN return on Ada #1001 — the only default-open returns case. */
 export const openReturn1001 = {
   returns: {
     nodes: [
       {
         id: "gid://shopify/Return/70001",
         status: "OPEN",
-        returnStatus: "OPEN",
       },
     ],
   },
-  returnStatus: "OPEN",
-  inProgress: true,
   items: [
     { title: "Oak Demo Rattle", reason: "Changed mind", type: "RETURN" },
   ],
-  refundTotal: money("24.00"),
+  refundTotal: moneyBag("24.00"),
   creditTotal: null,
   tracking: {
     number: "DEMO-RET-1001",

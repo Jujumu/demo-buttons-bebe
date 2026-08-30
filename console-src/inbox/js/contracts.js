@@ -14,8 +14,9 @@
  */
 
 /**
- * @typedef {object} MoneySet
+ * @typedef {object} MoneyBag
  * @property {MoneyV2} shopMoney
+ * @property {MoneyV2} presentmentMoney
  */
 
 /**
@@ -23,7 +24,7 @@
  * @property {string} displayName
  * @property {{ emailAddress: string } | null} defaultEmailAddress
  * @property {string} createdAt
- * @property {number} numberOfOrders
+ * @property {string} numberOfOrders
  * @property {MoneyV2} amountSpent
  * @property {string[]} tags
  */
@@ -33,7 +34,7 @@
  * @property {string} title
  * @property {string | null} sku
  * @property {number} quantity
- * @property {string} price
+ * @property {MoneyBag} originalUnitPriceSet
  */
 
 /**
@@ -61,14 +62,14 @@
  * @property {string} createdAt
  * @property {string} displayFinancialStatus
  * @property {string} displayFulfillmentStatus
- * @property {MoneySet} currentTotalPriceSet
+ * @property {MoneyBag} currentTotalPriceSet
  * @property {{ nodes: ClerkLineItem[] }} lineItems
  * @property {ClerkAddress | null} shippingAddress
  * @property {ClerkAddress | null} billingAddress
  * @property {{ trackingInfo: ClerkTrackingInfo[] }[]} fulfillments
- * @property {MoneySet | null} [currentSubtotalPriceSet]
- * @property {MoneySet | null} [totalShippingPriceSet]
- * @property {MoneySet | null} [totalTaxSet]
+ * @property {MoneyBag | null} [currentSubtotalPriceSet]
+ * @property {MoneyBag | null} [totalShippingPriceSet]
+ * @property {MoneyBag | null} [totalTaxSet]
  */
 
 /**
@@ -79,13 +80,17 @@
  */
 
 /**
+ * @typedef {object} ClerkReturn
+ * @property {string} id
+ * @property {string} status
+ */
+
+/**
  * @typedef {object} ClerkReturns
- * @property {{ nodes: object[] }} returns
- * @property {string | null} returnStatus
- * @property {boolean} inProgress
+ * @property {{ nodes: ClerkReturn[] }} returns
  * @property {ClerkReturnItem[]} items
- * @property {MoneySet | null} refundTotal
- * @property {MoneySet | null} creditTotal
+ * @property {MoneyBag | null} refundTotal
+ * @property {MoneyBag | null} creditTotal
  * @property {ClerkTrackingInfo | null} tracking
  */
 

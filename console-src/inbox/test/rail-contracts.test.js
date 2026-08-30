@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { IDS, SHOP, emptyReturns, orders } from "../js/fixtures/demo-inbox.js";
 import { formatSku } from "../js/util.js";
@@ -12,6 +15,25 @@ import { createMailbox } from "../js/mailbox.js";
 import { createRailOrgan } from "../js/tissues/rail.js";
 
 const shop = createFixtureShop();
+const here = dirname(fileURLToPath(import.meta.url));
+
+function clickToggle(host, name) {
+  host.onclick({
+    target: {
+      closest(sel) {
+        if (sel === "[data-history]") return null;
+        if (sel === "[data-toggle]") return { dataset: { toggle: name } };
+        return null;
+      },
+    },
+  });
+}
+
+function assertMoneyBag(bag) {
+  assert.deepEqual(Object.keys(bag).sort(), ["presentmentMoney", "shopMoney"]);
+  assert.equal(typeof bag.shopMoney.amount, "string");
+  assert.equal(typeof bag.presentmentMoney.amount, "string");
+}
 
 test("customer DTO uses Clerk Admin GraphQL field names", async () => {
   const record = await shop.getCustomer({ shop: SHOP, customerId: IDS.ADA });
@@ -30,6 +52,8 @@ test("customer DTO uses Clerk Admin GraphQL field names", async () => {
   assert.equal(model.record.email, undefined);
   assert.ok(!("email" in model.record));
   assert.deepEqual(model.record.tags, ["DEMO"]);
+  assert.equal(typeof model.record.numberOfOrders, "string");
+  assert.equal(model.record.numberOfOrders, "1");
 });
 
 test("order fixture keeps null SKUs and missing billing", async () => {
@@ -52,6 +76,10 @@ test("order fixture keeps null SKUs and missing billing", async () => {
   assert.match(html, /Absent/);
   assert.match(html, /Demo Carrier DEMO-1001/);
   assert.doesNotMatch(html, />https:\/\/example\.com\/track\/demo-1001</);
+  assertMoneyBag(order.currentTotalPriceSet);
+  assertMoneyBag(order.lineItems.nodes[0].originalUnitPriceSet);
+  assert.equal(order.lineItems.nodes[0].originalUnitPriceSet.shopMoney.amount, "24.00");
+  assert.equal(order.lineItems.nodes[0].price, undefined);
 });
 
 test("unfulfilled order has no shipment block and still null SKU", async () => {
@@ -82,7 +110,7 @@ test("matching billing peeks Same address", async () => {
 test("a present SKU renders a mono row and a null SKU does not", () => {
   const withSku = projectOrder({
     ...orders[IDS.ORDER_1002],
-    lineItems: { nodes: [{ title: "Canvas Demo Visor", sku: "DEMO-VISOR", quantity: 1, price: "32.00" }] },
+    lineItems: { nodes: [{ title: "Canvas Demo Visor", sku: "DEMO-VISOR", quantity: 1, originalUnitPriceSet: orders[IDS.ORDER_1002].lineItems.nodes[0].originalUnitPriceSet }] },
   });
   assert.equal(withSku.skuLabels[0], "DEMO-VISOR");
   assert.match(renderOrder(withSku), /<p class="mono line-sku" data-sku="DEMO-VISOR">DEMO-VISOR<\/p>/);
@@ -94,8 +122,8 @@ test("a present SKU renders a mono row and a null SKU does not", () => {
 test("empty demo returns peek No returns and stay collapsed", async () => {
   const record = await shop.getReturns({ shop: SHOP, orderId: IDS.ORDER_1002 });
   assert.deepEqual(record.returns, emptyReturns.returns);
-  assert.equal(record.returnStatus, null);
-  assert.equal(record.inProgress, false);
+  assert.equal(record.returns.nodes.length, 0);
+  assert.equal(record.returnStatus, undefined);
   const model = projectReturns(record);
   assert.equal(model.peek, "No returns");
   assert.equal(model.collapsedDefault, true);
@@ -107,17 +135,84 @@ test("empty demo returns peek No returns and stay collapsed", async () => {
 
 test("Ada OPEN return peeks in-progress and default-opens", async () => {
   const record = await shop.getReturns({ shop: SHOP, orderId: IDS.ORDER_1001 });
-  assert.equal(record.returnStatus, "OPEN");
-  assert.equal(record.inProgress, true);
+  assert.equal(record.returns.nodes[0].status, "OPEN");
+  assert.equal(record.returnStatus, undefined);
   assert.equal(record.items.length, 1);
   const model = projectReturns(record);
   assert.equal(model.peek, "In transit · 1 item");
   assert.equal(model.collapsedDefault, false);
   assert.equal(model.inProgress, true);
+  assert.equal(model.record.status, "OPEN");
   const html = renderReturns(model);
   assert.match(html, /data-open="true"/);
   assert.match(html, /In transit · 1 item/);
   assert.doesNotMatch(html, /IN_PROGRESS/);
+});
+
+test("in-progress is Return.status OPEN only — no PENDING, ignore Order.returnStatus", () => {
+  const src = readFileSync(join(here, "../js/tissues/returns.js"), "utf8");
+  assert.doesNotMatch(src, /PENDING/);
+  assert.equal(projectReturns({
+    returnStatus: "OPEN",
+    inProgress: true,
+    returns: { nodes: [] },
+    items: [],
+  }).inProgress, false);
+  assert.equal(projectReturns({
+    returns: { nodes: [{ status: "REQUESTED" }] },
+    items: [{ title: "Demo" }],
+  }).inProgress, false);
+  assert.equal(projectReturns({
+    returns: { nodes: [{ status: "CLOSED" }] },
+    items: [{ title: "Demo" }],
+  }).inProgress, false);
+  assert.equal(projectReturns({
+    returns: { nodes: [{ status: "OPEN" }] },
+    items: [{ title: "Demo" }],
+  }).inProgress, true);
+});
+
+test("click closes OPEN returns and the user toggle wins", async () => {
+  const rail = createRailOrgan({ shop, mailbox: createMailbox() });
+  await rail.load({ shop: SHOP, customerId: IDS.ADA, orderId: IDS.ORDER_1001, ticketId: "t-ada-track" });
+  assert.equal(rail.snapshot().open.returns, true);
+  const host = { innerHTML: "", onclick: null };
+  rail.mount(host);
+  assert.match(host.innerHTML, /data-tissue="returns"[^>]*data-open="true"/);
+  clickToggle(host, "returns");
+  assert.equal(rail.snapshot().open.returns, false);
+  assert.match(host.innerHTML, /data-tissue="returns"[^>]*data-open="false"/);
+  await rail.load({ shop: SHOP, customerId: IDS.ADA, orderId: IDS.ORDER_1001, ticketId: "t-ada-track" });
+  assert.equal(rail.snapshot().open.returns, false, "same ticket must not re-force OPEN");
+});
+
+test("switching tickets resets expand to lock defaults", async () => {
+  const rail = createRailOrgan({ shop, mailbox: createMailbox() });
+  await rail.load({ shop: SHOP, customerId: IDS.ADA, orderId: IDS.ORDER_1001, ticketId: "t-ada-track" });
+  const host = { innerHTML: "", onclick: null };
+  rail.mount(host);
+  clickToggle(host, "returns");
+  clickToggle(host, "order-history");
+  clickToggle(host, "customer");
+  assert.equal(rail.snapshot().open.returns, false);
+  assert.equal(rail.snapshot().open["order-history"], true);
+  assert.equal(rail.snapshot().open.customer, false);
+
+  await rail.load({ shop: SHOP, customerId: IDS.CASEY, orderId: IDS.ORDER_1002, ticketId: "t-casey-visor" });
+  const casey = rail.snapshot().open;
+  assert.equal(casey.customer, true);
+  assert.equal(casey.order, true);
+  assert.equal(casey.returns, false);
+  assert.equal(casey["order-history"], false);
+  assert.equal(casey.addresses, false);
+
+  await rail.load({ shop: SHOP, customerId: IDS.JORDAN, orderId: null, ticketId: "t-jordan-ship" });
+  assert.equal(rail.snapshot().open.returns, false);
+
+  await rail.load({ shop: SHOP, customerId: IDS.ADA, orderId: IDS.ORDER_1001, ticketId: "t-ada-track" });
+  assert.equal(rail.snapshot().open.returns, true);
+  assert.equal(rail.snapshot().open["order-history"], false);
+  assert.equal(rail.snapshot().open.customer, true);
 });
 
 test("order-history is newest first and does not replace This order", async () => {
