@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # =============================================================================
 #  verify_hermes_toolset.sh — run this on the VPS BEFORE restarting the
-#  processor with the new tool allow-list (DEV-ISSUES #8).
+# Verify (or re-verify after a toolset change) that Hermes was launched by the
+# processor with the new tool allow-list.
 #
 #  WHY: a misspelled toolset name is silent. Hermes does not error; it just
 #  loses the tool, and drafts quietly get worse with nothing in the logs.

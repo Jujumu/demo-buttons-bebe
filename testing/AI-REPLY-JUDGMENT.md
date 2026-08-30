@@ -1,7 +1,7 @@
 # AI Reply Judgment — 20 Captured Replies
 
 *Scored 2026-07-09 against the live knowledge base (policies + intents) using the rubric in `TEST-PLAN.md` §3.*
-*Source of the replies: `qa-run/results.json` (real `glm-5.2` / Hermes output).*
+*Source of the replies: a captured `results.json` batch from a real `glm-5.2` / Hermes run.*
 
 Checks: **A** = right risk call (draft vs escalate) · **B** = grounded & true · **C** = complete · **D** = tone/language · **E** = clean output (no AI leakage).
 

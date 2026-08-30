@@ -16,8 +16,9 @@ everything so the rest can be run in one go.
 
 ## To run all 48 scenarios on the live AI (on the VPS)
 
-`scenarios.json` uses the same shape as your existing `qa-run/results.json`. On the VPS,
-loop each scenario's `message` through Hermes the same way the earlier run did, e.g.:
+`scenarios.json` is the input. On the VPS,
+loop each scenario's `message` through Hermes the same way a live one-shot run
+would, e.g.:
 
 ```bash
 # on the VPS, in "/opt/buttonsbebe"

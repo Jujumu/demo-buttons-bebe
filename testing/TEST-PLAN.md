@@ -124,8 +124,8 @@ The AI's "brain" (the `glm-5.2` model via Hermes) runs on the VPS. There are two
 to exercise it, from cheapest/safest to most realistic:
 
 1. **Batch harness (recommended, safe).** A list of test messages is fed to Hermes one
-   at a time on the VPS, and each reply is saved to a `results.json` file — exactly the
-   format already in `qa-run/results.json`. Nothing touches the real Gorgias queue, no
+   at a time on the VPS, and each reply is saved to a `results.json` file.
+   Nothing touches the real Gorgias queue, no
    customer is ever contacted. This is the primary method and is repeatable.
 2. **Live shadow test (highest fidelity, use sparingly).** Create a handful of test
    tickets in a **test/sandbox Gorgias view** (or clearly tagged `TEST`) and let the

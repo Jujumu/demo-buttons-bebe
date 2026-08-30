@@ -159,8 +159,8 @@ Only after every service has been green for 24 hours:
 
 - Remove the `.env` bullet from **`CLAUDE.md` → Known limitations**.
 - Update `CLAUDE.md` §"Where things live" to list one `.env`, not two.
-- Update `AGENTS.md` and `HANDOVER/02-live-architecture.md` §271 the same way.
-- Note the rotation date in `DEV-ISSUES.md` #9 and mark it resolved.
+- Update `AGENTS.md` the same way.
+- Note the rotation date in the deploy runbook and mark the dual-`.env` issue resolved.
 
 ---
 

@@ -654,21 +654,18 @@ def products_by_vendor(vendor: str, limit: int = 5, active_only: bool = True) ->
 if __name__ == '__main__':
     import sys
     from pathlib import Path
-    # Load /root/.env from repo root if running standalone
-    try:
-        import sys
-        sys.path.insert(0, str(Path(__file__).parent.parent / 'gorgias-webhook'))
-        import dotenv_loader
-        dotenv_loader.load()
-    except ImportError:
-        _env = Path('/root/.env')
-        if _env.exists():
-            for line in _env.read_text().splitlines():
-                line = line.strip()
-                if line and not line.startswith('#') and '=' in line:
-                    k, _, v = line.partition('=')
-                    if k.strip() not in os.environ:
-                        os.environ[k.strip()] = v.strip()
+
+    # Load repo-root .env when running this module standalone.
+    for _env in (Path(__file__).resolve().parents[1] / '.env', Path('/root/.env')):
+        if not _env.exists():
+            continue
+        for line in _env.read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith('#') and '=' in line:
+                k, _, v = line.partition('=')
+                if k.strip() not in os.environ:
+                    os.environ[k.strip()] = v.strip()
+        break
 
     logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
     test_email = sys.argv[1] if len(sys.argv) > 1 else 'test@example.com'
