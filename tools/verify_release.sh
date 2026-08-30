@@ -56,7 +56,7 @@ from pathlib import Path
 import ast
 import json
 
-roots = [Path("feedback"), Path("kb"), Path("processor"), Path("testing"), Path("tools"), Path("webhook"), Path("deploy")]
+roots = [Path("feedback"), Path("kb"), Path("processor"), Path("testing"), Path("tools"), Path("webhook"), Path("deploy"), Path("console-src/helpdesk-agent")]
 
 # Installed dependencies are not ours to syntax-check, and checking them made
 # the gate's verdict depend on which interpreter happened to run it: a local
@@ -188,6 +188,9 @@ if [[ -f processor/classifier/__init__.py ]]; then
 else
   echo "release gate: classifier parity skipped (T-FIX-3 package not present)"
 fi
+
+PYTHONPATH="$ROOT_DIR/console-src/helpdesk-agent${PYTHONPATH:+:$PYTHONPATH}" \
+  "$PYTHON" -m unittest discover -s console-src/helpdesk-agent/tests -v
 
 node --check whatsapp-connect/server.js
 node --test whatsapp-connect/test/security.test.js
