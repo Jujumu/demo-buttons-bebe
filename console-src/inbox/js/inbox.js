@@ -9,14 +9,6 @@ import { createThreadTissue } from "./tissues/thread.js";
 import { createViewTissue } from "./tissues/view.js";
 import { forbiddenControlHits } from "./util.js";
 
-function caduceusStub(ticket) {
-  if (!ticket) return { draft: "", summarize: "" };
-  return {
-    draft: ticket.stubDraft || "",
-    summarize: ticket.stubSummary || "",
-  };
-}
-
 function withRecipient(ticket, email) {
   if (!ticket) return null;
   return {
@@ -88,16 +80,62 @@ export function createInboxOrgan(opts = {}) {
     </div>`;
   }
 
+  async function loadDraft(ticket) {
+    if (!ticket) return "";
+    if (typeof shop.draftReply === "function") {
+      try {
+        const railSnap = rail.snapshot();
+        const result = await shop.draftReply({
+          ticketId: ticket.id,
+          shop: shopHost,
+          thread: ticket,
+          customerId: ticket.customerId,
+          orderId: ticket.orderId,
+          customer: railSnap.models.customer?.record,
+          order: railSnap.models.order?.record,
+          returns: railSnap.models.returns?.record,
+          pastOrders: railSnap.models.history?.rows,
+        });
+        if (result?.draft) return result.draft;
+      } catch {
+        // fixture fallback below
+      }
+    }
+    return ticket.stubDraft || "";
+  }
+
+  async function loadSummary(ticket) {
+    if (!ticket) return "";
+    if (typeof shop.summarizeThread === "function") {
+      try {
+        const result = await shop.summarizeThread({
+          ticketId: ticket.id,
+          shop: shopHost,
+          thread: ticket,
+        });
+        if (result?.summary) return result.summary;
+      } catch {
+        // fixture fallback below
+      }
+    }
+    return ticket.stubSummary || "";
+  }
+
+  async function refreshComposer() {
+    const ticket = selectedTicket();
+    discarded = false;
+    summarizeText = "";
+    strip = ticket ? await loadDraft(ticket) : "";
+  }
+
   function composerInput(ticket) {
-    const ai = caduceusStub(ticket);
-    const activeStrip = discarded ? "" : (strip || summarizeText || ai.draft || "");
     return {
       ticket: withRecipient(ticket, toEmail),
-      draft: ai.draft,
-      summarize: summarizeText || ai.summarize,
+      draft: discarded ? "" : strip,
+      summarize: summarizeText,
       macros,
       body,
-      strip: activeStrip,
+      strip: discarded ? "" : strip,
     };
   }
 
@@ -137,7 +175,7 @@ export function createInboxOrgan(opts = {}) {
       ),
       sent,
       strip: composerModel.strip,
-      summarize: summarizeText || caduceusStub(ticket).summarize,
+      summarize: summarizeText,
     };
   }
 
@@ -193,7 +231,7 @@ export function createInboxOrgan(opts = {}) {
       summarizeText = "";
       discarded = false;
       ensureSelection();
-      refreshRail().then(paint);
+      refreshRail().then(refreshComposer).then(paint);
     });
     mailbox.subscribe(MAILBOX_TOPICS.LIST_SELECTED, ({ ticketId }) => {
       selectedId = ticketId;
@@ -201,12 +239,14 @@ export function createInboxOrgan(opts = {}) {
       strip = "";
       summarizeText = "";
       discarded = false;
-      refreshRail().then(paint);
+      refreshRail().then(refreshComposer).then(paint);
     });
     mailbox.subscribe(MAILBOX_TOPICS.COMPOSER_BODY, ({ text }) => {
       body = text;
     });
     mailbox.subscribe(MAILBOX_TOPICS.COMPOSER_INSERT, () => {
+      strip = "";
+      discarded = true;
       paint();
     });
     mailbox.subscribe(MAILBOX_TOPICS.COMPOSER_DISCARD, () => {
@@ -214,12 +254,12 @@ export function createInboxOrgan(opts = {}) {
       discarded = true;
       paint();
     });
-    mailbox.subscribe(MAILBOX_TOPICS.COMPOSER_SUMMARIZE, () => {
-      const ticket = selectedTicket();
-      summarizeText = caduceusStub(ticket).summarize;
-      strip = summarizeText;
-      discarded = false;
-      paint();
+    mailbox.subscribe(MAILBOX_TOPICS.COMPOSER_SUMMARIZE, ({ ticketId }) => {
+      const ticket = selectedTicket() || catalog.find((item) => item.id === ticketId) || null;
+      loadSummary(ticket).then((text) => {
+        summarizeText = text;
+        paint();
+      });
     });
     mailbox.subscribe(MAILBOX_TOPICS.COMPOSER_SEND, ({ text, close }) => {
       const ticket = selectedTicket();
@@ -253,12 +293,20 @@ export function createInboxOrgan(opts = {}) {
     selectView(next) {
       viewId = next;
       selectedId = null;
+      body = "";
+      strip = "";
+      summarizeText = "";
+      discarded = false;
       ensureSelection();
-      return refreshRail();
+      return refreshRail().then(refreshComposer);
     },
     selectTicket(id) {
       selectedId = id;
-      return refreshRail();
+      body = "";
+      strip = "";
+      summarizeText = "";
+      discarded = false;
+      return refreshRail().then(refreshComposer);
     },
     toggleRail(key) {
       return rail.toggle(key);
@@ -272,9 +320,23 @@ export function createInboxOrgan(opts = {}) {
       strip = "";
       composerTissue.update(composerInput(selectedTicket()));
     },
+    insertDraft() {
+      const text = discarded ? "" : strip;
+      if (text) body = body ? `${body}\n\n${text}` : text;
+      strip = "";
+      discarded = true;
+      composerTissue.update(composerInput(selectedTicket()));
+    },
+    async requestSummarize() {
+      const ticket = selectedTicket();
+      summarizeText = await loadSummary(ticket);
+      composerTissue.update(composerInput(ticket));
+      return snapshot();
+    },
     async ready() {
       ensureSelection();
       await refreshRail();
+      await refreshComposer();
       return snapshot();
     },
   };

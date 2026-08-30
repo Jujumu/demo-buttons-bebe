@@ -169,6 +169,17 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   padding: 10px 8px;
   resize: vertical;
 }
+.summarize-peek {
+  margin: 0 0 10px;
+  padding: 0;
+  color: var(--mute);
+}
+.summarize-peek .summarize-text {
+  font-size: 12px;
+  line-height: 1.45;
+  margin-top: 4px;
+  color: var(--mute);
+}
 .draft-strip {
   display: flex;
   justify-content: space-between;

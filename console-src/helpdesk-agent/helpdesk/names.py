@@ -8,6 +8,8 @@ TOOL_GET_CUSTOMER = "helpdesk.get_customer"
 TOOL_GET_ORDER = "helpdesk.get_order"
 TOOL_GET_RETURNS = "helpdesk.get_returns"
 TOOL_LIST_PAST_ORDERS = "helpdesk.list_past_orders"
+TOOL_DRAFT_REPLY = "helpdesk.draft_reply"
+TOOL_SUMMARIZE_THREAD = "helpdesk.summarize_thread"
 
 TOOL_NAMES = (
     TOOL_LIST_TICKETS,
@@ -16,6 +18,8 @@ TOOL_NAMES = (
     TOOL_GET_ORDER,
     TOOL_GET_RETURNS,
     TOOL_LIST_PAST_ORDERS,
+    TOOL_DRAFT_REPLY,
+    TOOL_SUMMARIZE_THREAD,
 )
 
 CLI_COMMANDS = {
@@ -25,6 +29,8 @@ CLI_COMMANDS = {
     TOOL_GET_ORDER: "get-order",
     TOOL_GET_RETURNS: "get-returns",
     TOOL_LIST_PAST_ORDERS: "list-past-orders",
+    TOOL_DRAFT_REPLY: "draft-reply",
+    TOOL_SUMMARIZE_THREAD: "summarize-thread",
 }
 
 SAMPLE_SHOP = "demo-helpdesk.example"

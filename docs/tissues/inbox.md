@@ -3,11 +3,14 @@
 Module 9 is an **organ**: view, list, thread, composer, and rail. Rail is itself an organ of customer, this-order, returns, and order-history. Rail section titles are `h2`; nested disclosures are `h3`. Tissues are replaceable black boxes. They talk over a mailbox. They do not import each other's internals. One tissue error stays in its pane.
 
 The shop tissue is a client of `helpdesk.get_customer` / `get_order` /
-`get_returns` / `list_past_orders` (same payloads as MCP/CLI). Live reads
-target Cute Things (`SHOPIFY_SHOP` pinned to `yznyc1-ez.myshopify.com`) when
-mint works. Mint/Admin failure falls back to `demo-inbox.example` fixtures.
-`SHOPIFY_MUTATIONS_ENABLED` stays `0`. No live store writes. The Ada OPEN
-return is invented fixture-only and is never injected onto a live shop query.
+`get_returns` / `list_past_orders` (same payloads as MCP/CLI). Composer
+Insert/Discard and the mute summarize peek are clients of
+`helpdesk.draft_reply` and `helpdesk.summarize_thread` on that same
+`invoke()` path. Live reads target Cute Things (`SHOPIFY_SHOP` pinned to
+`yznyc1-ez.myshopify.com`) when mint works. Mint/Admin failure falls back
+to `demo-inbox.example` fixtures. `SHOPIFY_MUTATIONS_ENABLED` stays `0`.
+No live store writes. The Ada OPEN return is invented fixture-only and is
+never injected onto a live shop query. No `helpdesk.send`.
 
 Demo names only (Ada Demo, Casey Sandbox, Jordan Preview). No customer PII.
 
@@ -47,14 +50,15 @@ Demo names only (Ada Demo, Casey Sandbox, Jordan Preview). No customer PII.
 - **Out:** `{ ticketId }` on `composer/summarize`
 - Status-change lines are muted. The ticket badge is title case (`Open`), not `OPEN`.
 - Skip-link copy is `Skip to thread.`
-- Summarize is a stub until Caduceus is wired; it returns a summarize string to the composer contract
+- Summarize publishes `composer/summarize`. Caduceus fills a mute peek via `helpdesk.summarize_thread`. It does not Send and does not open an AI sidebar.
 - **Degrade:** “Select a ticket.” Rail and composer keep their last good state
 
 ### composer
 
 - **In:** `{ ticket, draft, summarize, macros, body }`
 - **Out:** body / insert / discard / send
-- To is visible. Macros live inside the box. AI draft is a strip **above** the textarea with Insert / Discard — never Send. The AI draft kicker is mute (accent is unread/error only).
+- To is visible. Macros live inside the box. AI draft is a strip **above** the textarea with Insert / Discard — never Send. The AI draft kicker is mute (accent is unread/error only). Draft text comes from `helpdesk.draft_reply`.
+- Summarize is a mute peek **above** the composer box, never a send. It does not enable Send by itself.
 - Send is ink fill (min-height 40px; 44px on coarse pointers) and disabled while the body is empty
 - Send & close is hairline secondary, not a second ink primary. It hides on a closed ticket
 - **Degrade:** “Select a ticket to reply.”
@@ -106,6 +110,8 @@ Clerk DTO field names are locked. In for each: `{ shop, customerId? , orderId? }
 - **Out:** the Clerk DTOs above (same as helpdesk MCP/CLI)
 - Client: `console-src/inbox/js/shop/helpdesk-shop.js` via
   `POST /console/api/helpdesk` → `helpdesk.invoke()`
+- Composer uses the same client for `helpdesk.draft_reply` and
+  `helpdesk.summarize_thread`. Insert/Discard never call send.
 - Fallback: `console-src/inbox/js/shop/fixture-shop.js` when mint/Admin/HTTP
   is unavailable, or when the requested GID is only on the fixture catalog
 - Live Cute Things (`source=live`) remounts the inbox onto live GIDs. Empty

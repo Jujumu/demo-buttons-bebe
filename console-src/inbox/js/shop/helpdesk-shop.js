@@ -90,6 +90,24 @@ export function createHelpdeskShop(opts = {}) {
       if (rows) return rows;
       return fallback.getOrderHistory({ shop: fallback.shop, customerId });
     },
+    async draftReply(args = {}) {
+      const record = await read(
+        "helpdesk.draft_reply",
+        { ...args, shop: args.shop || activeShop },
+        (payload) => ({ draft: payload.draft || "", source: payload.source || "live" }),
+      );
+      if (record?.draft) return record;
+      return fallback.draftReply(args);
+    },
+    async summarizeThread(args = {}) {
+      const record = await read(
+        "helpdesk.summarize_thread",
+        { ...args, shop: args.shop || activeShop },
+        (payload) => ({ summary: payload.summary || "", source: payload.source || "live" }),
+      );
+      if (record?.summary) return record;
+      return fallback.summarizeThread(args);
+    },
   };
 }
 

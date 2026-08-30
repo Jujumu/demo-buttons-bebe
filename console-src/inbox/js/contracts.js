@@ -106,9 +106,11 @@
 /**
  * Shop tissue. The inbox rail is a client of helpdesk.* tools
  * (`get_customer`, `get_order`, `get_returns`, `list_past_orders`) via
- * `createHelpdeskShop`. Fixtures are the fallback when mint/Admin is down.
- * In: `{ shop, customerId?, orderId? }`. Out: the Clerk DTOs above.
- * Must not mutate Shopify. `SHOPIFY_MUTATIONS_ENABLED` stays 0.
+ * `createHelpdeskShop`. Composer is a client of `draft_reply` and
+ * `summarize_thread` on the same invoke(). Fixtures are the fallback when
+ * mint/Admin is down. In: `{ shop, customerId?, orderId? }` plus composer
+ * `{ ticketId, thread? }`. Out: the Clerk DTOs above, or `{ draft }` /
+ * `{ summary }`. Must not mutate Shopify. `SHOPIFY_MUTATIONS_ENABLED` stays 0.
  *
  * @typedef {object} ShopTissue
  * @property {(req: { shop: string, customerId: string }) => Promise<ClerkCustomer | null> | ClerkCustomer | null} getCustomer

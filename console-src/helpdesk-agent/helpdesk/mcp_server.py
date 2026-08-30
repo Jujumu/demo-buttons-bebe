@@ -8,12 +8,14 @@ from typing import Any
 
 from .dispatch import invoke, list_tools
 from .names import (
+    TOOL_DRAFT_REPLY,
     TOOL_GET_CUSTOMER,
     TOOL_GET_ORDER,
     TOOL_GET_RETURNS,
     TOOL_GET_TICKET,
     TOOL_LIST_PAST_ORDERS,
     TOOL_LIST_TICKETS,
+    TOOL_SUMMARIZE_THREAD,
 )
 
 SCHEMAS = {
@@ -37,6 +39,22 @@ SCHEMAS = {
     TOOL_LIST_PAST_ORDERS: {
         "shop": {"type": "string"},
         "customerId": {"type": "string", "description": "gid://shopify/Customer/…"},
+    },
+    TOOL_DRAFT_REPLY: {
+        "ticketId": {"type": "string"},
+        "shop": {"type": "string"},
+        "thread": {"type": "object", "description": "already-loaded ticket thread"},
+        "customer": {"type": "object"},
+        "order": {"type": "object"},
+        "returns": {"type": "object"},
+        "pastOrders": {"type": "array"},
+        "customerId": {"type": "string"},
+        "orderId": {"type": "string"},
+    },
+    TOOL_SUMMARIZE_THREAD: {
+        "ticketId": {"type": "string"},
+        "shop": {"type": "string"},
+        "thread": {"type": "object", "description": "already-loaded ticket thread"},
     },
 }
 
