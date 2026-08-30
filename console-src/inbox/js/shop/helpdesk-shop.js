@@ -181,6 +181,15 @@ export function createHelpdeskShop(opts = {}) {
       if (record) return record;
       return { ok: false, spam: false, ticketId: null };
     },
+    async pullMailbox(args = {}) {
+      const record = await read(
+        "helpdesk.pull_mailbox",
+        { limit: args.limit || 20 },
+        (payload) => payload,
+      );
+      if (record) return record;
+      return { ok: false, ingested: [], spam: [], skipped: 0 };
+    },
   };
 }
 

@@ -18,6 +18,7 @@ from .names import (
     TOOL_GET_TICKET,
     TOOL_INGEST_CHAT,
     TOOL_INGEST_EMAIL,
+    TOOL_PULL_MAILBOX,
     TOOL_LIST_PAST_ORDERS,
     TOOL_LIST_TICKETS,
     TOOL_SEARCH_MACROS,
@@ -39,7 +40,7 @@ def _add_shop_gid(parser: argparse.ArgumentParser, gid_flag: str, dest: str) -> 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="helpdesk", description="Shopify helpdesk organ (MCP + CLI).")
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("tools", help="list the twelve v1 tools")
+    sub.add_parser("tools", help="list the thirteen v1 tools")
     sub.add_parser("serve", help="run the MCP stdio server")
     tickets = sub.add_parser(CLI_COMMANDS[TOOL_LIST_TICKETS])
     tickets.add_argument("--view", default="open")
@@ -71,6 +72,8 @@ def build_parser() -> argparse.ArgumentParser:
     ingest_chat.add_argument("--from-name", dest="fromName", required=True)
     ingest_chat.add_argument("--body", dest="body", required=True)
     ingest_chat.add_argument("--received-at", dest="receivedAt", required=True)
+    pull = sub.add_parser(CLI_COMMANDS[TOOL_PULL_MAILBOX])
+    pull.add_argument("--limit", type=int, default=20)
     return parser
 
 

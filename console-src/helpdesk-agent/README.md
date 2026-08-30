@@ -1,7 +1,7 @@
 # Helpdesk agent organ
 
 MCP server + CLI for the Shopify helpdesk. UI is a client, not the product.
-Each of the twelve v1 tools is a tissue: one handler, two doors (MCP and CLI).
+Each of the thirteen v1 tools is a tissue: one handler, two doors (MCP and CLI).
 
 ```text
 helpdesk list-tickets --view mine --limit 20
@@ -19,17 +19,20 @@ helpdesk ingest-email --from "Ada <ada.tracking@example.com>" \
   --received-at 2026-08-30T14:02:00Z
 helpdesk ingest-chat --from-name Ada --body "Any update on #1001?" \
   --received-at 2026-08-30T15:02:00Z
+helpdesk pull-mailbox --limit 20
 helpdesk serve          # MCP stdio
-helpdesk tools          # list the twelve tool names
+helpdesk tools          # list the thirteen tool names
 ```
 
 JSON on stdout. Failures are structured JSON (no stack traces).
 
-The inbox is a client of the same twelve tools. The console HTTP door is
+The inbox is a client of the same thirteen tools. The console HTTP door is
 `POST /console/api/helpdesk` (`{ tool, arguments }`) and calls `invoke()`.
 Mint/Admin failure falls back to the inbox fixture shop. `SHOPIFY_MUTATIONS_ENABLED`
 stays `0`. Env names (values live only in `.env`): `SHOPIFY_SHOP`,
-`SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`.
+`SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`. `AGENTMAIL_API_KEY` is read by
+the AgentMail SDK for `pull_mailbox` only — never printed, never committed.
+Missing key or a failed live list falls back to the fixture mailbox.
 
 From this directory:
 

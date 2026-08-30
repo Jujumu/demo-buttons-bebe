@@ -6,12 +6,14 @@ Agent-native organ. The UI is a client. Every tissue is a black box
 This organ does **not** wrap Gorgias. Ticket tissues are first-party.
 Shopify rail tissues speak Admin GraphQL **2026-07** field names only.
 
-## Tools (v1, twelve)
+## Tools (v1, thirteen)
 
-Six rail/inbox reads, two Caduceus composer tools, two macro tools, and two
-intake tools. Composer and macro tools return text. They never send, refund,
-or cancel. Intake writes a first-party ticket (or drops spam). It never
-creates a Shopify customer.
+Six rail/inbox reads, two Caduceus composer tools, two macro tools, two
+intake tools, and one AgentMail pull. Composer and macro tools return text.
+They never send, refund, or cancel. Intake writes a first-party ticket (or
+drops spam). It never creates a Shopify customer. `pull_mailbox` reads the
+AgentMail inbox and calls `ingest_email`. It never sends, replies, forwards,
+deletes, or creates an inbox.
 
 | Tool | Tissue | CLI | In | Out |
 |---|---|---|---|---|
@@ -27,6 +29,7 @@ creates a Shopify customer.
 | `helpdesk.apply_macro` | composer insert | `helpdesk apply-macro --macro-id … --mode replace\|append` | `{ macroId, mode?, currentBody? }` | `{ text, title, mode, body }` for the textarea |
 | `helpdesk.ingest_email` | intake | `helpdesk ingest-email` | `{ from, subject, body, receivedAt }` | signed ticket row, or `{ spam: true, ticketId: null }` |
 | `helpdesk.ingest_chat` | intake | `helpdesk ingest-chat` | `{ fromName, body, receivedAt }` | signed ticket row, or `{ spam: true, ticketId: null }` |
+| `helpdesk.pull_mailbox` | mailbox | `helpdesk pull-mailbox` | `{ limit? }` | `{ ingested: [ticket rows], spam: [{ from, subject }], skipped: n }` |
 
 **Macro contract.** `search_macros` always returns the fixture body so a client
 can insert without a second call. `apply_macro` is the insert path: `replace`
@@ -48,9 +51,10 @@ email, so order-name only. Miss → GID null. Never `customerCreate`. Never
 deprecated `Customer.email`. `customerName` is the intake From name, never
 `Customer.displayName`. Ticket status is helpdesk `open`.
 
-The inbox is a client of these twelve tools. MCP, CLI, and
+The inbox is a client of these thirteen tools. MCP, CLI, and
 `POST /console/api/helpdesk` (`{ tool, arguments }`) share `invoke()`.
-The UI must not open a second GraphQL client.
+The UI must not open a second GraphQL client. After `pull_mailbox`,
+`list_tickets` shows the new rows. There is no second ingest path.
 
 Rail IDs are Shopify GIDs (`gid://shopify/Customer/…`, `gid://shopify/Order/…`),
 not bare ticket numbers. `list_tickets` / `get_ticket` attach those GIDs so the

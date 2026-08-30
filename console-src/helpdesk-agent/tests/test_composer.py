@@ -147,11 +147,12 @@ class ComposerTissueTests(unittest.TestCase):
         reply = handle_rpc({"jsonrpc": "2.0", "id": 9, "method": "tools/list"})
         names = [tool["name"] for tool in reply["result"]["tools"]]
         self.assertEqual(names, list(TOOL_NAMES))
-        self.assertEqual(len(names), 12)
+        self.assertEqual(len(names), 13)
         self.assertIn("helpdesk.search_macros", names)
         self.assertIn("helpdesk.apply_macro", names)
         self.assertIn("helpdesk.ingest_email", names)
         self.assertIn("helpdesk.ingest_chat", names)
+        self.assertIn("helpdesk.pull_mailbox", names)
 
     def test_unknown_inbox_ticket_without_thread_is_not_found(self) -> None:
         payload = invoke("helpdesk.draft_reply", {"ticketId": "t-missing"})

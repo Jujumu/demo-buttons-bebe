@@ -16,6 +16,7 @@ from .names import (
     TOOL_GET_TICKET,
     TOOL_INGEST_CHAT,
     TOOL_INGEST_EMAIL,
+    TOOL_PULL_MAILBOX,
     TOOL_LIST_PAST_ORDERS,
     TOOL_LIST_TICKETS,
     TOOL_SEARCH_MACROS,
@@ -78,6 +79,9 @@ SCHEMAS = {
         "fromName": {"type": "string"},
         "body": {"type": "string"},
         "receivedAt": {"type": "string"},
+    },
+    TOOL_PULL_MAILBOX: {
+        "limit": {"type": "integer", "description": "max unread/new inbound messages to pull"},
     },
 }
 

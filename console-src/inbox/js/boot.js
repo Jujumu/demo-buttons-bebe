@@ -15,4 +15,7 @@ const organ = createInboxOrgan({
   viewId: params.get("view") || undefined,
   ticketId: params.get("ticket") || undefined,
 });
+if (!live?.tickets) {
+  await organ.pullMailbox({ limit: Number(params.get("limit") || 20) || 20 });
+}
 organ.mount(root);

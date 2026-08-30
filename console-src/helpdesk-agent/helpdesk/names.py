@@ -14,6 +14,7 @@ TOOL_SEARCH_MACROS = "helpdesk.search_macros"
 TOOL_APPLY_MACRO = "helpdesk.apply_macro"
 TOOL_INGEST_EMAIL = "helpdesk.ingest_email"
 TOOL_INGEST_CHAT = "helpdesk.ingest_chat"
+TOOL_PULL_MAILBOX = "helpdesk.pull_mailbox"
 
 TOOL_NAMES = (
     TOOL_LIST_TICKETS,
@@ -28,6 +29,7 @@ TOOL_NAMES = (
     TOOL_APPLY_MACRO,
     TOOL_INGEST_EMAIL,
     TOOL_INGEST_CHAT,
+    TOOL_PULL_MAILBOX,
 )
 
 CLI_COMMANDS = {
@@ -43,6 +45,7 @@ CLI_COMMANDS = {
     TOOL_APPLY_MACRO: "apply-macro",
     TOOL_INGEST_EMAIL: "ingest-email",
     TOOL_INGEST_CHAT: "ingest-chat",
+    TOOL_PULL_MAILBOX: "pull-mailbox",
 }
 
 SAMPLE_SHOP = "demo-helpdesk.example"

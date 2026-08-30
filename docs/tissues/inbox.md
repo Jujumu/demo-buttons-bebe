@@ -11,7 +11,9 @@ selected. Composer Insert/Discard and the mute summarize peek are clients of
 `helpdesk.draft_reply` and `helpdesk.summarize_thread`. In-box macro search is
 a client of `helpdesk.search_macros`; Insert/Append call `helpdesk.apply_macro`
 (`replace` or `append`) and never send. Email/chat intake is a client of
-`helpdesk.ingest_email` / `helpdesk.ingest_chat` on that same path. Live reads target Cute Things
+`helpdesk.ingest_email` / `helpdesk.ingest_chat` / `helpdesk.pull_mailbox`
+on that same path. `pull_mailbox` is the AgentMail bridge: it maps unread
+inbound mail onto `ingest_email`. Live reads target Cute Things
 (`SHOPIFY_SHOP` pinned to `yznyc1-ez.myshopify.com`) when mint works.
 Mint/Admin failure falls back to `demo-inbox.example` fixtures.
 `SHOPIFY_MUTATIONS_ENABLED` stays `0`. No live store writes. The Ada OPEN

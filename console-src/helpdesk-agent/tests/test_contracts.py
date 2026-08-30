@@ -24,9 +24,9 @@ class ContractTests(unittest.TestCase):
     def setUp(self) -> None:
         reset_tickets()
 
-    def test_twelve_tools_only(self) -> None:
+    def test_thirteen_tools_only(self) -> None:
         self.assertEqual(tuple(list_tools()), TOOL_NAMES)
-        self.assertEqual(len(TOOLS), 12)
+        self.assertEqual(len(TOOLS), 13)
         self.assertEqual([item["name"] for item in tool_descriptors()], list(TOOL_NAMES))
         self.assertIn("helpdesk.draft_reply", TOOL_NAMES)
         self.assertIn("helpdesk.summarize_thread", TOOL_NAMES)
@@ -34,12 +34,13 @@ class ContractTests(unittest.TestCase):
         self.assertIn("helpdesk.apply_macro", TOOL_NAMES)
         self.assertIn("helpdesk.ingest_email", TOOL_NAMES)
         self.assertIn("helpdesk.ingest_chat", TOOL_NAMES)
+        self.assertIn("helpdesk.pull_mailbox", TOOL_NAMES)
 
-    def test_mcp_lists_twelve_tools(self) -> None:
+    def test_mcp_lists_thirteen_tools(self) -> None:
         reply = handle_rpc({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
         names = [tool["name"] for tool in reply["result"]["tools"]]
         self.assertEqual(names, list(TOOL_NAMES))
-        self.assertEqual(len(names), 12)
+        self.assertEqual(len(names), 13)
 
     def _cli(self, argv: list[str]) -> dict:
         buf = io.StringIO()
@@ -121,10 +122,18 @@ class ContractTests(unittest.TestCase):
                 ],
                 dict(CHAT_WITH_1001),
             ),
+            (
+                "helpdesk.pull_mailbox",
+                ["pull-mailbox", "--limit", "5"],
+                {"limit": 5},
+            ),
         ]
         for tool, argv, args in cases:
+            reset_tickets()
             handled = dispatch(tool, args)
+            reset_tickets()
             cli = self._cli(argv)
+            reset_tickets()
             mcp = handle_rpc(
                 {
                     "jsonrpc": "2.0",
@@ -134,6 +143,7 @@ class ContractTests(unittest.TestCase):
                 }
             )
             mcp_body = json.loads(mcp["result"]["content"][0]["text"])
+            reset_tickets()
             cli.pop("_exit")
             self.assertEqual(handled, cli, tool)
             self.assertEqual(handled, mcp_body, tool)
