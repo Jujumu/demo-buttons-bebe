@@ -1,0 +1,129 @@
+"""Clerk DTO lock — Admin GraphQL 2026-07 names only. Not PR 2 guesses."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from .errors import bad_request
+
+BILLING_MISSING_LABEL = "No billing"
+
+
+def money_v2(node: dict[str, Any] | None) -> dict[str, str]:
+    if not isinstance(node, dict) or "amount" not in node or "currencyCode" not in node:
+        raise bad_request("MoneyV2 requires amount and currencyCode")
+    return {"amount": str(node["amount"]), "currencyCode": str(node["currencyCode"])}
+
+
+def money_bag(node: dict[str, Any] | None) -> dict[str, Any]:
+    """currentTotalPriceSet is a MoneyBag, not a MoneySet."""
+    if not isinstance(node, dict) or "shopMoney" not in node:
+        raise bad_request("MoneyBag requires shopMoney")
+    out: dict[str, Any] = {"shopMoney": money_v2(node["shopMoney"])}
+    presentment = node.get("presentmentMoney")
+    if presentment is not None:
+        out["presentmentMoney"] = money_v2(presentment)
+    return out
+
+
+def number_of_orders(value: Any) -> str:
+    if value is None:
+        raise bad_request("numberOfOrders is required")
+    return str(value)
+
+
+def omit_null_sku(line: dict[str, Any]) -> dict[str, Any]:
+    out = dict(line)
+    if out.get("sku") is None:
+        out.pop("sku", None)
+    return out
+
+
+def billing_label(billing_address: Any) -> str:
+    if billing_address is None:
+        return BILLING_MISSING_LABEL
+    return BILLING_MISSING_LABEL if billing_address == {} else "Has billing"
+
+
+def line_item(node: dict[str, Any]) -> dict[str, Any]:
+    price = node.get("originalUnitPriceSet") or {}
+    shop_money = price.get("shopMoney") if isinstance(price, dict) else None
+    row: dict[str, Any] = {
+        "title": node.get("title"),
+        "quantity": node.get("quantity"),
+        "originalUnitPriceSet": {"shopMoney": money_v2(shop_money)},
+    }
+    sku = node.get("sku")
+    if sku is not None:
+        row["sku"] = sku
+    return omit_null_sku(row)
+
+
+def clerk_customer(node: dict[str, Any]) -> dict[str, Any]:
+    email = node.get("defaultEmailAddress")
+    return {
+        "id": node["id"],
+        "displayName": node.get("displayName"),
+        "defaultEmailAddress": (
+            {"emailAddress": email["emailAddress"]} if isinstance(email, dict) and email.get("emailAddress") else None
+        ),
+        "createdAt": node.get("createdAt"),
+        "numberOfOrders": number_of_orders(node.get("numberOfOrders")),
+        "amountSpent": money_v2(node.get("amountSpent")),
+        "tags": list(node.get("tags") or []),
+    }
+
+
+def clerk_order(node: dict[str, Any]) -> dict[str, Any]:
+    lines = node.get("lineItems") or {}
+    nodes = lines.get("nodes") if isinstance(lines, dict) else []
+    fulfillments = []
+    for fulfillment in node.get("fulfillments") or []:
+        info = [
+            {"number": t.get("number"), "url": t.get("url"), "company": t.get("company")}
+            for t in (fulfillment.get("trackingInfo") or [])
+        ]
+        fulfillments.append({"trackingInfo": info})
+    return {
+        "id": node["id"],
+        "name": node.get("name"),
+        "createdAt": node.get("createdAt"),
+        "displayFinancialStatus": node.get("displayFinancialStatus"),
+        "displayFulfillmentStatus": node.get("displayFulfillmentStatus"),
+        "currentTotalPriceSet": money_bag(node.get("currentTotalPriceSet")),
+        "billingAddress": node.get("billingAddress"),
+        "shippingAddress": node.get("shippingAddress"),
+        "lineItems": {"nodes": [line_item(item) for item in nodes or []]},
+        "fulfillments": fulfillments,
+    }
+
+
+def clerk_returns(order: dict[str, Any]) -> dict[str, Any]:
+    """Split Return.status from Order.returnStatus. OPEN only drives inProgress."""
+    connection = order.get("returns") or {}
+    nodes = []
+    for item in connection.get("nodes") or []:
+        nodes.append(
+            {
+                "id": item.get("id"),
+                "name": item.get("name"),
+                "status": item.get("status"),
+                "totalQuantity": item.get("totalQuantity"),
+            }
+        )
+    return {
+        "orderReturnStatus": order.get("returnStatus") or order.get("orderReturnStatus") or "NO_RETURN",
+        "returns": {"nodes": nodes},
+        "inProgress": any(item.get("status") == "OPEN" for item in nodes),
+    }
+
+
+def clerk_history_row(node: dict[str, Any]) -> dict[str, Any]:
+    bag = money_bag(node.get("currentTotalPriceSet"))
+    return {
+        "id": node["id"],
+        "name": node.get("name"),
+        "createdAt": node.get("createdAt"),
+        "displayFulfillmentStatus": node.get("displayFulfillmentStatus"),
+        "currentTotalPriceSet": {"shopMoney": bag["shopMoney"]},
+    }
