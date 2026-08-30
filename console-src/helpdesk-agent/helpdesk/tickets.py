@@ -175,14 +175,16 @@ SEED_TICKETS = (
 _store: list[dict] = []
 _intake: list[dict] = []
 _by_dedupe: dict[tuple, dict] = {}
+_seen_messages: set[str] = set()
 _next_seq = 1
 
 
 def reset() -> None:
-    global _store, _intake, _by_dedupe, _next_seq
+    global _store, _intake, _by_dedupe, _seen_messages, _next_seq
     _store = [copy.deepcopy(row) for row in SEED_TICKETS]
     _intake = []
     _by_dedupe = {}
+    _seen_messages = set()
     _next_seq = 1
 
 
@@ -191,6 +193,13 @@ reset()
 
 def remember_intake(record: dict) -> None:
     _intake.append(dict(record))
+    message_id = record.get("messageId")
+    if message_id:
+        _seen_messages.add(str(message_id))
+
+
+def seen_message_id(message_id: str | None) -> bool:
+    return bool(message_id) and str(message_id) in _seen_messages
 
 
 def intake_records() -> list[dict]:

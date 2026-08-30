@@ -54,3 +54,33 @@ CHAT_WITHOUT_ORDER = {
     "body": "The rattle is broken. Is anyone there?",
     "receivedAt": "2026-08-30T15:10:00Z",
 }
+
+# Stable AgentMail message ids for the fixture mailbox. Pull-only. Not Shopify.
+ADA_MESSAGE_ID = "msg-ada-1001"
+SAM_MESSAGE_ID = "msg-sam-rattle"
+PRIYA_MESSAGE_ID = "msg-priya-return"
+JORDAN_MESSAGE_ID = "msg-jordan-wrong"
+PRIZE_MESSAGE_ID = "msg-prize-spam"
+
+
+def _mailbox_item(message_id: str, fixture: dict) -> dict:
+    return {
+        "message_id": message_id,
+        "from": fixture["from"],
+        "subject": fixture["subject"],
+        "extracted_text": fixture["body"],
+        "text": fixture["body"],
+        "extracted_html": None,
+        "html": None,
+        "received_at": fixture["receivedAt"],
+        "labels": ["unread"],
+    }
+
+
+MAILBOX_FIXTURES = (
+    _mailbox_item(ADA_MESSAGE_ID, ADA_TRACKING),
+    _mailbox_item(SAM_MESSAGE_ID, SAM_RATTLE),
+    _mailbox_item(PRIYA_MESSAGE_ID, PRIYA_RETURN),
+    _mailbox_item(JORDAN_MESSAGE_ID, JORDAN_WRONG),
+    _mailbox_item(PRIZE_MESSAGE_ID, PRIZE_SPAM),
+)

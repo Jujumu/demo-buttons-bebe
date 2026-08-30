@@ -75,6 +75,7 @@ def _intake_record(
         "spam": spam,
         "mailbox": MAILBOX_ADDRESS,
         "mailboxDisplay": MAILBOX_DISPLAY,
+        "messageId": None,
     }
 
 
@@ -90,6 +91,7 @@ def handle_ingest_email(args: dict[str, Any]) -> dict[str, Any]:
     subject = str(args["subject"])
     body = str(args["body"])
     received_at = str(args["receivedAt"])
+    message_id = str(args["messageId"]).strip() if args.get("messageId") else None
     record = _intake_record(
         channel="email",
         from_name=from_name,
@@ -99,6 +101,7 @@ def handle_ingest_email(args: dict[str, Any]) -> dict[str, Any]:
         received_at=received_at,
         spam=is_spam(subject, body),
     )
+    record["messageId"] = message_id
     tickets.remember_intake(record)
     if record["spam"]:
         return {"spam": True, "ticketId": None}
@@ -107,6 +110,11 @@ def handle_ingest_email(args: dict[str, Any]) -> dict[str, Any]:
         body=body,
         from_email=from_email,
         channel="email",
+    )
+    dedupe_key = (
+        ("agentmail", message_id)
+        if message_id
+        else ("email", from_email or from_name, subject, body, received_at)
     )
     ticket = tickets.add_ticket(
         customer_name=from_name,
@@ -117,7 +125,7 @@ def handle_ingest_email(args: dict[str, Any]) -> dict[str, Any]:
         order_id=order_id,
         channel="email",
         from_email=from_email,
-        dedupe_key=("email", from_email or from_name, subject, body, received_at),
+        dedupe_key=dedupe_key,
     )
     return {"spam": False, "ticketId": ticket["id"], **ticket}
 

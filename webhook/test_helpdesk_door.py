@@ -26,7 +26,7 @@ class HelpdeskDoorTests(unittest.TestCase):
     def setUp(self) -> None:
         reset_tickets()
 
-    def test_http_matches_dispatch_for_all_twelve_tools(self) -> None:
+    def test_http_matches_dispatch_for_all_thirteen_tools(self) -> None:
         cases = [
             ("helpdesk.list_tickets", {"view": "open", "limit": 5}),
             ("helpdesk.get_ticket", {"ticketId": "1001"}),
@@ -40,10 +40,14 @@ class HelpdeskDoorTests(unittest.TestCase):
             ("helpdesk.apply_macro", {"macroId": "shipping-delay", "mode": "replace"}),
             ("helpdesk.ingest_email", dict(ADA_TRACKING)),
             ("helpdesk.ingest_chat", dict(CHAT_WITH_1001)),
+            ("helpdesk.pull_mailbox", {"limit": 5}),
         ]
         for tool, args in cases:
+            reset_tickets()
             handled = dispatch(tool, args)
+            reset_tickets()
             http_payload = handle_http(tool, args)
+            reset_tickets()
             door = handle_tool(tool, args)
             self.assertEqual(handled, http_payload, tool)
             self.assertEqual(handled, door, tool)

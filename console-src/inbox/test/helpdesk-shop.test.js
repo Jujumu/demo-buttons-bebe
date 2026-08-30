@@ -66,6 +66,8 @@ function pythonInvoke(tool, args) {
       "--body", String(args.body),
       "--received-at", String(args.receivedAt),
     );
+  } else if (tool === "helpdesk.pull_mailbox") {
+    argv.push("pull-mailbox", "--limit", String(args.limit || 20));
   } else {
     throw new Error(`unknown tool ${tool}`);
   }
@@ -92,10 +94,10 @@ function clientFromPython(source = "sample") {
   });
 }
 
-test("client exposes exactly the twelve helpdesk tools", () => {
+test("client exposes exactly the thirteen helpdesk tools", () => {
   const client = createHelpdeskClient({ invoke: async () => ({ ok: true }) });
   assert.deepEqual(client.tools, TOOL_NAMES);
-  assert.equal(TOOL_NAMES.length, 12);
+  assert.equal(TOOL_NAMES.length, 13);
   assert.ok(TOOL_NAMES.includes("helpdesk.list_tickets"));
   assert.ok(TOOL_NAMES.includes("helpdesk.get_ticket"));
   assert.ok(TOOL_NAMES.includes("helpdesk.draft_reply"));
@@ -104,6 +106,7 @@ test("client exposes exactly the twelve helpdesk tools", () => {
   assert.ok(TOOL_NAMES.includes("helpdesk.apply_macro"));
   assert.ok(TOOL_NAMES.includes("helpdesk.ingest_email"));
   assert.ok(TOOL_NAMES.includes("helpdesk.ingest_chat"));
+  assert.ok(TOOL_NAMES.includes("helpdesk.pull_mailbox"));
   assert.deepEqual([...WRITE_TOOLS], ["helpdesk.send", "helpdesk.refund", "helpdesk.cancel"]);
   for (const name of WRITE_TOOLS) {
     assert.ok(!TOOL_NAMES.includes(name));
@@ -251,6 +254,61 @@ test("inbox ingestEmail and ingestChat call the same intake tools", async () => 
   assert.ok(calls.includes("helpdesk.ingest_chat"));
 });
 
+test("inbox pullMailbox calls helpdesk.pull_mailbox then list_tickets", async () => {
+  const calls = [];
+  const adaRow = {
+    id: "t-in-1",
+    customerName: "Ada",
+    subject: "Tracking on order #1001 has not moved",
+    snippet: "Where is my order #1001? The tracking has not updated.",
+    status: "open",
+    updatedAt: "2026-08-30T14:02:00Z",
+    customerId: LIVE_IDS.C_UNFULFILLED,
+    orderId: LIVE_IDS.O_1001,
+  };
+  const shop = createHelpdeskShop({
+    client: createHelpdeskClient({
+      async invoke(tool, args) {
+        calls.push(tool);
+        if (tool === "helpdesk.pull_mailbox") {
+          return { ok: true, ingested: [adaRow], spam: [{ from: "Prize Desk <winner@prize-farm.example>", subject: "You won a $10,000 prize!" }], skipped: 0 };
+        }
+        if (tool === "helpdesk.list_tickets") {
+          return { ok: true, tickets: [adaRow] };
+        }
+        if (tool === "helpdesk.get_ticket") {
+          return {
+            ok: true,
+            ticket: {
+              ...adaRow,
+              messages: [{ id: "m1", fromAgent: false, name: "Ada", body: adaRow.snippet, at: adaRow.updatedAt }],
+              statusEvents: [],
+            },
+          };
+        }
+        if (tool === "helpdesk.draft_reply") {
+          return { ok: true, source: "fixture", draft: "Hi Ada — I looked at #1001." };
+        }
+        if (tool === "helpdesk.search_macros") {
+          return { ok: true, macros: [] };
+        }
+        return { ok: false };
+      },
+    }),
+  });
+  const organ = createInboxOrgan({ shop, viewId: "open" });
+  const pulled = await organ.pullMailbox({ limit: 5 });
+  assert.equal(pulled.ingested[0].id, "t-in-1");
+  assert.equal(pulled.ingested[0].customerName, "Ada");
+  assert.ok(calls.includes("helpdesk.pull_mailbox"));
+  assert.ok(calls.includes("helpdesk.list_tickets"));
+  assert.ok(!calls.includes("helpdesk.ingest_email"));
+  const snap = organ.snapshot();
+  assert.equal(snap.selectedId, "t-in-1");
+  assert.match(snap.html, /Tracking on order #1001/);
+  assert.doesNotMatch(snap.html, /You won a \$10,000 prize/);
+});
+
 test("inbox panes call list_tickets and get_ticket on invoke", async () => {
   const calls = [];
   const shop = createHelpdeskShop({
@@ -330,7 +388,7 @@ test("CLI payloads match the JS shop adapter for sample rail tools", async () =>
   assert.equal(projectOrderHistory(history).rows[0].fulfillmentStatus, history[0].displayFulfillmentStatus);
 });
 
-test("all twelve CLI tools return ok on the same handler path", () => {
+test("all thirteen CLI tools return ok on the same handler path", () => {
   const cases = [
     ["helpdesk.list_tickets", { view: "open", limit: 5 }],
     ["helpdesk.get_ticket", { ticketId: "1001" }],
@@ -353,6 +411,7 @@ test("all twelve CLI tools return ok on the same handler path", () => {
       body: "Any update on #1001? Tracking looks stuck.",
       receivedAt: "2026-08-30T15:02:00Z",
     }],
+    ["helpdesk.pull_mailbox", { limit: 5 }],
   ];
   for (const [tool, args] of cases) {
     const payload = pythonInvoke(tool, args);

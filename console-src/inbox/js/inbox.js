@@ -502,5 +502,16 @@ export function createInboxOrgan(opts = {}) {
       await refreshComposer();
       return result;
     },
+    async pullMailbox(args = {}) {
+      if (typeof shop.pullMailbox !== "function") return null;
+      const result = await shop.pullMailbox(args);
+      await refreshList();
+      const first = Array.isArray(result?.ingested) ? result.ingested[0] : null;
+      if (first?.id) selectedId = first.id;
+      await refreshThread();
+      await refreshRail();
+      await refreshComposer();
+      return result;
+    },
   };
 }
