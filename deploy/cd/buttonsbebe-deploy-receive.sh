@@ -216,6 +216,15 @@ sync_source kb-admin "$live_root/kb-admin" \
   --exclude 'node_modules/' --exclude 'data/' --exclude 'logs/'
 install -D -m 0644 "$release_dir/console-src/index.html" "$web_root/index.html"
 install -D -m 0644 "$release_dir/console-src/login.html" "$web_root/login.html"
+if [[ -d "$release_dir/console-src/inbox" ]]; then
+  mkdir -p "$web_root/inbox"
+  find "$release_dir/console-src/inbox" -type f \
+    ! -path '*/test/*' ! -name 'package.json' -print0 |
+    while IFS= read -r -d '' file; do
+      rel="${file#"$release_dir/console-src/inbox/"}"
+      install -D -m 0644 "$file" "$web_root/inbox/$rel"
+    done
+fi
 
 (cd "$live_root/webhook" && "$uv_bin" sync --locked)
 (cd "$live_root/processor" && "$uv_bin" sync --locked)
