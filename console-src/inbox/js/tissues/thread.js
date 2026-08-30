@@ -1,11 +1,12 @@
 import { MAILBOX_TOPICS } from "../contracts.js";
-import { esc, formatWhen, initials, screenStatus } from "../util.js";
+import { clerkStatusEvents, talkMessages } from "../shop/clerk-ticket.js";
+import { esc, formatWeekday, formatWhen, initials, screenStatus } from "../util.js";
 
 /**
  * Thread tissue.
- * In: `{ ticket }`
+ * In: `{ ticket }` from helpdesk.get_ticket
  * Out: summarize request on `composer/summarize`
- * Status-change lines are muted. No Send.
+ * Status-change events are muted as `Closed · Tuesday`. No Send.
  */
 export function createThreadTissue({ mailbox }) {
   let model = { ticket: null };
@@ -15,10 +16,7 @@ export function createThreadTissue({ mailbox }) {
   }
 
   function renderMessage(message) {
-    if (message.kind === "status") {
-      return `<p class="status-line">${esc(message.body)} · ${esc(formatWhen(message.at))}</p>`;
-    }
-    const who = message.fromAgent ? "agent" : "customer";
+    const who = message.fromAgent || message.from === "agent" ? "agent" : "customer";
     return `<article class="bubble ${who}">
       <div class="bubble-meta">
         <span class="avatar">${esc(initials(message.name))}</span>
@@ -29,23 +27,35 @@ export function createThreadTissue({ mailbox }) {
     </article>`;
   }
 
+  function renderStatus(event) {
+    return `<p class="status-line">${esc(screenStatus(event.status))} · ${esc(formatWeekday(event.at))}</p>`;
+  }
+
+  function timeline(ticket) {
+    const items = [
+      ...talkMessages(ticket).map((message) => ({ at: message.at, html: renderMessage(message) })),
+      ...clerkStatusEvents(ticket).map((event) => ({ at: event.at, html: renderStatus(event) })),
+    ];
+    items.sort((a, b) => String(a.at || "").localeCompare(String(b.at || "")));
+    return items.map((item) => item.html).join("");
+  }
+
   function render(next = model) {
     const ticket = next.ticket;
     if (!ticket) {
       return `<div class="pane-inner"><p class="empty-pane">Select a ticket.</p></div>`;
     }
-    const count = (ticket.messages || []).filter((msg) => msg.kind !== "status").length;
+    const count = talkMessages(ticket).length;
     const summarizeLabel = count === 1 ? "Summarize 1 message" : `Summarize ${count} messages`;
-    const messages = (ticket.messages || []).map(renderMessage).join("");
     return `<div class="pane-inner thread-inner">
       <header class="thread-head">
         <div>
-          <h2>${esc(ticket.messages?.[0]?.name || "Customer")}</h2>
+          <h2>${esc(ticket.customerName || "Customer")}</h2>
           <p class="thread-subject">${esc(ticket.subject)}</p>
         </div>
         <span class="status-badge">${esc(screenStatus(ticket.status))}</span>
       </header>
-      <div class="thread-scroll">${messages}</div>
+      <div class="thread-scroll">${timeline(ticket)}</div>
       <div class="summarize-row">
         <button type="button" class="btn-quiet" data-summarize="${esc(ticket.id)}">${esc(summarizeLabel)}</button>
       </div>

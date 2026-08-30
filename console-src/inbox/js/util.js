@@ -40,6 +40,14 @@ export function formatWhen(iso) {
   });
 }
 
+/** Status-event mute line: `Closed · Tuesday`. */
+export function formatWeekday(iso) {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("en-GB", { weekday: "long", timeZone: "UTC" });
+}
+
 export function initials(name) {
   const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
   if (!parts.length) return "·";

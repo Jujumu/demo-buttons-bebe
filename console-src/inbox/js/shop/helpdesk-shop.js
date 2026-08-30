@@ -137,6 +137,25 @@ export function createHelpdeskShop(opts = {}) {
       if (record?.text) return record;
       return fallback.applyMacro(args);
     },
+    async listTickets({ view, limit } = {}) {
+      const rows = await read(
+        "helpdesk.list_tickets",
+        { view: view || "open", limit: limit || 20 },
+        (payload) => payload.tickets,
+      );
+      if (Array.isArray(rows)) return rows;
+      return fallback.listTickets({ view, limit });
+    },
+    async getTicket({ ticketId } = {}) {
+      if (!ticketId) return null;
+      const record = await read(
+        "helpdesk.get_ticket",
+        { ticketId },
+        (payload) => payload.ticket,
+      );
+      if (record) return record;
+      return fallback.getTicket({ ticketId });
+    },
   };
 }
 

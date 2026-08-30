@@ -13,8 +13,8 @@ Composer and macro tools return text. They never send, refund, or cancel.
 
 | Tool | Tissue | CLI | In | Out |
 |---|---|---|---|---|
-| `helpdesk.list_tickets` | list | `helpdesk list-tickets` | `{ view, limit }` | ticket rows |
-| `helpdesk.get_ticket` | thread | `helpdesk get-ticket` | `{ ticketId }` | ticket + messages + status events |
+| `helpdesk.list_tickets` | list | `helpdesk list-tickets` | `{ view, limit }` | ticket rows (`id`, `customerName`, `subject`, `snippet`, `status`, `updatedAt`, `customerId`, `orderId`) |
+| `helpdesk.get_ticket` | thread | `helpdesk get-ticket` | `{ ticketId }` | ticket + `messages` + `statusEvents` |
 | `helpdesk.get_customer` | customer | `helpdesk get-customer` | `{ shop, customerId }` GID | `ClerkCustomer` |
 | `helpdesk.get_order` | order | `helpdesk get-order` | `{ shop, orderId }` GID | `ClerkOrder` |
 | `helpdesk.get_returns` | returns | `helpdesk get-returns` | `{ shop, orderId }` GID | returns payload |
@@ -38,8 +38,12 @@ The inbox is a client of these ten tools. MCP, CLI, and
 The UI must not open a second GraphQL client.
 
 Rail IDs are Shopify GIDs (`gid://shopify/Customer/…`, `gid://shopify/Order/…`),
-not bare ticket numbers. Ticket tissues keep `view` / `limit` / `ticketId`.
-Composer `--ticket` is the ticket id (sample `1001` or an already-loaded inbox thread).
+not bare ticket numbers. `list_tickets` / `get_ticket` attach those GIDs so the
+rail can load when a row is selected. Ticket status is first-party
+(`open` / `closed` / `snoozed`) — not `Return.status` and not
+`Order.displayFulfillmentStatus`. `customerName` is first-party — never
+`Customer.displayName`. Ticket tissues keep `{ view, limit }` / `{ ticketId }`.
+Composer `--ticket` is the ticket id (sample `1001` aliases `t-ada-track`).
 
 Drafts are merchant replies the human Inserts or Discards. Summaries are a
 short mute peek of the thread, not a reply. Missing LLM keys return a labeled

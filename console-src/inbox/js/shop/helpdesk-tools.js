@@ -31,3 +31,8 @@ export const COMPOSER_TOOLS = Object.freeze({
   searchMacros: "helpdesk.search_macros",
   applyMacro: "helpdesk.apply_macro",
 });
+
+export const INBOX_TOOLS = Object.freeze({
+  list: "helpdesk.list_tickets",
+  thread: "helpdesk.get_ticket",
+});

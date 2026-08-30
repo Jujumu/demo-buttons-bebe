@@ -19,18 +19,31 @@ from .names import (
     TOOL_SEARCH_MACROS,
     TOOL_SUMMARIZE_THREAD,
 )
+from .env import load_shopify_env
 from .shop import rail_get_customer, rail_get_order, rail_get_returns, rail_list_past_orders
+
+
+def _ticket_gid_source() -> str:
+    forced = (load_shopify_env().get("HELPDESK_SOURCE") or "").strip().lower()
+    if forced in {"live", "live-holes"}:
+        return forced
+    return "sample"
 
 
 def handle_list_tickets(args: dict[str, Any]) -> dict[str, Any]:
     view = str(args.get("view") or "open")
     limit = args.get("limit", 20)
-    return {"source": "sample", "tickets": tickets.list_tickets(view, limit)}
+    gid_source = _ticket_gid_source()
+    return {"source": "sample", "tickets": tickets.list_tickets(view, limit, gid_source)}
 
 
 def handle_get_ticket(args: dict[str, Any]) -> dict[str, Any]:
     ticket_id = args.get("ticketId") or args.get("ticket_id")
-    return {"source": "sample", "ticket": tickets.get_ticket(str(ticket_id) if ticket_id is not None else "")}
+    gid_source = _ticket_gid_source()
+    return {
+        "source": "sample",
+        "ticket": tickets.get_ticket(str(ticket_id) if ticket_id is not None else "", gid_source),
+    }
 
 
 def handle_get_customer(args: dict[str, Any]) -> dict[str, Any]:

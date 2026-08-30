@@ -262,7 +262,9 @@ export const macros = [
 export const tickets = [
   {
     id: "t-ada-track",
+    customerName: "Ada Demo",
     subject: "Tracking on order #1001 has not moved",
+    snippet: "Where is my order #1001? The tracking has not updated.",
     status: "open",
     view: "mine",
     assignee: "me",
@@ -286,12 +288,16 @@ export const tickets = [
         at: "2026-08-28T14:40:00Z",
         body: "Looking at the shipment now — I will write back with the carrier update.",
       },
-      { id: "s1", kind: "status", at: "2026-08-28T14:41:00Z", body: "Assigned to me" },
+    ],
+    statusEvents: [
+      { at: "2026-08-28T14:41:00Z", status: "open", note: "assigned" },
     ],
   },
   {
     id: "t-casey-visor",
+    customerName: "Casey Sandbox",
     subject: "When will order #1002 ship?",
+    snippet: "Please tell me when order #1002 will leave. I need the visor this week.",
     status: "open",
     view: "unassigned",
     assignee: null,
@@ -309,10 +315,13 @@ export const tickets = [
         body: "Please tell me when order #1002 will leave. I need the visor this week.",
       },
     ],
+    statusEvents: [],
   },
   {
     id: "t-casey-throw",
+    customerName: "Casey Sandbox",
     subject: "Question about the throw on #1003",
+    snippet: "Did the merino throw on #1003 go out? I want to confirm the shipment.",
     status: "open",
     view: "unassigned",
     assignee: null,
@@ -330,10 +339,13 @@ export const tickets = [
         body: "Did the merino throw on #1003 go out? I want to confirm the shipment.",
       },
     ],
+    statusEvents: [],
   },
   {
     id: "t-jordan-ship",
+    customerName: "Jordan Preview",
     subject: "Do you ship the demo catalog to Canada?",
+    snippet: "Do you ship the demo catalog to Canada, or is it local-only?",
     status: "snoozed",
     view: "snoozed",
     assignee: null,
@@ -350,12 +362,16 @@ export const tickets = [
         at: "2026-08-26T09:00:00Z",
         body: "Do you ship the demo catalog to Canada, or is it local-only?",
       },
-      { id: "s2", kind: "status", at: "2026-08-26T09:05:00Z", body: "Set status: snoozed" },
+    ],
+    statusEvents: [
+      { at: "2026-08-26T09:05:00Z", status: "snoozed", note: "waiting" },
     ],
   },
   {
     id: "t-ada-closed",
+    customerName: "Ada Demo",
     subject: "Received the rattle — thank you",
+    snippet: "The rattle from #1001 arrived. Thank you — you can close this.",
     status: "closed",
     view: "closed",
     assignee: "me",
@@ -379,7 +395,9 @@ export const tickets = [
         at: "2026-08-25T18:10:00Z",
         body: "Glad it reached you, Ada.",
       },
-      { id: "s3", kind: "status", at: "2026-08-25T18:12:00Z", body: "Set status: closed" },
+    ],
+    statusEvents: [
+      { at: "2026-08-25T18:12:00Z", status: "closed", note: "answered" },
     ],
   },
 ];
@@ -395,6 +413,7 @@ export const IDS = {
 
 export function ticketInView(ticket, viewId) {
   if (viewId === "all") return true;
+  if (viewId === "open") return ticket.status === "open";
   if (viewId === "mine") return ticket.assignee === "me" && ticket.status === "open";
   if (viewId === "unassigned") return ticket.assignee == null && ticket.status === "open";
   if (viewId === "snoozed") return ticket.status === "snoozed";

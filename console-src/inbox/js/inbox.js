@@ -36,7 +36,7 @@ export function createInboxOrgan(opts = {}) {
   const mailbox = opts.mailbox || createMailbox();
   const shop = opts.shop || createHelpdeskShop({ fail: opts.fail });
   const shopHost = opts.shopHost || shop.shop || SHOP;
-  const catalog = opts.tickets || fixtureTickets;
+  const pinnedCatalog = opts.tickets || null;
   const viewTissue = createViewTissue({ mailbox });
   const listTissue = createListTissue({ mailbox });
   const threadTissue = createThreadTissue({ mailbox });
@@ -55,13 +55,16 @@ export function createInboxOrgan(opts = {}) {
   let macroQuery = "";
   let selectedMacroId = "";
   let macrosOpen = true;
+  let listRows = pinnedCatalog ? pinnedCatalog.filter((ticket) => ticketInView(ticket, viewId)) : [];
+  let selected = pinnedCatalog?.find((ticket) => ticket.id === selectedId) || null;
+  let counts = pinnedCatalog ? viewCounts(pinnedCatalog) : viewCounts(fixtureTickets);
 
   function visibleTickets() {
-    return catalog.filter((ticket) => ticketInView(ticket, viewId));
+    return listRows;
   }
 
   function selectedTicket() {
-    return catalog.find((ticket) => ticket.id === selectedId) || null;
+    return selected || listRows.find((ticket) => ticket.id === selectedId) || null;
   }
 
   function ensureSelection() {
@@ -69,6 +72,58 @@ export function createInboxOrgan(opts = {}) {
     if (!visible.some((ticket) => ticket.id === selectedId)) {
       selectedId = visible[0]?.id || null;
     }
+  }
+
+  async function refreshList() {
+    if (pinnedCatalog) {
+      listRows = pinnedCatalog.filter((ticket) => ticketInView(ticket, viewId));
+      counts = viewCounts(pinnedCatalog);
+      return;
+    }
+    if (typeof shop.listTickets === "function") {
+      try {
+        const [rows, ...viewRows] = await Promise.all([
+          shop.listTickets({ view: viewId, limit: 50 }),
+          ...views.map((view) => shop.listTickets({ view: view.id, limit: 100 })),
+        ]);
+        if (Array.isArray(rows)) listRows = rows;
+        counts = Object.fromEntries(views.map((view, index) => [
+          view.id,
+          Array.isArray(viewRows[index]) ? viewRows[index].length : 0,
+        ]));
+        return;
+      } catch {
+        // fixture fallback below
+      }
+    }
+    listRows = fixtureTickets.filter((ticket) => ticketInView(ticket, viewId));
+    counts = viewCounts(fixtureTickets);
+  }
+
+  async function refreshThread() {
+    const id = selectedId;
+    if (!id) {
+      selected = null;
+      return;
+    }
+    if (pinnedCatalog) {
+      selected = pinnedCatalog.find((ticket) => ticket.id === id) || null;
+      return;
+    }
+    if (typeof shop.getTicket === "function") {
+      try {
+        const ticket = await shop.getTicket({ ticketId: id });
+        if (ticket) {
+          selected = ticket;
+          return;
+        }
+      } catch {
+        // fixture fallback below
+      }
+    }
+    selected = fixtureTickets.find((ticket) => ticket.id === id)
+      || listRows.find((ticket) => ticket.id === id)
+      || null;
   }
 
   function shell() {
@@ -169,7 +224,6 @@ export function createInboxOrgan(opts = {}) {
   function snapshot() {
     ensureSelection();
     const ticket = selectedTicket();
-    const counts = viewCounts(catalog);
     const viewModel = viewTissue.update({ views, counts, selectedViewId: viewId });
     const listModel = listTissue.update({
       tickets: visibleTickets(),
@@ -230,14 +284,16 @@ export function createInboxOrgan(opts = {}) {
       composer: root.querySelector("[data-slot=composer]"),
       rail: root.querySelector('[data-pane="rail"]'),
     };
+    await refreshList();
     ensureSelection();
+    await refreshThread();
     await refreshRail();
     await refreshComposer();
     await refreshMacros("");
 
     const paint = () => {
       const ticket = selectedTicket();
-      safeMount(viewTissue, panes.views, { views, counts: viewCounts(catalog), selectedViewId: viewId });
+      safeMount(viewTissue, panes.views, { views, counts, selectedViewId: viewId });
       safeMount(listTissue, panes.list, {
         tickets: visibleTickets(),
         selectedTicketId: selectedId,
@@ -265,8 +321,10 @@ export function createInboxOrgan(opts = {}) {
       discarded = false;
       selectedMacroId = "";
       macrosOpen = true;
-      ensureSelection();
-      refreshRail().then(refreshComposer).then(() => refreshMacros(macroQuery)).then(paint);
+      refreshList().then(() => {
+        ensureSelection();
+        return refreshThread();
+      }).then(refreshRail).then(refreshComposer).then(() => refreshMacros(macroQuery)).then(paint);
     });
     mailbox.subscribe(MAILBOX_TOPICS.LIST_SELECTED, ({ ticketId }) => {
       selectedId = ticketId;
@@ -276,7 +334,7 @@ export function createInboxOrgan(opts = {}) {
       discarded = false;
       selectedMacroId = "";
       macrosOpen = true;
-      refreshRail().then(refreshComposer).then(() => refreshMacros(macroQuery)).then(paint);
+      refreshThread().then(refreshRail).then(refreshComposer).then(() => refreshMacros(macroQuery)).then(paint);
     });
     mailbox.subscribe(MAILBOX_TOPICS.COMPOSER_BODY, ({ text }) => {
       body = text;
@@ -298,7 +356,7 @@ export function createInboxOrgan(opts = {}) {
       paint();
     });
     mailbox.subscribe(MAILBOX_TOPICS.COMPOSER_SUMMARIZE, ({ ticketId }) => {
-      const ticket = selectedTicket() || catalog.find((item) => item.id === ticketId) || null;
+      const ticket = selectedTicket() || listRows.find((item) => item.id === ticketId) || null;
       loadSummary(ticket).then((text) => {
         summarizeText = text;
         paint();
@@ -342,8 +400,10 @@ export function createInboxOrgan(opts = {}) {
       discarded = false;
       selectedMacroId = "";
       macrosOpen = true;
-      ensureSelection();
-      return refreshRail().then(refreshComposer).then(() => refreshMacros(macroQuery));
+      return refreshList().then(() => {
+        ensureSelection();
+        return refreshThread();
+      }).then(refreshRail).then(refreshComposer).then(() => refreshMacros(macroQuery));
     },
     selectTicket(id) {
       selectedId = id;
@@ -353,7 +413,7 @@ export function createInboxOrgan(opts = {}) {
       discarded = false;
       selectedMacroId = "";
       macrosOpen = true;
-      return refreshRail().then(refreshComposer).then(() => refreshMacros(macroQuery));
+      return refreshThread().then(refreshRail).then(refreshComposer).then(() => refreshMacros(macroQuery));
     },
     toggleRail(key) {
       return rail.toggle(key);
@@ -414,7 +474,9 @@ export function createInboxOrgan(opts = {}) {
       return snapshot();
     },
     async ready() {
+      await refreshList();
       ensureSelection();
+      await refreshThread();
       await refreshRail();
       await refreshComposer();
       await refreshMacros(macroQuery);

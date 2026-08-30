@@ -2,7 +2,7 @@ import { MAILBOX_TOPICS } from "../contracts.js";
 import { esc } from "../util.js";
 
 /**
- * View tissue.
+ * View tissue. Counts come from helpdesk.list_tickets per view.
  * In: `{ views, counts, selectedViewId }`
  * Out: `{ viewId }` on `view/selected`
  */

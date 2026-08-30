@@ -22,7 +22,9 @@ const STORE_NAME = "Demo Shop";
 
 function ticket({
   id,
+  customerName,
   subject,
+  snippet,
   status,
   view,
   assignee,
@@ -32,10 +34,13 @@ function ticket({
   stubDraft,
   stubSummary,
   messages,
+  statusEvents,
 }) {
   return {
     id,
+    customerName,
     subject,
+    snippet,
     status,
     view,
     assignee,
@@ -45,6 +50,7 @@ function ticket({
     stubDraft,
     stubSummary,
     messages,
+    statusEvents: statusEvents || [],
   };
 }
 
@@ -52,7 +58,9 @@ function ticket({
 export const liveTickets = [
   ticket({
     id: "t-unfulfilled",
+    customerName: "Demo Unfulfilled",
     subject: "Has order #1001 left yet?",
+    snippet: "Where is my order #1001? I do not see a shipment yet.",
     status: "open",
     view: "mine",
     assignee: "me",
@@ -76,12 +84,16 @@ export const liveTickets = [
         at: "2026-08-28T14:40:00Z",
         body: "Looking at the order now — I will write back with the fulfillment update.",
       },
-      { id: "ls1", kind: "status", at: "2026-08-28T14:41:00Z", body: "Assigned to me" },
+    ],
+    statusEvents: [
+      { at: "2026-08-28T14:41:00Z", status: "open", note: "assigned" },
     ],
   }),
   ticket({
     id: "t-fulfilled",
+    customerName: "Demo Fulfilled",
     subject: "Tracking on order #1002",
+    snippet: "Please send the carrier link for order #1002.",
     status: "open",
     view: "unassigned",
     assignee: null,
@@ -99,10 +111,13 @@ export const liveTickets = [
         body: "Please send the carrier link for order #1002.",
       },
     ],
+    statusEvents: [],
   }),
   ticket({
     id: "t-multi-open",
+    customerName: "Demo Multiple Orders",
     subject: "Question about order #1003",
+    snippet: "When will order #1003 leave?",
     status: "open",
     view: "unassigned",
     assignee: null,
@@ -120,10 +135,13 @@ export const liveTickets = [
         body: "When will order #1003 leave?",
       },
     ],
+    statusEvents: [],
   }),
   ticket({
     id: "t-multi-snoozed",
+    customerName: "Demo Multiple Orders",
     subject: "Do you ship the catalog to Canada?",
+    snippet: "Do you ship the catalog to Canada, or is it local-only?",
     status: "snoozed",
     view: "snoozed",
     assignee: null,
@@ -140,12 +158,16 @@ export const liveTickets = [
         at: "2026-08-26T09:00:00Z",
         body: "Do you ship the catalog to Canada, or is it local-only?",
       },
-      { id: "ls2", kind: "status", at: "2026-08-26T09:05:00Z", body: "Set status: snoozed" },
+    ],
+    statusEvents: [
+      { at: "2026-08-26T09:05:00Z", status: "snoozed", note: "waiting" },
     ],
   }),
   ticket({
     id: "t-fulfilled-closed",
+    customerName: "Demo Fulfilled",
     subject: "Received order #1002 — thank you",
+    snippet: "Order #1002 arrived. Thank you — you can close this.",
     status: "closed",
     view: "closed",
     assignee: "me",
@@ -169,7 +191,9 @@ export const liveTickets = [
         at: "2026-08-25T18:10:00Z",
         body: "Glad it reached you.",
       },
-      { id: "ls3", kind: "status", at: "2026-08-25T18:12:00Z", body: "Set status: closed" },
+    ],
+    statusEvents: [
+      { at: "2026-08-25T18:12:00Z", status: "closed", note: "answered" },
     ],
   }),
 ];

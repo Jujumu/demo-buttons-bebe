@@ -81,6 +81,8 @@ test("client exposes exactly the ten helpdesk tools", () => {
   const client = createHelpdeskClient({ invoke: async () => ({ ok: true }) });
   assert.deepEqual(client.tools, TOOL_NAMES);
   assert.equal(TOOL_NAMES.length, 10);
+  assert.ok(TOOL_NAMES.includes("helpdesk.list_tickets"));
+  assert.ok(TOOL_NAMES.includes("helpdesk.get_ticket"));
   assert.ok(TOOL_NAMES.includes("helpdesk.draft_reply"));
   assert.ok(TOOL_NAMES.includes("helpdesk.summarize_thread"));
   assert.ok(TOOL_NAMES.includes("helpdesk.search_macros"));
@@ -89,6 +91,120 @@ test("client exposes exactly the ten helpdesk tools", () => {
   for (const name of WRITE_TOOLS) {
     assert.ok(!TOOL_NAMES.includes(name));
   }
+});
+
+test("list_tickets rows include customerId and orderId GIDs", async () => {
+  const listed = pythonInvoke("helpdesk.list_tickets", { view: "open", limit: 20 });
+  assert.equal(listed.ok, true);
+  const ada = listed.tickets.find((row) => row.id === "t-ada-track");
+  assert.ok(ada);
+  assert.equal(ada.customerName, "Ada Demo");
+  assert.equal(ada.displayName, undefined);
+  assert.equal(ada.customerId, SAMPLE_ADA);
+  assert.equal(ada.orderId, SAMPLE_ADA_ORDER);
+  assert.match(ada.customerId, /^gid:\/\/shopify\/Customer\//);
+  assert.match(ada.orderId, /^gid:\/\/shopify\/Order\//);
+  assert.equal(ada.status, "open");
+  assert.notEqual(ada.status, "OPEN");
+  for (const row of listed.tickets) {
+    assert.ok(["open", "closed", "snoozed"].includes(row.status), row.status);
+    assert.notEqual(row.status, "OPEN");
+    assert.equal(row.displayName, undefined);
+  }
+
+  const shop = createHelpdeskShop({ client: clientFromPython("sample"), shop: SAMPLE_SHOP });
+  const rows = await shop.listTickets({ view: "mine", limit: 10 });
+  assert.equal(rows[0].id, "t-ada-track");
+  assert.equal(rows[0].customerId, SAMPLE_ADA);
+  assert.equal(rows[0].orderId, SAMPLE_ADA_ORDER);
+});
+
+test("get_ticket returns messages and statusEvents", async () => {
+  const payload = pythonInvoke("helpdesk.get_ticket", { ticketId: "1001" });
+  assert.equal(payload.ok, true);
+  const ticket = payload.ticket;
+  assert.equal(ticket.id, "t-ada-track");
+  assert.equal(ticket.customerName, "Ada Demo");
+  assert.equal(ticket.displayName, undefined);
+  assert.ok(Array.isArray(ticket.messages));
+  assert.ok(ticket.messages.length >= 1);
+  assert.ok(Array.isArray(ticket.statusEvents));
+  assert.ok(ticket.statusEvents.length >= 1);
+  assert.equal(ticket.status, "open");
+  assert.notEqual(ticket.status, "OPEN");
+  assert.equal(ticket.customerId, SAMPLE_ADA);
+  assert.equal(ticket.orderId, SAMPLE_ADA_ORDER);
+
+  const shop = createHelpdeskShop({ client: clientFromPython("sample"), shop: SAMPLE_SHOP });
+  const loaded = await shop.getTicket({ ticketId: "t-ada-closed" });
+  assert.equal(loaded.status, "closed");
+  assert.equal(loaded.statusEvents.at(-1).status, "closed");
+  assert.notEqual(loaded.status, "OPEN");
+});
+
+test("ticket customerName is not displayName and status is not Return.status", async () => {
+  const shop = createHelpdeskShop({ client: clientFromPython("sample"), shop: SAMPLE_SHOP });
+  const ticket = await shop.getTicket({ ticketId: "t-ada-track" });
+  const customer = await shop.getCustomer({ shop: SAMPLE_SHOP, customerId: SAMPLE_ADA });
+  const returns = await shop.getReturns({ shop: SAMPLE_SHOP, orderId: SAMPLE_ADA_ORDER });
+  assert.equal(ticket.customerName, "Ada Demo");
+  assert.equal(ticket.displayName, undefined);
+  assert.equal(customer.displayName, "Ada Demo");
+  assert.equal(customer.customerName, undefined);
+  assert.equal(ticket.status, "open");
+  assert.equal(returns.returns.nodes[0].status, "OPEN");
+  assert.notEqual(ticket.status, returns.returns.nodes[0].status);
+});
+
+test("inbox panes call list_tickets and get_ticket on invoke", async () => {
+  const calls = [];
+  const shop = createHelpdeskShop({
+    client: createHelpdeskClient({
+      async invoke(tool, args) {
+        calls.push(tool);
+        if (tool === "helpdesk.list_tickets") {
+          return {
+            ok: true,
+            tickets: [{
+              id: "t-ada-track",
+              customerName: "Ada Demo",
+              subject: "Tracking on order #1001 has not moved",
+              snippet: "Where is my order #1001? The tracking has not updated.",
+              status: "open",
+              updatedAt: "2026-08-28T15:10:00Z",
+              customerId: IDS.ADA,
+              orderId: IDS.ORDER_1001,
+            }],
+          };
+        }
+        if (tool === "helpdesk.get_ticket") {
+          return {
+            ok: true,
+            ticket: {
+              id: args.ticketId,
+              customerName: "Ada Demo",
+              subject: "Tracking on order #1001 has not moved",
+              snippet: "Where is my order #1001? The tracking has not updated.",
+              status: "open",
+              updatedAt: "2026-08-28T15:10:00Z",
+              customerId: IDS.ADA,
+              orderId: IDS.ORDER_1001,
+              messages: fixtureTickets[0].messages,
+              statusEvents: fixtureTickets[0].statusEvents,
+            },
+          };
+        }
+        return { ok: false };
+      },
+    }),
+  });
+  const organ = createInboxOrgan({ shop, viewId: "mine" });
+  const snap = await organ.ready();
+  assert.ok(calls.includes("helpdesk.list_tickets"));
+  assert.ok(calls.includes("helpdesk.get_ticket"));
+  assert.equal(snap.selectedId, "t-ada-track");
+  assert.match(snap.html, /Ada Demo/);
+  assert.match(snap.html, /status-line">Open · Friday/);
 });
 
 test("CLI payloads match the JS shop adapter for sample rail tools", async () => {

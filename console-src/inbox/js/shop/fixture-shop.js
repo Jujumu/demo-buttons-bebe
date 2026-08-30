@@ -1,4 +1,5 @@
-import { customers, emptyReturns, macros as fixtureMacros, orders, returnsForOrder, SHOP } from "../fixtures/demo-inbox.js";
+import { clerkTicket, clerkTicketRow } from "./clerk-ticket.js";
+import { customers, emptyReturns, macros as fixtureMacros, orders, returnsForOrder, SHOP, ticketInView, tickets as fixtureTickets } from "../fixtures/demo-inbox.js";
 
 function assertShop(shop) {
   if (shop && shop !== SHOP) {
@@ -61,6 +62,19 @@ export function createFixtureShop(opts = {}) {
         .filter((order) => order.customerId === customerId)
         .map(historyRow)
         .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+    },
+    listTickets({ view, limit } = {}) {
+      maybeFail("list");
+      const cap = Number(limit) > 0 ? Number(limit) : 20;
+      return fixtureTickets
+        .filter((ticket) => ticketInView(ticket, view || "open"))
+        .slice(0, cap)
+        .map(clerkTicketRow);
+    },
+    getTicket({ ticketId } = {}) {
+      maybeFail("thread");
+      const ticket = fixtureTickets.find((row) => row.id === ticketId);
+      return ticket ? clerkTicket(ticket) : null;
     },
     draftReply(args = {}) {
       maybeFail("draft");
