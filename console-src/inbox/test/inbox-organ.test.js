@@ -53,7 +53,7 @@ function fakeRoot() {
   };
 }
 
-test("mount first-paints the Ada draft strip before paint", async () => {
+test("mount first-paints the Ada draft strip above the composer box", async () => {
   const organ = createInboxOrgan({ viewId: "mine" });
   const root = fakeRoot();
   await organ.mount(root);
@@ -63,6 +63,12 @@ test("mount first-paints the Ada draft strip before paint", async () => {
   assert.match(composer, /data-discard/);
   assert.match(composer, /AI draft/);
   assert.match(composer, /disabled/);
+  const stripAt = composer.indexOf("data-draft-strip");
+  const boxAt = composer.indexOf("composer-box");
+  const bodyAt = composer.indexOf("data-body");
+  assert.ok(stripAt > -1 && boxAt > stripAt, "draft strip sits above the composer box");
+  assert.ok(bodyAt > boxAt, "textarea stays inside the composer box");
+  assert.doesNotMatch(composer.slice(boxAt), /data-draft-strip/);
 });
 
 test("selected list row CSS is a 4px ink bar with no wash", () => {
@@ -122,12 +128,15 @@ test("discarding the AI strip does not restore the draft", async () => {
   let snap = await organ.ready();
   assert.match(snap.html, /data-draft-strip/);
   const stripAt = snap.html.indexOf("data-draft-strip");
+  const boxAt = snap.html.indexOf("composer-box");
   const bodyAt = snap.html.indexOf("data-body");
-  assert.ok(stripAt > -1 && bodyAt > stripAt, "draft strip sits above the textarea");
-  const stripHtml = snap.html.slice(stripAt, bodyAt);
+  assert.ok(stripAt > -1 && boxAt > stripAt, "draft strip sits above the composer box");
+  assert.ok(bodyAt > boxAt, "textarea stays inside the composer box");
+  const stripHtml = snap.html.slice(stripAt, boxAt);
   assert.match(stripHtml, /data-insert/);
   assert.match(stripHtml, /data-discard/);
   assert.doesNotMatch(stripHtml, />Send</);
+  assert.doesNotMatch(snap.html.slice(boxAt, bodyAt), /data-draft-strip/);
   organ.discardStrip();
   snap = organ.snapshot();
   assert.doesNotMatch(snap.html, /data-draft-strip/);
@@ -291,7 +300,10 @@ test("Insert puts the draft in the textarea and does not send", async () => {
   let snap = await organ.ready();
   assert.match(snap.html, /data-draft-strip/);
   assert.match(snap.html, /draft-kicker">AI draft</);
-  assert.doesNotMatch(snap.html.slice(snap.html.indexOf("data-draft-strip"), snap.html.indexOf("data-body")), />Send</);
+  const stripAt = snap.html.indexOf("data-draft-strip");
+  const boxAt = snap.html.indexOf("composer-box");
+  assert.ok(stripAt > -1 && boxAt > stripAt, "draft strip sits above the composer box");
+  assert.doesNotMatch(snap.html.slice(stripAt, boxAt), />Send</);
   assert.equal(snap.sendDisabled, true);
   assert.equal(snap.sent.length, 0);
   organ.insertDraft();

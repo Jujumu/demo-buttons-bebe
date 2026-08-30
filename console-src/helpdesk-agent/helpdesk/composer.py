@@ -54,9 +54,8 @@ def _from_customer(message: dict[str, Any]) -> bool:
     return who in {"", "customer"}
 
 
-def _customer_name(thread: dict[str, Any], customer: dict[str, Any] | None) -> str:
-    if customer and customer.get("displayName"):
-        return str(customer["displayName"])
+def _customer_name(thread: dict[str, Any], _customer: dict[str, Any] | None) -> str:
+    """Ticket customerName / message name only. Never Customer.displayName."""
     if thread.get("customerName"):
         return str(thread["customerName"])
     for message in _talk_messages(thread):

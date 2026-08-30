@@ -221,9 +221,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  margin: 0;
-  padding: 8px;
-  border-bottom: 1px solid var(--line);
+  margin: 0 0 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  background: var(--ground);
 }
 .draft-kicker { font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--mute); }
 .draft-text { font-size: 13px; margin-top: 4px; }
