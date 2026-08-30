@@ -39,7 +39,7 @@ LIVE_GIDS = {
     "t-casey-visor": (C_FULFILLED, O_1002),
     "t-casey-throw": (C_MULTI, O_1003),
     "t-jordan-ship": (C_MULTI, None),
-    "t-ada-closed": (C_FULFILLED, O_1002),
+    "t-ada-closed": (C_UNFULFILLED, O_1001),
 }
 
 STORE_NAME = "Demo Shop"

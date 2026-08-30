@@ -94,6 +94,8 @@ test("closed Ada thread mutes Closed · Tuesday", async () => {
   assert.equal(snap.selectedId, "t-ada-closed");
   assert.equal(snap.selectedHasInkBar, true);
   assert.match(snap.html, /status-line">Closed · Tuesday/);
+  assert.match(snap.html, /#1001 · Paid · Fulfilled/);
+  assert.doesNotMatch(snap.html, /#1002 ·/);
   assert.doesNotMatch(snap.html, /Set status: closed/);
   assert.doesNotMatch(snap.html, /displayFulfillmentStatus/);
   assert.match(snap.html, /btn-quiet" data-summarize/);

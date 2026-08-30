@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from helpdesk.dispatch import WRITE_TOOLS, dispatch, invoke
-from helpdesk.fixtures_live_holes import C_UNFULFILLED, O_1001
+from helpdesk.fixtures_live_holes import C_FULFILLED, C_UNFULFILLED, O_1001, O_1002
 from helpdesk.fixtures_sample import ADA, ORDER_ADA
 from helpdesk.names import SAMPLE_SHOP
 
@@ -77,6 +77,28 @@ class TicketContractTests(unittest.TestCase):
             ticket = dispatch("helpdesk.get_ticket", {"ticketId": "t-ada-track"})["ticket"]
             self.assertEqual(ticket["customerId"], C_UNFULFILLED)
             self.assertEqual(ticket["orderId"], O_1001)
+        finally:
+            if previous is None:
+                os.environ.pop("HELPDESK_SOURCE", None)
+            else:
+                os.environ["HELPDESK_SOURCE"] = previous
+
+    def test_live_holes_closed_ada_joins_unfulfilled_1001(self) -> None:
+        previous = os.environ.get("HELPDESK_SOURCE")
+        os.environ["HELPDESK_SOURCE"] = "live-holes"
+        try:
+            closed = dispatch("helpdesk.get_ticket", {"ticketId": "t-ada-closed"})["ticket"]
+            self.assertEqual(closed["customerId"], C_UNFULFILLED)
+            self.assertEqual(closed["orderId"], O_1001)
+            self.assertNotEqual(closed["customerId"], C_FULFILLED)
+            self.assertNotEqual(closed["orderId"], O_1002)
+            self.assertEqual(closed["status"], "closed")
+            self.assertEqual(closed["customerName"], "Ada Demo")
+            self.assertNotIn("displayName", closed)
+            self.assertIn("#1001", closed["subject"] + closed["snippet"])
+            jordan = dispatch("helpdesk.get_ticket", {"ticketId": "t-jordan-ship"})["ticket"]
+            self.assertIsNone(jordan["orderId"])
+            self.assertEqual(jordan["status"], "snoozed")
         finally:
             if previous is None:
                 os.environ.pop("HELPDESK_SOURCE", None)
