@@ -15,6 +15,22 @@ export function createThreadTissue({ mailbox }) {
     return { ticket: input.ticket || null };
   }
 
+  function renderAttachments(message) {
+    const rows = Array.isArray(message.attachments) ? message.attachments : [];
+    if (!rows.length) return "";
+    const figures = rows
+      .filter((item) => item && item.url)
+      .map((item) => {
+        const alt = item.alt || "Attachment";
+        return `<figure class="bubble-attach">
+          <img src="${esc(item.url)}" alt="${esc(alt)}" loading="lazy" />
+          <figcaption>${esc(alt)}</figcaption>
+        </figure>`;
+      })
+      .join("");
+    return figures ? `<div class="bubble-attachments">${figures}</div>` : "";
+  }
+
   function renderMessage(message) {
     const who = message.fromAgent || message.from === "agent" ? "agent" : "customer";
     return `<article class="bubble ${who}">
@@ -24,6 +40,7 @@ export function createThreadTissue({ mailbox }) {
         <time>${esc(formatWhen(message.at))}</time>
       </div>
       <p>${esc(message.body)}</p>
+      ${renderAttachments(message)}
     </article>`;
   }
 

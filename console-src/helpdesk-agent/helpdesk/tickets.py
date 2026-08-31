@@ -18,6 +18,7 @@ from .fixtures_live_holes import (
     O_1002,
     O_1003,
 )
+from .fixtures_demo_tickets import DEMO_SEED_TICKETS
 from .fixtures_sample import ADA, CASEY, JORDAN, ORDER_ADA, ORDER_CASEY_A, ORDER_CASEY_B
 
 VIEWS = ("open", "closed", "all", "snoozed", "mine", "unassigned")
@@ -170,7 +171,7 @@ SEED_TICKETS = (
             {"at": "2026-08-25T18:12:00Z", "status": "closed", "note": "answered"},
         ],
     },
-)
+) + tuple(DEMO_SEED_TICKETS)
 
 _store: list[dict] = []
 _intake: list[dict] = []

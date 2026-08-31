@@ -103,6 +103,17 @@ def _last_customer_body(thread: dict[str, Any]) -> str:
     return str(thread.get("snippet") or thread.get("subject") or "").strip()
 
 
+def _customer_photo_count(thread: dict[str, Any]) -> int:
+    total = 0
+    for message in _talk_messages(thread):
+        if not _from_customer(message):
+            continue
+        attachments = message.get("attachments") or []
+        if isinstance(attachments, list):
+            total += sum(1 for item in attachments if isinstance(item, dict) and item.get("url"))
+    return total
+
+
 def _load_thread(args: dict[str, Any]) -> dict[str, Any]:
     thread = _as_record(args.get("thread"))
     if thread and (thread.get("messages") is not None or thread.get("subject") or thread.get("id")):
@@ -202,6 +213,12 @@ def fixture_draft(thread: dict[str, Any], rail: dict[str, Any]) -> str:
 
     if open_return:
         sentences.append("There is an open return on this order. I will not refund or cancel from here.")
+
+    photos = _customer_photo_count(thread)
+    if photos == 1:
+        sentences.append("I can see the photo you attached and will use it while we sort this out.")
+    elif photos > 1:
+        sentences.append(f"I can see the {photos} photos you attached and will use them while we sort this out.")
 
     if asked and not order_name:
         sentences.append("Happy to answer from the published catalog once we have an order to check.")

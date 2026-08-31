@@ -8,14 +8,13 @@ const shop = createHelpdeskShop({ client });
 const live = await resolveLiveInbox(client);
 if (live) shop.setShop(live.shop);
 const params = new URLSearchParams(location.search);
+// Always list from helpdesk.list_tickets (SEED + intake). Live mint only
+// pins the shop host — do not replace the catalog with the 5-row live stub.
 const organ = createInboxOrgan({
   shop,
-  tickets: live?.tickets,
   shopHost: live?.shop,
-  viewId: params.get("view") || undefined,
+  viewId: params.get("view") || "open",
   ticketId: params.get("ticket") || undefined,
 });
-if (!live?.tickets) {
-  await organ.pullMailbox({ limit: Number(params.get("limit") || 20) || 20 });
-}
+await organ.pullMailbox({ limit: Number(params.get("limit") || 20) || 20 });
 organ.mount(root);
