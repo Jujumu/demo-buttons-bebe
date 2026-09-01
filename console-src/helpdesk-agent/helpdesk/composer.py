@@ -173,6 +173,71 @@ def _load_rail(args: dict[str, Any], thread: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _scenario_draft(
+    ticket_id: str,
+    name: str,
+    order_name: str,
+    financial: str,
+    fulfill: str,
+) -> str | None:
+    """Caduceus tone for seeded demo scenarios. Never refund/cancel/send promises."""
+    oid = order_name or ""
+    money = financial or "Paid"
+    ship = fulfill or "Unfulfilled"
+
+    if ticket_id == "t-demo-04-return":
+        looked = oid or "#1003"
+        return (
+            f"Hi {name} — I looked at {looked}. To start a return on the merino throw, reply with "
+            "the item name and whether tags are still on, and we will walk you through the return "
+            "portal steps from here. A prepaid label is not automatic — once the return is set up, "
+            "we will confirm whether a label is included or you need to buy postage. I will not "
+            "refund or cancel from this chat. Let me know if you need anything else."
+        )
+    if ticket_id == "t-demo-05-cancel":
+        looked = oid or "#1001"
+        return (
+            f"Hi {name} — I looked at {looked}. It is {money} and {ship}, so it has not been "
+            "handed to a carrier yet. I see you asked to cancel because of the wrong size. I will "
+            "not cancel or refund from here — a teammate needs to review the hold before anything "
+            "changes. I will write back once that review is done. Let me know if you need anything else."
+        )
+    if ticket_id == "t-demo-08-canada":
+        return (
+            f"Hi {name} — Yes, we can ship the Muslin Swaddle Trio to Montreal. International "
+            "shipping is offered at checkout (about $35 USD as a typical rate — please confirm the "
+            "live total before you place the order). Any customs or import duties charged in Canada "
+            "are the customer’s responsibility. I cannot promise a carrier delivery date from this "
+            "chat. Let me know if you need anything else."
+        )
+    if ticket_id == "t-demo-14-duplicate":
+        looked = oid or "#1001"
+        return (
+            f"Hi {name} — I looked at {looked}. Thanks for flagging the two bank lines that look "
+            "like this order. I am checking whether one is a pending authorization versus a second "
+            "capture. I will not refund from here — once we confirm what the bank is showing, a "
+            "teammate can advise next steps. Let me know if you need anything else."
+        )
+    if ticket_id == "t-demo-18-exchange":
+        looked = oid or "#1003"
+        return (
+            f"Hi {name} — I looked at {looked}. Happy to help with an exchange on the Organic "
+            "Cotton Bath Towel Hood for the next size. Reply with the size you want and whether "
+            "the current towel is unused with tags on, and we will outline the swap steps from "
+            "here. I will not issue a refund from this chat. Let me know if you need anything else."
+        )
+    if ticket_id == "t-demo-22-policy":
+        return (
+            f"Hi {name} — For unused baby apparel with tags still on, our demo return window is "
+            "7 days after delivery for refund eligibility — the return needs a carrier scan within "
+            "that window. After that, eligible returns are usually store credit instead. Final-sale "
+            "items follow different rules. I will not process a refund from this chat; write back "
+            "with an order number if you want us to check a specific item. Let me know if you need "
+            "anything else."
+        )
+    return None
+
+
 def fixture_draft(thread: dict[str, Any], rail: dict[str, Any]) -> str:
     """Merchant-reply draft. Never promises a refund, cancel, or send."""
     customer = rail.get("customer")
@@ -187,6 +252,11 @@ def fixture_draft(thread: dict[str, Any], rail: dict[str, Any]) -> str:
     company, tracking = _tracking(order_rec)
     open_return = _open_return(returns if isinstance(returns, dict) else None)
     asked = _last_customer_body(thread)
+    ticket_id = str(thread.get("id") or "").strip()
+
+    scenario = _scenario_draft(ticket_id, name, order_name, financial, fulfill)
+    if scenario is not None:
+        return scenario
 
     sentences: list[str] = []
     if status == "closed":
