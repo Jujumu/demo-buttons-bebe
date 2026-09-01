@@ -56,6 +56,12 @@ def line_item(node: dict[str, Any]) -> dict[str, Any]:
     sku = node.get("sku")
     if sku is not None:
         row["sku"] = sku
+    image = node.get("image")
+    if isinstance(image, dict) and image.get("url"):
+        row["image"] = {"url": str(image["url"])}
+        alt = image.get("altText")
+        if alt:
+            row["image"]["altText"] = str(alt)
     return omit_null_sku(row)
 
 

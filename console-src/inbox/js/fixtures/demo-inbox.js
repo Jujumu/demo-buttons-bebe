@@ -69,6 +69,10 @@ export const orders = {
           sku: null,
           quantity: 1,
           originalUnitPriceSet: moneyBag("24.00"),
+          image: {
+            url: "https://images.pexels.com/photos/129722/pexels-photo-129722.jpeg?auto=compress&cs=tinysrgb&h=200&w=200&fit=crop",
+            altText: "Oak Demo Rattle",
+          },
         },
       ],
     },
@@ -112,6 +116,10 @@ export const orders = {
           sku: null,
           quantity: 1,
           originalUnitPriceSet: moneyBag("32.00"),
+          image: {
+            url: "https://images.pexels.com/photos/38702945/pexels-photo-38702945.jpeg?auto=compress&cs=tinysrgb&h=200&w=200&fit=crop",
+            altText: "Canvas Demo Visor",
+          },
         },
       ],
     },
@@ -145,6 +153,10 @@ export const orders = {
           sku: null,
           quantity: 1,
           originalUnitPriceSet: moneyBag("54.00"),
+          image: {
+            url: "https://images.pexels.com/photos/9448357/pexels-photo-9448357.jpeg?auto=compress&cs=tinysrgb&h=200&w=200&fit=crop",
+            altText: "Merino Demo Throw",
+          },
         },
       ],
     },

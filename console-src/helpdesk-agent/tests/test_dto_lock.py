@@ -58,6 +58,16 @@ class DtoLockTests(_ForceLiveHoles):
         self.assertNotIn("sku", line)
         self.assertNotIn("null", str(line).lower())
 
+    def test_line_item_image_url(self) -> None:
+        order = dispatch("helpdesk.get_order", {"shop": SAMPLE_SHOP, "orderId": ORDER_ADA})["order"]
+        line = order["lineItems"]["nodes"][0]
+        self.assertIn("image", line)
+        self.assertTrue(str(line["image"]["url"]).startswith("https://"))
+        hole = dispatch("helpdesk.get_order", {"shop": LIVE_HOLE_SHOP, "orderId": O_1002})["order"]
+        hole_line = hole["lineItems"]["nodes"][0]
+        self.assertIn("url", hole_line["image"])
+        self.assertTrue(str(hole_line["image"]["url"]).startswith("https://"))
+
     def test_missing_billing_is_no_billing(self) -> None:
         order = dispatch("helpdesk.get_order", {"shop": SAMPLE_SHOP, "orderId": ORDER_ADA})["order"]
         self.assertIsNone(order["billingAddress"])

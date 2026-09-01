@@ -308,6 +308,17 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 .lines { list-style: none; padding: 0; margin: 10px 0; font-size: 12px; }
 .line { padding: 6px 0; border-top: 1px solid var(--line); }
 .line:first-child { border-top: 0; }
+.line-row { display: flex; gap: 10px; align-items: flex-start; }
+.line-thumb {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  background: var(--ground);
+}
+.line-thumb-empty { display: block; }
+.line-copy { flex: 1; min-width: 0; }
 .line-title { font-weight: 500; }
 .line-sku { margin-top: 2px; }
 .line-meta { margin-top: 2px; color: var(--mute); }
