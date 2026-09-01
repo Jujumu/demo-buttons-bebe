@@ -35,6 +35,7 @@
  * @property {string | null} sku
  * @property {number} quantity
  * @property {MoneyBag} originalUnitPriceSet
+ * @property {{ url: string, altText?: string } | undefined} [image]
  */
 
 /**

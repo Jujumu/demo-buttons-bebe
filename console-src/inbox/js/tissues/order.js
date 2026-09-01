@@ -53,10 +53,20 @@ export function renderOrder(model, { open = true, addressesOpen = false, shipmen
     const skuRow = skuLabel
       ? `<p class="mono line-sku" data-sku="${esc(skuLabel)}">${esc(skuLabel)}</p>`
       : "";
+    const imageUrl = item.image?.url || "";
+    const imageAlt = item.image?.altText || item.title || "Product";
+    const thumb = imageUrl
+      ? `<img class="line-thumb" src="${esc(imageUrl)}" alt="${esc(imageAlt)}" loading="lazy" />`
+      : `<span class="line-thumb line-thumb-empty" aria-hidden="true"></span>`;
     return `<li class="line">
-      <p class="line-title">${esc(item.title)}</p>
-      ${skuRow}
-      <p class="line-meta">${esc(item.quantity)} · <span class="mono">${esc(formatMoney(item.originalUnitPriceSet, ""))}</span></p>
+      <div class="line-row">
+        ${thumb}
+        <div class="line-copy">
+          <p class="line-title">${esc(item.title)}</p>
+          ${skuRow}
+          <p class="line-meta">${esc(item.quantity)} · <span class="mono">${esc(formatMoney(item.originalUnitPriceSet, ""))}</span></p>
+        </div>
+      </div>
     </li>`;
   }).join("");
   const tracking = model.tracking;

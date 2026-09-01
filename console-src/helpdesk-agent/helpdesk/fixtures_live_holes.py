@@ -28,6 +28,10 @@ LINE = {
     "sku": None,
     "quantity": 1,
     "originalUnitPriceSet": {"shopMoney": USD},
+    "image": {
+        "url": "https://images.pexels.com/photos/9534298/pexels-photo-9534298.jpeg?auto=compress&cs=tinysrgb&h=200&w=200&fit=crop",
+        "altText": "Organic Cotton Baby Romper",
+    },
 }
 EMPTY_RETURNS = {"nodes": []}
 

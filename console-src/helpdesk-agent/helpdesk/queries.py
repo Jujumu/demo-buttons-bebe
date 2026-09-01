@@ -37,6 +37,7 @@ query HelpdeskOrder($id: ID!) {
         sku
         quantity
         originalUnitPriceSet { shopMoney { amount currencyCode } }
+        image { url altText }
       }
     }
     fulfillments { trackingInfo { number url company } }
