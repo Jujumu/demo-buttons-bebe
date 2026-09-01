@@ -7,7 +7,12 @@ from pathlib import Path
 from typing import Any
 
 from .errors import bad_request
-from .fixtures_intake import MAILBOX_ADDRESS, MAILBOX_DISPLAY, MAILBOX_FIXTURES
+from .fixtures_intake import (
+    FIXTURE_MESSAGE_IDS,
+    MAILBOX_ADDRESS,
+    MAILBOX_DISPLAY,
+    MAILBOX_FIXTURES,
+)
 from .intake import handle_ingest_email
 from . import tickets
 
@@ -263,6 +268,7 @@ def _ticket_row(payload: dict[str, Any]) -> dict[str, Any]:
 
 def handle_pull_mailbox(args: dict[str, Any]) -> dict[str, Any]:
     limit = _limit(args)
+    force = bool(args.get("force"))
     messages, source = load_messages(limit)
     ingested: list[dict[str, Any]] = []
     spam: list[dict[str, str]] = []
@@ -270,6 +276,14 @@ def handle_pull_mailbox(args: dict[str, Any]) -> dict[str, Any]:
     for message in messages:
         mid = message.get("message_id")
         if tickets.seen_message_id(mid):
+            skipped += 1
+            continue
+        if (
+            not force
+            and mid
+            and str(mid) in FIXTURE_MESSAGE_IDS
+            and tickets.seed_catalog_loaded()
+        ):
             skipped += 1
             continue
         from_value = message.get("from") or ""

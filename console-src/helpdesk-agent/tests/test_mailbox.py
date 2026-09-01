@@ -13,7 +13,7 @@ REPO = ROOT.parents[1]
 sys.path.insert(0, str(ROOT))
 
 from helpdesk.dispatch import WRITE_TOOLS, dispatch, invoke
-from helpdesk.fixtures_intake import ADA_TRACKING, PRIZE_SPAM
+from helpdesk.fixtures_intake import ADA_MESSAGE_ID, ADA_TRACKING, PRIZE_SPAM
 from helpdesk.fixtures_live_holes import C_UNFULFILLED, O_1001
 from helpdesk.mailbox import handle_pull_mailbox
 from helpdesk.mcp_server import handle_rpc
@@ -28,7 +28,7 @@ class MailboxPullTests(unittest.TestCase):
         os.environ.pop("AGENTMAIL_API_KEY", None)
 
     def test_pull_mailbox_ada_creates_one_ticket_joined_to_1001(self) -> None:
-        payload = dispatch(TOOL_PULL_MAILBOX, {"limit": 5})
+        payload = dispatch(TOOL_PULL_MAILBOX, {"limit": 5, "force": True})
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["source"], "fixture")
         ada = next(row for row in payload["ingested"] if row["customerName"] == "Ada")
@@ -46,7 +46,7 @@ class MailboxPullTests(unittest.TestCase):
         self.assertEqual(ticket["messages"][0]["name"], "Ada")
 
     def test_prize_is_spam_and_not_in_list_tickets(self) -> None:
-        payload = dispatch(TOOL_PULL_MAILBOX, {"limit": 5})
+        payload = dispatch(TOOL_PULL_MAILBOX, {"limit": 5, "force": True})
         self.assertTrue(any("prize" in row["subject"].lower() for row in payload["spam"]))
         self.assertTrue(any(row["from"] == PRIZE_SPAM["from"] for row in payload["spam"]))
         self.assertFalse(any("prize" in row["subject"].lower() for row in payload["ingested"]))
@@ -54,12 +54,12 @@ class MailboxPullTests(unittest.TestCase):
         self.assertFalse(any("prize" in f"{row['subject']} {row['snippet']}".lower() for row in listed))
 
     def test_second_pull_of_same_message_id_does_not_duplicate(self) -> None:
-        first = dispatch(TOOL_PULL_MAILBOX, {"limit": 5})
+        first = dispatch(TOOL_PULL_MAILBOX, {"limit": 5, "force": True})
         ids = [row["id"] for row in first["ingested"]]
         self.assertEqual(len(ids), len(set(ids)))
         self.assertEqual(len(first["ingested"]), 4)
         self.assertEqual(first["skipped"], 0)
-        second = dispatch(TOOL_PULL_MAILBOX, {"limit": 5})
+        second = dispatch(TOOL_PULL_MAILBOX, {"limit": 5, "force": True})
         self.assertEqual(second["ingested"], [])
         self.assertEqual(second["spam"], [])
         self.assertEqual(second["skipped"], 5)
@@ -123,12 +123,43 @@ class MailboxPullTests(unittest.TestCase):
         self.assertIn(TOOL_PULL_MAILBOX, names)
 
     def test_unjoined_fixtures_stay_gid_null(self) -> None:
-        payload = dispatch(TOOL_PULL_MAILBOX, {"limit": 5})
+        payload = dispatch(TOOL_PULL_MAILBOX, {"limit": 5, "force": True})
         by_name = {row["customerName"]: row for row in payload["ingested"]}
         for name in ("Sam", "Priya", "Jordan"):
             self.assertIsNone(by_name[name]["customerId"], name)
             self.assertIsNone(by_name[name]["orderId"], name)
             self.assertEqual(by_name[name]["status"], "open")
+
+    def test_pull_without_force_skips_fixture_scenarios_when_seeds_loaded(self) -> None:
+        payload = dispatch(TOOL_PULL_MAILBOX, {"limit": 5})
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["ingested"], [])
+        self.assertEqual(payload["spam"], [])
+        self.assertEqual(payload["skipped"], 5)
+        listed = dispatch("helpdesk.list_tickets", {"view": "all", "limit": 100})["tickets"]
+        self.assertEqual(len(listed), 35)
+        self.assertFalse(any(row["id"].startswith("t-in-") for row in listed))
+
+    def test_persisted_seen_survives_reset(self) -> None:
+        seen_path = ROOT / "tests" / "tmp_seen_messages.json"
+        seen_path.parent.mkdir(parents=True, exist_ok=True)
+        if seen_path.is_file():
+            seen_path.unlink()
+        os.environ["HELPDESK_SEEN_FILE"] = str(seen_path)
+        try:
+            first = dispatch(TOOL_PULL_MAILBOX, {"limit": 5, "force": True})
+            self.assertEqual(len(first["ingested"]), 4)
+            reset_tickets()
+            second = dispatch(TOOL_PULL_MAILBOX, {"limit": 5, "force": True})
+            self.assertEqual(second["ingested"], [])
+            self.assertEqual(second["skipped"], 5)
+            listed = dispatch("helpdesk.list_tickets", {"view": "all", "limit": 100})["tickets"]
+            self.assertEqual(len(listed), 35)
+            self.assertFalse(any(row["id"].startswith("t-in-") for row in listed))
+            self.assertIn(ADA_MESSAGE_ID, seen_path.read_text(encoding="utf-8"))
+        finally:
+            os.environ.pop("HELPDESK_SEEN_FILE", None)
+            seen_path.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

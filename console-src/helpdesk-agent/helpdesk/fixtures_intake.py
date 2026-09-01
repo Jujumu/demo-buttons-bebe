@@ -84,3 +84,13 @@ MAILBOX_FIXTURES = (
     _mailbox_item(JORDAN_MESSAGE_ID, JORDAN_WRONG),
     _mailbox_item(PRIZE_MESSAGE_ID, PRIZE_SPAM),
 )
+
+FIXTURE_MESSAGE_IDS = frozenset(
+    {
+        ADA_MESSAGE_ID,
+        SAM_MESSAGE_ID,
+        PRIYA_MESSAGE_ID,
+        JORDAN_MESSAGE_ID,
+        PRIZE_MESSAGE_ID,
+    }
+)

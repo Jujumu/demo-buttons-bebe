@@ -32,6 +32,10 @@ def _load_dotenv(path: Path) -> None:
 
 _load_dotenv(REPO / ".env")
 os.environ.setdefault("SHOPIFY_MUTATIONS_ENABLED", "0")
+os.environ.setdefault(
+    "HELPDESK_SEEN_FILE",
+    str(REPO / "console-src" / "inbox" / "data" / "seen_messages.json"),
+)
 
 from helpdesk.http import handle_http  # noqa: E402
 

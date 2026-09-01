@@ -216,6 +216,12 @@ test("no Edit, Refund, Cancel controls and no Gaia", async () => {
   assert.doesNotMatch(tree, /\bdata-edit\b/);
 });
 
+test("boot only pulls mailbox when ?pull=1", () => {
+  const boot = readFileSync(join(here, "../js/boot.js"), "utf8");
+  assert.match(boot, /params\.get\("pull"\)\s*===\s*"1"/);
+  assert.doesNotMatch(boot, /await organ\.pullMailbox\(\{ limit:[^}]+\}\);\s*organ\.mount/);
+});
+
 test("one rail tissue error leaves thread and other rail sections up", async () => {
   const shop = createFixtureShop({ fail: { returns: "fixture returns down" } });
   const organ = createInboxOrgan({ shop, viewId: "mine" });
