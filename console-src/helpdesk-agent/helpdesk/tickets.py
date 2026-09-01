@@ -8,6 +8,9 @@ Spam never becomes a ticket and never appears in list_tickets.
 from __future__ import annotations
 
 import copy
+import json
+import os
+from pathlib import Path
 
 from .errors import bad_request, not_found
 from .fixtures_live_holes import (
@@ -180,6 +183,37 @@ _seen_messages: set[str] = set()
 _next_seq = 1
 
 
+def _seen_file() -> Path | None:
+    raw = os.environ.get("HELPDESK_SEEN_FILE", "").strip()
+    return Path(raw) if raw else None
+
+
+def _load_persisted_seen() -> None:
+    path = _seen_file()
+    if not path or not path.is_file():
+        return
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        return
+    if isinstance(data, list):
+        for item in data:
+            if item:
+                _seen_messages.add(str(item))
+
+
+def _persist_seen(message_id: str) -> None:
+    path = _seen_file()
+    if not path:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(sorted(_seen_messages)), encoding="utf-8")
+
+
+def seed_catalog_loaded() -> bool:
+    return len(_store) >= len(SEED_TICKETS)
+
+
 def reset() -> None:
     global _store, _intake, _by_dedupe, _seen_messages, _next_seq
     _store = [copy.deepcopy(row) for row in SEED_TICKETS]
@@ -187,20 +221,23 @@ def reset() -> None:
     _by_dedupe = {}
     _seen_messages = set()
     _next_seq = 1
-
-
-reset()
+    _load_persisted_seen()
 
 
 def remember_intake(record: dict) -> None:
     _intake.append(dict(record))
     message_id = record.get("messageId")
     if message_id:
-        _seen_messages.add(str(message_id))
+        mid = str(message_id)
+        _seen_messages.add(mid)
+        _persist_seen(mid)
 
 
 def seen_message_id(message_id: str | None) -> bool:
     return bool(message_id) and str(message_id) in _seen_messages
+
+
+reset()
 
 
 def intake_records() -> list[dict]:
