@@ -169,6 +169,64 @@ class ComposerTissueTests(unittest.TestCase):
         self.assertNotIn("gorgias", blob)
         self.assertNotIn("client_secret", blob)
 
+    def test_scenario_drafts_match_caduceus_tone(self) -> None:
+        """Six seeded demos get useful scenario language; no refund/cancel/send promises."""
+        cases = (
+            (
+                "t-demo-04-return",
+                ("Priya", "#1003", "merino throw", "prepaid label", "return portal"),
+            ),
+            (
+                "t-demo-05-cancel",
+                ("Eli", "#1001", "wrong size", "will not cancel", "teammate"),
+            ),
+            (
+                "t-demo-08-canada",
+                ("Luc", "Montreal", "Muslin Swaddle", "customs", "$35"),
+            ),
+            (
+                "t-demo-14-duplicate",
+                ("Drew", "#1001", "bank", "pending authorization", "will not refund"),
+            ),
+            (
+                "t-demo-18-exchange",
+                ("Taylor", "#1003", "Bath Towel Hood", "exchange", "will not issue a refund"),
+            ),
+            (
+                "t-demo-22-policy",
+                ("Reese", "7 days", "store credit", "Final-sale", "will not process a refund"),
+            ),
+        )
+        cancel_forbidden = (
+            "i cancelled",
+            "i refunded",
+            "i will cancel your",
+            "i will refund",
+            "cancel it for you",
+            "refund you",
+            "i sent",
+            "i have sent",
+        )
+        for ticket_id, keywords in cases:
+            with self.subTest(ticket_id=ticket_id):
+                payload = dispatch("helpdesk.draft_reply", {"ticketId": ticket_id, "shop": SAMPLE_SHOP})
+                self.assertTrue(payload["ok"], ticket_id)
+                self.assertEqual(payload["source"], "fixture")
+                draft = payload["draft"]
+                self.assertIsInstance(draft, str)
+                self.assertGreater(len(draft), 40)
+                lower = draft.lower()
+                for keyword in keywords:
+                    self.assertIn(keyword.lower(), lower, f"{ticket_id}: missing {keyword!r}")
+                for snippet in FORBIDDEN_DRAFT:
+                    self.assertNotIn(snippet, lower, f"{ticket_id}: forbidden {snippet!r}")
+                if ticket_id == "t-demo-05-cancel":
+                    self.assertIn("paid", lower)
+                    self.assertIn("unfulfilled", lower)
+                    for snippet in cancel_forbidden:
+                        self.assertNotIn(snippet, lower, f"cancel ticket: {snippet!r}")
+                    self.assertIn("i will not cancel or refund", lower)
+
 
 if __name__ == "__main__":
     unittest.main()
