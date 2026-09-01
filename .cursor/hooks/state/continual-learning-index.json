@@ -1,0 +1,41 @@
+{
+  "transcripts": {
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/0c61adf8-b660-41f8-94b3-92b79214420f/0c61adf8-b660-41f8-94b3-92b79214420f.jsonl": {
+      "lastProcessedAt": "2026-09-01T02:48:00Z",
+      "mtimeMs": 1788127421074.1853
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/18920665-760b-4fd1-8f39-1fe9694ef24b/18920665-760b-4fd1-8f39-1fe9694ef24b.jsonl": {
+      "lastProcessedAt": "2026-09-01T02:48:00Z",
+      "mtimeMs": 1788127816041.592
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/48ed0999-e360-4ed8-9968-47cad4f93c52/48ed0999-e360-4ed8-9968-47cad4f93c52.jsonl": {
+      "lastProcessedAt": "2026-09-01T02:48:00Z",
+      "mtimeMs": 1788209270316.7156
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/48ed0999-e360-4ed8-9968-47cad4f93c52/subagents/62bf2da5-1ca4-4ffa-922a-26793550340f.jsonl": {
+      "lastProcessedAt": "2026-09-01T02:48:00Z",
+      "mtimeMs": 1788201646994.7126
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/48ed0999-e360-4ed8-9968-47cad4f93c52/subagents/69ba7ec3-a6ca-4033-baa2-b5fdf53a2b90.jsonl": {
+      "lastProcessedAt": "2026-09-01T02:48:00Z",
+      "mtimeMs": 1788173664996.309
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/48ed0999-e360-4ed8-9968-47cad4f93c52/subagents/d33b2f1a-a5a1-4691-a69a-994238be31d2.jsonl": {
+      "lastProcessedAt": "2026-09-01T02:48:00Z",
+      "mtimeMs": 1788129650538.021
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/48ed0999-e360-4ed8-9968-47cad4f93c52/subagents/d6f46494-99e9-4cde-98fa-4065fb2cfc03.jsonl": {
+      "lastProcessedAt": "2026-09-01T02:48:00Z",
+      "mtimeMs": 1788209322700.3337
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/48ed0999-e360-4ed8-9968-47cad4f93c52/subagents/dd3b1f3c-3927-4260-8cd4-0eecfba38327.jsonl": {
+      "lastProcessedAt": "2026-09-01T02:48:00Z",
+      "mtimeMs": 1788161057722.2761
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/48ed0999-e360-4ed8-9968-47cad4f93c52/subagents/e6a2c1dd-a6dd-4430-9291-896b93fb64bc.jsonl": {
+      "lastProcessedAt": "2026-09-01T02:48:00Z",
+      "mtimeMs": 1788129672897.0999
+    }
+  },
+  "version": 1
+}

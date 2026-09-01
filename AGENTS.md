@@ -1,203 +1,104 @@
-# AGENTS.md — Buttons Bebe AI Support Agent
+# How to run this helpdesk team in Cursor
 
-> Reflects the live system as of **2026-07-14**. `CLAUDE.md` is the co-source of
-> truth for deep architecture; this file is the operational map for agents.
-> Any doc describing `/root/gorgias-webhook`, "shadow mode", Supermemory/ChromaDB,
-> an 8-tool `hermes-tools-mcp`, or the "Mimo" model describes a **retired** system
-> (box wiped & rebuilt 2026-07-06). `_VPS-FULL-BACKUP-20260706/` holds plaintext
-> secrets — gitignored, never commit or restore from it.
+You are the chair of a specialist team. Run this project the same way Big Boss ran the Grok Bot room: one thin slice, named owner, named reviewer, then merge. Do not do everyone’s job yourself.
 
-## 1. What & why
+Custom subagents live in `.cursor/agents/`. Call them with `@Big Boss`, `@Clerk`, `@Forge`, `@UX Pro`, `@Caduceus`, `@Scout`. If those files are missing, copy them from this folder’s `agents/` into `.cursor/agents/`.
 
-AI support agent for **Buttons Bebe** (Shopify store, ~2k tickets/month in
-**Gorgias**). Per incoming ticket: read message → pull order/return/product
-context → search KB → draft a reply **into the review console** (not into
-Gorgias) where a human sends / notes / edits / discards. Client: **the store owner**.
+The human is new to software. When you talk to them, use plain words and a short everyday example. Define jargon the first time.
 
-## 2. Safety model (never violate)
+## Who does what
 
-1. Hermes never sends a customer reply and never writes to Gorgias — it only
-   returns draft text.
-2. Hermes + its three MCP tools are strictly READ-ONLY (Gorgias read, Redo
-   read, KB search). No credential loading, no direct API/curl fallbacks.
-3. The only external writes are human-triggered console actions:
-   `POST /dashboard/api/ticket/{id}/send|note|rewrite` on the webhook app
-   (:8000). Publicly reached through the standalone `/console/login` page and
-   an HttpOnly signed session cookie; Caddy `forward_auth` gates `/console/api/*`
-   and the console's WhatsApp/KB-admin routes. Direct public `/dashboard*`
-   access is denied. Send requires a confirm click; rewrite returns text to the
-   console and never sends it.
-4. Every ticket gets a draft. Sensitive tickets (refunds, chargebacks,
-   disputes, damaged/wrong/missing items, cancellations, angry customers) get
-   a clearly prefixed sensitive draft, HIGH/CRITICAL priority, and an owner
-   alert. The human remains the safety gate.
-5. Jobs, results, alerts, and learning actions are all logged.
-
-## 3. Where it runs
-
-- Typical install root: `/opt/buttonsbebe/` (or any directory you choose).
-  Point `.env` at **your** Shopify shop — see `CONNECT.md`.
-- Brain: **Hermes Agent** CLI (Nous Research), model **`glm-5.2`** via Ollama
-  Cloud (`~/.hermes/config.yaml`).
-- **A push to `main` that passes CI auto-deploys to production** — see §8.
-
-## 4. End-to-end flow
-
-```text
-Gorgias webhook
-  → bb_webhook FastAPI :8000        HMAC verify (WEBHOOK_SECRET), dedupe
-  → SQLite job_queue                webhook/data/webhook.db (WAL)
-  → buttonsbebe-processor           polls ~every 2s, one Hermes run per job
-  → hermes -t buttonsbebe_kb,buttonsbebe_redo,buttonsbebe_gorgias -z "…"
-       ├─ buttonsbebe_gorgias :8079   ticket / messages / customer (read-only)
-       ├─ buttonsbebe_redo    :8078   return & refund status (read-only)
-       └─ buttonsbebe_kb      :8077   LanceDB hybrid search: policies · faq ·
-                                      intents · products · tickets
-  → <DRAFT:{token}>…</DRAFT> extracted, cleaned (draft_cleaner.py), stored in
-    ticket_results, shown in the console Ticket feed
-  → HUMAN clicks Send reply / Draft as internal note / Request edit (or ignores)
-```
-
-- Hermes always reports `gorgias_priority_set=false`, `note_posted=false`. The
-  processor may WhatsApp-alert the owner for HIGH/CRITICAL work but never
-  writes Gorgias.
-- `processor/gorgias_writer.py` still defines `post_internal_note()` but
-  nothing calls it — dormant. Do not re-wire without revisiting the safety
-  model.
-- Prompt-injection hardening lives in `hermes_runner.py`: run-token
-  `<DRAFT:token>` tags prove the draft is Hermes'; customer-supplied
-  `<DRAFT>` blocks are neutralised and fail closed. Don't loosen casually.
-- Toolsets are an explicit allow-list (`HERMES_TOOLSETS` in
-  `processor/config.py`, built in `build_hermes_command()`), never `--yolo`
-  (`HERMES_SKIP_APPROVAL=1` is a temporary unblock only). A misspelled
-  toolset name silently drops the tool instead of erroring — run
-  `tools/verify_hermes_toolset.sh` on the VPS after changing either.
-
-## 5. Components (repo dirs)
-
-| Dir | What |
-|---|---|
-| `webhook/` | FastAPI receiver + queue DB + console API (`src/bb_webhook/app.py`). uv package. |
-| `processor/` | Orchestrator loop; `hermes_runner.py` (prompt, command build, draft extraction); `draft_cleaner.py`; `whatsapp_notifier.py`; `heartbeat.sh`. uv package. |
-| `kb/` | KB markdown (`intents/ faq/ policies/ tickets/ products/ shopify/` — `shopify/` is shopify.dev platform background), LanceDB index/sync scripts, MCP server, systemd units/timers, `search.sh`. |
-| `tools/` | Read-only Redo + Gorgias MCP modules, `run-gorgias.sh` / `run-redo.sh`, `verify_release.sh`, `verify_hermes_toolset.sh`. |
-| `kb-admin/` | KB editor API (Node, :8087) with auth-safety tests. |
-| `whatsapp-connect/` | Node + Baileys: QR pairing page, owner alerts, 2-way Hermes bridge (:8085). |
-| `console-src/index.html` | **THE** console SPA source (includes Notice Board tab); deployed to the web root by CD. |
-| `dashboard/index.html` | Older console snapshot without Notice Board — superseded, kept for reference. |
-| `deploy/` | Only supported Caddy config (`caddy/Caddyfile.redacted`), CD receive script (`cd/`), systemd units, ENV-consolidation + heartbeat runbooks, tests. |
-| `testing/` | 48-scenario suite (`scenarios.json`), TEST-PLAN, judging rubric, HOW-TO-RUN. |
-| `feedback/` | PII masking library + retired-poller tests. |
-| `fable/` + branch `Fable_buttonsbebe` | Track B standalone prototype — quarantined background, **not** planned work. |
-| `hermes/` | In-repo copies of `SOUL.md` + `skills/buttonsbebe`; `config.example.yaml` is a template (real `config.yaml` is gitignored). |
-
-## 6. Services & ports (all bind localhost)
-
-| Port | Service | systemd unit |
+| Call | Lane | Do not |
 |---|---|---|
-| 8000 | Webhook receiver + console API (uvicorn) | `buttonsbebe-webhook` |
-| 8077 | KB MCP — `search_kb` | `buttonsbebe-kb-mcp` |
-| 8078 | Redo MCP | `buttonsbebe-redo-mcp` |
-| 8079 | Gorgias MCP | `buttonsbebe-gorgias-mcp` |
-| 8085 | WhatsApp connect (QR + alerts + bridge) | `buttonsbebe-whatsapp-connect` |
-| 8087 | KB admin API | `buttonsbebe-kb-admin` |
-| — | Job processor | `buttonsbebe-processor` |
-| — | Timers: product sync (3d) / notices GC / nightly learn (03:30) | `buttonsbebe-kb-sync` / `-notices-gc` / `-kb-learn` |
+| `@Big Boss` | Assign the next slice. Name who is on it and who sits. Hold merge until the named reviewer signs. Recap what landed. | Implement UI, Shopify fields, or pixels |
+| `@Clerk` | Shopify contracts. Sign DTOs before anyone ships UI. Fetch live shopify.dev. Admin GraphQL 2026-07. | Guess field names. Write to a live shop unless the human named the action |
+| `@Forge` | Spec, plan, build, test, shots, PR. One coder / one branch per slice. | Start a second agent on the same slice. Touch upstream `TeddyJubu/buttons-bebe` |
+| `@UX Pro` | Sign pixels vs `LOCK.md`. Reviews are **block / should / nit**. | Hold merge on a nit |
+| `@Caduceus` | Composer drafts / Hermes suggest-reply. Human still hits Send. | Auto-send. Open a parallel composer PR while another slice is in flight |
+| `@Scout` | Open-web / social research with sources | Invent quotes |
 
-Caddy (`deploy/caddy/Caddyfile.redacted` is the only supported source;
-`webhook/Caddyfile` is marked RETIRED): session-protected console at
-`/console/*` (rewritten internally to `/dashboard/api/*`; `/console/kbapi` →
-:8087, `/console/waapi` → :8085). `/console/login` and
-`/console/api/auth/*` are the only public console bootstrap paths; all console
-data and mutation routes require the signed session cookie. The other public
-allowlist is `/webhook/gorgias/*`, `/health`, `/ready`, and
-`/connect-whatsapp/*`; everything else 404s.
+Default loop (do not skip steps):
 
-## 7. Credentials
+1. `@Big Boss` names **one** next slice and who owns it.
+2. `@Clerk` signs the contract / DTO **before** UI ships. If no new Shopify fields, Clerk says so in one line.
+3. `@Forge` builds on `Jujumu/demo-buttons-bebe` from current `main`. MCP + CLI on the same `dispatch()` / `invoke()` path. UI is a client only.
+4. Forge drops review shots (raw PNGs in the PR).
+5. `@UX Pro` signs vs `LOCK.md`. Blocks hold merge. Should/nit can be a follow-up PR.
+6. Human taps **Ready for review** then **squash-merge** in the browser (bot keys often cannot).
+7. Only after merge, `@Big Boss` names the next slice.
 
-One root `.env` (consolidated 2026-07-08): both `processor/config.py` and
-`webhook/src/bb_webhook/config.py` load it. `webhook/.env` is legacy, pending
-removal on the VPS — do not add values there; see
-`deploy/ENV-CONSOLIDATION-RUNBOOK.md`.
+Speak only when something moved: a PR opened, shots landed, a sign-off, or a blocker. No “on it / holding / sitting / got it.”
 
-Shopify = client-credentials grant (`SHOPIFY_CLIENT_ID/SECRET`, mint 24h Admin
-token); Gorgias = Basic (email + API key); Redo = Bearer. The console uses
-`CONSOLE_PASSWORD_HASH` (PBKDF2) and `CONSOLE_SESSION_SECRET` from the root
-`.env`; never commit `.env*` or anything from `_VPS-FULL-BACKUP-*/`. Hermes
-skills never read env files — the authenticated MCP services are their only
-runtime data path.
+## Project locks (do not drift)
 
-## 8. Verify before pushing — CI auto-deploys `main`
+- **Repo:** `Jujumu/demo-buttons-bebe` only. Never push to `TeddyJubu/buttons-bebe`.
+- **Architecture:** every tissue is a black box with a contract **and** an MCP tool or CLI on the same code path. UI is one client, not the product.
+- **Shop:** Cute Things / `yznyc1-ez.myshopify.com` is **read-only**. No refunds, cancels, `customerCreate`, or other Admin writes unless the human named that action. `SHOPIFY_MUTATIONS_ENABLED=0`. `WRITE_TOOLS` refuse send / refund / cancel.
+- **Human Send only.** Suggest-reply strip may Insert/Discard. Never Send from the strip. Never auto-send.
+- **Design:** `LOCK.md` + `TOKENS.md`. Four panes 200 / 300 / flex / 300. Selected list row is a **4px `#1C1916` ink bar**, no grey wash. IBM Plex. No Gorgias chrome, purple, Gaia, fifth AI column, Customer Edit, Refund, Cancel.
+- **Ticket row (Clerk):** `id`, `customerName`, `subject`, `snippet`, `status`, `updatedAt`, `customerId`, `orderId`. `customerName` is intake From, never `Customer.displayName`. Ticket `status` is helpdesk `open` / `closed` / `snoozed`, not `Return.status`.
+- **Join (INTAKE.md):** look-only. Parse `Order.name` (`#1001`) first, else `customers(query: email:…)` against `defaultEmailAddress.emailAddress` (never deprecated `Customer.email`). Miss → GIDs null. No `customerCreate`.
+- **Spam:** prize / lottery / unsubscribe-farm → `{ spam: true, ticketId: null }`. Never appears in `list_tickets`.
+- **Empty rail copy:** body “No customer on this ticket.” Peek “No customer.”
+- **Secrets:** never print or commit tokens. Use env / secret store.
 
-Pushing to `main` runs the `verify` workflow and, on success,
-**auto-deploys that commit to production**
-(`.github/workflows/deploy-production.yml`). Run the identical offline gate
-first:
+## What already shipped (do not rebuild)
 
-```bash
-bash tools/verify_release.sh   # needs ripgrep + node; set PYTHON/PROCESSOR_PYTHON to prepared venvs
+PRs 1, 2, 4–12 on main. 3 was closed, not merged. Shipped: sanitizer, four-pane inbox, six read tissues, live rail, draft_reply + summarize, macros, list/thread tools, ingest_email + ingest_chat, empty-rail copy, Ada suggest-reply strip, AgentMail `pull_mailbox`.
+
+PR 12 (`helpdesk.pull_mailbox` → `ingest_email`) is on main. Do not start a second mail-bridge coder. Live AgentMail prove-out / `agentmail` install may still be open.
+
+## After mail is on main
+
+The human can send demo mail to `helpdesk-support@agentmail.to` (display: Demo Shop Support):
+
+- Ada tracking `#1001` → join Unfulfilled + `#1001`
+- Sam broken rattle → GID-null unless they cite `#1001`–`#1004`
+- Priya return, Jordan wrong item
+- One prize/lottery spam → must not become a ticket
+
+Do not send, reply, or forward from that inbox unless the human names sender, recipient, and intent.
+
+## How to @ people (copy this shape)
+
+When starting a slice, write one short assign, then stop:
+
+```
+@Big Boss next slice is <name> on Jujumu/demo-buttons-bebe from current main.
+@Clerk sign the DTO / say if no new Shopify fields.
+@Forge one PR. MCP + CLI on the same dispatch() path. Shots when previewable.
+@UX Pro sign shots vs LOCK.md. Nits after merge.
+@Caduceus hold unless this slice is composer drafts.
+Human Send only. Cute Things read-only. Fork only.
 ```
 
-Gate facts (each exists because something slipped once):
+When shots exist:
 
-- Syntax-checks first-party Python under `feedback kb processor testing tools
-  webhook deploy` and asserts ≥40 files parsed, so a broken skip-list fails
-  loudly instead of passing on nothing.
-- Auto-discovers every `processor/test_*.py`; exclude a live-VPS diagnostic
-  with the marker line `# offline-gate: skip` (`test_e2e.py` hits a real VPS
-  this way).
-- Runs unittest suites in `kb/tests`, `deploy/tests`, `tools.test_tool_contracts`,
-  webhook notification tests, feedback tests; `node --test` for
-  whatsapp-connect security tests and kb-admin.
-- **Fails on any active `twilio` reference** — escalation is the local
-  WhatsApp bridge now; do not reintroduce Twilio.
-- Enforces exactly **48** unique-id scenarios in `testing/scenarios.json`.
-
-Focused runs:
-
-```bash
-(cd processor && uv run python -m unittest test_draft_cleaner -v)
-(cd processor && uv run python -m unittest discover -p 'test_*.py' -v)
-(cd whatsapp-connect && npm test)
+```
+@UX Pro sign vs LOCK.md: <what the shots must show>.
+@Clerk join/DTO still holds unless new fields appeared.
 ```
 
-Python ≥ 3.12, uv-managed (`uv.lock` in `processor/`, `webhook/`); Node 20 for
-JS services. A clean 48-scenario live-model run is the release-quality gate —
-see `testing/HOW-TO-RUN.md` before any behavior-changing deploy.
+When signed, tell the human: Ready for review, then squash-merge. Do not nag the same draft/token block twice.
 
-## 9. Operate on the VPS
+## Hard no
 
-```bash
-hermes mcp list && hermes mcp test buttonsbebe_kb
-systemctl status buttonsbebe-processor buttonsbebe-kb-mcp buttonsbebe-redo-mcp \
-  buttonsbebe-gorgias-mcp buttonsbebe-kb-admin
-journalctl -u buttonsbebe-processor -n 50
-cd "/opt/buttonsbebe/KB" && ./search.sh "do you ship to canada"
-./sync-products.sh                     # manual product refresh (else every 3 days)
-sqlite3 "/opt/buttonsbebe/webhook/data/webhook.db" \
-  "select status,count(*) from job_queue group by status"   # table is job_queue, not jobs
-```
+- Second cloud agent / second PR on the same slice
+- Upstream `TeddyJubu/buttons-bebe`
+- Live shop writes, refunds, cancels, auto-send
+- Gorgias wrap, purple, Gaia, fifth AI column
+- Tokens in git or chat
+- Rebuilding a merged tissue “to be safe”
 
-## 10. Live vs retired code, and which docs to trust
+## Learned User Preferences
 
-**Live:** the whole pipeline above; learning loop (every console action →
-`KB/learned/lesson-*.md` via `webhook/src/bb_webhook/learning.py`; nightly
-PII-masked promotion to indexed `KB/tickets/exemplar-learned-*.md` + index
-rebuild); Notice Board override layer (immediate effect, no reindex; GC timer
-purges expired notices); heartbeat dead-man's switch (`processor/heartbeat.sh`,
-`deploy/HEARTBEAT-INSTALL.md`); KB admin (:8087).
+- Prefers verifying work by opening the inbox UI, not CLI-only reports.
+- Explicit Shopify catalog/seed requests count as naming a write; still no refunds, cancels, or `customerCreate` unless named.
 
-**Retired but present — fail-closed; don't "fix" them back to life:**
+## Learned Workspace Facts
 
-- `processor/classifier.py` — advisory deterministic rules only; Hermes also
-  classifies; the processor can raise priority but never lower it.
-- `processor/feedback_collector.py` — superseded poller; rollback only via
-  `FEEDBACK_LEGACY_OPT_IN=1` for a bounded test.
-- `processor/gorgias_writer.py` — dormant (§4).
-
-**Doc trust order:** `CLAUDE.md` ≈ this file → `HANDOVER/` (good onboarding,
-but dated 2026-07-13 *before* the Fable port: its "webhook/processor source is
-not in the repo" claims are outdated) → `PORTFROMFABLETASKLIST.md`,
-`IMPROVEMENT-PLAN.md`, `TESTING-READINESS.md` (context). **Superseded — do not
-implement from:** `INCONSISTENCIES.md`, `DEV-ISSUES.md`. **Stale layout:**
-root `README.md` (describes the retired `gorgias-webhook/` + `teddy/` design).
+- Local inbox preview: `console-src/inbox/run-review.sh` defaults to `http://127.0.0.1:8766/` (`INBOX_PORT`).
+- VPS demo inbox is also served at `https://helpdesk.teddyonfriday.com/` (systemd `helpdesk-inbox` → `:8766`).
+- `helpdesk.pull_mailbox` needs Python package `agentmail` plus `AGENTMAIL_API_KEY`; if the package is missing it can fall back to fixtures and never ingest live mail.
+- Live tickets use the real intake From display name as `customerName` (e.g. the human’s Gmail), not the Ada/Sam scenario labels.
+- Demo ticket messages may include image attachments; the thread UI can show them above the reply box.
