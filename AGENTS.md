@@ -94,6 +94,8 @@ When signed, tell the human: Ready for review, then squash-merge. Do not nag the
 
 - Prefers verifying work by opening the inbox UI, not CLI-only reports.
 - Explicit Shopify catalog/seed requests count as naming a write; still no refunds, cancels, or `customerCreate` unless named.
+- Prefers kid-simple architecture explanations using the organ/tissue analogy; use Excalidraw or the click-to-enter 3D sim when drawing it.
+- Prefers Surge (`*.surge.sh`) for quick public static hosting; do not use Cloudflare tunnels for that.
 
 ## Learned Workspace Facts
 
@@ -102,3 +104,8 @@ When signed, tell the human: Ready for review, then squash-merge. Do not nag the
 - `helpdesk.pull_mailbox` needs Python package `agentmail` plus `AGENTMAIL_API_KEY`; if the package is missing it can fall back to fixtures and never ingest live mail.
 - Live tickets use the real intake From display name as `customerName` (e.g. the human’s Gmail), not the Ada/Sam scenario labels.
 - Demo ticket messages may include image attachments; the thread UI can show them above the reply box.
+- Order rail line items show 48×48 product thumbnails from Shopify `lineItems.image.url` (PR 13).
+- Demo inbox baseline is 35 seed tickets; normal boot does not auto-pull mail — use `?pull=1` (optional `force=1` for fixtures).
+- Cross-boot AgentMail dedupe persists seen message ids in `console-src/inbox/data/seen_messages.json`.
+- Organ/tissue architecture: Excalidraw at `docs/tissues/organ-tissue.excalidraw`; interactive 3D sim at `docs/tissues/architecture-3d-sim.html`.
+- Surge CLI is installed globally on this VPS (`surge` on PATH); publish a folder that contains `index.html`.
