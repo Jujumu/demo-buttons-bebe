@@ -21,6 +21,8 @@
       position: absolute; z-index: 4; pointer-events: none;
       top: 18px; left: 18px; width: min(380px, calc(100vw - 36px));
     }
+    .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; pointer-events: auto; }
+    .toolbar button.is-on { background: var(--ink); color: var(--paper); }
     .card {
       pointer-events: auto;
       background: rgba(255, 253, 249, 0.94);
@@ -30,6 +32,7 @@
       box-shadow: 0 16px 40px rgba(28, 25, 22, 0.12);
       backdrop-filter: blur(10px);
     }
+    .card.is-off { display: none; }
     .crumb { font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: #78716c; margin-bottom: 6px; }
     h1 { font-size: 20px; line-height: 1.2; margin-bottom: 6px; }
     .lede { font-size: 14px; line-height: 1.45; color: #44403c; }
@@ -41,7 +44,7 @@
     .wire-key { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
     .wire-key span { display: flex; align-items: center; gap: 8px; }
     .wire-ico { width: 34px; height: 10px; flex-shrink: 0; }
-    .row { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+    .row { display: none; }
     button {
       pointer-events: auto;
       border: 1.5px solid var(--ink);
@@ -76,15 +79,16 @@
 <body>
   <div id="canvas-host"></div>
   <div class="hud">
-    <div class="card">
+    <div class="toolbar">
+      <button id="btn-info" aria-pressed="false">Info</button>
+      <button id="btn-back" disabled>← Back out</button>
+      <button id="btn-reset">Reset camera</button>
+    </div>
+    <div class="card is-off" id="info-card">
       <div class="crumb" id="crumb">Whole body</div>
       <h1 id="title">Click an organ to walk inside</h1>
       <p class="lede" id="lede">Big blocks are organs. Little parts inside are tissues — each one has a single job.</p>
       <div class="meta" id="meta"></div>
-      <div class="row">
-        <button id="btn-back" disabled>← Back out</button>
-        <button id="btn-reset">Reset camera</button>
-      </div>
     </div>
   </div>
   <div id="hint">Drag to look around · scroll to zoom · click a shape</div>

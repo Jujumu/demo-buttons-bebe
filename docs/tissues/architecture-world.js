@@ -33,6 +33,7 @@ const WIRE_LEGEND = `
       </svg>
       Single wire, arrow one way = push only
     </span>
+    <span>This drawing is the demo helpdesk only — not Gorgias / Redo / KB.</span>
   </div>`;
 
 const ORGANS = [
@@ -40,17 +41,17 @@ const ORGANS = [
     id: "mail",
     name: "Customer mail",
     form: "mail",
-    kid: "Someone writes in. That letter starts the whole story.",
+    kid: "A letter lands in the demo mailbox. Helpdesk intake turns it into a ticket — the inbox only reads after that.",
     color: 0xf9a8b4,
     pos: [-16, 1.5, 0],
     size: [3.6, 3.0, 2.6],
     tissues: [
       {
-        name: "Email",
+        name: "Inbound letter",
         shape: "mail",
-        kid: "A customer asks a question. Prize / lottery junk is thrown away and never becomes a ticket.",
-        inn: "{ from, subject, body }",
-        out: "a ticket — or spam: true",
+        kid: "AgentMail unread mail. pull_mailbox maps it onto ingest_email. Prize / lottery junk never becomes a ticket.",
+        inn: "AgentMail message",
+        out: "helpdesk.ingest_email — not the inbox pane",
       },
     ],
   },
@@ -114,7 +115,7 @@ const ORGANS = [
       { name: "get_ticket", shape: "chat", kid: "Opens one conversation: messages plus status events.", inn: "{ ticketId }", out: "ticket + messages + statusEvents" },
       { name: "get_customer", shape: "person", kid: "Looks up the shopper. Email is defaultEmailAddress — never the old Customer.email field.", inn: "{ shop, customerId }", out: "ClerkCustomer" },
       { name: "get_order", shape: "package", kid: "Looks up this order: money, line items, tracking. Look only.", inn: "{ shop, orderId }", out: "ClerkOrder" },
-      { name: "get_returns", shape: "loop", kid: "Looks up returns. “Open” here means Return.status OPEN — not the ticket status.", inn: "{ shop, orderId }", out: "returns payload" },
+      { name: "get_returns", shape: "loop", kid: "Looks up returns on Shopify. “Open” means Return.status OPEN — not ticket status. Not Redo.", inn: "{ shop, orderId }", out: "returns payload" },
       { name: "list_past_orders", shape: "package", kid: "Older orders, newest first. Peeking one does not replace This order.", inn: "{ shop, customerId }", out: "order-history rows" },
       { name: "draft_reply", shape: "pen", kid: "Writes a suggested reply. You Insert or Discard. It never hits Send.", inn: "{ ticketId, shop? }", out: "{ draft }" },
       { name: "summarize_thread", shape: "chat", kid: "A quiet peek at what the thread is about. Not a reply.", inn: "{ ticketId }", out: "{ summary }" },
@@ -127,28 +128,26 @@ const ORGANS = [
   },
   {
     id: "look",
-    name: "Look-only books",
+    name: "Shopify (look-only)",
     form: "books",
-    kid: "Three books the helper may peek in. Locks on: no refunds, no cancels, no new customers.",
+    kid: "The only shop book in this demo. Returns, orders, and customers come from Shopify Admin — not Redo, not a KB.",
     color: 0xeab308,
     pos: [13.4, 1.7, 0],
     size: [4.2, 3.4, 3.0],
     tissues: [
-      { name: "Shopify", shape: "bag", kid: "The order book. Admin GraphQL, read-only. SHOPIFY_MUTATIONS_ENABLED stays 0.", inn: "customer / order GIDs", out: "Clerk customer, order, history" },
-      { name: "Redo", shape: "loop", kid: "The returns book. Look only.", inn: "order GID", out: "returns.nodes[].status" },
-      { name: "KB", shape: "book", kid: "The answer book: FAQ, policies, past tickets, product facts.", inn: "a search question", out: "grounded snippets" },
+      { name: "Shopify", shape: "bag", kid: "Admin GraphQL 2026-07, read-only. SHOPIFY_MUTATIONS_ENABLED stays 0. get_customer / get_order / get_returns / list_past_orders all read here (or fixtures).", inn: "customer / order GIDs", out: "Clerk customer, order, returns, history" },
     ],
   },
   {
     id: "send",
     name: "Human send gate",
     form: "gate",
-    kid: "The safety door. A helper may write. Only a person may send.",
+    kid: "Composer safety door. Send writes onto the local thread. This demo does not email the customer back.",
     color: 0xf87171,
-    pos: [3.2, 1.7, 11],
+    pos: [-7.5, 1.6, 10],
     size: [4.8, 3.4, 3.0],
     tissues: [
-      { name: "Send", shape: "gate", kid: "Public reply to the customer. Needs a human click. Never from the AI strip.", inn: "text in the composer", out: "a real message — human only" },
+      { name: "Send", shape: "gate", kid: "A human click in the composer. Appends a message on this ticket in the inbox. There is no helpdesk.send and no AgentMail outbound.", inn: "text in the composer", out: "local thread row — not a real email" },
       { name: "Insert / Discard", shape: "pen", kid: "What the draft strip may do. It fills or clears the box. It does not send.", inn: "{ draft }", out: "composer body, still unsent" },
     ],
   },
@@ -163,7 +162,7 @@ const RAIL = {
   tissues: [
     { name: "Customer", shape: "person", kid: "Who wrote in. Empty copy: “No customer on this ticket.” No Edit button.", inn: "{ shop, customerId }", out: "name, email, orders, spend" },
     { name: "This order", shape: "package", kid: "The order on this ticket, with little product pictures. Clicking past orders does not replace it.", inn: "{ shop, orderId }", out: "name, paid/fulfilled, line items, tracking" },
-    { name: "Returns", shape: "loop", kid: "Open only if this ticket really has an OPEN return. No refund / cancel controls.", inn: "{ shop, orderId }", out: "Return.status" },
+    { name: "Returns", shape: "loop", kid: "Shopify Return.status on this order. Open only if THIS ticket has an OPEN return. No Redo. No refund / cancel.", inn: "{ shop, orderId }", out: "Return.status" },
     { name: "Past orders", shape: "package", kid: "A peek list. Starts collapsed. Does not swap out This order.", inn: "{ shop, customerId }", out: "newest-first rows" },
   ],
 };
@@ -807,15 +806,22 @@ for (const organ of ORGANS) {
 }
 
 const byId = Object.fromEntries(ORGANS.map((o) => [o.id, o]));
-addSimplexWire(byId.mail, byId.inbox, 0x3b82f6);
+// Demo path only: mailbox → helpdesk intake (not into the inbox pane).
+addSimplexWire(byId.mail, byId.helpdesk, 0x3b82f6, {
+  lift: 4.6,
+  side: 2.4,
+  fromAxis: new THREE.Vector3(1, 0.15, 0.35),
+  toAxis: new THREE.Vector3(-1, 0.1, 0.2),
+});
+// Inbox is a client: ask / answer on the same dispatch() path.
 addDuplexWire(byId.inbox, byId.helpdesk, 0xf97316);
+// Shop reads: Shopify Admin (or fixtures). No Redo. No KB.
 addDuplexWire(byId.helpdesk, byId.look, 0xca8a04);
-addSimplexWire(byId.helpdesk, byId.send, 0xdc2626);
-addSimplexWire(byId.send, byId.mail, 0xf43f5e, {
+// Human Send lives in the composer. It stops here — local thread only.
+addSimplexWire(byId.inbox, byId.send, 0xdc2626, {
   fromAxis: new THREE.Vector3(0, 0, 1),
   toAxis: new THREE.Vector3(0, 0, -1),
-  lift: 3.4,
-  side: -2.4,
+  lift: 1.4,
 });
 
 const stack = [];
@@ -831,7 +837,7 @@ function showWorld() {
   setCard(
     "Whole body",
     "Click an organ to walk inside",
-    "Each organ is a LEGO house. The sign on the roof tells you which one it is.",
+    "Mail goes into helpdesk intake. The inbox only asks and answers. Send stays in the composer — it does not email out.",
     WIRE_LEGEND
   );
   backBtn.disabled = true;
@@ -870,6 +876,349 @@ function clearDetail() {
   }
 }
 
+function roundCanvasRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function drawInboxWireframe() {
+  const W = 1920;
+  const H = 1080;
+  const c = document.createElement("canvas");
+  c.width = W;
+  c.height = H;
+  const ctx = c.getContext("2d");
+  const ink = "#1C1916";
+  const paper = "#FFFDF9";
+  const ground = "#F4F0EA";
+  const mute = "#5C564F";
+  const line = "rgba(28,25,22,0.14)";
+  ctx.fillStyle = ground;
+  ctx.fillRect(0, 0, W, H);
+  const viewW = 274;
+  const listW = 411;
+  const railW = 411;
+  const threadW = W - viewW - listW - railW;
+  const xs = [0, viewW, viewW + listW, viewW + listW + threadW];
+  const ws = [viewW, listW, threadW, railW];
+  const titles = ["View", "List", "Thread + composer", "Rail"];
+
+  for (let i = 0; i < 4; i++) {
+    ctx.fillStyle = paper;
+    ctx.fillRect(xs[i], 0, ws[i], H);
+    ctx.strokeStyle = line;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(xs[i] + 0.5, 0);
+    ctx.lineTo(xs[i] + 0.5, H);
+    ctx.stroke();
+    ctx.fillStyle = mute;
+    ctx.font = "600 22px Arial";
+    ctx.fillText(titles[i], xs[i] + 22, 42);
+  }
+
+  // View list
+  const views = ["Assigned to me", "Unassigned", "All", "Snoozed", "Closed"];
+  views.forEach((name, i) => {
+    const y = 78 + i * 56;
+    if (i === 2) {
+      ctx.fillStyle = ink;
+      ctx.fillRect(xs[0], y - 18, 8, 44);
+      ctx.font = "600 26px Arial";
+    } else {
+      ctx.fillStyle = mute;
+      ctx.font = "400 26px Arial";
+    }
+    ctx.fillText(name, xs[0] + 28, y + 12);
+  });
+
+  // Ticket rows
+  const rows = [
+    ["Ada Demo", "Where is order #1001?"],
+    ["Sam", "Broken rattle"],
+    ["Priya", "Start a return"],
+  ];
+  rows.forEach((row, i) => {
+    const y = 78 + i * 92;
+    if (i === 0) {
+      ctx.fillStyle = ink;
+      ctx.fillRect(xs[1], y - 8, 8, 72);
+    }
+    ctx.fillStyle = ink;
+    ctx.font = "600 26px Arial";
+    ctx.fillText(row[0], xs[1] + 28, y + 18);
+    ctx.fillStyle = mute;
+    ctx.font = "400 22px Arial";
+    ctx.fillText(row[1], xs[1] + 28, y + 48);
+    ctx.strokeStyle = line;
+    ctx.beginPath();
+    ctx.moveTo(xs[1] + 16, y + 72);
+    ctx.lineTo(xs[1] + ws[1] - 16, y + 72);
+    ctx.stroke();
+  });
+
+  // Thread bubbles
+  const tx = xs[2] + 28;
+  roundCanvasRect(ctx, tx, 78, 420, 88, 12);
+  ctx.fillStyle = "#efe8de";
+  ctx.fill();
+  ctx.fillStyle = ink;
+  ctx.font = "400 22px Arial";
+  ctx.fillText("Hi — any update on #1001?", tx + 18, 128);
+  roundCanvasRect(ctx, tx + 80, 188, 460, 72, 12);
+  ctx.fillStyle = "#e8f0e6";
+  ctx.fill();
+  ctx.fillStyle = mute;
+  ctx.font = "400 20px Arial";
+  ctx.fillText("Closed · Tuesday", tx + 98, 232);
+
+  // Draft strip
+  roundCanvasRect(ctx, tx, 290, threadW - 56, 86, 10);
+  ctx.strokeStyle = line;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = mute;
+  ctx.font = "600 18px Arial";
+  ctx.fillText("Suggested draft  ·  Insert   Discard", tx + 16, 324);
+  ctx.font = "400 20px Arial";
+  ctx.fillStyle = ink;
+  ctx.fillText("Hi Ada — #1001 is still packing.", tx + 16, 356);
+
+  // Composer box
+  roundCanvasRect(ctx, tx, 400, threadW - 56, 280, 12);
+  ctx.strokeStyle = ink;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = mute;
+  ctx.font = "400 18px Arial";
+  ctx.fillText("To  Ada Demo", tx + 16, 432);
+  ctx.fillStyle = "#d6d3d1";
+  ctx.fillRect(tx + 16, 452, threadW - 88, 140);
+  ctx.fillStyle = mute;
+  ctx.font = "400 20px Arial";
+  ctx.fillText("Type a reply…", tx + 28, 490);
+
+  roundCanvasRect(ctx, tx + 16, 612, 140, 48, 6);
+  ctx.fillStyle = ink;
+  ctx.fill();
+  ctx.fillStyle = paper;
+  ctx.font = "600 22px Arial";
+  ctx.fillText("Send", tx + 56, 644);
+  roundCanvasRect(ctx, tx + 170, 612, 180, 48, 6);
+  ctx.strokeStyle = ink;
+  ctx.stroke();
+  ctx.fillStyle = ink;
+  ctx.font = "600 20px Arial";
+  ctx.fillText("Send & close", tx + 188, 644);
+
+  // Rail cards
+  const cards = ["Customer", "This order", "Returns", "Past orders"];
+  const peeks = ["Ada Demo", "#1001 · Paid", "No returns", "3 orders"];
+  cards.forEach((name, i) => {
+    const y = 78 + i * 230;
+    roundCanvasRect(ctx, xs[3] + 22, y, railW - 44, 210, 10);
+    ctx.strokeStyle = line;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = ink;
+    ctx.font = "600 26px Arial";
+    ctx.fillText(name, xs[3] + 40, y + 44);
+    ctx.fillStyle = mute;
+    ctx.font = "400 22px Arial";
+    ctx.fillText(peeks[i], xs[3] + 40, y + 84);
+  });
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  return { tex, xs, ws, W, H };
+}
+
+function drawRailWireframe() {
+  const W = 900;
+  const H = 1080;
+  const c = document.createElement("canvas");
+  c.width = W;
+  c.height = H;
+  const ctx = c.getContext("2d");
+  ctx.fillStyle = "#F4F0EA";
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "#FFFDF9";
+  ctx.fillRect(24, 24, W - 48, H - 48);
+  ctx.fillStyle = "#5C564F";
+  ctx.font = "600 22px Arial";
+  ctx.fillText("Rail", 48, 64);
+  const cards = [
+    ["Customer", "Who wrote in"],
+    ["This order", "The order on this ticket"],
+    ["Returns", "Open only if THIS ticket has OPEN"],
+    ["Past orders", "Peek — does not replace This order"],
+  ];
+  cards.forEach((row, i) => {
+    const y = 100 + i * 230;
+    roundCanvasRect(ctx, 48, y, W - 96, 200, 10);
+    ctx.strokeStyle = "rgba(28,25,22,0.16)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = "#1C1916";
+    ctx.font = "600 32px Arial";
+    ctx.fillText(row[0], 72, y + 56);
+    ctx.fillStyle = "#5C564F";
+    ctx.font = "400 24px Arial";
+    ctx.fillText(row[1], 72, y + 100);
+  });
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+function addBillboardFrame(group, w, h) {
+  const bezel = new THREE.Mesh(
+    new THREE.BoxGeometry(w + 0.28, h + 0.28, 0.16),
+    legoMat(0x1c1916)
+  );
+  bezel.position.z = -0.1;
+  group.add(bezel);
+  const postL = new THREE.Mesh(new THREE.BoxGeometry(0.18, h * 0.55, 0.18), legoMat(0x44403c));
+  postL.position.set(-w * 0.42, -h * 0.28, -0.28);
+  group.add(postL);
+  const postR = postL.clone();
+  postR.position.x = w * 0.42;
+  group.add(postR);
+  const foot = new THREE.Mesh(new THREE.BoxGeometry(w * 0.7, 0.16, 1.1), legoMat(0x292524));
+  foot.position.set(0, -h / 2 - 0.35, 0.1);
+  group.add(foot);
+}
+
+function tissueByName(organ, name) {
+  return organ.tissues.find((t) => t.name === name);
+}
+
+function mountInboxStudio(organ, crumbPrefix) {
+  const { tex, xs, ws, W, H } = drawInboxWireframe();
+  const width = 13.6;
+  const height = width * (H / W);
+  const board = new THREE.Group();
+  board.position.set(0, height / 2 + 1.15, -0.6);
+  board.rotation.x = -0.06;
+  addBillboardFrame(board, width, height);
+  const screen = new THREE.Mesh(
+    new THREE.PlaneGeometry(width, height),
+    new THREE.MeshStandardMaterial({ map: tex, roughness: 0.55, metalness: 0.02 })
+  );
+  screen.position.z = 0.02;
+  board.add(screen);
+  detail.add(board);
+  paint(board);
+
+  const paneNames = ["View", "List", "Thread", "Rail"];
+  const composerSplit = 0.58;
+  paneNames.forEach((name, i) => {
+    const tissue = name === "Thread" ? tissueByName(organ, "Thread") : tissueByName(organ, name);
+    if (!tissue) return;
+    const px = xs[i] / W;
+    const pw = ws[i] / W;
+    const paneW = width * pw;
+    const paneH = name === "Thread" ? height * composerSplit : height;
+    const hit = new THREE.Mesh(
+      new THREE.PlaneGeometry(paneW - 0.08, paneH - 0.08),
+      new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.0,
+        emissive: 0x60a5fa,
+        emissiveIntensity: 0,
+      })
+    );
+    const cx = -width / 2 + (px + pw / 2) * width;
+    const cy = name === "Thread" ? height / 2 - paneH / 2 : 0;
+    hit.position.set(cx, cy, 0.06);
+    hit.userData = { kind: "tissue", tissue, organ, pane: name };
+    board.add(hit);
+    clickables.push(hit);
+  });
+
+  const composer = tissueByName(organ, "Composer");
+  if (composer) {
+    const pw = ws[2] / W;
+    const paneW = width * pw;
+    const paneH = height * (1 - composerSplit);
+    const hit = new THREE.Mesh(
+      new THREE.PlaneGeometry(paneW - 0.08, paneH - 0.08),
+      new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.0,
+        emissive: 0x60a5fa,
+        emissiveIntensity: 0,
+      })
+    );
+    const px = xs[2] / W;
+    const cx = -width / 2 + (px + pw / 2) * width;
+    const cy = -height / 2 + paneH / 2;
+    hit.position.set(cx, cy, 0.06);
+    hit.userData = { kind: "tissue", tissue: composer, organ, pane: "Composer" };
+    board.add(hit);
+    clickables.push(hit);
+  }
+
+  gsap.from(board.scale, { x: 0.2, y: 0.2, z: 0.2, duration: dur(0.7), ease: "back.out(1.4)" });
+  flyTo(0, 5.8, 14.2, 0, 3.4, -0.4);
+  setCard(
+    crumbPrefix || `Inside · ${organ.name}`,
+    "Inbox UI wireframe",
+    "This is the four-pane window: view 200 · list 300 · thread/composer flex · rail 300. Click a pane.",
+    "Selected list row is a 4px ink bar — no grey wash. Send lives in the composer."
+  );
+}
+
+function mountRailStudio(organ, crumbPrefix) {
+  const tex = drawRailWireframe();
+  const width = 6.4;
+  const height = 7.7;
+  const board = new THREE.Group();
+  board.position.set(0, height / 2 + 1.1, -0.4);
+  addBillboardFrame(board, width, height);
+  const screen = new THREE.Mesh(
+    new THREE.PlaneGeometry(width, height),
+    new THREE.MeshStandardMaterial({ map: tex, roughness: 0.55, metalness: 0.02 })
+  );
+  screen.position.z = 0.02;
+  board.add(screen);
+  detail.add(board);
+  paint(board);
+  organ.tissues.forEach((tissue, i) => {
+    const paneH = height * 0.2;
+    const hit = new THREE.Mesh(
+      new THREE.PlaneGeometry(width * 0.82, paneH),
+      new THREE.MeshStandardMaterial({
+        transparent: true,
+        opacity: 0,
+        color: 0xffffff,
+        emissive: 0x60a5fa,
+        emissiveIntensity: 0,
+      })
+    );
+    hit.position.set(0, height * 0.32 - i * (paneH + 0.12), 0.06);
+    hit.userData = { kind: "tissue", tissue, organ, pane: tissue.name };
+    board.add(hit);
+    clickables.push(hit);
+  });
+  gsap.from(board.scale, { x: 0.2, y: 0.2, z: 0.2, duration: dur(0.6), ease: "back.out(1.4)" });
+  flyTo(0, 5.4, 12.5, 0, 3.2, -0.2);
+  setCard(
+    crumbPrefix || `Inside · ${organ.name}`,
+    "Rail wireframe",
+    "Four stacked cards. Click one. Peeking past orders does not replace This order.",
+    ""
+  );
+}
+
 function enterOrgan(organ, crumbPrefix) {
   stack.push(organ);
   overview.visible = false;
@@ -878,12 +1227,21 @@ function enterOrgan(organ, crumbPrefix) {
   backBtn.disabled = false;
 
   const platform = new THREE.Mesh(
-    new THREE.CylinderGeometry(8.4, 8.4, 0.28, 48),
+    new THREE.CylinderGeometry(organ.id === "inbox" || organ.id === "rail" ? 11 : 8.4, organ.id === "inbox" || organ.id === "rail" ? 11 : 8.4, 0.28, 48),
     stdMat(organ.color, { roughness: 0.6, emissiveIntensity: 0.08 })
   );
   platform.position.y = 0.14;
   platform.receiveShadow = true;
   detail.add(platform);
+
+  if (organ.id === "inbox") {
+    mountInboxStudio(organ, crumbPrefix);
+    return;
+  }
+  if (organ.id === "rail") {
+    mountRailStudio(organ, crumbPrefix);
+    return;
+  }
 
   const tissues = organ.tissues;
   const n = tissues.length;
@@ -954,6 +1312,13 @@ backBtn.addEventListener("click", () => {
   }
 });
 resetBtn.addEventListener("click", () => showWorld());
+const infoCard = document.getElementById("info-card");
+const infoBtn = document.getElementById("btn-info");
+infoBtn.addEventListener("click", () => {
+  const off = infoCard.classList.toggle("is-off");
+  infoBtn.setAttribute("aria-pressed", off ? "false" : "true");
+  infoBtn.classList.toggle("is-on", !off);
+});
 
 const ray = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
