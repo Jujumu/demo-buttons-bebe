@@ -167,6 +167,23 @@ const RAIL = {
   ],
 };
 
+// Helpdesk floor plan — clustered like the real handlers, not a necklace.
+const HELPDESK_LAYOUT = {
+  pull_mailbox: [-5.6, 1.05, 2.6],
+  ingest_email: [-5.6, 1.05, 0.3],
+  ingest_chat: [-5.6, 1.05, -2.0],
+  list_tickets: [-1.9, 1.05, 5.2],
+  get_ticket: [1.9, 1.05, 5.2],
+  draft_reply: [5.6, 1.05, 2.8],
+  summarize_thread: [5.6, 1.05, 0.7],
+  search_macros: [5.6, 1.05, -1.4],
+  apply_macro: [5.6, 1.05, -3.5],
+  get_customer: [-3.4, 1.05, -4.6],
+  get_order: [3.4, 1.05, -4.6],
+  get_returns: [-3.4, 1.05, -7.6],
+  list_past_orders: [3.4, 1.05, -7.6],
+};
+
 const host = document.getElementById("canvas-host");
 const titleEl = document.getElementById("title");
 const ledeEl = document.getElementById("lede");
@@ -177,7 +194,7 @@ const resetBtn = document.getElementById("btn-reset");
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xefe7dc);
-scene.fog = new THREE.Fog(0xefe7dc, 32, 82);
+scene.fog = new THREE.Fog(0xefe7dc, 40, 110);
 
 const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 200);
 camera.position.set(5, 15, 30);
@@ -664,7 +681,8 @@ detail.visible = false;
 scene.add(detail);
 
 const clickables = [];
-const packets = [];
+const overviewPackets = [];
+const detailPackets = [];
 
 function offsetFace(organ, n) {
   const p = new THREE.Vector3(...organ.pos);
@@ -728,7 +746,7 @@ function cableCurve(a, b, lift, side) {
   return new THREE.CatmullRomCurve3([a2, mid, b2]);
 }
 
-function addTube(curve, color, radius) {
+function addTube(curve, color, radius, parent = overview) {
   const mesh = new THREE.Mesh(
     new THREE.TubeGeometry(curve, 56, radius, 8, false),
     new THREE.MeshStandardMaterial({
@@ -740,19 +758,69 @@ function addTube(curve, color, radius) {
   );
   mesh.castShadow = true;
   mesh.raycast = () => {};
-  overview.add(mesh);
+  parent.add(mesh);
   return mesh;
 }
 
-function addPulse(curve, color, speed, reverse = false) {
+function addPulse(curve, color, speed, reverse = false, parent = overview, packetList = overviewPackets) {
   const ball = new THREE.Mesh(
     new THREE.SphereGeometry(0.16, 12, 12),
     new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.7 })
   );
   ball.castShadow = true;
   ball.raycast = () => {};
-  overview.add(ball);
-  packets.push({ curve, ball, t: Math.random(), speed, reverse });
+  parent.add(ball);
+  packetList.push({ curve, ball, t: Math.random(), speed, reverse });
+}
+
+function brickFace(from, to, half = 0.95) {
+  const a = from.clone();
+  const d = to.clone().sub(from);
+  const ax = Math.abs(d.x);
+  const ay = Math.abs(d.y);
+  const az = Math.abs(d.z);
+  if (ax >= az && ax >= ay) a.x += Math.sign(d.x || 1) * half;
+  else if (az >= ax && az >= ay) a.z += Math.sign(d.z || 1) * half;
+  else a.y += Math.sign(d.y || 1) * half;
+  return a;
+}
+
+function addSpokeAt(parent, packetList, from, to, color, opts = {}) {
+  const a = opts.raw ? from.clone() : brickFace(from, to, opts.halfA ?? 0.95);
+  const b = opts.raw ? to.clone() : brickFace(to, from, opts.halfB ?? 0.55);
+  parent.add(makeSocket(a, b));
+  parent.add(makeSocket(b, a));
+  const curve = cableCurve(a, b, opts.lift ?? 0.4, opts.side ?? 0);
+  addTube(curve, color, opts.radius ?? 0.04, parent);
+  addPulse(curve, color, opts.speed ?? 0.0032, false, parent, packetList);
+}
+
+function addDuplexAt(parent, packetList, from, to, color, opts = {}) {
+  const a = opts.raw ? from.clone() : brickFace(from, to, opts.halfA ?? 0.95);
+  const b = opts.raw ? to.clone() : brickFace(to, from, opts.halfB ?? 0.95);
+  parent.add(makeSocket(a, b));
+  parent.add(makeSocket(b, a));
+  const lift = opts.lift ?? 1.2;
+  const side = opts.side ?? 0.28;
+  const radius = opts.radius ?? 0.06;
+  const c1 = cableCurve(a, b, lift, side);
+  const c2 = cableCurve(a, b, lift, -side);
+  addTube(c1, color, radius, parent);
+  addTube(c2, color, radius, parent);
+  addPulse(c1, color, opts.speed ?? 0.0045, false, parent, packetList);
+  addPulse(c2, color, opts.speed ?? 0.0045, true, parent, packetList);
+}
+
+function addSimplexAt(parent, packetList, from, to, color, opts = {}) {
+  const a = opts.raw ? from.clone() : brickFace(from, to, opts.halfA ?? 0.95);
+  const b = opts.raw ? to.clone() : brickFace(to, from, opts.halfB ?? 0.95);
+  const dir = b.clone().sub(a).normalize();
+  parent.add(makeSocket(a, b));
+  const curve = cableCurve(a, b, opts.lift ?? 1.05, opts.side ?? 0);
+  addTube(curve, color, opts.radius ?? 0.08, parent);
+  const tip = b.clone().addScaledVector(dir, -0.18);
+  parent.add(makeArrow(tip, dir, color));
+  addPulse(curve, color, opts.speed ?? 0.0055, false, parent, packetList);
 }
 
 function addDuplexWire(from, to, color) {
@@ -778,6 +846,10 @@ function addSimplexWire(from, to, color, opts = {}) {
   const tip = b.clone().addScaledVector(dir, -0.2);
   overview.add(makeArrow(tip, dir, color));
   addPulse(curve, color, 0.0055, false);
+}
+
+function posOf(wrap) {
+  return wrap.position.clone();
 }
 
 for (const organ of ORGANS) {
@@ -871,6 +943,7 @@ function clearDetail() {
     const ch = detail.children[0];
     detail.remove(ch);
   }
+  detailPackets.length = 0;
   for (let i = clickables.length - 1; i >= 0; i--) {
     if (clickables[i].userData.kind === "tissue") clickables.splice(i, 1);
   }
@@ -1099,6 +1172,140 @@ function tissueByName(organ, name) {
   return organ.tissues.find((t) => t.name === name);
 }
 
+function addHub(kind, color, label, position, scale = 0.4) {
+  const wrap = new THREE.Group();
+  wrap.position.copy(position);
+  wrap.add(makeLegoMini(color, kind, scale));
+  detail.add(wrap);
+  const lab = makeLabel(label, 640, 160, "#1c1916");
+  lab.scale.set(2.5, 0.76, 1);
+  lab.position.set(position.x, position.y + 1.55, position.z);
+  detail.add(lab);
+  return wrap;
+}
+
+function worldPoint(obj, nudge = new THREE.Vector3()) {
+  const p = new THREE.Vector3();
+  obj.updateWorldMatrix(true, false);
+  obj.getWorldPosition(p);
+  return p.add(nudge);
+}
+
+function wireInboxStudio(paneHits) {
+  const mailbox = addHub("mail", 0xf9a8b4, "Inbox mailbox", new THREE.Vector3(0, 0.95, 4.2), 0.42);
+  const hub = mailbox.position.clone();
+  hub.y = 1.2;
+  const order = ["View", "List", "Thread", "Composer", "Rail"];
+  order.forEach((name, i) => {
+    const hit = paneHits[name];
+    if (!hit) return;
+    const pane = worldPoint(hit, new THREE.Vector3(0, 0, 0.85));
+    addSpokeAt(detail, detailPackets, pane, hub, 0x78716c, {
+      raw: true,
+      lift: 0.35 + (i % 2) * 0.2,
+      side: (i - 2) * 0.18,
+      radius: 0.04,
+    });
+  });
+  const list = paneHits.List && worldPoint(paneHits.List, new THREE.Vector3(0.15, 0.1, 1.05));
+  const thread = paneHits.Thread && worldPoint(paneHits.Thread, new THREE.Vector3(-0.1, 0.55, 1.05));
+  const composer = paneHits.Composer && worldPoint(paneHits.Composer, new THREE.Vector3(0, 0.25, 1.05));
+  const rail = paneHits.Rail && worldPoint(paneHits.Rail, new THREE.Vector3(-0.15, 0.1, 1.05));
+  const view = paneHits.View && worldPoint(paneHits.View, new THREE.Vector3(0.15, 0.1, 1.05));
+  if (view && list) {
+    addSimplexAt(detail, detailPackets, view, list, 0x44403c, {
+      raw: true, lift: 2.6, side: 0.7, radius: 0.085,
+    });
+  }
+  if (list && thread) {
+    addSimplexAt(detail, detailPackets, list, thread, 0x1c1916, {
+      raw: true, lift: 3.15, side: -0.15, radius: 0.09,
+    });
+  }
+  if (list && rail) {
+    addSimplexAt(detail, detailPackets, list, rail, 0x0369a1, {
+      raw: true, lift: 3.4, side: 0.45, radius: 0.09,
+    });
+  }
+  if (list && composer) {
+    addSimplexAt(detail, detailPackets, list, composer, 0x78716c, {
+      raw: true, lift: 2.35, side: -0.7, radius: 0.08,
+    });
+  }
+  if (thread && composer) {
+    addSimplexAt(detail, detailPackets, thread, composer, 0x57534e, {
+      raw: true, lift: 1.85, side: 0.55, radius: 0.08,
+    });
+    addSimplexAt(detail, detailPackets, composer, thread, 0xdc2626, {
+      raw: true, lift: 1.35, side: -0.55, radius: 0.09,
+    });
+  }
+}
+
+function wireRailStudio(cardHits) {
+  const shop = addHub("bag", 0xeab308, "Look-only shop", new THREE.Vector3(-4.4, 1.05, 1.6), 0.4);
+  const hub = shop.position.clone();
+  hub.y = 1.25;
+  cardHits.forEach((hit, i) => {
+    const pane = worldPoint(hit, new THREE.Vector3(-0.4, 0, 0.4));
+    addDuplexAt(detail, detailPackets, pane, hub, 0xca8a04, {
+      raw: true,
+      lift: 0.8 + i * 0.18,
+      side: (i - 1.5) * 0.28,
+      radius: 0.05,
+    });
+  });
+}
+
+function wireHelpdesk(wraps) {
+  const core = new THREE.Vector3(0, 1.2, 0);
+  const names = Object.keys(wraps);
+  names.forEach((name, i) => {
+    addSpokeAt(detail, detailPackets, posOf(wraps[name]), core, 0xd6d3d1, {
+      lift: 0.35,
+      side: (i % 2 === 0 ? 0.12 : -0.12),
+      radius: 0.038,
+      halfA: 0.9,
+      halfB: 0.5,
+    });
+  });
+  const pair = (a, b, color, opts) => {
+    if (!wraps[a] || !wraps[b]) return;
+    addSimplexAt(detail, detailPackets, posOf(wraps[a]), posOf(wraps[b]), color, opts);
+  };
+  // pull_mailbox calls ingest_email directly (not a second ingest path).
+  pair("pull_mailbox", "ingest_email", 0x3b82f6, { lift: 1.6, side: 0.55, radius: 0.085 });
+  // After intake, list_tickets / get_ticket read the same first-party ticket store.
+  pair("ingest_email", "list_tickets", 0x2563eb, { lift: 2.1, side: -0.7, radius: 0.075 });
+  pair("ingest_chat", "list_tickets", 0x2563eb, { lift: 2.4, side: 0.85, radius: 0.075 });
+  pair("ingest_email", "get_ticket", 0x1d4ed8, { lift: 2.6, side: 0.4, radius: 0.07 });
+  pair("ingest_chat", "get_ticket", 0x1d4ed8, { lift: 2.85, side: -0.5, radius: 0.07 });
+  // Composer tools read the thread (tickets.get_ticket) when the client does not pass it.
+  pair("get_ticket", "draft_reply", 0x44403c, { lift: 2.35, side: 0.85, radius: 0.08 });
+  pair("get_ticket", "summarize_thread", 0x57534e, { lift: 2.65, side: -0.7, radius: 0.08 });
+  // Four shop tools share shop.py. They do not call each other.
+  const shopHub = addHub("bag", 0xeab308, "shop.py", new THREE.Vector3(0, 1.05, -6.15), 0.38);
+  const shopPos = shopHub.position.clone();
+  shopPos.y = 1.25;
+  ["get_customer", "get_order", "get_returns", "list_past_orders"].forEach((name, i) => {
+    if (!wraps[name]) return;
+    addDuplexAt(detail, detailPackets, posOf(wraps[name]), shopPos, 0xca8a04, {
+      lift: 1.55,
+      side: (i - 1.5) * 0.38,
+      radius: 0.07,
+      halfA: 0.85,
+      halfB: 0.5,
+    });
+  });
+  if (wraps.draft_reply) {
+    addSimplexAt(detail, detailPackets, posOf(wraps.draft_reply), shopPos, 0xa16207, {
+      lift: 3.4,
+      side: 1.15,
+      radius: 0.09,
+    });
+  }
+}
+
 function mountInboxStudio(organ, crumbPrefix) {
   const { tex, xs, ws, W, H } = drawInboxWireframe();
   const width = 13.6;
@@ -1116,6 +1323,7 @@ function mountInboxStudio(organ, crumbPrefix) {
   detail.add(board);
   paint(board);
 
+  const paneHits = {};
   const paneNames = ["View", "List", "Thread", "Rail"];
   const composerSplit = 0.58;
   paneNames.forEach((name, i) => {
@@ -1141,6 +1349,7 @@ function mountInboxStudio(organ, crumbPrefix) {
     hit.userData = { kind: "tissue", tissue, organ, pane: name };
     board.add(hit);
     clickables.push(hit);
+    paneHits[name] = hit;
   });
 
   const composer = tissueByName(organ, "Composer");
@@ -1165,15 +1374,19 @@ function mountInboxStudio(organ, crumbPrefix) {
     hit.userData = { kind: "tissue", tissue: composer, organ, pane: "Composer" };
     board.add(hit);
     clickables.push(hit);
+    paneHits.Composer = hit;
   }
 
+  board.updateWorldMatrix(true, true);
+  wireInboxStudio(paneHits);
+
   gsap.from(board.scale, { x: 0.2, y: 0.2, z: 0.2, duration: dur(0.7), ease: "back.out(1.4)" });
-  flyTo(0, 5.8, 14.2, 0, 3.4, -0.4);
+  flyTo(0, 7.2, 18.5, 0, 3.1, 1.0);
   setCard(
     crumbPrefix || `Inside · ${organ.name}`,
     "Inbox UI wireframe",
-    "This is the four-pane window: view 200 · list 300 · thread/composer flex · rail 300. Click a pane.",
-    "Selected list row is a 4px ink bar — no grey wash. Send lives in the composer."
+    "Panes drop letters in the mailbox. They do not peek in each other's rooms. Click a pane.",
+    "view/selected → list. list/selected → thread, rail, composer. Summarize is thread → composer. Send is composer → local thread."
   );
 }
 
@@ -1192,6 +1405,7 @@ function mountRailStudio(organ, crumbPrefix) {
   board.add(screen);
   detail.add(board);
   paint(board);
+  const cardHits = [];
   organ.tissues.forEach((tissue, i) => {
     const paneH = height * 0.2;
     const hit = new THREE.Mesh(
@@ -1208,14 +1422,17 @@ function mountRailStudio(organ, crumbPrefix) {
     hit.userData = { kind: "tissue", tissue, organ, pane: tissue.name };
     board.add(hit);
     clickables.push(hit);
+    cardHits.push(hit);
   });
+  board.updateWorldMatrix(true, true);
+  wireRailStudio(cardHits);
   gsap.from(board.scale, { x: 0.2, y: 0.2, z: 0.2, duration: dur(0.6), ease: "back.out(1.4)" });
-  flyTo(0, 5.4, 12.5, 0, 3.2, -0.2);
+  flyTo(0, 5.6, 14.2, -1.2, 3.0, 0.2);
   setCard(
     crumbPrefix || `Inside · ${organ.name}`,
     "Rail wireframe",
-    "Four stacked cards. Click one. Peeking past orders does not replace This order.",
-    ""
+    "Four cards load at the same time. None of them plug into each other. Past orders does not replace This order.",
+    "Each card asks helpdesk (look-only Shopify). If one card breaks, the others stay up."
   );
 }
 
@@ -1226,8 +1443,10 @@ function enterOrgan(organ, crumbPrefix) {
   clearDetail();
   backBtn.disabled = false;
 
+  const wide = organ.id === "inbox" || organ.id === "rail" || organ.id === "helpdesk";
+  const radius = organ.id === "helpdesk" ? 12.4 : wide ? 11 : 8.4;
   const platform = new THREE.Mesh(
-    new THREE.CylinderGeometry(organ.id === "inbox" || organ.id === "rail" ? 11 : 8.4, organ.id === "inbox" || organ.id === "rail" ? 11 : 8.4, 0.28, 48),
+    new THREE.CylinderGeometry(radius, radius, 0.28, 48),
     stdMat(organ.color, { roughness: 0.6, emissiveIntensity: 0.08 })
   );
   platform.position.y = 0.14;
@@ -1245,17 +1464,23 @@ function enterOrgan(organ, crumbPrefix) {
 
   const tissues = organ.tissues;
   const n = tissues.length;
+  const wraps = {};
   tissues.forEach((t, i) => {
-    const ang = (i / n) * Math.PI * 2 - Math.PI / 2;
-    const r = n > 8 ? 6.2 : 5.4;
+    const slot = organ.id === "helpdesk" ? HELPDESK_LAYOUT[t.name] : null;
     const wrap = new THREE.Group();
-    wrap.position.set(Math.cos(ang) * r, 1.05, Math.sin(ang) * r);
+    if (slot) wrap.position.set(...slot);
+    else {
+      const ang = (i / n) * Math.PI * 2 - Math.PI / 2;
+      const r = n > 8 ? 6.2 : 5.4;
+      wrap.position.set(Math.cos(ang) * r, 1.05, Math.sin(ang) * r);
+    }
     const visual = makeLegoMini(t.nested ? 0x7dd3fc : organ.color, t.shape || organ.form, 0.4);
     wrap.add(visual);
     addHit(wrap, 2.2, 2.4, 2.2);
     wrap.userData = { kind: "tissue", tissue: t, organ };
     detail.add(wrap);
     clickables.push(wrap);
+    wraps[t.name] = wrap;
     const lab = makeLabel(t.name, 640, 160, t.nested ? "#075985" : "#9a3412");
     lab.scale.set(2.7, 0.82, 1);
     lab.position.set(wrap.position.x, 2.65, wrap.position.z);
@@ -1275,12 +1500,30 @@ function enterOrgan(organ, crumbPrefix) {
   core.userData = { kind: "organCore", organ };
   detail.add(core);
 
+  if (organ.id === "helpdesk") {
+    const lab = makeLabel("dispatch()", 640, 160, "#9a3412");
+    lab.scale.set(2.8, 0.84, 1);
+    lab.position.set(0, 2.55, 0);
+    detail.add(lab);
+    wireHelpdesk(wraps);
+    flyTo(0, 16.2, 22.5, 0, 0.5, -1.1);
+    setCard(
+      crumbPrefix || `Inside · ${organ.name}`,
+      organ.name,
+      "Every tool plugs into dispatch() — MCP, CLI, and the inbox HTTP door share that room.",
+      "Blue arrow: pull_mailbox calls ingest_email, then tickets show in list_tickets. Gold: shop.py is the shared look-only Shopify door. Search and apply macros stay on dispatch only."
+    );
+    return;
+  }
+
   flyTo(0, 11.5, 16.5, 0, 0.8, 0);
   setCard(
     crumbPrefix || `Inside · ${organ.name}`,
     organ.name,
     organ.kid,
-    "Each tissue is a little LEGO brick. The sign on top is its one job."
+    organ.id === "send"
+      ? "Insert/Discard fills the box. Send writes the local thread. They do not plug into each other, and neither emails the customer."
+      : "Each tissue is a little LEGO brick. The sign on top is its one job."
   );
 }
 
@@ -1395,16 +1638,21 @@ resize();
 
 function tick() {
   controls.update();
-  if (overview.visible) {
-    for (const p of packets) {
-      p.t = (p.t + p.speed) % 1;
-      const u = p.reverse ? 1 - p.t : p.t;
-      p.ball.position.copy(p.curve.getPointAt(u));
-    }
+  const moving = overview.visible ? overviewPackets : detailPackets;
+  for (const p of moving) {
+    p.t = (p.t + p.speed) % 1;
+    const u = p.reverse ? 1 - p.t : p.t;
+    p.ball.position.copy(p.curve.getPointAt(u));
   }
   renderer.render(scene, camera);
   requestAnimationFrame(tick);
 }
 tick();
 showWorld();
-window.__bb = { enterOrgan, showWorld, ORGANS, RAIL };
+const bootInside = new URLSearchParams(location.search).get("inside");
+if (bootInside === "rail") enterOrgan(RAIL);
+else if (bootInside) {
+  const organ = ORGANS.find((o) => o.id === bootInside);
+  if (organ) enterOrgan(organ);
+}
+window.__bb = { enterOrgan, showWorld, ORGANS, RAIL, camera, controls };
