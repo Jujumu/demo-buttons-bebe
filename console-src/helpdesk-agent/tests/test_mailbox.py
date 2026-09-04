@@ -15,7 +15,7 @@ sys.path.insert(0, str(ROOT))
 from helpdesk.dispatch import WRITE_TOOLS, dispatch, invoke
 from helpdesk.fixtures_intake import ADA_MESSAGE_ID, ADA_TRACKING, PRIZE_SPAM
 from helpdesk.fixtures_live_holes import C_UNFULFILLED, O_1001
-from helpdesk.mailbox import handle_pull_mailbox
+from helpdesk.mailbox import _ticket_row, handle_pull_mailbox
 from helpdesk.mcp_server import handle_rpc
 from helpdesk.names import TOOL_NAMES, TOOL_PULL_MAILBOX
 from helpdesk.tickets import reset as reset_tickets
@@ -93,6 +93,23 @@ class MailboxPullTests(unittest.TestCase):
                 if stripped.startswith("AGENTMAIL_API_KEY="):
                     value = stripped.split("=", 1)[1].strip().strip("\"'")
                     self.assertEqual(value, "", f"{path} must not commit a key")
+
+    def test_ticket_row_keeps_request_type(self) -> None:
+        row = _ticket_row(
+            {
+                "id": "t-in-1",
+                "customerName": "Lee Chen",
+                "subject": "GDPR request",
+                "snippet": "Please delete my stored personal data.",
+                "status": "open",
+                "updatedAt": "2026-08-30T14:20:00Z",
+                "customerId": None,
+                "orderId": None,
+                "requestType": "privacy_request",
+            }
+        )
+        self.assertEqual(row["requestType"], "privacy_request")
+        self.assertIsNone(_ticket_row({**row, "requestType": None})["requestType"])
 
     def test_mutations_still_refused(self) -> None:
         for tool in WRITE_TOOLS:
