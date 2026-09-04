@@ -98,10 +98,25 @@ export function fixtureDraftFromThread(thread = {}, rail = {}) {
  */
 export function createFixtureShop(opts = {}) {
   const fail = opts.fail || {};
+  const escalated = new Map();
 
   function maybeFail(key) {
     if (!fail[key]) return;
     throw fail[key] instanceof Error ? fail[key] : new Error(String(fail[key]));
+  }
+
+  function withEscalate(ticket) {
+    const extra = escalated.get(ticket.id);
+    if (!extra) return ticket;
+    return {
+      ...ticket,
+      escalated: true,
+      escalationReason: extra.reason || ticket.escalationReason,
+      statusEvents: [
+        ...(ticket.statusEvents || []),
+        extra.event,
+      ].filter(Boolean),
+    };
   }
 
   return {
@@ -145,7 +160,7 @@ export function createFixtureShop(opts = {}) {
     getTicket({ ticketId } = {}) {
       maybeFail("thread");
       const ticket = fixtureTickets.find((row) => row.id === ticketId);
-      return ticket ? clerkTicket(ticket) : null;
+      return ticket ? clerkTicket(withEscalate(ticket)) : null;
     },
     draftReply(args = {}) {
       maybeFail("draft");
@@ -189,6 +204,26 @@ export function createFixtureShop(opts = {}) {
         mode,
         body: macro.body,
         macroId: macro.id,
+      };
+    },
+    escalateTicket({ ticketId, reason } = {}) {
+      maybeFail("escalate");
+      const ticket = fixtureTickets.find((row) => row.id === ticketId);
+      if (!ticket) return null;
+      const note = reason ? `escalated: ${String(reason).trim()}` : "escalated";
+      escalated.set(ticket.id, {
+        reason: reason ? String(reason).trim() : "",
+        event: { at: new Date().toISOString(), status: ticket.status, note },
+      });
+      return clerkTicket(withEscalate(ticket));
+    },
+    writeGateStatus() {
+      maybeFail("write-gate");
+      return {
+        mutationsEnabled: false,
+        refused: ["send", "refund", "cancel"],
+        tools: ["helpdesk.send", "helpdesk.refund", "helpdesk.cancel"],
+        message: "Shopify writes are refused. SHOPIFY_MUTATIONS_ENABLED stays 0.",
       };
     },
   };

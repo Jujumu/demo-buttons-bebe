@@ -68,6 +68,11 @@ function pythonInvoke(tool, args) {
     );
   } else if (tool === "helpdesk.pull_mailbox") {
     argv.push("pull-mailbox", "--limit", String(args.limit || 20));
+  } else if (tool === "helpdesk.escalate_ticket") {
+    argv.push("escalate-ticket", "--ticket-id", String(args.ticketId));
+    if (args.reason) argv.push("--reason", String(args.reason));
+  } else if (tool === "helpdesk.write_gate_status") {
+    argv.push("write-gate-status");
   } else {
     throw new Error(`unknown tool ${tool}`);
   }
@@ -94,10 +99,10 @@ function clientFromPython(source = "sample") {
   });
 }
 
-test("client exposes exactly the thirteen helpdesk tools", () => {
+test("client exposes exactly the fifteen helpdesk tools", () => {
   const client = createHelpdeskClient({ invoke: async () => ({ ok: true }) });
   assert.deepEqual(client.tools, TOOL_NAMES);
-  assert.equal(TOOL_NAMES.length, 13);
+  assert.equal(TOOL_NAMES.length, 15);
   assert.ok(TOOL_NAMES.includes("helpdesk.list_tickets"));
   assert.ok(TOOL_NAMES.includes("helpdesk.get_ticket"));
   assert.ok(TOOL_NAMES.includes("helpdesk.draft_reply"));
@@ -107,6 +112,8 @@ test("client exposes exactly the thirteen helpdesk tools", () => {
   assert.ok(TOOL_NAMES.includes("helpdesk.ingest_email"));
   assert.ok(TOOL_NAMES.includes("helpdesk.ingest_chat"));
   assert.ok(TOOL_NAMES.includes("helpdesk.pull_mailbox"));
+  assert.ok(TOOL_NAMES.includes("helpdesk.escalate_ticket"));
+  assert.ok(TOOL_NAMES.includes("helpdesk.write_gate_status"));
   assert.deepEqual([...WRITE_TOOLS], ["helpdesk.send", "helpdesk.refund", "helpdesk.cancel"]);
   for (const name of WRITE_TOOLS) {
     assert.ok(!TOOL_NAMES.includes(name));
@@ -388,7 +395,7 @@ test("CLI payloads match the JS shop adapter for sample rail tools", async () =>
   assert.equal(projectOrderHistory(history).rows[0].fulfillmentStatus, history[0].displayFulfillmentStatus);
 });
 
-test("all thirteen CLI tools return ok on the same handler path", () => {
+test("all fifteen CLI tools return ok on the same handler path", () => {
   const cases = [
     ["helpdesk.list_tickets", { view: "open", limit: 5 }],
     ["helpdesk.get_ticket", { ticketId: "1001" }],
@@ -412,6 +419,8 @@ test("all thirteen CLI tools return ok on the same handler path", () => {
       receivedAt: "2026-08-30T15:02:00Z",
     }],
     ["helpdesk.pull_mailbox", { limit: 5 }],
+    ["helpdesk.escalate_ticket", { ticketId: "t-ada-track" }],
+    ["helpdesk.write_gate_status", {}],
   ];
   for (const [tool, args] of cases) {
     const payload = pythonInvoke(tool, args);
@@ -777,6 +786,24 @@ test("CLI search-macros and apply-macro share dispatch and never send", () => {
   assert.doesNotMatch(applied.text, /gorgias|refund you|i cancelled/i);
   assert.ok(!WRITE_TOOLS.includes("helpdesk.search_macros"));
   assert.ok(!WRITE_TOOLS.includes("helpdesk.apply_macro"));
+});
+
+test("escalate_ticket and write_gate_status share the CLI dispatch path", () => {
+  const escalated = pythonInvoke("helpdesk.escalate_ticket", {
+    ticketId: "t-ada-track",
+    reason: "pending review",
+  });
+  assert.equal(escalated.ok, true);
+  assert.equal(escalated.ticket.escalated, true);
+  assert.equal(escalated.ticket.status, "open");
+  assert.equal(escalated.ticket.escalationReason, "pending review");
+  assert.ok(!WRITE_TOOLS.includes("helpdesk.escalate_ticket"));
+  const gate = pythonInvoke("helpdesk.write_gate_status", {});
+  assert.equal(gate.ok, true);
+  assert.equal(gate.mutationsEnabled, false);
+  assert.deepEqual(gate.refused, ["send", "refund", "cancel"]);
+  assert.ok(gate.tools.includes("helpdesk.refund"));
+  assert.ok(gate.tools.includes("helpdesk.cancel"));
 });
 
 test("shop adapter has no mutation surface", async () => {

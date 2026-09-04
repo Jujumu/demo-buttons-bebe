@@ -136,6 +136,8 @@
  * @property {string | null} orderId
  * @property {object[]} messages
  * @property {{ at: string, status: string, note?: string }[]} statusEvents
+ * @property {boolean} [escalated]
+ * @property {string} [escalationReason]
  */
 
 /**
@@ -168,6 +170,7 @@
  * `composer/discard`
  * `composer/send`        { text, close: boolean }
  * `composer/summarize`   { ticketId }
+ * `thread/escalate`      { ticketId, reason? } — first-party; never Send
  * `history/peek`         { orderId }  — does not replace This order
  * `tissue/error`         { tissueId, message }
  */
@@ -180,6 +183,7 @@ export const MAILBOX_TOPICS = Object.freeze({
   COMPOSER_DISCARD: "composer/discard",
   COMPOSER_SEND: "composer/send",
   COMPOSER_SUMMARIZE: "composer/summarize",
+  THREAD_ESCALATE: "thread/escalate",
   HISTORY_PEEK: "history/peek",
   TISSUE_ERROR: "tissue/error",
 });

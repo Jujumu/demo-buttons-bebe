@@ -59,6 +59,10 @@ class SafetyTests(unittest.TestCase):
                 blocked = invoke(tool, {})
                 self.assertEqual(blocked["error"], "forbidden")
             self.assertEqual(WRITE_TOOLS, frozenset({"helpdesk.send", "helpdesk.refund", "helpdesk.cancel"}))
+            gate = invoke("helpdesk.write_gate_status", {})
+            self.assertTrue(gate["ok"])
+            self.assertIn("refund", gate["refused"])
+            self.assertIn("cancel", gate["refused"])
         finally:
             if previous is None:
                 os.environ.pop("SHOPIFY_MUTATIONS_ENABLED", None)

@@ -4,19 +4,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from .errors import HelpdeskError, bad_request, forbidden_write
+from .env import mutations_enabled
+from .errors import REFUSED_WRITES, HelpdeskError, bad_request, forbidden_write
 from .names import TOOL_NAMES
 from .tissues import HANDLERS
 
 TOOLS = TOOL_NAMES
 
-WRITE_TOOLS = frozenset(
-    {
-        "helpdesk.send",
-        "helpdesk.refund",
-        "helpdesk.cancel",
-    }
-)
+WRITE_TOOLS = frozenset(f"helpdesk.{name}" for name in REFUSED_WRITES)
 
 
 def list_tools() -> list[str]:
@@ -26,7 +21,7 @@ def list_tools() -> list[str]:
 def dispatch(tool: str, args: dict[str, Any] | None = None) -> dict[str, Any]:
     arguments = dict(args or {})
     if tool in WRITE_TOOLS:
-        raise forbidden_write()
+        raise forbidden_write(tool=tool, mutations_enabled=mutations_enabled())
     handler = HANDLERS.get(tool)
     if handler is None:
         raise bad_request("unknown tool", tool=tool)

@@ -27,5 +27,18 @@ def bad_request(message: str, **details: Any) -> HelpdeskError:
     return HelpdeskError("bad_request", message, details=details)
 
 
-def forbidden_write() -> HelpdeskError:
-    return HelpdeskError("forbidden", "Shopify writes are refused. SHOPIFY_MUTATIONS_ENABLED stays 0.")
+REFUSED_WRITES = ("send", "refund", "cancel")
+
+
+def forbidden_write(*, tool: str | None = None, mutations_enabled: bool = False) -> HelpdeskError:
+    details: dict[str, Any] = {
+        "mutationsEnabled": bool(mutations_enabled),
+        "refused": list(REFUSED_WRITES),
+    }
+    if tool:
+        details["tool"] = tool
+    return HelpdeskError(
+        "forbidden",
+        "Shopify writes are refused. SHOPIFY_MUTATIONS_ENABLED stays 0.",
+        details=details,
+    )

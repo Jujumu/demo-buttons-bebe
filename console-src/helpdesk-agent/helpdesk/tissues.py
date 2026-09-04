@@ -1,4 +1,4 @@
-"""Thirteen tissue handlers. Input → output only."""
+"""Fifteen tissue handlers. Input → output only."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from .macros import handle_apply_macro, handle_search_macros
 from .names import (
     TOOL_APPLY_MACRO,
     TOOL_DRAFT_REPLY,
+    TOOL_ESCALATE_TICKET,
     TOOL_GET_CUSTOMER,
     TOOL_GET_ORDER,
     TOOL_GET_RETURNS,
@@ -23,8 +24,10 @@ from .names import (
     TOOL_LIST_TICKETS,
     TOOL_SEARCH_MACROS,
     TOOL_SUMMARIZE_THREAD,
+    TOOL_WRITE_GATE_STATUS,
 )
-from .env import load_shopify_env
+from .env import load_shopify_env, mutations_enabled
+from .errors import REFUSED_WRITES
 from .shop import rail_get_customer, rail_get_order, rail_get_returns, rail_list_past_orders
 
 
@@ -48,6 +51,31 @@ def handle_get_ticket(args: dict[str, Any]) -> dict[str, Any]:
     return {
         "source": "sample",
         "ticket": tickets.get_ticket(str(ticket_id) if ticket_id is not None else "", gid_source),
+    }
+
+
+def handle_escalate_ticket(args: dict[str, Any]) -> dict[str, Any]:
+    ticket_id = args.get("ticketId") or args.get("ticket_id")
+    reason = args.get("reason")
+    gid_source = _ticket_gid_source()
+    return {
+        "source": "sample",
+        "ticket": tickets.escalate_ticket(
+            str(ticket_id) if ticket_id is not None else "",
+            None if reason is None else str(reason),
+            gid_source,
+        ),
+    }
+
+
+def handle_write_gate_status(_args: dict[str, Any]) -> dict[str, Any]:
+    enabled = mutations_enabled()
+    refused = list(REFUSED_WRITES)
+    return {
+        "mutationsEnabled": enabled,
+        "refused": refused,
+        "tools": [f"helpdesk.{name}" for name in REFUSED_WRITES],
+        "message": "Shopify writes are refused. SHOPIFY_MUTATIONS_ENABLED stays 0.",
     }
 
 
@@ -85,4 +113,6 @@ HANDLERS = {
     TOOL_INGEST_EMAIL: handle_ingest_email,
     TOOL_INGEST_CHAT: handle_ingest_chat,
     TOOL_PULL_MAILBOX: handle_pull_mailbox,
+    TOOL_ESCALATE_TICKET: handle_escalate_ticket,
+    TOOL_WRITE_GATE_STATUS: handle_write_gate_status,
 }

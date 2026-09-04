@@ -134,6 +134,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   border-bottom: 1px solid var(--line);
 }
 .thread-head h2 { font-size: 16px; font-weight: 600; }
+.thread-head-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .thread-subject { color: var(--mute); font-size: 13px; margin-top: 2px; }
 .status-badge {
   font-size: 11px;
@@ -177,6 +178,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 .composer { border-top: 1px solid var(--line); padding: 12px 16px 16px; background: var(--surface); }
 .composer-to { font-size: 12px; margin-bottom: 8px; }
 .composer-to .mute, .mute { color: var(--mute); }
+.write-gate { color: var(--mute); font-size: 12px; margin: 0 0 8px; }
 .composer-box { border: 1px solid var(--line); background: var(--ground); padding: 8px; }
 .macro-search {
   width: 100%;

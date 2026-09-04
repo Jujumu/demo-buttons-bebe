@@ -228,6 +228,40 @@ test("Send stays disabled until the body has text", async () => {
   assert.doesNotMatch(readySend, /is-disabled/);
 });
 
+test("thread header shows Escalate as a secondary control", async () => {
+  const organ = createInboxOrgan({ viewId: "mine" });
+  const snap = await organ.ready();
+  assert.match(snap.html, /data-escalate="t-ada-track"/);
+  assert.match(snap.html, />Escalate</);
+  assert.match(snap.html, /thread-head-actions/);
+  const escalate = [...snap.html.matchAll(/<button\b[^>]*>/g)]
+    .map((match) => match[0])
+    .find((html) => /\bdata-escalate\b/.test(html));
+  assert.ok(escalate, "Escalate lives in the thread header");
+  assert.match(escalate, /btn-quiet/);
+  assert.doesNotMatch(escalate, /btn-ink/);
+});
+
+test("composer shows write-gate copy without Refund or Cancel controls", async () => {
+  const organ = createInboxOrgan({ viewId: "mine" });
+  const snap = await organ.ready();
+  assert.match(snap.html, /data-write-gate/);
+  assert.match(snap.html, /Refunds and cancels are gated/);
+  assert.deepEqual(snap.forbidden, []);
+  assert.doesNotMatch(snap.html, /<(button|a)\b[^>]*>[^<]*Refund/i);
+  assert.doesNotMatch(snap.html, /<(button|a)\b[^>]*>[^<]*\bCancel\b/i);
+});
+
+test("escalate marks the ticket and does not Send", async () => {
+  const organ = createInboxOrgan({ viewId: "mine" });
+  await organ.ready();
+  const snap = await organ.escalate("pending review");
+  assert.match(snap.html, /data-escalated/);
+  assert.match(snap.html, />Escalated</);
+  assert.doesNotMatch(snap.html, /data-escalate=/);
+  assert.equal(snap.sent.length, 0);
+});
+
 test("closed ticket keeps composer and hides Send & close", async () => {
   const organ = createInboxOrgan({ viewId: "closed", ticketId: "t-ada-closed" });
   const snap = await organ.ready();

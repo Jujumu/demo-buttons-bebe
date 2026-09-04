@@ -55,6 +55,11 @@ export function createInboxOrgan(opts = {}) {
   let macroQuery = "";
   let selectedMacroId = "";
   let macrosOpen = true;
+  let writeGate = {
+    mutationsEnabled: false,
+    refused: ["send", "refund", "cancel"],
+    message: "Shopify writes are refused. SHOPIFY_MUTATIONS_ENABLED stays 0.",
+  };
   let listRows = pinnedCatalog ? pinnedCatalog.filter((ticket) => ticketInView(ticket, viewId)) : [];
   let selected = pinnedCatalog?.find((ticket) => ticket.id === selectedId) || null;
   let counts = pinnedCatalog ? viewCounts(pinnedCatalog) : viewCounts(fixtureTickets);
@@ -187,6 +192,43 @@ export function createInboxOrgan(opts = {}) {
     strip = ticket ? await loadDraft(ticket) : "";
   }
 
+  async function refreshWriteGate() {
+    if (typeof shop.writeGateStatus === "function") {
+      try {
+        const result = await shop.writeGateStatus();
+        if (result && Array.isArray(result.refused)) writeGate = result;
+      } catch {
+        // keep default gated copy
+      }
+    }
+  }
+
+  async function escalateSelected(reason) {
+    const ticket = selectedTicket();
+    if (!ticket || ticket.escalated) return ticket;
+    if (typeof shop.escalateTicket === "function") {
+      try {
+        const result = await shop.escalateTicket({ ticketId: ticket.id, reason });
+        if (result) {
+          selected = result;
+          return result;
+        }
+      } catch {
+        // local flag below
+      }
+    }
+    selected = {
+      ...ticket,
+      escalated: true,
+      escalationReason: reason || "",
+      statusEvents: [
+        ...(ticket.statusEvents || []),
+        { at: new Date().toISOString(), status: ticket.status, note: "escalated" },
+      ],
+    };
+    return selected;
+  }
+
   async function refreshMacros(query = "") {
     macroQuery = query;
     if (typeof shop.searchMacros === "function") {
@@ -218,6 +260,7 @@ export function createInboxOrgan(opts = {}) {
       query: macroQuery,
       selectedMacroId,
       searchOpen: macrosOpen,
+      writeGate,
     };
   }
 
@@ -290,6 +333,7 @@ export function createInboxOrgan(opts = {}) {
     await refreshRail();
     await refreshComposer();
     await refreshMacros("");
+    await refreshWriteGate();
 
     const paint = () => {
       const ticket = selectedTicket();
@@ -361,6 +405,10 @@ export function createInboxOrgan(opts = {}) {
         summarizeText = text;
         paint();
       });
+    });
+    mailbox.subscribe(MAILBOX_TOPICS.THREAD_ESCALATE, ({ ticketId, reason }) => {
+      if (ticketId && ticketId !== selectedId) selectedId = ticketId;
+      escalateSelected(reason).then(() => refreshThread()).then(paint);
     });
     mailbox.subscribe(MAILBOX_TOPICS.COMPOSER_SEND, ({ text, close }) => {
       const ticket = selectedTicket();
@@ -467,6 +515,13 @@ export function createInboxOrgan(opts = {}) {
       composerTissue.update(composerInput(selectedTicket()));
       return snapshot();
     },
+    async escalate(reason) {
+      const ticket = await escalateSelected(reason);
+      if (ticket && !pinnedCatalog) await refreshThread();
+      composerTissue.update(composerInput(selectedTicket()));
+      threadTissue.update({ ticket: selectedTicket() });
+      return snapshot();
+    },
     async requestSummarize() {
       const ticket = selectedTicket();
       summarizeText = await loadSummary(ticket);
@@ -480,6 +535,7 @@ export function createInboxOrgan(opts = {}) {
       await refreshRail();
       await refreshComposer();
       await refreshMacros(macroQuery);
+      await refreshWriteGate();
       return snapshot();
     },
     async ingestEmail(args) {

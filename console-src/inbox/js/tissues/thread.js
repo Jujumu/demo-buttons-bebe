@@ -5,8 +5,9 @@ import { esc, formatWeekday, formatWhen, initials, screenStatus } from "../util.
 /**
  * Thread tissue.
  * In: `{ ticket }` from helpdesk.get_ticket
- * Out: summarize request on `composer/summarize`
- * Status-change events are muted as `Closed · Tuesday`. No Send.
+ * Out: summarize on `composer/summarize`; escalate on `thread/escalate`.
+ * Status-change events are muted as `Closed · Tuesday`. Escalate is secondary.
+ * No Send.
  */
 export function createThreadTissue({ mailbox }) {
   let model = { ticket: null };
@@ -64,13 +65,20 @@ export function createThreadTissue({ mailbox }) {
     }
     const count = talkMessages(ticket).length;
     const summarizeLabel = count === 1 ? "Summarize 1 message" : `Summarize ${count} messages`;
+    const escalated = Boolean(ticket.escalated);
+    const escalateControl = escalated
+      ? `<span class="status-badge" data-escalated>Escalated</span>`
+      : `<button type="button" class="btn-quiet" data-escalate="${esc(ticket.id)}">Escalate</button>`;
     return `<div class="pane-inner thread-inner">
       <header class="thread-head">
         <div>
           <h2>${esc(ticket.customerName || "Customer")}</h2>
           <p class="thread-subject">${esc(ticket.subject)}</p>
         </div>
-        <span class="status-badge">${esc(screenStatus(ticket.status))}</span>
+        <div class="thread-head-actions">
+          <span class="status-badge">${esc(screenStatus(ticket.status))}</span>
+          ${escalateControl}
+        </div>
       </header>
       <div class="thread-scroll">${timeline(ticket)}</div>
       <div class="summarize-row">
@@ -82,6 +90,11 @@ export function createThreadTissue({ mailbox }) {
   function mount(el) {
     el.innerHTML = render(model);
     el.onclick = (event) => {
+      const escalate = event.target.closest("[data-escalate]");
+      if (escalate) {
+        mailbox.publish(MAILBOX_TOPICS.THREAD_ESCALATE, { ticketId: escalate.dataset.escalate });
+        return;
+      }
       const button = event.target.closest("[data-summarize]");
       if (!button) return;
       mailbox.publish(MAILBOX_TOPICS.COMPOSER_SUMMARIZE, { ticketId: button.dataset.summarize });

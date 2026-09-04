@@ -3,7 +3,7 @@ import { TOOL_NAMES } from "./helpdesk-tools.js";
 export const HELPDESK_HTTP_PATH = "/console/api/helpdesk";
 
 /**
- * Browser/Node client for the thirteen helpdesk.* tools.
+ * Browser/Node client for the fifteen helpdesk.* tools.
  * Same payloads as MCP and CLI. No GraphQL here.
  *
  * @param {{ invoke?: Function, url?: string, fetch?: typeof fetch }} [opts]
@@ -73,6 +73,12 @@ export function createHelpdeskClient(opts = {}) {
     },
     pullMailbox(args) {
       return invoke("helpdesk.pull_mailbox", args);
+    },
+    escalateTicket(args) {
+      return invoke("helpdesk.escalate_ticket", args);
+    },
+    writeGateStatus(args) {
+      return invoke("helpdesk.write_gate_status", args);
     },
   };
 }
