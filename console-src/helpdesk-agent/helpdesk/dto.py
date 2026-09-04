@@ -10,6 +10,7 @@ BILLING_MISSING_LABEL = "No billing"
 TRACKING_MISSING_LABEL = "No tracking"
 GIFT_CARDS_MISSING_LABEL = "No gift cards"
 DISCOUNTS_MISSING_LABEL = "No discounts"
+INVOICE_MISSING_LABEL = "No invoice"
 
 
 def money_v2(node: dict[str, Any] | None) -> dict[str, str]:
@@ -154,6 +155,22 @@ def clerk_discount_codes(nodes: Any) -> list[str]:
     return out
 
 
+def clerk_invoice_url(node: dict[str, Any]) -> str | None:
+    """Fixture invoice/receipt URL. Live Order has no official invoiceUrl field."""
+    raw = node.get("invoiceUrl")
+    if not isinstance(raw, str):
+        return None
+    url = raw.strip()
+    if not url:
+        return None
+    lower = url.lower()
+    if lower.startswith("https://") or lower.startswith("http://"):
+        return url
+    if url.startswith("/docs/review/"):
+        return url
+    return None
+
+
 def clerk_customer(node: dict[str, Any]) -> dict[str, Any]:
     email = node.get("defaultEmailAddress")
     return {
@@ -190,6 +207,7 @@ def clerk_order(node: dict[str, Any]) -> dict[str, Any]:
         "lineItems": {"nodes": [line_item(item) for item in nodes or []]},
         "fulfillments": fulfillments,
         "discountCodes": clerk_discount_codes(node.get("discountCodes")),
+        "invoiceUrl": clerk_invoice_url(node),
     }
 
 

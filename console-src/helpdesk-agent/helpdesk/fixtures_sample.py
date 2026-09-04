@@ -128,6 +128,7 @@ ORDERS = {
         "lineItems": {"nodes": [_LINE]},
         "fulfillments": [],
         "discountCodes": ["WELCOME10"],
+        "invoiceUrl": "https://example.com/invoice/demo-9001",
         "returns": {
             "nodes": [
                 {"id": RETURN_OPEN, "name": "#9001-R1", "status": "OPEN", "totalQuantity": 1},

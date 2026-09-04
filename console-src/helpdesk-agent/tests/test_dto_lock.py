@@ -8,7 +8,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from helpdesk.dispatch import dispatch
+from helpdesk.dispatch import WRITE_TOOLS, dispatch, invoke
 from helpdesk.dto import billing_label, clerk_returns, tracking_label
 from helpdesk.fixtures_live_holes import C_MULTI, C_UNFULFILLED, O_1001, O_1002
 from helpdesk.fixtures_sample import ADA, CASEY, ORDER_ADA, ORDER_CASEY_B
@@ -138,6 +138,21 @@ class DtoLockTests(_ForceLiveHoles):
         self.assertEqual(casey["discountCodes"], [])
         hole = dispatch("helpdesk.get_order", {"shop": LIVE_HOLE_SHOP, "orderId": O_1001})["order"]
         self.assertEqual(hole["discountCodes"], [])
+
+    def test_sample_order_exposes_fixture_invoice_url_live_empty(self) -> None:
+        order = dispatch("helpdesk.get_order", {"shop": SAMPLE_SHOP, "orderId": ORDER_ADA})["order"]
+        self.assertEqual(order["invoiceUrl"], "https://example.com/invoice/demo-9001")
+        casey = dispatch("helpdesk.get_order", {"shop": SAMPLE_SHOP, "orderId": ORDER_CASEY_B})["order"]
+        self.assertIsNone(casey["invoiceUrl"])
+        hole = dispatch("helpdesk.get_order", {"shop": LIVE_HOLE_SHOP, "orderId": O_1001})["order"]
+        self.assertIsNone(hole["invoiceUrl"])
+        from helpdesk.queries import ORDER_QUERY
+
+        self.assertNotIn("invoiceUrl", ORDER_QUERY)
+        self.assertEqual(WRITE_TOOLS, frozenset({"helpdesk.send", "helpdesk.refund", "helpdesk.cancel"}))
+        for tool in ("helpdesk.refund", "helpdesk.cancel"):
+            payload = invoke(tool, {})
+            self.assertEqual(payload["error"], "forbidden")
 
     def test_sample_customer_exposes_official_gift_card_fields(self) -> None:
         customer = dispatch(

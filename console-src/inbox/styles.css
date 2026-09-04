@@ -374,6 +374,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 .gift-row:first-child, .discount-code:first-child { padding-top: 0; }
 .gift-hint { color: var(--ink); }
 .track-link { color: var(--accent); font-size: 12px; font-weight: 500; }
+.invoice-link { color: var(--accent); font-size: 12px; font-weight: 500; }
 .totals { display: grid; gap: 4px; margin: 8px 0; }
 .totals div { display: flex; justify-content: space-between; gap: 8px; }
 .addr-stack { display: flex; flex-direction: column; gap: 10px; }

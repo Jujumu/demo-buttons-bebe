@@ -78,6 +78,7 @@ test("selected list row CSS is a 4px ink bar with no wash", () => {
   assert.match(css, /\.ticket-row\.is-selected\s*\{[^}]*background:\s*var\(--surface\)/);
   assert.match(css, /One leading-edge ink bar on the selected ticket \(4px\)/);
   assert.match(css, /\.track-link\s*\{[^}]*color:\s*var\(--accent\)/);
+  assert.match(css, /\.invoice-link\s*\{[^}]*color:\s*var\(--accent\)/);
   assert.doesNotMatch(css, /\.track-link\s*\{[^}]*font-family:\s*var\(--mono\)/);
   assert.match(css, /\.ship-company\s*\{[^}]*color:\s*var\(--mute\)/);
   assert.match(css, /\.ship-number\s*\{[^}]*font-family:\s*var\(--mono\)/);
@@ -126,6 +127,8 @@ test("inbox organ renders four panes and an ink selected bar", async () => {
   assert.match(snap.html, /25\.00 USD · Enabled/);
   assert.match(snap.html, /<h3>Discounts<\/h3>\s*<span class="peek">WELCOME10<\/span>/);
   assert.match(snap.html, /<p class="mono discount-code">WELCOME10<\/p>/);
+  assert.match(snap.html, /<h3>Invoice<\/h3>\s*<span class="peek">Invoice<\/span>/);
+  assert.match(snap.html, /<a class="invoice-link"[^>]*>Invoice<\/a>/);
   assert.match(snap.html, /<h3>Addresses<\/h3>/);
   assert.match(snap.html, /ticket-row is-selected/);
   assert.match(snap.html, /status-line">Open · Friday/);
@@ -487,8 +490,10 @@ test("switching tickets resets rail expand and does not leak Ada OPEN returns", 
   assert.equal(snap.rail.open.shipment, false);
   assert.equal(snap.rail.open.giftCards, false);
   assert.equal(snap.rail.open.discounts, false);
+  assert.equal(snap.rail.open.invoice, false);
   assert.match(snap.html, /<h3>Gift cards<\/h3>\s*<span class="peek">No gift cards<\/span>/);
   assert.match(snap.html, /<h3>Discounts<\/h3>\s*<span class="peek">No discounts<\/span>/);
+  assert.match(snap.html, /<h3>Invoice<\/h3>\s*<span class="peek">No invoice<\/span>/);
 
   await organ.selectTicket("t-jordan-ship");
   snap = organ.snapshot();
@@ -501,9 +506,11 @@ test("switching tickets resets rail expand and does not leak Ada OPEN returns", 
   assert.equal(snap.rail.open["order-history"], false);
   assert.equal(snap.rail.open.giftCards, true);
   assert.equal(snap.rail.open.discounts, true);
+  assert.equal(snap.rail.open.invoice, true);
   assert.match(snap.html, /In transit · 1 item/);
   assert.match(snap.html, /••••4291/);
   assert.match(snap.html, /WELCOME10/);
+  assert.match(snap.html, /<a class="invoice-link"[^>]*>Invoice<\/a>/);
 });
 
 test("composer Insert and Discard never publish send", () => {
