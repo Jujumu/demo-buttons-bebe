@@ -224,10 +224,12 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   width: 100%;
   min-height: 88px;
   border: 0;
-  border-top: 1px solid var(--line);
   background: var(--surface);
   padding: 10px 8px;
   resize: vertical;
+}
+.composer-box[data-macro-open="true"] textarea {
+  border-top: 1px solid var(--line);
 }
 .summarize-peek {
   margin: 0 0 10px;
@@ -252,7 +254,14 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 .draft-kicker { font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--mute); }
 .draft-text { font-size: 13px; margin-top: 4px; }
 .draft-actions { display: flex; gap: 6px; align-items: flex-start; }
-.composer-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
+.composer-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+}
+.composer-send { display: flex; gap: 8px; }
 
 .btn-ink, .btn-quiet, .btn-hairline {
   border: 1px solid var(--line);

@@ -54,7 +54,7 @@ export function createInboxOrgan(opts = {}) {
   let macros = fixtureMacros;
   let macroQuery = "";
   let selectedMacroId = "";
-  let macrosOpen = true;
+  let macrosOpen = false;
   let writeGate = {
     mutationsEnabled: false,
     refused: ["send", "refund", "cancel"],
@@ -422,7 +422,7 @@ export function createInboxOrgan(opts = {}) {
       summarizeText = "";
       discarded = false;
       selectedMacroId = "";
-      macrosOpen = true;
+      macrosOpen = false;
       refreshList().then(() => {
         ensureSelection();
         return refreshThread();
@@ -435,11 +435,14 @@ export function createInboxOrgan(opts = {}) {
       summarizeText = "";
       discarded = false;
       selectedMacroId = "";
-      macrosOpen = true;
+      macrosOpen = false;
       refreshThread().then(refreshRail).then(refreshComposer).then(() => refreshMacros(macroQuery)).then(paint);
     });
     mailbox.subscribe(MAILBOX_TOPICS.COMPOSER_BODY, ({ text }) => {
       body = text;
+    });
+    mailbox.subscribe(MAILBOX_TOPICS.COMPOSER_MACROS, ({ open }) => {
+      macrosOpen = Boolean(open);
     });
     mailbox.subscribe(MAILBOX_TOPICS.COMPOSER_INSERT, (payload) => {
       if (payload?.macroId) {
@@ -541,7 +544,7 @@ export function createInboxOrgan(opts = {}) {
       summarizeText = "";
       discarded = false;
       selectedMacroId = "";
-      macrosOpen = true;
+      macrosOpen = false;
       return refreshList().then(() => {
         ensureSelection();
         return refreshThread();
@@ -554,7 +557,7 @@ export function createInboxOrgan(opts = {}) {
       summarizeText = "";
       discarded = false;
       selectedMacroId = "";
-      macrosOpen = true;
+      macrosOpen = false;
       return refreshThread().then(refreshRail).then(refreshComposer).then(() => refreshMacros(macroQuery));
     },
     toggleRail(key) {
@@ -575,6 +578,11 @@ export function createInboxOrgan(opts = {}) {
       strip = "";
       discarded = true;
       composerTissue.update(composerInput(selectedTicket()));
+    },
+    openMacros() {
+      macrosOpen = true;
+      composerTissue.update(composerInput(selectedTicket()));
+      return snapshot();
     },
     async searchMacros(query = "") {
       macrosOpen = true;
