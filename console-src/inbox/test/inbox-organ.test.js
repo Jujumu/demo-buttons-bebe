@@ -98,6 +98,10 @@ test("unsubscribe ticket shows mute request type without a Shopify write control
   assert.match(snap.html, /<h2>Marketing unsubscribe<\/h2>/);
   assert.match(snap.html, /No Shopify write — confirm preference out of band/);
   assert.match(snap.html, /<h2>Customer<\/h2>\s*<span class="peek">No customer<\/span>/);
+  assert.match(snap.html, /data-draft-strip/);
+  assert.match(snap.html, /I have your marketing unsubscribe request/);
+  assert.match(snap.html, /confirm the preference out of band/);
+  assert.doesNotMatch(snap.html, /data-draft-strip[\s\S]*?(?:destination|published catalog|I looked at)/i);
   assert.doesNotMatch(snap.html, /data-marketing-unsubscribe/);
   assert.doesNotMatch(snap.html, /<(button|a)\b[^>]*>[^<]*Unsubscribe/i);
   assert.deepEqual(snap.forbidden, []);
@@ -118,6 +122,10 @@ test("privacy ticket shows mute request type without a Shopify write control", a
   assert.match(snap.html, /Privacy tools stay locked\. No live data erase or export\./);
   assert.match(snap.html, /data-privacy-gate-open>Mark privacy handled</);
   assert.match(snap.html, /<h2>Customer<\/h2>\s*<span class="peek">No customer<\/span>/);
+  assert.match(snap.html, /data-draft-strip/);
+  assert.match(snap.html, /I have your privacy request/);
+  assert.match(snap.html, /out of band/);
+  assert.doesNotMatch(snap.html, /data-draft-strip[\s\S]*?(?:destination|published catalog|I looked at)/i);
   assert.doesNotMatch(snap.html, /data-tissue="privacy"/);
   assert.doesNotMatch(snap.html, /data-customer-privacy/);
   assert.doesNotMatch(snap.html, /<(button|a)\b[^>]*>[^<]*(?:erasure|redact|Customer Privacy)/i);

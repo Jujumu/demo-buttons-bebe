@@ -86,6 +86,8 @@ owns the preference change out of band.
 3. Rail peeks `Marketing unsubscribe` +
    `No Shopify write — confirm preference out of band`. No control that
    writes Shopify consent.
+4. Draft strip (`helpdesk.draft_reply`) confirms opt-out / marketing
+   preference path. Never invent order, catalog, or destination copy.
 
 Do not call marketing unsubscribe mutations. Do not query invented
 consent fields. Official `Customer.emailMarketingConsent` stays unread
@@ -107,6 +109,8 @@ deletion out of band. No fifth rail tissue.
    flag only. It does not write Shopify.
 5. Gated lock copy:
    `Privacy tools stay locked. No live data erase or export.`
+6. Draft strip explains the privacy path out of band (export / deletion).
+   Never invent order, catalog, or destination copy.
 
 Intake keywords (fixture-ok): privacy / GDPR / delete my data /
 data request. Do not call Customer privacy / GDPR / data-request
