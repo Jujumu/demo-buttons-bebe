@@ -334,7 +334,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   font-size: 13px;
 }
 .ship-copy { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
-.ship-number { font-family: var(--mono); font-size: 12px; }
+.ship-company { color: var(--mute); }
+.ship-number { font-family: var(--mono); font-size: 12px; color: var(--ink); }
 .track-link { color: var(--accent); font-size: 12px; font-weight: 500; }
 .totals { display: grid; gap: 4px; margin: 8px 0; }
 .totals div { display: flex; justify-content: space-between; gap: 8px; }

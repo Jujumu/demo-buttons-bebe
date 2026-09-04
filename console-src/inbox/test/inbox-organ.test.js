@@ -79,6 +79,7 @@ test("selected list row CSS is a 4px ink bar with no wash", () => {
   assert.match(css, /One leading-edge ink bar on the selected ticket \(4px\)/);
   assert.match(css, /\.track-link\s*\{[^}]*color:\s*var\(--accent\)/);
   assert.doesNotMatch(css, /\.track-link\s*\{[^}]*font-family:\s*var\(--mono\)/);
+  assert.match(css, /\.ship-company\s*\{[^}]*color:\s*var\(--mute\)/);
   assert.match(css, /\.ship-number\s*\{[^}]*font-family:\s*var\(--mono\)/);
   assert.doesNotMatch(css, /\.ticket-row\.is-selected\s*\{[^}]*background:\s*(?:#e|#E|rgba?\(\s*\d+)/);
   assert.doesNotMatch(css, /\.ticket-row\.is-selected\s*\{[^}]*box-shadow:\s*inset/);
