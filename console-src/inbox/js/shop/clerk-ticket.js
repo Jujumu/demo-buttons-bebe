@@ -52,5 +52,7 @@ export function clerkTicket(ticket) {
     toEmail: ticket.toEmail,
     assignee: ticket.assignee,
     view: ticket.view,
+    escalated: Boolean(ticket.escalated),
+    escalationReason: ticket.escalationReason || "",
   };
 }

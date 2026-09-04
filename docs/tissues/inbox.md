@@ -55,10 +55,11 @@ Demo names only (Ada Demo, Casey Sandbox, Jordan Preview). No customer PII.
 
 ### thread
 
-- **In:** `{ ticket }` from `helpdesk.get_ticket` (`ticket` + `messages` + `statusEvents`)
-- **Out:** `{ ticketId }` on `composer/summarize`
+- **In:** `{ ticket }` from `helpdesk.get_ticket` (`ticket` + `messages` + `statusEvents` + `escalated`)
+- **Out:** `{ ticketId }` on `composer/summarize`; `{ ticketId }` on `thread/escalate`
 - Status-change events are muted as `Closed · Tuesday` (ticket status + weekday). That is a status event, not `Order.displayFulfillmentStatus`. The Ada fixture includes at least one status event so the mute line is visible.
 - The ticket badge is title case (`Open`), not `OPEN`. Ticket status is `open` / `closed` / `snoozed`, never `Return.status`.
+- **Escalate** is a quiet secondary control in the thread header. It calls `helpdesk.escalate_ticket` (first-party). It does not Send and is not a Shopify write. After escalate the thread shows a mute status line `Escalated · Tuesday` (same voice as `Closed · Tuesday`). No Escalated badge or chip.
 - Skip-link copy is `Skip to thread.`
 - Summarize publishes `composer/summarize`. Caduceus fills a mute peek via `helpdesk.summarize_thread`. It does not Send and does not open an AI sidebar.
 - **Degrade:** “Select a ticket.” Rail and composer keep their last good state
@@ -72,6 +73,8 @@ Demo names only (Ada Demo, Casey Sandbox, Jordan Preview). No customer PII.
 - Summarize is a mute peek **above** the composer box, never a send. It does not enable Send by itself.
 - Send is ink fill (min-height 40px; 44px on coarse pointers) and disabled while the body is empty
 - Send & close is hairline secondary, not a second ink primary. It hides on a closed ticket
+- Mute write-gate copy: **Refunds and cancels are gated.** Client of `helpdesk.write_gate_status`. Not a Refund or Cancel control.
+- This order shows a hairline **Payments locked** control (same hairline language as Send & close). It opens a gate sheet: **Payments are locked until Syeed names an exact write. Refunds and cancels stay refused.**
 - **Degrade:** “Select a ticket to reply.”
 
 ## Rail tissues
@@ -94,6 +97,7 @@ Clerk DTO field names are locked. In for each: `{ shop, customerId? , orderId? }
 - Shipment opens only when tracking exists. Mute company + tracking number are copy (number in IBM Plex Mono), not a merged accent link. Separate **Track** opens the carrier URL when present. Empty fulfillments / no `trackingInfo`: collapsed peek `No tracking` (parallel to `No billing` / `No returns`). Do not invent a number. When tracking exists, `Fulfillment.displayStatus` may peek `In transit`. Do not treat `Order.displayFulfillmentStatus` as a mute status event.
 - Null or empty SKU omits the mono SKU row entirely. Do not print `null`. Do not print an em dash that occupies a SKU column. Do not invent a SKU
 - Clicking a past order does **not** replace this section
+- Hairline **Payments locked** (same language as Send & close) opens the payments gate sheet. Not a Refund or Cancel control.
 - **Degrade:** “No order on this ticket”
 
 ### returns

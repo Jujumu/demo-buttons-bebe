@@ -10,6 +10,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .errors import bad_request, not_found
@@ -362,5 +363,39 @@ def get_ticket(ticket_id: str, gid_source: str = "sample") -> dict:
             row = _row(ticket, gid_source)
             row["messages"] = [dict(message) for message in ticket["messages"]]
             row["statusEvents"] = [dict(event) for event in ticket["statusEvents"]]
+            row["escalated"] = bool(ticket.get("escalated"))
+            reason = ticket.get("escalationReason")
+            if reason:
+                row["escalationReason"] = str(reason)
             return row
+    raise not_found("ticket", str(ticket_id))
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def escalate_ticket(ticket_id: str, reason: str | None = None, gid_source: str = "sample") -> dict:
+    """First-party helpdesk escalate. Never a Shopify mutation."""
+    if not ticket_id:
+        raise bad_request("ticketId is required", field="ticketId")
+    canonical = _resolve_id(ticket_id)
+    note_reason = " ".join(str(reason or "").split())
+    for ticket in _store:
+        if ticket["id"] != canonical:
+            continue
+        now = _now_iso()
+        already = bool(ticket.get("escalated"))
+        ticket["escalated"] = True
+        if note_reason:
+            ticket["escalationReason"] = note_reason[:240]
+        ticket["updatedAt"] = now
+        if not already:
+            note = "escalated"
+            if note_reason:
+                note = f"escalated: {note_reason}"[:140]
+            ticket.setdefault("statusEvents", []).append(
+                {"at": now, "status": ticket["status"], "note": note}
+            )
+        return get_ticket(canonical, gid_source)
     raise not_found("ticket", str(ticket_id))

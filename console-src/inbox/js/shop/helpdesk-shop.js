@@ -190,6 +190,29 @@ export function createHelpdeskShop(opts = {}) {
       if (record) return record;
       return { ok: false, ingested: [], spam: [], skipped: 0 };
     },
+    async escalateTicket(args = {}) {
+      const record = await read(
+        "helpdesk.escalate_ticket",
+        { ticketId: args.ticketId, reason: args.reason },
+        (payload) => payload.ticket,
+      );
+      if (record) return record;
+      return fallback.escalateTicket(args);
+    },
+    async writeGateStatus(args = {}) {
+      const record = await read(
+        "helpdesk.write_gate_status",
+        args,
+        (payload) => ({
+          mutationsEnabled: Boolean(payload.mutationsEnabled),
+          refused: payload.refused || ["send", "refund", "cancel"],
+          tools: payload.tools || WRITE_TOOLS,
+          message: payload.message || "Shopify writes are refused. SHOPIFY_MUTATIONS_ENABLED stays 0.",
+        }),
+      );
+      if (record) return record;
+      return fallback.writeGateStatus(args);
+    },
   };
 }
 

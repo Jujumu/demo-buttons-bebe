@@ -136,6 +136,8 @@
  * @property {string | null} orderId
  * @property {object[]} messages
  * @property {{ at: string, status: string, note?: string }[]} statusEvents
+ * @property {boolean} [escalated]
+ * @property {string} [escalationReason]
  */
 
 /**
@@ -168,6 +170,9 @@
  * `composer/discard`
  * `composer/send`        { text, close: boolean }
  * `composer/summarize`   { ticketId }
+ * `thread/escalate`      { ticketId, reason? } — first-party; never Send
+ * `write-gate/open`      {} — This order hairline opens the payments sheet
+ * `write-gate/close`     {}
  * `history/peek`         { orderId }  — does not replace This order
  * `tissue/error`         { tissueId, message }
  */
@@ -180,9 +185,16 @@ export const MAILBOX_TOPICS = Object.freeze({
   COMPOSER_DISCARD: "composer/discard",
   COMPOSER_SEND: "composer/send",
   COMPOSER_SUMMARIZE: "composer/summarize",
+  THREAD_ESCALATE: "thread/escalate",
+  WRITE_GATE_OPEN: "write-gate/open",
+  WRITE_GATE_CLOSE: "write-gate/close",
   HISTORY_PEEK: "history/peek",
   TISSUE_ERROR: "tissue/error",
 });
+
+/** LOCK voice. Hairline + gate sheet. Not a Refund or Cancel control. */
+export const PAYMENTS_LOCKED_COPY =
+  "Payments are locked until Syeed names an exact write. Refunds and cancels stay refused.";
 
 export const FORBIDDEN_CONTROLS = Object.freeze([
   "gaia",

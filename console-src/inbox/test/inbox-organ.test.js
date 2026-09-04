@@ -228,6 +228,60 @@ test("Send stays disabled until the body has text", async () => {
   assert.doesNotMatch(readySend, /is-disabled/);
 });
 
+test("thread header shows Escalate as a secondary control", async () => {
+  const organ = createInboxOrgan({ viewId: "mine" });
+  const snap = await organ.ready();
+  assert.match(snap.html, /data-escalate="t-ada-track"/);
+  assert.match(snap.html, />Escalate</);
+  assert.match(snap.html, /thread-head-actions/);
+  const escalate = [...snap.html.matchAll(/<button\b[^>]*>/g)]
+    .map((match) => match[0])
+    .find((html) => /\bdata-escalate\b/.test(html));
+  assert.ok(escalate, "Escalate lives in the thread header");
+  assert.match(escalate, /btn-quiet/);
+  assert.doesNotMatch(escalate, /btn-ink/);
+});
+
+test("composer shows write-gate copy without Refund or Cancel controls", async () => {
+  const organ = createInboxOrgan({ viewId: "mine" });
+  const snap = await organ.ready();
+  assert.match(snap.html, /data-write-gate/);
+  assert.match(snap.html, /Refunds and cancels are gated/);
+  assert.deepEqual(snap.forbidden, []);
+  assert.doesNotMatch(snap.html, /<(button|a)\b[^>]*>[^<]*Refund/i);
+  assert.doesNotMatch(snap.html, /<(button|a)\b[^>]*>[^<]*\bCancel\b/i);
+});
+
+test("escalate marks the ticket and does not Send", async () => {
+  const organ = createInboxOrgan({ viewId: "mine" });
+  await organ.ready();
+  const snap = await organ.escalate("pending review");
+  assert.match(snap.html, /status-line"[^>]*data-escalated[^>]*>Escalated · /);
+  assert.doesNotMatch(snap.html, /status-badge[^>]*>Escalated</);
+  assert.doesNotMatch(snap.html, /data-escalate=/);
+  assert.equal(snap.sent.length, 0);
+});
+
+test("This order hairline opens the payments lock sheet", async () => {
+  const organ = createInboxOrgan({ viewId: "mine" });
+  let snap = await organ.ready();
+  assert.match(snap.html, /data-tissue="order"/);
+  const locked = [...snap.html.matchAll(/<button\b[^>]*>/g)]
+    .map((match) => match[0])
+    .find((html) => /\bdata-write-gate-open\b/.test(html));
+  assert.ok(locked, "Payments locked hairline lives on This order");
+  assert.match(locked, /btn-hairline/);
+  assert.match(snap.html, />Payments locked</);
+  assert.doesNotMatch(snap.html, /data-gate-sheet/);
+  snap = organ.openWriteGate();
+  assert.match(snap.html, /data-gate-sheet/);
+  assert.match(snap.html, /Payments are locked until Syeed names an exact write/);
+  assert.match(snap.html, /Refunds and cancels stay refused/);
+  assert.deepEqual(snap.forbidden, []);
+  assert.doesNotMatch(snap.html, /<(button|a)\b[^>]*>[^<]*Refund/i);
+  assert.doesNotMatch(snap.html, /<(button|a)\b[^>]*>[^<]*\bCancel\b/i);
+});
+
 test("closed ticket keeps composer and hides Send & close", async () => {
   const organ = createInboxOrgan({ viewId: "closed", ticketId: "t-ada-closed" });
   const snap = await organ.ready();

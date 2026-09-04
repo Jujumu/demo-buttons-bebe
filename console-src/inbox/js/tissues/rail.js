@@ -159,6 +159,11 @@ export function createRailOrgan({ shop, mailbox }) {
   function mount(el) {
     el.innerHTML = render();
     el.onclick = (event) => {
+      const gate = event.target.closest("[data-write-gate-open]");
+      if (gate) {
+        mailbox.publish(MAILBOX_TOPICS.WRITE_GATE_OPEN, {});
+        return;
+      }
       const retryBtn = event.target.closest("[data-retry]");
       if (retryBtn) {
         retry(retryBtn.dataset.retry).then(() => {

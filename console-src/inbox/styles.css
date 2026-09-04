@@ -134,6 +134,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   border-bottom: 1px solid var(--line);
 }
 .thread-head h2 { font-size: 16px; font-weight: 600; }
+.thread-head-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .thread-subject { color: var(--mute); font-size: 13px; margin-top: 2px; }
 .status-badge {
   font-size: 11px;
@@ -177,6 +178,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 .composer { border-top: 1px solid var(--line); padding: 12px 16px 16px; background: var(--surface); }
 .composer-to { font-size: 12px; margin-bottom: 8px; }
 .composer-to .mute, .mute { color: var(--mute); }
+.write-gate { color: var(--mute); font-size: 12px; margin: 0 0 8px; }
 .composer-box { border: 1px solid var(--line); background: var(--ground); padding: 8px; }
 .macro-search {
   width: 100%;
@@ -276,6 +278,25 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   color: var(--mute);
   opacity: 1;
 }
+
+.order-gate { margin: 10px 0 8px; }
+.gate-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  background: rgba(28, 25, 22, .24);
+}
+.gate-sheet {
+  width: min(28rem, calc(100vw - 32px));
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  padding: 20px;
+}
+.gate-sheet p { font-size: 14px; line-height: 1.5; }
+.gate-sheet-actions { display: flex; justify-content: flex-end; margin-top: 16px; }
 
 .rail-inner { overflow: auto; padding: 10px; }
 .rail-card { background: var(--surface); border: 1px solid var(--line); margin-bottom: 8px; }

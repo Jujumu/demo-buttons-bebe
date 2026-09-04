@@ -105,12 +105,18 @@ function renderAddress(label, address) {
 
 export function renderOrder(model, { open = true, addressesOpen = false, shipmentOpen } = {}) {
   const record = model.record;
+  const gateHairline = `<div class="order-gate">
+      <button type="button" class="btn-hairline" data-write-gate-open>Payments locked</button>
+    </div>`;
   if (!model.ok || !record) {
     return `<section class="rail-card" data-tissue="order" data-open="${open ? "true" : "false"}">
       <button type="button" class="rail-toggle" data-toggle="order" aria-expanded="${open ? "true" : "false"}">
         <h2>This order</h2><span class="peek">${esc(model.peek)}</span>
       </button>
-      <div class="rail-body"><p class="tissue-empty">No order on this ticket</p></div>
+      <div class="rail-body">
+        <p class="tissue-empty">No order on this ticket</p>
+        ${gateHairline}
+      </div>
     </section>`;
   }
   const shipOpen = shipmentOpen == null ? model.hasTracking : shipmentOpen;
@@ -155,6 +161,7 @@ export function renderOrder(model, { open = true, addressesOpen = false, shipmen
         <div><dt>Tax</dt><dd class="mono">${esc(formatMoney(record.totalTaxSet, "—"))}</dd></div>
         <div><dt>Total</dt><dd class="mono">${esc(formatMoney(record.currentTotalPriceSet, "—"))}</dd></div>
       </dl>
+      ${gateHairline}
       <div class="rail-sub" data-open="${addressesOpen ? "true" : "false"}">
         <button type="button" class="rail-sub-toggle" data-toggle="addresses" aria-expanded="${addressesOpen ? "true" : "false"}">
           <h3>Addresses</h3> <span class="peek">${esc(model.addressPeek)}</span>

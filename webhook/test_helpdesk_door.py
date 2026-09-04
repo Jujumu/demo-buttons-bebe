@@ -6,6 +6,7 @@ import os
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 HELPDESK = ROOT / "console-src" / "helpdesk-agent"
@@ -26,7 +27,7 @@ class HelpdeskDoorTests(unittest.TestCase):
     def setUp(self) -> None:
         reset_tickets()
 
-    def test_http_matches_dispatch_for_all_thirteen_tools(self) -> None:
+    def test_http_matches_dispatch_for_all_fifteen_tools(self) -> None:
         cases = [
             ("helpdesk.list_tickets", {"view": "open", "limit": 5}),
             ("helpdesk.get_ticket", {"ticketId": "1001"}),
@@ -41,17 +42,20 @@ class HelpdeskDoorTests(unittest.TestCase):
             ("helpdesk.ingest_email", dict(ADA_TRACKING)),
             ("helpdesk.ingest_chat", dict(CHAT_WITH_1001)),
             ("helpdesk.pull_mailbox", {"limit": 5}),
+            ("helpdesk.escalate_ticket", {"ticketId": "t-ada-track"}),
+            ("helpdesk.write_gate_status", {}),
         ]
-        for tool, args in cases:
-            reset_tickets()
-            handled = dispatch(tool, args)
-            reset_tickets()
-            http_payload = handle_http(tool, args)
-            reset_tickets()
-            door = handle_tool(tool, args)
-            self.assertEqual(handled, http_payload, tool)
-            self.assertEqual(handled, door, tool)
-            self.assertTrue(handled["ok"], tool)
+        with patch("helpdesk.tickets._now_iso", return_value="2026-09-04T12:00:00Z"):
+            for tool, args in cases:
+                reset_tickets()
+                handled = dispatch(tool, args)
+                reset_tickets()
+                http_payload = handle_http(tool, args)
+                reset_tickets()
+                door = handle_tool(tool, args)
+                self.assertEqual(handled, http_payload, tool)
+                self.assertEqual(handled, door, tool)
+                self.assertTrue(handled["ok"], tool)
 
     def test_writes_are_forbidden(self) -> None:
         for tool in ("helpdesk.send", "helpdesk.refund", "helpdesk.cancel"):

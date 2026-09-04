@@ -34,6 +34,7 @@ export function createComposerTissue({ mailbox }) {
     query: "",
     selectedMacroId: "",
     searchOpen: true,
+    writeGate: null,
   };
 
   function project(input) {
@@ -47,6 +48,7 @@ export function createComposerTissue({ mailbox }) {
       query: input.query || "",
       selectedMacroId: input.selectedMacroId || "",
       searchOpen: input.searchOpen ?? true,
+      writeGate: input.writeGate || null,
     };
   }
 
@@ -79,6 +81,12 @@ export function createComposerTissue({ mailbox }) {
     const ticket = next.ticket;
     if (!ticket) return `<div class="composer empty-pane">Select a ticket to reply.</div>`;
     const to = recipient(ticket);
+    const gate = next.writeGate || {};
+    const refused = Array.isArray(gate.refused) ? gate.refused : ["refund", "cancel"];
+    const moneyGated = refused.includes("refund") || refused.includes("cancel") || gate.mutationsEnabled === false;
+    const writeGate = moneyGated
+      ? `<p class="write-gate" data-write-gate>Refunds and cancels are gated.</p>`
+      : "";
     const macros = visibleMacros(next);
     const selected = selectedMacro(next);
     const macroItems = macros.map((macro) => (
@@ -121,6 +129,7 @@ export function createComposerTissue({ mailbox }) {
     return `<section class="composer" data-composer>
       ${peek}
       <div class="composer-to"><span>To</span> <strong>${esc(to.name)}</strong> <span class="mute">${esc(to.email)}</span></div>
+      ${writeGate}
       ${strip}
       <div class="composer-box" data-macro-open="${searchOpen ? "true" : "false"}">
         <input class="macro-search" data-macro-search type="search" placeholder="Search macros by name or tags" value="${esc(next.query)}" aria-label="Search macros">

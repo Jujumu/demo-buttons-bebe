@@ -1,4 +1,4 @@
-import { MAILBOX_TOPICS } from "./contracts.js";
+import { MAILBOX_TOPICS, PAYMENTS_LOCKED_COPY } from "./contracts.js";
 import { SHOP, STORE_NAME, macros as fixtureMacros, ticketInView, tickets as fixtureTickets, viewCounts, views } from "./fixtures/demo-inbox.js";
 import { createMailbox } from "./mailbox.js";
 import { createHelpdeskShop } from "./shop/helpdesk-shop.js";
@@ -55,6 +55,12 @@ export function createInboxOrgan(opts = {}) {
   let macroQuery = "";
   let selectedMacroId = "";
   let macrosOpen = true;
+  let writeGate = {
+    mutationsEnabled: false,
+    refused: ["send", "refund", "cancel"],
+    message: "Shopify writes are refused. SHOPIFY_MUTATIONS_ENABLED stays 0.",
+  };
+  let writeGateOpen = false;
   let listRows = pinnedCatalog ? pinnedCatalog.filter((ticket) => ticketInView(ticket, viewId)) : [];
   let selected = pinnedCatalog?.find((ticket) => ticket.id === selectedId) || null;
   let counts = pinnedCatalog ? viewCounts(pinnedCatalog) : viewCounts(fixtureTickets);
@@ -126,6 +132,18 @@ export function createInboxOrgan(opts = {}) {
       || null;
   }
 
+  function gateSheetHtml() {
+    if (!writeGateOpen) return "";
+    return `<div class="gate-sheet-backdrop" data-gate-sheet>
+      <div class="gate-sheet" role="dialog" aria-modal="true" aria-labelledby="gate-sheet-copy">
+        <p id="gate-sheet-copy">${PAYMENTS_LOCKED_COPY}</p>
+        <div class="gate-sheet-actions">
+          <button type="button" class="btn-hairline" data-gate-dismiss>Close</button>
+        </div>
+      </div>
+    </div>`;
+  }
+
   function shell() {
     return `<div class="inbox" data-organ="inbox">
       <a class="skip-link" href="#inbox-thread">Skip to thread.</a>
@@ -136,7 +154,8 @@ export function createInboxOrgan(opts = {}) {
         <div data-slot="composer"></div>
       </section>
       <aside class="pane pane-rail" data-pane="rail"></aside>
-    </div>`;
+    </div>
+    <div data-gate-host></div>`;
   }
 
   async function loadDraft(ticket) {
@@ -187,6 +206,43 @@ export function createInboxOrgan(opts = {}) {
     strip = ticket ? await loadDraft(ticket) : "";
   }
 
+  async function refreshWriteGate() {
+    if (typeof shop.writeGateStatus === "function") {
+      try {
+        const result = await shop.writeGateStatus();
+        if (result && Array.isArray(result.refused)) writeGate = result;
+      } catch {
+        // keep default gated copy
+      }
+    }
+  }
+
+  async function escalateSelected(reason) {
+    const ticket = selectedTicket();
+    if (!ticket || ticket.escalated) return ticket;
+    if (typeof shop.escalateTicket === "function") {
+      try {
+        const result = await shop.escalateTicket({ ticketId: ticket.id, reason });
+        if (result) {
+          selected = result;
+          return result;
+        }
+      } catch {
+        // local flag below
+      }
+    }
+    selected = {
+      ...ticket,
+      escalated: true,
+      escalationReason: reason || "",
+      statusEvents: [
+        ...(ticket.statusEvents || []),
+        { at: new Date().toISOString(), status: ticket.status, note: "escalated" },
+      ],
+    };
+    return selected;
+  }
+
   async function refreshMacros(query = "") {
     macroQuery = query;
     if (typeof shop.searchMacros === "function") {
@@ -218,6 +274,7 @@ export function createInboxOrgan(opts = {}) {
       query: macroQuery,
       selectedMacroId,
       searchOpen: macrosOpen,
+      writeGate,
     };
   }
 
@@ -238,7 +295,7 @@ export function createInboxOrgan(opts = {}) {
       <section class="pane pane-list" data-pane="list">${listTissue.render(listModel)}</section>
       <section class="pane pane-thread" id="inbox-thread" data-pane="thread" tabindex="-1">${threadTissue.render(threadModel)}${composerTissue.render(composerModel)}</section>
       <aside class="pane pane-rail" data-pane="rail">${rail.render()}</aside>
-    </div>`;
+    </div>${gateSheetHtml()}`;
     return {
       html,
       panes: { views: true, list: true, thread: true, rail: true },
@@ -290,6 +347,7 @@ export function createInboxOrgan(opts = {}) {
     await refreshRail();
     await refreshComposer();
     await refreshMacros("");
+    await refreshWriteGate();
 
     const paint = () => {
       const ticket = selectedTicket();
@@ -310,6 +368,8 @@ export function createInboxOrgan(opts = {}) {
       if (!threadResult.ok) {
         mailbox.publish(MAILBOX_TOPICS.TISSUE_ERROR, { tissueId: "thread", message: threadResult.error });
       }
+      const host = root.querySelector("[data-gate-host]");
+      if (host) host.innerHTML = gateSheetHtml();
     };
 
     mailbox.subscribe(MAILBOX_TOPICS.VIEW_SELECTED, ({ viewId: next }) => {
@@ -362,6 +422,24 @@ export function createInboxOrgan(opts = {}) {
         paint();
       });
     });
+    mailbox.subscribe(MAILBOX_TOPICS.THREAD_ESCALATE, ({ ticketId, reason }) => {
+      if (ticketId && ticketId !== selectedId) selectedId = ticketId;
+      escalateSelected(reason).then(() => refreshThread()).then(paint);
+    });
+    mailbox.subscribe(MAILBOX_TOPICS.WRITE_GATE_OPEN, () => {
+      writeGateOpen = true;
+      paint();
+    });
+    mailbox.subscribe(MAILBOX_TOPICS.WRITE_GATE_CLOSE, () => {
+      writeGateOpen = false;
+      paint();
+    });
+    root.onclick = (event) => {
+      if (event.target.closest("[data-gate-dismiss]") || event.target.closest("[data-gate-sheet]") === event.target) {
+        writeGateOpen = false;
+        paint();
+      }
+    };
     mailbox.subscribe(MAILBOX_TOPICS.COMPOSER_SEND, ({ text, close }) => {
       const ticket = selectedTicket();
       if (!ticket || !String(text || "").trim()) return;
@@ -467,6 +545,21 @@ export function createInboxOrgan(opts = {}) {
       composerTissue.update(composerInput(selectedTicket()));
       return snapshot();
     },
+    async escalate(reason) {
+      const ticket = await escalateSelected(reason);
+      if (ticket && !pinnedCatalog) await refreshThread();
+      composerTissue.update(composerInput(selectedTicket()));
+      threadTissue.update({ ticket: selectedTicket() });
+      return snapshot();
+    },
+    openWriteGate() {
+      writeGateOpen = true;
+      return snapshot();
+    },
+    closeWriteGate() {
+      writeGateOpen = false;
+      return snapshot();
+    },
     async requestSummarize() {
       const ticket = selectedTicket();
       summarizeText = await loadSummary(ticket);
@@ -480,6 +573,7 @@ export function createInboxOrgan(opts = {}) {
       await refreshRail();
       await refreshComposer();
       await refreshMacros(macroQuery);
+      await refreshWriteGate();
       return snapshot();
     },
     async ingestEmail(args) {

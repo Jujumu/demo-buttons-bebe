@@ -5,6 +5,7 @@ import json
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from unittest.mock import patch
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,10 +25,11 @@ class ContractTests(unittest.TestCase):
     def setUp(self) -> None:
         reset_tickets()
 
-    def test_thirteen_tools_only(self) -> None:
+    def test_fifteen_tools_only(self) -> None:
         self.assertEqual(tuple(list_tools()), TOOL_NAMES)
-        self.assertEqual(len(TOOLS), 13)
-        self.assertEqual([item["name"] for item in tool_descriptors()], list(TOOL_NAMES))
+        self.assertEqual(len(TOOLS), 15)
+        names = [item["name"] for item in tool_descriptors()]
+        self.assertEqual(names[:15], list(TOOL_NAMES))
         self.assertIn("helpdesk.draft_reply", TOOL_NAMES)
         self.assertIn("helpdesk.summarize_thread", TOOL_NAMES)
         self.assertIn("helpdesk.search_macros", TOOL_NAMES)
@@ -35,12 +37,19 @@ class ContractTests(unittest.TestCase):
         self.assertIn("helpdesk.ingest_email", TOOL_NAMES)
         self.assertIn("helpdesk.ingest_chat", TOOL_NAMES)
         self.assertIn("helpdesk.pull_mailbox", TOOL_NAMES)
+        self.assertIn("helpdesk.escalate_ticket", TOOL_NAMES)
+        self.assertIn("helpdesk.write_gate_status", TOOL_NAMES)
 
-    def test_mcp_lists_thirteen_tools(self) -> None:
+    def test_mcp_lists_fifteen_tools_and_refused_writes(self) -> None:
         reply = handle_rpc({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
         names = [tool["name"] for tool in reply["result"]["tools"]]
-        self.assertEqual(names, list(TOOL_NAMES))
-        self.assertEqual(len(names), 13)
+        self.assertEqual(names[:15], list(TOOL_NAMES))
+        self.assertEqual(len(list_tools()), 15)
+        self.assertIn("helpdesk.send", names)
+        self.assertIn("helpdesk.refund", names)
+        self.assertIn("helpdesk.cancel", names)
+        refund = next(tool for tool in reply["result"]["tools"] if tool["name"] == "helpdesk.refund")
+        self.assertIn("REFUSED", refund["description"])
 
     def _cli(self, argv: list[str]) -> dict:
         buf = io.StringIO()
@@ -127,28 +136,39 @@ class ContractTests(unittest.TestCase):
                 ["pull-mailbox", "--limit", "5"],
                 {"limit": 5},
             ),
+            (
+                "helpdesk.escalate_ticket",
+                ["escalate-ticket", "--ticket-id", "t-ada-track"],
+                {"ticketId": "t-ada-track"},
+            ),
+            (
+                "helpdesk.write_gate_status",
+                ["write-gate-status"],
+                {},
+            ),
         ]
-        for tool, argv, args in cases:
-            reset_tickets()
-            handled = dispatch(tool, args)
-            reset_tickets()
-            cli = self._cli(argv)
-            reset_tickets()
-            mcp = handle_rpc(
-                {
-                    "jsonrpc": "2.0",
-                    "id": 2,
-                    "method": "tools/call",
-                    "params": {"name": tool, "arguments": args},
-                }
-            )
-            mcp_body = json.loads(mcp["result"]["content"][0]["text"])
-            reset_tickets()
-            cli.pop("_exit")
-            self.assertEqual(handled, cli, tool)
-            self.assertEqual(handled, mcp_body, tool)
-            self.assertEqual(handled, handle_http(tool, args), tool)
-            self.assertTrue(handled["ok"], tool)
+        with patch("helpdesk.tickets._now_iso", return_value="2026-09-04T12:00:00Z"):
+            for tool, argv, args in cases:
+                reset_tickets()
+                handled = dispatch(tool, args)
+                reset_tickets()
+                cli = self._cli(argv)
+                reset_tickets()
+                mcp = handle_rpc(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": 2,
+                        "method": "tools/call",
+                        "params": {"name": tool, "arguments": args},
+                    }
+                )
+                mcp_body = json.loads(mcp["result"]["content"][0]["text"])
+                reset_tickets()
+                cli.pop("_exit")
+                self.assertEqual(handled, cli, tool)
+                self.assertEqual(handled, mcp_body, tool)
+                self.assertEqual(handled, handle_http(tool, args), tool)
+                self.assertTrue(handled["ok"], tool)
 
     def test_unknown_tool_is_structured_json(self) -> None:
         payload = invoke("helpdesk.send", {})

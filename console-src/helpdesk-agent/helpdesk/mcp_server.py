@@ -6,10 +6,11 @@ import json
 import sys
 from typing import Any
 
-from .dispatch import invoke, list_tools
+from .dispatch import WRITE_TOOLS, invoke, list_tools
 from .names import (
     TOOL_APPLY_MACRO,
     TOOL_DRAFT_REPLY,
+    TOOL_ESCALATE_TICKET,
     TOOL_GET_CUSTOMER,
     TOOL_GET_ORDER,
     TOOL_GET_RETURNS,
@@ -21,6 +22,7 @@ from .names import (
     TOOL_LIST_TICKETS,
     TOOL_SEARCH_MACROS,
     TOOL_SUMMARIZE_THREAD,
+    TOOL_WRITE_GATE_STATUS,
 )
 
 SCHEMAS = {
@@ -83,14 +85,34 @@ SCHEMAS = {
     TOOL_PULL_MAILBOX: {
         "limit": {"type": "integer", "description": "max unread/new inbound messages to pull"},
     },
+    TOOL_ESCALATE_TICKET: {
+        "ticketId": {"type": "string"},
+        "reason": {"type": "string", "description": "optional first-party note; never a Shopify mutation"},
+    },
+    TOOL_WRITE_GATE_STATUS: {},
 }
 
 
+def _description(name: str) -> str:
+    if name == TOOL_ESCALATE_TICKET:
+        return (
+            "First-party helpdesk escalate. Sets escalated/pending on the ticket. "
+            "Never a Shopify Admin mutation. Human still owns Send."
+        )
+    if name == TOOL_WRITE_GATE_STATUS:
+        return (
+            "Payment write-gate. Out: mutationsEnabled and refused "
+            "(send, refund, cancel). Cute Things stays read-only. "
+            "WRITE_TOOLS refuse those tools even if the env flag is on."
+        )
+    return f"Helpdesk tissue {name}"
+
+
 def tool_descriptors() -> list[dict[str, Any]]:
-    return [
+    live = [
         {
             "name": name,
-            "description": f"Helpdesk tissue {name}",
+            "description": _description(name),
             "inputSchema": {
                 "type": "object",
                 "properties": SCHEMAS[name],
@@ -99,6 +121,19 @@ def tool_descriptors() -> list[dict[str, Any]]:
         }
         for name in list_tools()
     ]
+    refused = [
+        {
+            "name": name,
+            "description": (
+                "REFUSED. Shopify Admin write is gated. "
+                "SHOPIFY_MUTATIONS_ENABLED stays 0. WRITE_TOOLS refuse send, refund, and cancel. "
+                "Call helpdesk.write_gate_status for the gate payload."
+            ),
+            "inputSchema": {"type": "object", "properties": {}, "additionalProperties": True},
+        }
+        for name in sorted(WRITE_TOOLS)
+    ]
+    return live + refused
 
 
 def handle_rpc(message: dict[str, Any]) -> dict[str, Any] | None:

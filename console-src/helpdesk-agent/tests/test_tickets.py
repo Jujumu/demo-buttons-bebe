@@ -42,9 +42,16 @@ class TicketContractTests(unittest.TestCase):
 
     def test_list_tickets_inbox_views(self) -> None:
         mine = dispatch("helpdesk.list_tickets", {"view": "mine", "limit": 20})["tickets"]
-        self.assertEqual([row["id"] for row in mine], ["t-ada-track"])
+        self.assertIn("t-ada-track", [row["id"] for row in mine])
+        self.assertEqual(mine[0]["id"], "t-ada-track")
+        for row in mine:
+            self.assertEqual(row["status"], "open")
+            self.assertNotEqual(row["status"], "OPEN")
         closed = dispatch("helpdesk.list_tickets", {"view": "closed", "limit": 20})["tickets"]
-        self.assertEqual([row["id"] for row in closed], ["t-ada-closed"])
+        self.assertIn("t-ada-closed", [row["id"] for row in closed])
+        self.assertEqual(closed[0]["id"], "t-ada-closed")
+        for row in closed:
+            self.assertEqual(row["status"], "closed")
         snoozed = dispatch("helpdesk.list_tickets", {"view": "snoozed", "limit": 20})["tickets"]
         self.assertEqual(snoozed[0]["status"], "snoozed")
         self.assertIsNone(snoozed[0]["orderId"])
@@ -134,6 +141,44 @@ class TicketContractTests(unittest.TestCase):
             self.assertFalse(payload["ok"])
             self.assertEqual(payload["error"], "forbidden")
             self.assertIn("SHOPIFY_MUTATIONS_ENABLED stays 0", payload["message"])
+            self.assertIn("refund", payload["details"]["refused"])
+            self.assertIn("cancel", payload["details"]["refused"])
+            self.assertFalse(payload["details"]["mutationsEnabled"])
+
+    def test_escalate_ticket_is_first_party_not_shopify(self) -> None:
+        from unittest.mock import patch
+
+        before = dispatch("helpdesk.get_ticket", {"ticketId": "t-ada-track"})["ticket"]
+        self.assertFalse(before.get("escalated"))
+        with patch("helpdesk.client.graphql") as gql:
+            payload = dispatch(
+                "helpdesk.escalate_ticket",
+                {"ticketId": "t-ada-track", "reason": "pending review"},
+            )
+            gql.assert_not_called()
+        self.assertTrue(payload["ok"])
+        ticket = payload["ticket"]
+        self.assertTrue(ticket["escalated"])
+        self.assertEqual(ticket["status"], "open")
+        self.assertEqual(ticket["escalationReason"], "pending review")
+        self.assertTrue(any("escalated" in (event.get("note") or "") for event in ticket["statusEvents"]))
+        again = dispatch("helpdesk.get_ticket", {"ticketId": "t-ada-track"})["ticket"]
+        self.assertTrue(again["escalated"])
+        rows = dispatch("helpdesk.list_tickets", {"view": "open", "limit": 20})["tickets"]
+        ada = next(row for row in rows if row["id"] == "t-ada-track")
+        self.assertNotIn("escalated", ada)
+        self.assertEqual(ada["status"], "open")
+        self.assertNotIn("helpdesk.escalate_ticket", WRITE_TOOLS)
+
+    def test_write_gate_status_reports_refused_money_writes(self) -> None:
+        os.environ["SHOPIFY_MUTATIONS_ENABLED"] = "0"
+        payload = dispatch("helpdesk.write_gate_status", {})
+        self.assertTrue(payload["ok"])
+        self.assertFalse(payload["mutationsEnabled"])
+        self.assertEqual(payload["refused"], ["send", "refund", "cancel"])
+        self.assertIn("helpdesk.refund", payload["tools"])
+        self.assertIn("helpdesk.cancel", payload["tools"])
+        self.assertIn("SHOPIFY_MUTATIONS_ENABLED stays 0", payload["message"])
 
 
 if __name__ == "__main__":

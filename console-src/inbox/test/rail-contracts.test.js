@@ -125,6 +125,15 @@ test("unfulfilled order peeks No tracking and stays collapsed", async () => {
   assert.equal(model.addressPeek, "No billing");
 });
 
+test("This order shows a Payments locked hairline", async () => {
+  const order = await shop.getOrder({ shop: SHOP, orderId: IDS.ORDER_1001 });
+  const html = renderOrder(projectOrder(order));
+  assert.match(html, /<h2>This order<\/h2>/);
+  assert.match(html, /btn-hairline" data-write-gate-open>Payments locked</);
+  assert.doesNotMatch(html, /<(button|a)\b[^>]*>[^<]*Refund/i);
+  assert.doesNotMatch(html, /<(button|a)\b[^>]*>[^<]*\bCancel\b/i);
+});
+
 test("partial ship shows mixed line status and tracking for the shipped line", async () => {
   const order = await shop.getOrder({ shop: SHOP, orderId: IDS.ORDER_1004 });
   const model = projectOrder(order);
