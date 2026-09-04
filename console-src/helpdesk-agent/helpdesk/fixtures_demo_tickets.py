@@ -9,11 +9,13 @@ from __future__ import annotations
 from .fixtures_live_holes import (
     C_FULFILLED,
     C_MULTI,
+    C_PARTIAL,
     C_UNFULFILLED,
     O_1001,
     O_1002,
     O_1003,
     O_1004,
+    O_PARTIAL,
 )
 
 STORE = "Demo Shop"
@@ -448,16 +450,18 @@ DEMO_SEED_TICKETS = (
     _ticket(
         tid="t-demo-19-partial",
         name="Sky Jensen",
-        subject="Only one of two swaddles arrived",
-        snippet="Muslin Swaddle Trio shipped but only one arrived.",
+        subject="Where's the rest of order #9004?",
+        snippet="The swaddle shipped — where's the rest?",
         status="open",
         assignee="me",
         updated="2026-08-31T19:15:00Z",
+        customer_id=C_PARTIAL,
+        order_id=O_PARTIAL,
         messages=[
             _msg(
                 "d19a",
                 "Sky Jensen",
-                "I ordered the Muslin Swaddle Trio but only one swaddle was in the package. Packing slip attached.",
+                "The Muslin Swaddle on #9004 shipped. Where's the rest? The Knit Baby Booties are still unfulfilled.",
                 "2026-08-31T19:10:00Z",
                 attachments=[IMG["slip"]],
             ),

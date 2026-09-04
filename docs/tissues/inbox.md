@@ -87,11 +87,11 @@ Clerk DTO field names are locked. In for each: `{ shop, customerId? , orderId? }
 
 ### order (This order)
 
-- **Out:** `name`, `createdAt`, `displayFinancialStatus`, `displayFulfillmentStatus`, `currentTotalPriceSet` (MoneyBag `{ shopMoney, presentmentMoney }`), `lineItems` (`title`, `sku`, `qty`, `originalUnitPriceSet.shopMoney`), stacked `shippingAddress` / `billingAddress`, `fulfillments.trackingInfo`, plus totals when the order object has them
-- Default open. Peek: order number + Paid + Fulfilled
-- Line items and totals stay visible while open
+- **Out:** `name`, `createdAt`, `displayFinancialStatus`, `displayFulfillmentStatus`, `currentTotalPriceSet` (MoneyBag `{ shopMoney, presentmentMoney }`), `lineItems` (`title`, `sku`, `qty`, `unfulfilledQuantity`, `originalUnitPriceSet.shopMoney`), stacked `shippingAddress` / `billingAddress`, `fulfillments.trackingInfo` / `displayStatus` / `fulfillmentLineItems`, plus totals when the order object has them
+- Default open. Peek: order number + Paid + Fulfilled / Partially Fulfilled / Unfulfilled
+- Line items and totals stay visible while open. Each line may show an official `unfulfilledQuantity` cue (`Shipped` / `Unfulfilled` / `N of Q unfulfilled`) so partial ship is visible. Miss → no invented line status.
 - Addresses start collapsed (stack, not two columns). Peek `No billing` when `billingAddress` is missing. `Ship ≠ bill` / `Same address` only when both addresses exist
-- Shipment opens only when tracking exists. Tracking is a labeled link, not a URL dump. Empty fulfillments / no `trackingInfo`: collapsed peek `No tracking` (parallel to `No billing` / `No returns`). Do not invent a number. Do not treat `Order.displayFulfillmentStatus` as a mute status event.
+- Shipment opens only when tracking exists. Tracking is a labeled link, not a URL dump. Empty fulfillments / no `trackingInfo`: collapsed peek `No tracking` (parallel to `No billing` / `No returns`). Do not invent a number. When tracking exists, `Fulfillment.displayStatus` may peek `In transit`. Do not treat `Order.displayFulfillmentStatus` as a mute status event.
 - Null or empty SKU omits the mono SKU row entirely. Do not print `null`. Do not print an em dash that occupies a SKU column. Do not invent a SKU
 - Clicking a past order does **not** replace this section
 - **Degrade:** “No order on this ticket”

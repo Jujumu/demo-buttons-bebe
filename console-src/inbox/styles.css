@@ -324,6 +324,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 .line-title { font-weight: 500; }
 .line-sku { margin-top: 2px; }
 .line-meta { margin-top: 2px; color: var(--mute); }
+.ship-line { margin-top: 6px; color: var(--mute); font-size: 12px; }
 .totals { display: grid; gap: 4px; margin: 8px 0; }
 .totals div { display: flex; justify-content: space-between; gap: 8px; }
 .addr-stack { display: flex; flex-direction: column; gap: 10px; }

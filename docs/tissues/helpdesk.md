@@ -80,6 +80,9 @@ short mute peek of the thread, not a reply. Missing LLM keys return a labeled
 - `sku` is `String | null`; omit the key when null (never print the word `null`)
 - `billingAddress` null is real; peek/copy label is `No billing`
 - empty `fulfillments` / no `trackingInfo`: peek/copy label is `No tracking`. Do not invent a number.
+- `LineItem.unfulfilledQuantity` is official; omit when missing. Do not invent a line status.
+- `Fulfillment.displayStatus` is official (`IN_TRANSIT`, …). `fulfillmentLineItems.nodes[].quantity` + `lineItem.title` are official when a shipment names its lines.
+- `Order.displayFulfillmentStatus` includes `PARTIALLY_FULFILLED` for mixed ship.
 - `inProgress` is true iff any `returns.nodes[].status === "OPEN"` (`ReturnStatus`)
 - `orderReturnStatus` is `Order.returnStatus` (`OrderReturnStatus`, live `NO_RETURN`)
 - Do not treat `Order.returnStatus === "IN_PROGRESS"` as an OPEN return
@@ -106,5 +109,8 @@ disk or printed. `SHOPIFY_MUTATIONS_ENABLED` stays `0`; writes are refused.
 Docs: [Customer](https://shopify.dev/docs/api/admin-graphql/2026-07/objects/Customer),
 [Order](https://shopify.dev/docs/api/admin-graphql/2026-07/objects/Order),
 [MoneyBag](https://shopify.dev/docs/api/admin-graphql/2026-07/objects/MoneyBag),
+[Fulfillment](https://shopify.dev/docs/api/admin-graphql/2026-07/objects/Fulfillment),
+[FulfillmentDisplayStatus](https://shopify.dev/docs/api/admin-graphql/2026-07/enums/FulfillmentDisplayStatus),
+[LineItem](https://shopify.dev/docs/api/admin-graphql/2026-07/objects/LineItem),
 [ReturnStatus](https://shopify.dev/docs/api/admin-graphql/2026-07/enums/ReturnStatus),
 [OrderReturnStatus](https://shopify.dev/docs/api/admin-graphql/2026-07/enums/OrderReturnStatus).

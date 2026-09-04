@@ -439,10 +439,13 @@ test("live-holes returns stay empty and never inherit Ada OPEN", async () => {
   assert.equal(projected.addressPeek, "No billing");
   assert.equal(projected.hasTracking, false);
   assert.equal(projected.shipmentPeek, "No tracking");
+  assert.equal(projected.lineFulfillLabels[0], "Unfulfilled");
+  assert.equal(order.lineItems.nodes[0].unfulfilledQuantity, 1);
   assert.equal(order.fulfillments?.length || 0, 0);
   const html = renderOrder(projected);
   assert.match(html, /<h3>Shipment<\/h3>\s*<span class="peek">No tracking<\/span>/);
   assert.match(html, /<p class="tissue-empty">No tracking<\/p>/);
+  assert.match(html, /data-line-fulfill="Unfulfilled">Unfulfilled</);
   assert.doesNotMatch(html, /AI-DEMO-|invented-track/i);
 });
 
@@ -802,7 +805,7 @@ test("resolveLiveInbox remounts only when source is live", async () => {
     invoke: async () => ({ ok: true, source: "live", customer: { id: LIVE_IDS.C_UNFULFILLED } }),
   });
   assert.equal(live.shop, LIVE_SHOP);
-  assert.equal(live.tickets.length, fixtureTickets.length);
+  assert.equal(live.tickets.length, 5);
   assert.ok(live.tickets.every((ticket) => !/Ada Demo/.test(JSON.stringify(ticket))));
 
   const sample = await resolveLiveInbox({
