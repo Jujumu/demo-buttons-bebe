@@ -42,6 +42,10 @@ test("UX Pro blocks fail the default Ada paint", async () => {
   assert.doesNotMatch(snap.html, /data-sku="null"/);
   assert.doesNotMatch(snap.html, />\s*null\s*</);
   assert.match(snap.html, /<h3>Addresses<\/h3>\s*<span class="peek">No billing<\/span>/);
+  assert.equal(toggleExpanded(snap.html, "giftCards"), true);
+  assert.equal(toggleExpanded(snap.html, "discounts"), true);
+  assert.match(snap.html, /<h3>Gift cards<\/h3>\s*<span class="peek">••••4291<\/span>/);
+  assert.match(snap.html, /<h3>Discounts<\/h3>\s*<span class="peek">WELCOME10<\/span>/);
   assert.match(snap.html, /status-badge">Open</);
   assert.match(snap.html, /Status Open/);
   assert.doesNotMatch(snap.html, /status-badge">OPEN</);
@@ -67,6 +71,10 @@ test("UX Pro blocks fail Casey and Jordan default paints", async () => {
       assert.match(snap.html, /<h3>Shipment<\/h3>\s*<span class="peek">No tracking<\/span>/);
       assert.equal(toggleExpanded(snap.html, "shipment"), false);
       assert.match(snap.html, /data-line-fulfill="Unfulfilled">Unfulfilled</);
+      assert.equal(toggleExpanded(snap.html, "giftCards"), false);
+      assert.equal(toggleExpanded(snap.html, "discounts"), false);
+      assert.match(snap.html, /<h3>Gift cards<\/h3>\s*<span class="peek">No gift cards<\/span>/);
+      assert.match(snap.html, /<h3>Discounts<\/h3>\s*<span class="peek">No discounts<\/span>/);
     }
   }
 });

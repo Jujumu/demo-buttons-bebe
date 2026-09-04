@@ -91,9 +91,17 @@ short mute peek of the thread, not a reply. Missing LLM keys return a labeled
 - `LineItem.unfulfilledQuantity` is official; omit when missing. Do not invent a line status.
 - `Fulfillment.displayStatus` is official (`IN_TRANSIT`, …). `fulfillmentLineItems.nodes[].quantity` + `lineItem.title` are official when a shipment names its lines.
 - `Order.displayFulfillmentStatus` includes `PARTIALLY_FULFILLED` for mixed ship.
+- `Order.discountCodes` is official `[String!]`. Empty list when none. Do not invent `discounts[]`.
 - `inProgress` is true iff any `returns.nodes[].status === "OPEN"` (`ReturnStatus`)
 - `orderReturnStatus` is `Order.returnStatus` (`OrderReturnStatus`, live `NO_RETURN`)
 - Do not treat `Order.returnStatus === "IN_PROGRESS"` as an OPEN return
+- Fixture `giftCards[]` on `ClerkCustomer` uses official `GiftCard` fields only:
+  `id`, `lastCharacters`, `maskedCode`, `enabled`, `balance` (MoneyV2).
+  Live `get_customer` does not query gift cards (Customer has no `giftCards`
+  connection; Cute Things may lack `read_gift_cards`). Live returns `[]`.
+  Clerk follow-up if live balances are needed: second read
+  `giftCards(first: 20, query: "customer_id:<numeric id>")`.
+  Do not invent `Order.giftCards`. Do not add giftCardCreate / giftCardDeactivate.
 
 ## Live vs sample returns
 
@@ -121,4 +129,6 @@ Docs: [Customer](https://shopify.dev/docs/api/admin-graphql/2026-07/objects/Cust
 [FulfillmentDisplayStatus](https://shopify.dev/docs/api/admin-graphql/2026-07/enums/FulfillmentDisplayStatus),
 [LineItem](https://shopify.dev/docs/api/admin-graphql/2026-07/objects/LineItem),
 [ReturnStatus](https://shopify.dev/docs/api/admin-graphql/2026-07/enums/ReturnStatus),
-[OrderReturnStatus](https://shopify.dev/docs/api/admin-graphql/2026-07/enums/OrderReturnStatus).
+[OrderReturnStatus](https://shopify.dev/docs/api/admin-graphql/2026-07/enums/OrderReturnStatus),
+[GiftCard](https://shopify.dev/docs/api/admin-graphql/2026-07/objects/GiftCard),
+[giftCards query](https://shopify.dev/docs/api/admin-graphql/2026-07/queries/giftCards).

@@ -11,6 +11,8 @@ Empty-copy voice is short and parallel:
 - No billing
 - No returns
 - No tracking
+- No gift cards
+- No discounts
 - No customer on this ticket
 
 Thread inbound From is the customer persona (`From Ada Demo`), not the
@@ -41,3 +43,15 @@ path as MCP + CLI). No second data path. Do not invent tracking.
 Miss → `No tracking` / unfulfilled line cue. Never invent a tracking number.
 Title-case on screen (`Unfulfilled`, `Partially Fulfilled`, `In transit`).
 Enums in data stay Shopify (`UNFULFILLED`, `PARTIALLY_FULFILLED`, `IN_TRANSIT`).
+
+## Gift cards + discounts
+
+Read-only peeks. Same `dispatch()` / `invoke()` path. No refund, cancel, or
+gift-card write.
+
+1. **Gift cards** — under Customer. Fixture `GiftCard` rows show masked
+   last-four (`lastCharacters` / `maskedCode`), MoneyV2 `balance`, and
+   Enabled/Disabled from `enabled`. Empty peek `No gift cards`. Live stays
+   empty until Clerk wires `giftCards(query: "customer_id:…")`.
+2. **Discounts** — under This order. Official `Order.discountCodes`. Empty
+   peek `No discounts`.

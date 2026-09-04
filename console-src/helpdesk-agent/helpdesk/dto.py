@@ -8,6 +8,8 @@ from .errors import bad_request
 
 BILLING_MISSING_LABEL = "No billing"
 TRACKING_MISSING_LABEL = "No tracking"
+GIFT_CARDS_MISSING_LABEL = "No gift cards"
+DISCOUNTS_MISSING_LABEL = "No discounts"
 
 
 def money_v2(node: dict[str, Any] | None) -> dict[str, str]:
@@ -113,6 +115,45 @@ def clerk_fulfillment(node: dict[str, Any]) -> dict[str, Any]:
     return row
 
 
+def clerk_gift_card(node: dict[str, Any]) -> dict[str, Any]:
+    """Official GiftCard fields only. No invented lastFour / status enum."""
+    if not isinstance(node, dict) or not node.get("lastCharacters"):
+        raise bad_request("GiftCard requires lastCharacters")
+    row: dict[str, Any] = {
+        "lastCharacters": str(node["lastCharacters"]),
+        "enabled": bool(node.get("enabled")),
+        "balance": money_v2(node.get("balance")),
+    }
+    ident = node.get("id")
+    if ident:
+        row["id"] = str(ident)
+    masked = node.get("maskedCode")
+    if masked:
+        row["maskedCode"] = str(masked)
+    return row
+
+
+def clerk_gift_cards(nodes: Any) -> list[dict[str, Any]]:
+    """Fixture GiftCard rows. Live Customer has no giftCards connection — empty."""
+    out: list[dict[str, Any]] = []
+    for item in nodes or []:
+        if isinstance(item, dict):
+            out.append(clerk_gift_card(item))
+    return out
+
+
+def clerk_discount_codes(nodes: Any) -> list[str]:
+    """Official Order.discountCodes: [String!]."""
+    out: list[str] = []
+    for item in nodes or []:
+        if item is None:
+            continue
+        text = str(item).strip()
+        if text:
+            out.append(text)
+    return out
+
+
 def clerk_customer(node: dict[str, Any]) -> dict[str, Any]:
     email = node.get("defaultEmailAddress")
     return {
@@ -125,6 +166,7 @@ def clerk_customer(node: dict[str, Any]) -> dict[str, Any]:
         "numberOfOrders": number_of_orders(node.get("numberOfOrders")),
         "amountSpent": money_v2(node.get("amountSpent")),
         "tags": list(node.get("tags") or []),
+        "giftCards": clerk_gift_cards(node.get("giftCards")),
     }
 
 
@@ -147,6 +189,7 @@ def clerk_order(node: dict[str, Any]) -> dict[str, Any]:
         "shippingAddress": node.get("shippingAddress"),
         "lineItems": {"nodes": [line_item(item) for item in nodes or []]},
         "fulfillments": fulfillments,
+        "discountCodes": clerk_discount_codes(node.get("discountCodes")),
     }
 
 

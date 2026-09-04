@@ -10,7 +10,7 @@ sys.path.insert(0, str(ROOT))
 
 from helpdesk.dispatch import dispatch
 from helpdesk.dto import billing_label, clerk_returns, tracking_label
-from helpdesk.fixtures_live_holes import C_MULTI, O_1001, O_1002
+from helpdesk.fixtures_live_holes import C_MULTI, C_UNFULFILLED, O_1001, O_1002
 from helpdesk.fixtures_sample import ADA, CASEY, ORDER_ADA, ORDER_CASEY_B
 from helpdesk.names import LIVE_HOLE_SHOP, SAMPLE_SHOP
 
@@ -130,6 +130,35 @@ class DtoLockTests(_ForceLiveHoles):
             "helpdesk.list_past_orders", {"shop": LIVE_HOLE_SHOP, "customerId": C_MULTI}
         )["orders"]
         self.assertEqual([row["name"] for row in multi], ["#1004", "#1003"])
+
+    def test_sample_order_exposes_official_discount_codes(self) -> None:
+        order = dispatch("helpdesk.get_order", {"shop": SAMPLE_SHOP, "orderId": ORDER_ADA})["order"]
+        self.assertEqual(order["discountCodes"], ["WELCOME10"])
+        casey = dispatch("helpdesk.get_order", {"shop": SAMPLE_SHOP, "orderId": ORDER_CASEY_B})["order"]
+        self.assertEqual(casey["discountCodes"], [])
+        hole = dispatch("helpdesk.get_order", {"shop": LIVE_HOLE_SHOP, "orderId": O_1001})["order"]
+        self.assertEqual(hole["discountCodes"], [])
+
+    def test_sample_customer_exposes_official_gift_card_fields(self) -> None:
+        customer = dispatch(
+            "helpdesk.get_customer", {"shop": SAMPLE_SHOP, "customerId": ADA}
+        )["customer"]
+        self.assertEqual(len(customer["giftCards"]), 1)
+        card = customer["giftCards"][0]
+        self.assertEqual(card["lastCharacters"], "4291")
+        self.assertEqual(card["maskedCode"], "••••4291")
+        self.assertTrue(card["enabled"])
+        self.assertEqual(card["balance"], {"amount": "25.00", "currencyCode": "USD"})
+        self.assertNotIn("lastFour", card)
+        self.assertNotIn("status", card)
+        casey = dispatch(
+            "helpdesk.get_customer", {"shop": SAMPLE_SHOP, "customerId": CASEY}
+        )["customer"]
+        self.assertEqual(casey["giftCards"], [])
+        hole = dispatch(
+            "helpdesk.get_customer", {"shop": LIVE_HOLE_SHOP, "customerId": C_UNFULFILLED}
+        )["customer"]
+        self.assertEqual(hole["giftCards"], [])
 
     def test_empty_order_does_not_use_ada_open_return(self) -> None:
         payload = dispatch(

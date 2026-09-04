@@ -1,5 +1,7 @@
 import {
   addressPeek,
+  discountPeek,
+  DISCOUNTS_MISSING_LABEL,
   esc,
   firstTracking,
   formatMoney,
@@ -30,9 +32,15 @@ export function projectOrder(record) {
       tracking: null,
       shipmentPeek: TRACKING_MISSING_LABEL,
       lineFulfillLabels: [],
+      discountCodes: [],
+      discountPeek: DISCOUNTS_MISSING_LABEL,
+      hasDiscounts: false,
     };
   }
   const nodes = record.lineItems?.nodes || [];
+  const discountCodes = (record.discountCodes || [])
+    .map((code) => String(code || "").trim())
+    .filter(Boolean);
   return {
     ok: true,
     peek: [record.name, statusLabel(record.displayFinancialStatus), statusLabel(record.displayFulfillmentStatus)]
@@ -44,6 +52,9 @@ export function projectOrder(record) {
     tracking: firstTracking(record),
     shipmentPeek: shipmentPeek(record),
     lineFulfillLabels: nodes.map((item) => lineFulfillmentLabel(item)),
+    discountCodes,
+    discountPeek: discountPeek(discountCodes),
+    hasDiscounts: discountCodes.length > 0,
     record,
   };
 }
@@ -96,6 +107,29 @@ function renderShipment(model, shipOpen) {
     </div>`;
 }
 
+function renderDiscounts(model, discountsOpen) {
+  const codes = model.discountCodes || [];
+  if (!codes.length) {
+    return `<div class="rail-sub" data-open="${discountsOpen ? "true" : "false"}">
+      <button type="button" class="rail-sub-toggle" data-toggle="discounts" aria-expanded="${discountsOpen ? "true" : "false"}">
+        <h3>Discounts</h3> <span class="peek">${esc(DISCOUNTS_MISSING_LABEL)}</span>
+      </button>
+      <div class="rail-sub-body"${discountsOpen ? "" : " hidden"}>
+        <p class="tissue-empty">${esc(DISCOUNTS_MISSING_LABEL)}</p>
+      </div>
+    </div>`;
+  }
+  const rows = codes.map((code) => `<p class="mono discount-code">${esc(code)}</p>`).join("");
+  return `<div class="rail-sub" data-open="${discountsOpen ? "true" : "false"}">
+    <button type="button" class="rail-sub-toggle" data-toggle="discounts" aria-expanded="${discountsOpen ? "true" : "false"}">
+      <h3>Discounts</h3> <span class="peek">${esc(model.discountPeek)}</span>
+    </button>
+    <div class="rail-sub-body"${discountsOpen ? "" : " hidden"}>
+      ${rows}
+    </div>
+  </div>`;
+}
+
 function renderAddress(label, address) {
   if (!address) return `<div class="addr"><h4>${esc(label)}</h4><p>Absent</p></div>`;
   const lines = [address.name, address.address1, address.address2, [address.city, address.province, address.zip].filter(Boolean).join(", "), address.country]
@@ -103,7 +137,7 @@ function renderAddress(label, address) {
   return `<div class="addr"><h4>${esc(label)}</h4>${lines.map((line) => `<p>${esc(line)}</p>`).join("")}</div>`;
 }
 
-export function renderOrder(model, { open = true, addressesOpen = false, shipmentOpen } = {}) {
+export function renderOrder(model, { open = true, addressesOpen = false, shipmentOpen, discountsOpen } = {}) {
   const record = model.record;
   const gateHairline = `<div class="order-gate">
       <button type="button" class="btn-hairline" data-write-gate-open>Payments locked</button>
@@ -120,6 +154,7 @@ export function renderOrder(model, { open = true, addressesOpen = false, shipmen
     </section>`;
   }
   const shipOpen = shipmentOpen == null ? model.hasTracking : shipmentOpen;
+  const codesOpen = discountsOpen == null ? Boolean(model.hasDiscounts) : discountsOpen;
   const items = (record.lineItems?.nodes || []).map((item, index) => {
     const skuLabel = model.skuLabels[index] ?? formatSku(item.sku);
     const skuRow = skuLabel
@@ -162,6 +197,7 @@ export function renderOrder(model, { open = true, addressesOpen = false, shipmen
         <div><dt>Total</dt><dd class="mono">${esc(formatMoney(record.currentTotalPriceSet, "—"))}</dd></div>
       </dl>
       ${gateHairline}
+      ${renderDiscounts(model, codesOpen)}
       <div class="rail-sub" data-open="${addressesOpen ? "true" : "false"}">
         <button type="button" class="rail-sub-toggle" data-toggle="addresses" aria-expanded="${addressesOpen ? "true" : "false"}">
           <h3>Addresses</h3> <span class="peek">${esc(model.addressPeek)}</span>

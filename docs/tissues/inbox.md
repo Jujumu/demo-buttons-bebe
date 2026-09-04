@@ -84,8 +84,9 @@ Clerk DTO field names are locked. In for each: `{ shop, customerId? , orderId? }
 
 ### customer
 
-- **Out:** `displayName`, `defaultEmailAddress.emailAddress` (not deprecated `Customer.email`), `createdAt`, `numberOfOrders` (JSON string), `amountSpent`, `tags`
+- **Out:** `displayName`, `defaultEmailAddress.emailAddress` (not deprecated `Customer.email`), `createdAt`, `numberOfOrders` (JSON string), `amountSpent`, `tags`, `giftCards` (official GiftCard fields; live empty)
 - Default open. Peek: name
+- Gift cards is a nested `h3` under Customer. Opens when a fixture card exists. Peek `No gift cards` when empty. Show masked last-four, MoneyV2 balance, Enabled/Disabled. Live stays empty until Clerk wires `giftCards(query:)`.
 - No Customer Edit link. No `customerUpdate` / address writes.
 - **Degrade:** “No customer on this ticket” in this card only
 
@@ -99,6 +100,7 @@ Clerk DTO field names are locked. In for each: `{ shop, customerId? , orderId? }
 - Null or empty SKU omits the mono SKU row entirely. Do not print `null`. Do not print an em dash that occupies a SKU column. Do not invent a SKU
 - Clicking a past order does **not** replace this section
 - Hairline **Payments locked** (same language as Send & close) opens the payments gate sheet. Not a Refund or Cancel control.
+- Discounts is a nested `h3` under This order. Official `discountCodes`. Opens when a code exists. Empty peek `No discounts`.
 - **Degrade:** “No order on this ticket”
 
 ### returns

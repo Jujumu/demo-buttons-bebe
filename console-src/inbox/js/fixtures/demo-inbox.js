@@ -27,6 +27,15 @@ export const customers = {
     numberOfOrders: "1",
     amountSpent: { amount: "28.00", currencyCode: "USD" },
     tags: ["DEMO"],
+    giftCards: [
+      {
+        id: "gid://shopify/GiftCard/80001",
+        lastCharacters: "4291",
+        maskedCode: "••••4291",
+        enabled: true,
+        balance: { amount: "25.00", currencyCode: "USD" },
+      },
+    ],
   },
   [CASEY]: {
     id: CASEY,
@@ -110,6 +119,7 @@ export const orders = {
         ],
       },
     ],
+    discountCodes: ["WELCOME10"],
     customerId: ADA,
   },
   [ORDER_1002]: {

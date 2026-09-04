@@ -48,6 +48,20 @@ export function reviewBlockViolations(html) {
     hits.push("empty shipment open");
   }
 
+  const giftCards = toggleExpanded(text, "giftCards");
+  const giftBlock = text.match(/data-toggle="giftCards"[\s\S]*?(?:data-toggle="|data-tissue="|$)/);
+  const giftPeekEmpty = /No gift cards/.test(giftBlock ? giftBlock[0] : "");
+  if (giftCards === true && giftPeekEmpty) {
+    hits.push("empty gift cards open");
+  }
+
+  const discounts = toggleExpanded(text, "discounts");
+  const discountBlock = text.match(/data-toggle="discounts"[\s\S]*?(?:data-toggle="|data-tissue="|$)/);
+  const discountPeekEmpty = /No discounts/.test(discountBlock ? discountBlock[0] : "");
+  if (discounts === true && discountPeekEmpty) {
+    hits.push("empty discounts open");
+  }
+
   if (history === true) {
     hits.push("past orders open by default");
   }

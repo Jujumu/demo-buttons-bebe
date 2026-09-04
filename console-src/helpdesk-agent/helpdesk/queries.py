@@ -25,6 +25,7 @@ query HelpdeskOrder($id: ID!) {
     displayFinancialStatus
     displayFulfillmentStatus
     returnStatus
+    discountCodes
     currentTotalPriceSet {
       shopMoney { amount currencyCode }
       presentmentMoney { amount currencyCode }
