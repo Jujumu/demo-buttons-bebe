@@ -85,7 +85,8 @@ export function createComposerTissue({ mailbox }) {
     const gate = next.writeGate || {};
     const refused = Array.isArray(gate.refused) ? gate.refused : ["refund", "cancel"];
     const moneyGated = refused.includes("refund") || refused.includes("cancel") || gate.mutationsEnabled === false;
-    const writeGate = moneyGated
+    const hasJoinedOrder = Boolean(ticket.orderId);
+    const writeGate = moneyGated && hasJoinedOrder
       ? `<p class="write-gate" data-write-gate>Refunds and cancels are gated.</p>`
       : "";
     const macros = visibleMacros(next);
