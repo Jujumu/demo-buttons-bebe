@@ -179,6 +179,28 @@ class TicketContractTests(unittest.TestCase):
         self.assertEqual(ada["status"], "open")
         self.assertNotIn("helpdesk.escalate_ticket", WRITE_TOOLS)
 
+    def test_unsubscribe_fixture_surfaces_request_type(self) -> None:
+        rows = dispatch("helpdesk.list_tickets", {"view": "open", "limit": 20})["tickets"]
+        priya = next(row for row in rows if row["id"] == "t-priya-unsub")
+        self.assertEqual(priya["requestType"], "marketing_unsubscribe")
+        self.assertEqual(priya["customerName"], "Priya Lane")
+        self.assertEqual(priya["status"], "open")
+        ada = next(row for row in rows if row["id"] == "t-ada-track")
+        self.assertIsNone(ada["requestType"])
+        casey = next(row for row in rows if row["id"] == "t-casey-visor")
+        self.assertIsNone(casey["requestType"])
+        ticket = dispatch("helpdesk.get_ticket", {"ticketId": "t-priya-unsub"})["ticket"]
+        self.assertEqual(ticket["requestType"], "marketing_unsubscribe")
+        self.assertEqual(ticket["status"], "open")
+        self.assertFalse(ticket.get("escalated"))
+        from helpdesk.queries import CUSTOMER_QUERY, ORDER_QUERY
+
+        self.assertNotIn("emailMarketingConsent", CUSTOMER_QUERY)
+        self.assertNotIn("marketingUnsubscribe", CUSTOMER_QUERY + ORDER_QUERY)
+        self.assertNotIn("customerEmailMarketingConsentUpdate", CUSTOMER_QUERY)
+        self.assertEqual(WRITE_TOOLS, frozenset({"helpdesk.send", "helpdesk.refund", "helpdesk.cancel"}))
+        self.assertNotIn("helpdesk.mark_request_type", WRITE_TOOLS)
+
     def test_write_gate_status_reports_refused_money_writes(self) -> None:
         os.environ["SHOPIFY_MUTATIONS_ENABLED"] = "0"
         payload = dispatch("helpdesk.write_gate_status", {})

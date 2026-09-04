@@ -76,6 +76,10 @@ export const DISCOUNTS_MISSING_LABEL = "No discounts";
 export const INVOICE_MISSING_LABEL = "No invoice";
 export const WARRANTY_MISSING_LABEL = "No warranty";
 export const ETA_MISSING_LABEL = "No ETA";
+export const REQUEST_TYPE_UNSUBSCRIBE = "marketing_unsubscribe";
+export const UNSUBSCRIBE_LABEL = "Unsubscribe";
+export const UNSUBSCRIBE_TITLE = "Marketing unsubscribe";
+export const UNSUBSCRIBE_WRITE_PEEK = "No Shopify write — confirm preference out of band";
 
 export function giftCardHint(card) {
   if (!card) return "";
@@ -252,6 +256,14 @@ const WRITE_ATTR = /\bdata-(?:edit|duplicate|refund|cancel|create-order|customer
 /** On-screen status word. Enums in data stay OPEN / PAID / etc. */
 export function screenStatus(value) {
   return statusLabel(value);
+}
+
+export function isMarketingUnsubscribe(value) {
+  return String(value || "") === REQUEST_TYPE_UNSUBSCRIBE;
+}
+
+export function requestTypeLabel(value) {
+  return isMarketingUnsubscribe(value) ? UNSUBSCRIBE_LABEL : "";
 }
 
 export function forbiddenControlHits(html) {

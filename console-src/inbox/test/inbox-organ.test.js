@@ -87,6 +87,25 @@ test("selected list row CSS is a 4px ink bar with no wash", () => {
   assert.doesNotMatch(css, /#6B46C1|#7C3AED|#5B21B6/);
 });
 
+test("unsubscribe ticket shows mute request type without a Shopify write control", async () => {
+  const organ = createInboxOrgan({ viewId: "mine", ticketId: "t-priya-unsub" });
+  const snap = await organ.ready();
+  assert.equal(snap.selectedId, "t-priya-unsub");
+  assert.match(snap.html, /data-ticket="t-priya-unsub"[^>]*data-request-type="marketing_unsubscribe"/);
+  assert.match(snap.html, /class="ticket-status ticket-request"[^>]*>Unsubscribe</);
+  assert.match(snap.html, /class="thread-request mute"[^>]*>Marketing unsubscribe</);
+  assert.match(snap.html, /data-tissue="preference"[^>]*data-request-type="marketing_unsubscribe"/);
+  assert.match(snap.html, /<h2>Marketing unsubscribe<\/h2>/);
+  assert.match(snap.html, /No Shopify write — confirm preference out of band/);
+  assert.match(snap.html, /<h2>Customer<\/h2>\s*<span class="peek">No customer<\/span>/);
+  assert.doesNotMatch(snap.html, /data-marketing-unsubscribe/);
+  assert.doesNotMatch(snap.html, /<(button|a)\b[^>]*>[^<]*Unsubscribe/i);
+  assert.deepEqual(snap.forbidden, []);
+  const ada = await createInboxOrgan({ viewId: "mine", ticketId: "t-ada-track" }).ready();
+  assert.doesNotMatch(ada.html, /data-ticket="t-ada-track"[^>]*data-request-type/);
+  assert.doesNotMatch(ada.html, /data-tissue="preference"/);
+});
+
 test("list rows show helpdesk status open closed snoozed", async () => {
   const snap = await createInboxOrgan({ viewId: "all" }).ready();
   assert.match(snap.html, /data-ticket="t-ada-track"[^>]*data-status="open"/);

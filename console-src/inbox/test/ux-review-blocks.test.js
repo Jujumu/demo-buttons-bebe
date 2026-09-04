@@ -62,6 +62,20 @@ test("UX Pro blocks fail the default Ada paint", async () => {
   assert.doesNotMatch(snap.html, /<(button|a)\b[^>]*>\s*(?:Customer\s+)?Edit\b/i);
 });
 
+test("UX Pro mute unsubscribe chrome has no Shopify write control", async () => {
+  const snap = await createInboxOrgan({ viewId: "mine", ticketId: "t-priya-unsub" }).ready();
+  assert.deepEqual(reviewBlockViolations(snap.html), []);
+  assert.match(snap.html, /class="ticket-status ticket-request"[^>]*>Unsubscribe</);
+  assert.match(snap.html, /class="thread-request mute"[^>]*>Marketing unsubscribe</);
+  assert.match(snap.html, /<h2>Marketing unsubscribe<\/h2>\s*<span class="peek">No Shopify write<\/span>/);
+  assert.match(snap.html, /No Shopify write — confirm preference out of band/);
+  assert.doesNotMatch(snap.html, /<(button|a)\b[^>]*>[^<]*(?:Unsubscribe|opt out|marketing consent)/i);
+  assert.doesNotMatch(snap.html, /#6B46C1|#7C3AED|#5B21B6/);
+  const css = readFileSync(join(here, "../styles.css"), "utf8");
+  assert.match(css, /\.ticket-request\s*\{[^}]*color:\s*var\(--mute\)/);
+  assert.match(css, /\.thread-request\s*\{/);
+});
+
 test("UX Pro blocks fail Casey and Jordan default paints", async () => {
   for (const opts of [
     { viewId: "unassigned", ticketId: "t-casey-visor" },

@@ -403,6 +403,33 @@ export const tickets = [
     ],
   },
   {
+    id: "t-priya-unsub",
+    customerName: "Priya Lane",
+    subject: "Please unsubscribe me from marketing emails",
+    snippet: "Please take me off the marketing list. I still want order updates.",
+    status: "open",
+    view: "mine",
+    assignee: "me",
+    customerId: null,
+    orderId: null,
+    requestType: "marketing_unsubscribe",
+    updatedAt: "2026-08-28T15:40:00Z",
+    stubDraft: "Hi Priya — I have your marketing unsubscribe request. I will confirm the preference out of band. This inbox does not change Shopify marketing settings.",
+    stubSummary: "Priya asked to leave the marketing list and keep order updates.",
+    messages: [
+      {
+        id: "m-unsub",
+        fromAgent: false,
+        name: "Priya Lane",
+        at: "2026-08-28T15:40:00Z",
+        body: "Please take me off the marketing list. I still want order updates.",
+      },
+    ],
+    statusEvents: [
+      { at: "2026-08-28T15:41:00Z", status: "open", note: "created" },
+    ],
+  },
+  {
     id: "t-casey-visor",
     customerName: "Casey Sandbox",
     subject: "When will order #1002 ship?",

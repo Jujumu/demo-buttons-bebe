@@ -28,6 +28,7 @@ from .fixtures_sample import ADA, CASEY, JORDAN, ORDER_ADA, ORDER_CASEY_A, ORDER
 
 VIEWS = ("open", "closed", "all", "snoozed", "mine", "unassigned")
 TICKET_STATUSES = ("open", "closed", "snoozed")
+REQUEST_TYPES = ("marketing_unsubscribe",)
 
 ALIASES = {
     "1001": "t-ada-track",
@@ -183,6 +184,30 @@ SEED_TICKETS = (
             {"at": "2026-08-25T18:12:00Z", "status": "closed", "note": "answered"},
         ],
     },
+    {
+        "id": "t-priya-unsub",
+        "customerName": "Priya Lane",
+        "subject": "Please unsubscribe me from marketing emails",
+        "snippet": "Please take me off the marketing list. I still want order updates.",
+        "status": "open",
+        "assignee": "me",
+        "updatedAt": "2026-08-28T15:40:00Z",
+        "requestType": "marketing_unsubscribe",
+        "messages": [
+            {
+                "id": "m8-unsub",
+                "from": "customer",
+                "fromAgent": False,
+                "name": "Priya Lane",
+                "fromName": "Priya Lane",
+                "body": "Please take me off the marketing list. I still want order updates.",
+                "at": "2026-08-28T15:40:00Z",
+            }
+        ],
+        "statusEvents": [
+            {"at": "2026-08-28T15:41:00Z", "status": "open", "note": "created"},
+        ],
+    },
 ) + tuple(DEMO_SEED_TICKETS)
 
 _store: list[dict] = []
@@ -257,6 +282,24 @@ def _snippet(body: str) -> str:
     return " ".join(str(body or "").split())[:140]
 
 
+def infer_request_type(subject: str = "", body: str = "") -> str | None:
+    """First-party type from intake subject. Never a Shopify marketing write."""
+    _ = body
+    hay = f"{subject or ''}".lower()
+    if "unsubscribe-farm" in hay or "unsubscribe farm" in hay:
+        return None
+    if "unsubscribe" in hay:
+        return "marketing_unsubscribe"
+    return None
+
+
+def _normalize_request_type(value: str | None, subject: str = "") -> str | None:
+    typed = str(value or "").strip() or infer_request_type(subject)
+    if typed in REQUEST_TYPES:
+        return typed
+    return None
+
+
 def add_ticket(
     *,
     customer_name: str,
@@ -268,6 +311,7 @@ def add_ticket(
     channel: str,
     from_email: str | None,
     dedupe_key: tuple,
+    request_type: str | None = None,
 ) -> dict:
     existing = _by_dedupe.get(dedupe_key)
     if existing:
@@ -275,6 +319,7 @@ def add_ticket(
     global _next_seq
     ticket_id = f"t-in-{_next_seq}"
     _next_seq += 1
+    typed = _normalize_request_type(request_type, subject)
     ticket = {
         "id": ticket_id,
         "customerName": customer_name,
@@ -288,6 +333,7 @@ def add_ticket(
         "orderId": order_id,
         "channel": channel,
         "fromEmail": from_email,
+        "requestType": typed,
         "messages": [
             {
                 "id": f"m-{ticket_id}-1",
@@ -349,6 +395,7 @@ def _row(ticket: dict, gid_source: str = "sample") -> dict:
         "updatedAt": ticket["updatedAt"],
         "customerId": customer_id,
         "orderId": order_id,
+        "requestType": ticket.get("requestType") or None,
     }
 
 

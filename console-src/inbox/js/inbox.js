@@ -328,6 +328,7 @@ export function createInboxOrgan(opts = {}) {
       customerId: ticket?.customerId,
       orderId: ticket?.orderId,
       ticketId: ticket?.id,
+      requestType: ticket?.requestType || "",
     });
     toEmail = rail.snapshot().models.customer?.record?.defaultEmailAddress?.emailAddress || "";
   }

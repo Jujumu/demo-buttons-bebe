@@ -1,5 +1,5 @@
 import { MAILBOX_TOPICS } from "../contracts.js";
-import { esc, formatOrderCount } from "../util.js";
+import { esc, formatOrderCount, isMarketingUnsubscribe, UNSUBSCRIBE_TITLE, UNSUBSCRIBE_WRITE_PEEK } from "../util.js";
 import { createCustomerTissue, renderCustomer } from "./customer.js";
 import { createOrderHistoryTissue, renderOrderHistory } from "./order-history.js";
 import { createOrderTissue, renderOrder } from "./order.js";
@@ -41,7 +41,7 @@ export function createRailOrgan({ shop, mailbox }) {
   let peekedHistoryId = null;
   let currentOrderId = null;
   let currentTicketKey = null;
-  let lastLoad = { shop: "", customerId: "", orderId: "", ticketId: "" };
+  let lastLoad = { shop: "", customerId: "", orderId: "", ticketId: "", requestType: "" };
 
   function ticketKey({ ticketId, customerId, orderId }) {
     if (ticketId) return `ticket:${ticketId}`;
@@ -82,6 +82,20 @@ export function createRailOrgan({ shop, mailbox }) {
     </section>`;
   }
 
+  function renderPreference() {
+    const typed = lastLoad.requestType;
+    if (!isMarketingUnsubscribe(typed)) return "";
+    return `<section class="rail-card" data-tissue="preference" data-open="true" data-request-type="${esc(typed)}">
+      <div class="rail-static">
+        <h2>${esc(UNSUBSCRIBE_TITLE)}</h2>
+        <span class="peek">No Shopify write</span>
+      </div>
+      <div class="rail-body">
+        <p class="mute preference-line">${esc(UNSUBSCRIBE_WRITE_PEEK)}</p>
+      </div>
+    </section>`;
+  }
+
   function render() {
     const customerHtml = models.customer.error
       ? renderError("customer", "Customer", models.customer.peek)
@@ -108,6 +122,7 @@ export function createRailOrgan({ shop, mailbox }) {
       ? renderError("order-history", "Past orders", models.history.peek)
       : renderOrderHistory(historyView, { open: open["order-history"], peekedId: peekedHistoryId });
     return `<div class="pane-inner rail-inner">
+      ${renderPreference()}
       ${customerHtml}
       ${orderHtml}
       ${returnsHtml}
@@ -136,8 +151,8 @@ export function createRailOrgan({ shop, mailbox }) {
     }));
   }
 
-  async function load({ shop: shopId, customerId, orderId, ticketId }) {
-    lastLoad = { shop: shopId, customerId, orderId, ticketId };
+  async function load({ shop: shopId, customerId, orderId, ticketId, requestType }) {
+    lastLoad = { shop: shopId, customerId, orderId, ticketId, requestType: requestType || "" };
     const nextKey = ticketKey({ ticketId, customerId, orderId });
     const switched = nextKey !== currentTicketKey;
     currentTicketKey = nextKey;

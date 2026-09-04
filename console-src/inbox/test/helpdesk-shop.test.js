@@ -144,6 +144,13 @@ test("list_tickets rows include customerId and orderId GIDs", async () => {
   assert.equal(rows[0].id, "t-ada-track");
   assert.equal(rows[0].customerId, SAMPLE_ADA);
   assert.equal(rows[0].orderId, SAMPLE_ADA_ORDER);
+  assert.equal(rows[0].requestType, null);
+  const priya = listed.tickets.find((row) => row.id === "t-priya-unsub");
+  assert.ok(priya);
+  assert.equal(priya.requestType, "marketing_unsubscribe");
+  assert.equal(priya.status, "open");
+  const casey = listed.tickets.find((row) => row.id === "t-casey-visor");
+  assert.equal(casey.requestType, null);
 });
 
 test("get_ticket returns messages and statusEvents", async () => {

@@ -49,17 +49,18 @@ Demo names only (Ada Demo, Casey Sandbox, Jordan Preview). No customer PII.
 
 - **In:** `{ tickets, selectedTicketId, viewLabel }` from `helpdesk.list_tickets`
 - **Out:** `{ ticketId }` on `list/selected`
-- Row copy uses first-party `customerName` (never the AgentMail/shop mailbox login), `snippet`, and title-case helpdesk `status` (`Open` / `Closed` / `Snoozed`). Never `Return.status`. Never `Order.displayFulfillmentStatus`.
+- Row copy uses first-party `customerName` (never the AgentMail/shop mailbox login), `snippet`, and title-case helpdesk `status` (`Open` / `Closed` / `Snoozed`). Mute list meta `Unsubscribe` when `requestType` is `marketing_unsubscribe`. Never `Return.status`. Never `Order.displayFulfillmentStatus`.
 - **Selected row:** One leading-edge ink bar on the selected ticket (4px). That is the only selection treatment. No wash, no purple. Surface only (`#FFFDF9`); bar is `#1C1916`.
 - **Degrade:** “No tickets in this view”
 
 ### thread
 
-- **In:** `{ ticket }` from `helpdesk.get_ticket` (`ticket` + `messages` + `statusEvents` + `escalated`)
+- **In:** `{ ticket }` from `helpdesk.get_ticket` (`ticket` + `messages` + `statusEvents` + `escalated` + `requestType`)
 - **Out:** `{ ticketId }` on `composer/summarize`; `{ ticketId }` on `thread/escalate`
 - Status-change events are muted as `Closed · Tuesday` (ticket status + weekday). That is a status event, not `Order.displayFulfillmentStatus`. The Ada fixture includes at least one status event so the mute line is visible.
 - Inbound bubbles read `From {customerDisplayName}` (mute email when it is a real customer address). Never the AgentMail/shop mailbox login. Staff/outbound From stays the shop identity. `from` on the DTO is still the role (`customer` / `agent`); `fromName` / `fromEmail` are the speaker.
 - The ticket badge is title case (`Open`), not `OPEN`. Ticket status is `open` / `closed` / `snoozed`, never `Return.status`.
+- Marketing unsubscribe tickets mute `Marketing unsubscribe` under the subject. Rail peeks the same title plus `No Shopify write — confirm preference out of band`. No Shopify marketing write control.
 - **Escalate** is a quiet secondary control in the thread header. It calls `helpdesk.escalate_ticket` (first-party). It does not Send and is not a Shopify write. After escalate the thread shows a mute status line `Escalated · Tuesday` (same voice as `Closed · Tuesday`). No Escalated badge or chip.
 - Skip-link copy is `Skip to thread.`
 - Summarize publishes `composer/summarize`. Caduceus fills a mute peek via `helpdesk.summarize_thread`. It does not Send and does not open an AI sidebar.

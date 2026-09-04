@@ -18,6 +18,7 @@ from helpdesk.fixtures_intake import (
     CHAT_WITHOUT_ORDER,
     JORDAN_WRONG,
     PRIYA_RETURN,
+    PRIYA_UNSUB,
     PRIZE_SPAM,
     SAM_RATTLE,
 )
@@ -65,6 +66,21 @@ class IntakeTests(unittest.TestCase):
         listed = dispatch("helpdesk.list_tickets", {"view": "all", "limit": 100})["tickets"]
         self.assertFalse(any("prize" in f"{row['subject']} {row['snippet']}".lower() for row in listed))
         self.assertFalse(any(row.get("id") == payload.get("id") for row in listed))
+
+    def test_ingest_email_unsubscribe_subject_sets_request_type(self) -> None:
+        payload = dispatch(TOOL_INGEST_EMAIL, PRIYA_UNSUB)
+        self.assertTrue(payload["ok"])
+        self.assertFalse(payload["spam"])
+        self.assertEqual(payload["requestType"], "marketing_unsubscribe")
+        listed = dispatch("helpdesk.list_tickets", {"view": "open", "limit": 20})["tickets"]
+        row = next(item for item in listed if item["id"] == payload["id"])
+        self.assertEqual(row["requestType"], "marketing_unsubscribe")
+        ada = dispatch(TOOL_INGEST_EMAIL, ADA_TRACKING)
+        self.assertIsNone(ada.get("requestType"))
+        prize = dispatch(TOOL_INGEST_EMAIL, PRIZE_SPAM)
+        self.assertTrue(prize["spam"])
+        self.assertIsNone(prize.get("requestType"))
+        self.assertEqual(WRITE_TOOLS, frozenset({"helpdesk.send", "helpdesk.refund", "helpdesk.cancel"}))
 
     def test_ingest_email_without_order_number_stays_gid_null(self) -> None:
         for fixture in (SAM_RATTLE, PRIYA_RETURN, JORDAN_WRONG):

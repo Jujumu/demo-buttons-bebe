@@ -17,6 +17,7 @@ Empty-copy voice is short and parallel:
 - No warranty
 - No ETA
 - No customer on this ticket
+- No Shopify write
 
 Thread inbound From is the customer persona (`From Ada Demo`), not the
 AgentMail/shop mailbox login. Mute the email when it helps; omit mailbox
@@ -72,3 +73,20 @@ gift-card write.
    covers both. Live zone stays empty: Admin GraphQL 2026-07 Order /
    Fulfillment have no shipping-zone field. Track chrome stays company +
    mono number + Track.
+
+## Marketing unsubscribe
+
+First-party ticket `requestType`. Not a Shopify Marketing write. Human
+owns the preference change out of band.
+
+1. List meta mutes `Unsubscribe` when `requestType` is
+   `marketing_unsubscribe`. Same mute status voice as Open / Closed /
+   Snoozed. No purple badge.
+2. Thread header mutes `Marketing unsubscribe` under the subject.
+3. Rail peeks `Marketing unsubscribe` +
+   `No Shopify write — confirm preference out of band`. No control that
+   writes Shopify consent.
+
+Do not call marketing unsubscribe mutations. Do not query invented
+consent fields. Official `Customer.emailMarketingConsent` stays unread
+on this slice.
