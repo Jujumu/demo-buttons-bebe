@@ -13,6 +13,7 @@ Empty-copy voice is short and parallel:
 - No tracking
 - No gift cards
 - No discounts
+- No invoice
 - No customer on this ticket
 
 Thread inbound From is the customer persona (`From Ada Demo`), not the
@@ -55,3 +56,7 @@ gift-card write.
    empty until Clerk wires `giftCards(query: "customer_id:…")`.
 2. **Discounts** — under This order. Official `Order.discountCodes`. Empty
    peek `No discounts`.
+3. **Invoice** — under This order. Fixture `invoiceUrl` is a normal **Invoice**
+   link (new tab). Empty peek `No invoice`. Live stays empty: Admin GraphQL
+   2026-07 `Order` has no invoice/receipt URL. Do not send invoices. Do not
+   use `orderInvoiceSend`.

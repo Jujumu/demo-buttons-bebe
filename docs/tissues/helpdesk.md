@@ -92,6 +92,16 @@ short mute peek of the thread, not a reply. Missing LLM keys return a labeled
 - `Fulfillment.displayStatus` is official (`IN_TRANSIT`, …). `fulfillmentLineItems.nodes[].quantity` + `lineItem.title` are official when a shipment names its lines.
 - `Order.displayFulfillmentStatus` includes `PARTIALLY_FULFILLED` for mixed ship.
 - `Order.discountCodes` is official `[String!]`. Empty list when none. Do not invent `discounts[]`.
+- `invoiceUrl` is a helpdesk DTO (`string | null`). Admin GraphQL 2026-07
+  [`Order`](https://shopify.dev/docs/api/admin-graphql/2026-07/objects/Order)
+  has **no** invoice/receipt URL field. Nearby official pieces we did **not**
+  guess onto Order: [`DraftOrder.invoiceUrl`](https://shopify.dev/docs/api/admin-graphql/2026-07/objects/DraftOrder)
+  (checkout link on a draft, not a paid-order receipt) and mutation
+  [`orderInvoiceSend`](https://shopify.dev/docs/api/admin-graphql/2026-07/mutations/orderInvoiceSend)
+  (write — refused). Live `get_order` returns `invoiceUrl: null` and does
+  not query an invented field. Fixture Ada has an example `https://` URL.
+  Clerk: wire an official Order document URL if/when 2026-07 grows one.
+  Do not map `statusPageUrl` as an invoice.
 - `inProgress` is true iff any `returns.nodes[].status === "OPEN"` (`ReturnStatus`)
 - `orderReturnStatus` is `Order.returnStatus` (`OrderReturnStatus`, live `NO_RETURN`)
 - Do not treat `Order.returnStatus === "IN_PROGRESS"` as an OPEN return

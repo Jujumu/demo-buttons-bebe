@@ -62,6 +62,13 @@ export function reviewBlockViolations(html) {
     hits.push("empty discounts open");
   }
 
+  const invoice = toggleExpanded(text, "invoice");
+  const invoiceBlock = text.match(/data-toggle="invoice"[\s\S]*?(?:data-toggle="|data-tissue="|$)/);
+  const invoicePeekEmpty = /No invoice/.test(invoiceBlock ? invoiceBlock[0] : "");
+  if (invoice === true && invoicePeekEmpty) {
+    hits.push("empty invoice open");
+  }
+
   if (history === true) {
     hits.push("past orders open by default");
   }

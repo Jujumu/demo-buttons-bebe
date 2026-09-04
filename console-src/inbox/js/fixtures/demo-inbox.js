@@ -120,6 +120,7 @@ export const orders = {
       },
     ],
     discountCodes: ["WELCOME10"],
+    invoiceUrl: "https://example.com/invoice/demo-1001",
     customerId: ADA,
   },
   [ORDER_1002]: {

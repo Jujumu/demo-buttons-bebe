@@ -73,6 +73,7 @@ export function addressPeek(shipping, billing) {
 export const TRACKING_MISSING_LABEL = "No tracking";
 export const GIFT_CARDS_MISSING_LABEL = "No gift cards";
 export const DISCOUNTS_MISSING_LABEL = "No discounts";
+export const INVOICE_MISSING_LABEL = "No invoice";
 
 export function giftCardHint(card) {
   if (!card) return "";
@@ -96,6 +97,20 @@ export function discountPeek(codes) {
   const list = Array.isArray(codes) ? codes.map((code) => String(code || "").trim()).filter(Boolean) : [];
   if (!list.length) return DISCOUNTS_MISSING_LABEL;
   return list[0];
+}
+
+export function invoiceUrlOf(order) {
+  const url = String(order?.invoiceUrl || "").trim();
+  if (!url) return "";
+  const lower = url.toLowerCase();
+  if (lower.startsWith("https://") || lower.startsWith("http://") || url.startsWith("/docs/review/")) {
+    return url;
+  }
+  return "";
+}
+
+export function invoicePeek(url) {
+  return invoiceUrlOf({ invoiceUrl: url }) ? "Invoice" : INVOICE_MISSING_LABEL;
 }
 
 export function shipmentPeek(order) {
