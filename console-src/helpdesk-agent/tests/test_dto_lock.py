@@ -81,6 +81,7 @@ class DtoLockTests(_ForceLiveHoles):
         self.assertEqual(order["fulfillments"], [])
         self.assertEqual(tracking_label(order["fulfillments"]), "No tracking")
         self.assertNotIn("sku", order["lineItems"]["nodes"][0])
+        self.assertEqual(order["lineItems"]["nodes"][0]["unfulfilledQuantity"], 1)
         tracked = dispatch("helpdesk.get_order", {"shop": LIVE_HOLE_SHOP, "orderId": O_1002})["order"]
         info = tracked["fulfillments"][0]["trackingInfo"][0]
         self.assertEqual(tracking_label(tracked["fulfillments"]), "Has tracking")
@@ -88,6 +89,32 @@ class DtoLockTests(_ForceLiveHoles):
         self.assertEqual(info["url"], "https://example.com/ai-demo/1002")
         self.assertEqual(info["company"], "Demo Carrier")
         self.assertNotIn("sku", tracked["lineItems"]["nodes"][0])
+        self.assertEqual(tracked["lineItems"]["nodes"][0]["unfulfilledQuantity"], 0)
+        self.assertEqual(tracked["fulfillments"][0]["displayStatus"], "IN_TRANSIT")
+
+    def test_partial_ship_exposes_unfulfilled_quantity(self) -> None:
+        from helpdesk.fixtures_sample import ORDER_PARTIAL, SKY
+
+        order = dispatch("helpdesk.get_order", {"shop": SAMPLE_SHOP, "orderId": ORDER_PARTIAL})["order"]
+        self.assertEqual(order["displayFulfillmentStatus"], "PARTIALLY_FULFILLED")
+        lines = order["lineItems"]["nodes"]
+        self.assertEqual(len(lines), 2)
+        self.assertEqual(lines[0]["unfulfilledQuantity"], 0)
+        self.assertEqual(lines[1]["unfulfilledQuantity"], 1)
+        self.assertEqual(lines[0]["title"], "Muslin Swaddle")
+        self.assertEqual(lines[1]["title"], "Knit Baby Booties")
+        self.assertEqual(tracking_label(order["fulfillments"]), "Has tracking")
+        self.assertEqual(order["fulfillments"][0]["displayStatus"], "IN_TRANSIT")
+        shipped = order["fulfillments"][0]["fulfillmentLineItems"]["nodes"][0]
+        self.assertEqual(shipped["lineItem"]["title"], "Muslin Swaddle")
+        self.assertEqual(shipped["quantity"], 1)
+        customer = dispatch("helpdesk.get_customer", {"shop": SAMPLE_SHOP, "customerId": SKY})["customer"]
+        self.assertEqual(customer["displayName"], "Sky Jensen")
+
+        hole = dispatch("helpdesk.get_order", {"shop": LIVE_HOLE_SHOP, "orderId": ORDER_PARTIAL})["order"]
+        self.assertEqual(hole["displayFulfillmentStatus"], "PARTIALLY_FULFILLED")
+        self.assertEqual(hole["lineItems"]["nodes"][0]["unfulfilledQuantity"], 0)
+        self.assertEqual(hole["lineItems"]["nodes"][1]["unfulfilledQuantity"], 1)
 
     def test_past_orders_newest_first_money_bag_shop_money(self) -> None:
         rows = dispatch(

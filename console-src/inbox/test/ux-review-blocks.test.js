@@ -66,6 +66,7 @@ test("UX Pro blocks fail Casey and Jordan default paints", async () => {
     if (opts.ticketId === "t-casey-visor") {
       assert.match(snap.html, /<h3>Shipment<\/h3>\s*<span class="peek">No tracking<\/span>/);
       assert.equal(toggleExpanded(snap.html, "shipment"), false);
+      assert.match(snap.html, /data-line-fulfill="Unfulfilled">Unfulfilled</);
     }
   }
 });

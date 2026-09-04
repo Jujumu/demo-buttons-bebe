@@ -73,7 +73,36 @@ export function addressPeek(shipping, billing) {
 export const TRACKING_MISSING_LABEL = "No tracking";
 
 export function shipmentPeek(order) {
-  return hasTracking(order) ? "" : TRACKING_MISSING_LABEL;
+  if (!hasTracking(order)) return TRACKING_MISSING_LABEL;
+  const status = firstFulfillmentDisplayStatus(order);
+  return status ? fulfillmentDisplayLabel(status) : "";
+}
+
+/** Official LineItem.unfulfilledQuantity cue. Miss → no invented status. */
+export function lineFulfillmentLabel(item) {
+  if (item == null || item.unfulfilledQuantity == null || item.unfulfilledQuantity === "") {
+    return "";
+  }
+  const qty = Number(item.quantity);
+  const left = Number(item.unfulfilledQuantity);
+  if (!Number.isFinite(qty) || qty < 0 || !Number.isFinite(left) || left < 0) return "";
+  if (left <= 0) return "Shipped";
+  if (left >= qty) return "Unfulfilled";
+  return `${left} of ${qty} unfulfilled`;
+}
+
+export function firstFulfillmentDisplayStatus(order) {
+  for (const fulfillment of order?.fulfillments || []) {
+    if (fulfillment?.displayStatus) return fulfillment.displayStatus;
+  }
+  return "";
+}
+
+/** Shopify FulfillmentDisplayStatus on-screen copy ("In transit"). */
+export function fulfillmentDisplayLabel(value) {
+  const labeled = statusLabel(value);
+  if (!labeled) return "";
+  return labeled.charAt(0) + labeled.slice(1).toLowerCase();
 }
 
 export function statusLabel(value) {

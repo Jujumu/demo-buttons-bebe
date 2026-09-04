@@ -11,10 +11,12 @@ export const STORE_NAME = "Demo Shop";
 const ADA = "gid://shopify/Customer/90001";
 const CASEY = "gid://shopify/Customer/90002";
 const JORDAN = "gid://shopify/Customer/90003";
+const SKY = "gid://shopify/Customer/9004";
 
 const ORDER_1001 = "gid://shopify/Order/80001";
 const ORDER_1002 = "gid://shopify/Order/80002";
 const ORDER_1003 = "gid://shopify/Order/80003";
+const ORDER_1004 = "gid://shopify/Order/9004";
 
 export const customers = {
   [ADA]: {
@@ -44,6 +46,15 @@ export const customers = {
     amountSpent: { amount: "0.00", currencyCode: "USD" },
     tags: ["DEMO"],
   },
+  [SKY]: {
+    id: SKY,
+    displayName: "Sky Jensen",
+    defaultEmailAddress: { emailAddress: "sky.jensen@example.com" },
+    createdAt: "2026-07-14T10:00:00Z",
+    numberOfOrders: "1",
+    amountSpent: { amount: "50.00", currencyCode: "USD" },
+    tags: ["DEMO"],
+  },
 };
 
 function moneyBag(amount, currencyCode = "USD") {
@@ -68,6 +79,7 @@ export const orders = {
           title: "Oak Demo Rattle",
           sku: null,
           quantity: 1,
+          unfulfilledQuantity: 0,
           originalUnitPriceSet: moneyBag("24.00"),
           image: {
             url: "https://images.pexels.com/photos/129722/pexels-photo-129722.jpeg?auto=compress&cs=tinysrgb&h=200&w=200&fit=crop",
@@ -88,6 +100,7 @@ export const orders = {
     billingAddress: null,
     fulfillments: [
       {
+        displayStatus: "IN_TRANSIT",
         trackingInfo: [
           {
             number: "DEMO-1001",
@@ -115,6 +128,7 @@ export const orders = {
           title: "Canvas Demo Visor",
           sku: null,
           quantity: 1,
+          unfulfilledQuantity: 1,
           originalUnitPriceSet: moneyBag("32.00"),
           image: {
             url: "https://images.pexels.com/photos/38702945/pexels-photo-38702945.jpeg?auto=compress&cs=tinysrgb&h=200&w=200&fit=crop",
@@ -152,6 +166,7 @@ export const orders = {
           title: "Merino Demo Throw",
           sku: null,
           quantity: 1,
+          unfulfilledQuantity: 0,
           originalUnitPriceSet: moneyBag("54.00"),
           image: {
             url: "https://images.pexels.com/photos/9448357/pexels-photo-9448357.jpeg?auto=compress&cs=tinysrgb&h=200&w=200&fit=crop",
@@ -180,6 +195,7 @@ export const orders = {
     },
     fulfillments: [
       {
+        displayStatus: "IN_TRANSIT",
         trackingInfo: [
           {
             number: "DEMO-1003",
@@ -190,6 +206,69 @@ export const orders = {
       },
     ],
     customerId: CASEY,
+  },
+  [ORDER_1004]: {
+    id: ORDER_1004,
+    name: "#9004",
+    createdAt: "2026-08-25T09:15:00Z",
+    displayFinancialStatus: "PAID",
+    displayFulfillmentStatus: "PARTIALLY_FULFILLED",
+    currentTotalPriceSet: moneyBag("50.00"),
+    currentSubtotalPriceSet: moneyBag("46.00"),
+    totalShippingPriceSet: moneyBag("4.00"),
+    totalTaxSet: moneyBag("0.00"),
+    lineItems: {
+      nodes: [
+        {
+          title: "Muslin Swaddle",
+          sku: null,
+          quantity: 1,
+          unfulfilledQuantity: 0,
+          originalUnitPriceSet: moneyBag("28.00"),
+          image: {
+            url: "https://images.pexels.com/photos/9448357/pexels-photo-9448357.jpeg?auto=compress&cs=tinysrgb&h=200&w=200&fit=crop",
+            altText: "Muslin swaddle",
+          },
+        },
+        {
+          title: "Knit Baby Booties",
+          sku: null,
+          quantity: 1,
+          unfulfilledQuantity: 1,
+          originalUnitPriceSet: moneyBag("18.00"),
+          image: {
+            url: "https://images.pexels.com/photos/6902351/pexels-photo-6902351.jpeg?auto=compress&cs=tinysrgb&h=200&w=200&fit=crop",
+            altText: "Knit baby booties",
+          },
+        },
+      ],
+    },
+    shippingAddress: {
+      name: "Sky Jensen",
+      address1: "22 Rest Lane",
+      address2: null,
+      city: "Demo City",
+      province: "Example State",
+      zip: "00004",
+      country: "Exampleland",
+    },
+    billingAddress: null,
+    fulfillments: [
+      {
+        displayStatus: "IN_TRANSIT",
+        trackingInfo: [
+          {
+            number: "SAMPLE-9004",
+            company: "Sample Carrier",
+            url: "https://example.com/sample/9004",
+          },
+        ],
+        fulfillmentLineItems: {
+          nodes: [{ quantity: 1, lineItem: { title: "Muslin Swaddle" } }],
+        },
+      },
+    ],
+    customerId: SKY,
   },
 };
 
@@ -412,15 +491,41 @@ export const tickets = [
       { at: "2026-08-25T18:12:00Z", status: "closed", note: "answered" },
     ],
   },
+  {
+    id: "t-sky-rest",
+    customerName: "Sky Jensen",
+    subject: "Where's the rest of order #9004?",
+    snippet: "The swaddle shipped — where's the rest?",
+    status: "open",
+    view: "unassigned",
+    assignee: null,
+    customerId: SKY,
+    orderId: ORDER_1004,
+    updatedAt: "2026-08-28T17:00:00Z",
+    stubDraft: "Hi Sky — #9004 is paid and partially fulfilled. The Muslin Swaddle is with Sample Carrier as SAMPLE-9004. The Knit Baby Booties are still unfulfilled.",
+    stubSummary: "Sky asked where the rest of #9004 is. The swaddle shipped; the booties have not.",
+    messages: [
+      {
+        id: "m8",
+        fromAgent: false,
+        name: "Sky Jensen",
+        at: "2026-08-28T16:50:00Z",
+        body: "The Muslin Swaddle on #9004 shipped. Where's the rest? The Knit Baby Booties are still unfulfilled.",
+      },
+    ],
+    statusEvents: [],
+  },
 ];
 
 export const IDS = {
   ADA,
   CASEY,
   JORDAN,
+  SKY,
   ORDER_1001,
   ORDER_1002,
   ORDER_1003,
+  ORDER_1004,
 };
 
 export function ticketInView(ticket, viewId) {

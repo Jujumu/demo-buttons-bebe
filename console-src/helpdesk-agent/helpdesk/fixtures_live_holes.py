@@ -7,10 +7,12 @@ from .names import LIVE_HOLE_SHOP
 C_UNFULFILLED = "gid://shopify/Customer/10207427887277"
 C_FULFILLED = "gid://shopify/Customer/10207427920045"
 C_MULTI = "gid://shopify/Customer/10207427952813"
+C_PARTIAL = "gid://shopify/Customer/9004"
 O_1001 = "gid://shopify/Order/7131035795629"
 O_1002 = "gid://shopify/Order/7131035861165"
 O_1003 = "gid://shopify/Order/7131035893933"
 O_1004 = "gid://shopify/Order/7131035992237"
+O_PARTIAL = "gid://shopify/Order/9004"
 
 USD = {"amount": "28.00", "currencyCode": "USD"}
 BAG = {"shopMoney": USD, "presentmentMoney": USD}
@@ -27,6 +29,7 @@ LINE = {
     "title": "Organic Cotton Baby Romper",
     "sku": None,
     "quantity": 1,
+    "unfulfilledQuantity": 1,
     "originalUnitPriceSet": {"shopMoney": USD},
     "image": {
         "url": "https://images.pexels.com/photos/9534298/pexels-photo-9534298.jpeg?auto=compress&cs=tinysrgb&h=200&w=200&fit=crop",
@@ -52,6 +55,11 @@ def _order(gid: str, name: str, created: str, fulfill: str, customer_id: str, tr
     line = dict(LINE)
     if title:
         line["title"] = title
+    shipped = fulfill == "FULFILLED"
+    line["unfulfilledQuantity"] = 0 if shipped else line["quantity"]
+    fulfillment = None
+    if tracking:
+        fulfillment = {"trackingInfo": [tracking], "displayStatus": "IN_TRANSIT"}
     return {
         "id": gid,
         "name": name,
@@ -63,7 +71,7 @@ def _order(gid: str, name: str, created: str, fulfill: str, customer_id: str, tr
         "billingAddress": None,
         "shippingAddress": {**SHIP, "name": name.replace("#", "Order ")},
         "lineItems": {"nodes": [line]},
-        "fulfillments": [{"trackingInfo": [tracking]}] if tracking else [],
+        "fulfillments": [fulfillment] if fulfillment else [],
         "returns": EMPTY_RETURNS,
         "customerId": customer_id,
     }
@@ -79,6 +87,7 @@ CUSTOMERS = {
     C_MULTI: _customer(
         C_MULTI, "Demo Multiple Orders", "2", "56.00", "ai-demo-multi@example.com"
     ),
+    C_PARTIAL: _customer(C_PARTIAL, "Sky Jensen", "1", "50.00", "sky@demo-helpdesk.example"),
 }
 
 ORDERS = {
@@ -112,12 +121,74 @@ ORDERS = {
         },
         title="Cashmere Knit Baby Blanket",
     ),
+    O_PARTIAL: {
+        "id": O_PARTIAL,
+        "name": "#9004",
+        "createdAt": "2026-08-10T14:40:00Z",
+        "displayFinancialStatus": "PAID",
+        "displayFulfillmentStatus": "PARTIALLY_FULFILLED",
+        "returnStatus": "NO_RETURN",
+        "currentTotalPriceSet": {
+            "shopMoney": {"amount": "50.00", "currencyCode": "USD"},
+            "presentmentMoney": {"amount": "50.00", "currencyCode": "USD"},
+        },
+        "billingAddress": None,
+        "shippingAddress": {**SHIP, "name": "Sky Jensen"},
+        "lineItems": {
+            "nodes": [
+                {
+                    "title": "Muslin Swaddle",
+                    "sku": None,
+                    "quantity": 1,
+                    "unfulfilledQuantity": 0,
+                    "originalUnitPriceSet": {
+                        "shopMoney": {"amount": "28.00", "currencyCode": "USD"}
+                    },
+                    "image": {
+                        "url": "https://images.pexels.com/photos/9448357/pexels-photo-9448357.jpeg?auto=compress&cs=tinysrgb&h=200&w=200&fit=crop",
+                        "altText": "Muslin swaddle",
+                    },
+                },
+                {
+                    "title": "Knit Baby Booties",
+                    "sku": None,
+                    "quantity": 1,
+                    "unfulfilledQuantity": 1,
+                    "originalUnitPriceSet": {
+                        "shopMoney": {"amount": "18.00", "currencyCode": "USD"}
+                    },
+                    "image": {
+                        "url": "https://images.pexels.com/photos/6902351/pexels-photo-6902351.jpeg?auto=compress&cs=tinysrgb&h=200&w=200&fit=crop",
+                        "altText": "Knit baby booties",
+                    },
+                },
+            ]
+        },
+        "fulfillments": [
+            {
+                "displayStatus": "IN_TRANSIT",
+                "trackingInfo": [
+                    {
+                        "number": "SAMPLE-9004",
+                        "url": "https://example.com/sample/9004",
+                        "company": "Sample Carrier",
+                    }
+                ],
+                "fulfillmentLineItems": {
+                    "nodes": [{"quantity": 1, "lineItem": {"title": "Muslin Swaddle"}}]
+                },
+            }
+        ],
+        "returns": EMPTY_RETURNS,
+        "customerId": C_PARTIAL,
+    },
 }
 
 CUSTOMER_ORDERS = {
     C_UNFULFILLED: [O_1001],
     C_FULFILLED: [O_1002],
     C_MULTI: [O_1004, O_1003],
+    C_PARTIAL: [O_PARTIAL],
 }
 
 SHOP = LIVE_HOLE_SHOP

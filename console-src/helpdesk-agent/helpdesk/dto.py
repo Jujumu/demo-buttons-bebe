@@ -74,7 +74,43 @@ def line_item(node: dict[str, Any]) -> dict[str, Any]:
         alt = image.get("altText")
         if alt:
             row["image"]["altText"] = str(alt)
+    unfulfilled = node.get("unfulfilledQuantity")
+    if isinstance(unfulfilled, bool):
+        pass
+    elif isinstance(unfulfilled, int):
+        row["unfulfilledQuantity"] = unfulfilled
+    elif isinstance(unfulfilled, str) and unfulfilled.lstrip("-").isdigit():
+        row["unfulfilledQuantity"] = int(unfulfilled)
     return omit_null_sku(row)
+
+
+def clerk_fulfillment(node: dict[str, Any]) -> dict[str, Any]:
+    """Official Fulfillment fields only. Do not invent trackingInfo."""
+    info = [
+        {"number": t.get("number"), "url": t.get("url"), "company": t.get("company")}
+        for t in (node.get("trackingInfo") or [])
+        if isinstance(t, dict)
+    ]
+    row: dict[str, Any] = {"trackingInfo": info}
+    status = node.get("displayStatus")
+    if status:
+        row["displayStatus"] = str(status)
+    items = node.get("fulfillmentLineItems") or {}
+    nodes = items.get("nodes") if isinstance(items, dict) else None
+    mapped = []
+    for item in nodes or []:
+        if not isinstance(item, dict):
+            continue
+        line = item.get("lineItem") if isinstance(item.get("lineItem"), dict) else {}
+        mapped.append(
+            {
+                "quantity": item.get("quantity"),
+                "lineItem": {"title": line.get("title")},
+            }
+        )
+    if mapped:
+        row["fulfillmentLineItems"] = {"nodes": mapped}
+    return row
 
 
 def clerk_customer(node: dict[str, Any]) -> dict[str, Any]:
@@ -95,13 +131,11 @@ def clerk_customer(node: dict[str, Any]) -> dict[str, Any]:
 def clerk_order(node: dict[str, Any]) -> dict[str, Any]:
     lines = node.get("lineItems") or {}
     nodes = lines.get("nodes") if isinstance(lines, dict) else []
-    fulfillments = []
-    for fulfillment in node.get("fulfillments") or []:
-        info = [
-            {"number": t.get("number"), "url": t.get("url"), "company": t.get("company")}
-            for t in (fulfillment.get("trackingInfo") or [])
-        ]
-        fulfillments.append({"trackingInfo": info})
+    fulfillments = [
+        clerk_fulfillment(item)
+        for item in (node.get("fulfillments") or [])
+        if isinstance(item, dict)
+    ]
     return {
         "id": node["id"],
         "name": node.get("name"),

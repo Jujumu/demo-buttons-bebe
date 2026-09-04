@@ -110,12 +110,28 @@ test("inbox organ renders four panes and an ink selected bar", async () => {
   assert.equal(snap.selectedId, "t-ada-track");
   assert.match(snap.html, /Ada Demo/);
   assert.match(snap.html, /#1001 · Paid · Fulfilled/);
+  assert.match(snap.html, /data-line-fulfill="Shipped">Shipped</);
+  assert.match(snap.html, /<h3>Shipment<\/h3>\s*<span class="peek">In transit<\/span>/);
   assert.match(snap.html, /Skip to thread\./);
   assert.match(snap.html, /<h2>Customer<\/h2>/);
   assert.match(snap.html, /<h3>Addresses<\/h3>/);
   assert.match(snap.html, /ticket-row is-selected/);
   assert.match(snap.html, /status-line">Open · Friday/);
   assert.doesNotMatch(snap.html, /Assigned to me ·/);
+});
+
+test("partial-ship ticket shows mixed lines on the order rail", async () => {
+  const organ = createInboxOrgan({ viewId: "unassigned", ticketId: "t-sky-rest" });
+  const snap = await organ.ready();
+  assert.equal(snap.selectedId, "t-sky-rest");
+  assert.match(snap.html, /#9004 · Paid · Partially Fulfilled/);
+  assert.match(snap.html, /data-line-fulfill="Shipped">Shipped</);
+  assert.match(snap.html, /data-line-fulfill="Unfulfilled">Unfulfilled</);
+  assert.match(snap.html, /Muslin Swaddle/);
+  assert.match(snap.html, /Knit Baby Booties/);
+  assert.match(snap.html, /Sample Carrier SAMPLE-9004/);
+  assert.match(snap.html, /<h3>Shipment<\/h3>\s*<span class="peek">In transit<\/span>/);
+  assert.doesNotMatch(snap.html, /<p class="tissue-empty">No tracking<\/p>/);
 });
 
 test("closed Ada thread mutes Closed · Tuesday", async () => {

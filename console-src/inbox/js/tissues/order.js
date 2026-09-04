@@ -6,6 +6,7 @@ import {
   formatSku,
   formatWhen,
   hasTracking,
+  lineFulfillmentLabel,
   shipmentPeek,
   statusLabel,
   TRACKING_MISSING_LABEL,
@@ -28,6 +29,7 @@ export function projectOrder(record) {
       hasTracking: false,
       tracking: null,
       shipmentPeek: TRACKING_MISSING_LABEL,
+      lineFulfillLabels: [],
     };
   }
   const nodes = record.lineItems?.nodes || [];
@@ -41,17 +43,30 @@ export function projectOrder(record) {
     hasTracking: hasTracking(record),
     tracking: firstTracking(record),
     shipmentPeek: shipmentPeek(record),
+    lineFulfillLabels: nodes.map((item) => lineFulfillmentLabel(item)),
     record,
   };
 }
 
 function renderShipment(model, shipOpen) {
   const tracking = model.tracking;
+  const shipLines = (model.record?.fulfillments || []).flatMap((fulfillment) =>
+    (fulfillment.fulfillmentLineItems?.nodes || []).map((item) => {
+      const title = item.lineItem?.title || "";
+      const qty = item.quantity;
+      if (!title) return "";
+      return `<p class="ship-line">${esc(title)}${qty != null ? ` · ${esc(qty)}` : ""}</p>`;
+    }),
+  ).join("");
   if (model.hasTracking && tracking) {
+    const peek = model.shipmentPeek
+      ? ` <span class="peek">${esc(model.shipmentPeek)}</span>`
+      : "";
     return `<div class="rail-sub" data-open="${shipOpen ? "true" : "false"}">
-        <button type="button" class="rail-sub-toggle" data-toggle="shipment" aria-expanded="${shipOpen ? "true" : "false"}"><h3>Shipment</h3></button>
+        <button type="button" class="rail-sub-toggle" data-toggle="shipment" aria-expanded="${shipOpen ? "true" : "false"}"><h3>Shipment</h3>${peek}</button>
         <div class="rail-sub-body"${shipOpen ? "" : " hidden"}>
           <a class="track-link" href="${esc(tracking.url)}" rel="noreferrer">${esc(tracking.company)} ${esc(tracking.number)}</a>
+          ${shipLines}
         </div>
       </div>`;
   }
@@ -93,13 +108,17 @@ export function renderOrder(model, { open = true, addressesOpen = false, shipmen
     const thumb = imageUrl
       ? `<img class="line-thumb" src="${esc(imageUrl)}" alt="${esc(imageAlt)}" loading="lazy" />`
       : `<span class="line-thumb line-thumb-empty" aria-hidden="true"></span>`;
+    const fulfillLabel = model.lineFulfillLabels?.[index] || lineFulfillmentLabel(item);
+    const fulfillCue = fulfillLabel
+      ? ` · <span data-line-fulfill="${esc(fulfillLabel)}">${esc(fulfillLabel)}</span>`
+      : "";
     return `<li class="line">
       <div class="line-row">
         ${thumb}
         <div class="line-copy">
           <p class="line-title">${esc(item.title)}</p>
           ${skuRow}
-          <p class="line-meta">${esc(item.quantity)} · <span class="mono">${esc(formatMoney(item.originalUnitPriceSet, ""))}</span></p>
+          <p class="line-meta">${esc(item.quantity)} · <span class="mono">${esc(formatMoney(item.originalUnitPriceSet, ""))}</span>${fulfillCue}</p>
         </div>
       </div>
     </li>`;

@@ -34,6 +34,7 @@
  * @property {string} title
  * @property {string | null} sku
  * @property {number} quantity
+ * @property {number} [unfulfilledQuantity]
  * @property {MoneyBag} originalUnitPriceSet
  * @property {{ url: string, altText?: string } | undefined} [image]
  */
@@ -57,6 +58,13 @@
  */
 
 /**
+ * @typedef {object} ClerkFulfillment
+ * @property {ClerkTrackingInfo[]} trackingInfo
+ * @property {string} [displayStatus]
+ * @property {{ nodes: { quantity: number, lineItem: { title: string } }[] }} [fulfillmentLineItems]
+ */
+
+/**
  * @typedef {object} ClerkOrder
  * @property {string} id
  * @property {string} name
@@ -67,7 +75,7 @@
  * @property {{ nodes: ClerkLineItem[] }} lineItems
  * @property {ClerkAddress | null} shippingAddress
  * @property {ClerkAddress | null} billingAddress
- * @property {{ trackingInfo: ClerkTrackingInfo[] }[]} fulfillments
+ * @property {ClerkFulfillment[]} fulfillments
  * @property {MoneyBag | null} [currentSubtotalPriceSet]
  * @property {MoneyBag | null} [totalShippingPriceSet]
  * @property {MoneyBag | null} [totalTaxSet]

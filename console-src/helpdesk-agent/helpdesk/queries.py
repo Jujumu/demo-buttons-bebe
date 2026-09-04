@@ -36,11 +36,18 @@ query HelpdeskOrder($id: ID!) {
         title
         sku
         quantity
+        unfulfilledQuantity
         originalUnitPriceSet { shopMoney { amount currencyCode } }
         image { url altText }
       }
     }
-    fulfillments { trackingInfo { number url company } }
+    fulfillments {
+      displayStatus
+      trackingInfo { number url company }
+      fulfillmentLineItems(first: 50) {
+        nodes { quantity lineItem { title } }
+      }
+    }
     returns(first: 20) { nodes { id name status totalQuantity } }
   }
 }

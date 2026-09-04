@@ -111,13 +111,34 @@ test("unfulfilled order peeks No tracking and stays collapsed", async () => {
   assert.equal(order.lineItems.nodes[0].sku, null);
   assert.equal(model.hasTracking, false);
   assert.equal(model.shipmentPeek, "No tracking");
+  assert.equal(model.lineFulfillLabels[0], "Unfulfilled");
   const html = renderOrder(model);
   assert.match(html, /<h3>Shipment<\/h3>\s*<span class="peek">No tracking<\/span>/);
   assert.match(html, /<p class="tissue-empty">No tracking<\/p>/);
   assert.match(html, /data-toggle="shipment"[^>]*aria-expanded="false"/);
+  assert.match(html, /data-line-fulfill="Unfulfilled">Unfulfilled</);
   assert.doesNotMatch(html, /DEMO-1001|DEMO-1002|invented-track/i);
   assert.doesNotMatch(html, /data-sku=/);
   assert.equal(model.addressPeek, "No billing");
+});
+
+test("partial ship shows mixed line status and tracking for the shipped line", async () => {
+  const order = await shop.getOrder({ shop: SHOP, orderId: IDS.ORDER_1004 });
+  const model = projectOrder(order);
+  assert.equal(order.displayFulfillmentStatus, "PARTIALLY_FULFILLED");
+  assert.match(model.peek, /#9004/);
+  assert.match(model.peek, /Partially Fulfilled/);
+  assert.deepEqual(model.lineFulfillLabels, ["Shipped", "Unfulfilled"]);
+  assert.equal(model.hasTracking, true);
+  assert.equal(model.shipmentPeek, "In transit");
+  const html = renderOrder(model, { shipmentOpen: true });
+  assert.match(html, /data-line-fulfill="Shipped">Shipped</);
+  assert.match(html, /data-line-fulfill="Unfulfilled">Unfulfilled</);
+  assert.match(html, /Muslin Swaddle/);
+  assert.match(html, /Knit Baby Booties/);
+  assert.match(html, /Sample Carrier SAMPLE-9004/);
+  assert.match(html, /<h3>Shipment<\/h3>\s*<span class="peek">In transit<\/span>/);
+  assert.doesNotMatch(html, /<p class="tissue-empty">No tracking<\/p>/);
 });
 
 test("different billing peeks Ship ≠ bill without crashing", async () => {
