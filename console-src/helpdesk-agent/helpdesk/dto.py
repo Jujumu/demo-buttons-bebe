@@ -11,6 +11,7 @@ TRACKING_MISSING_LABEL = "No tracking"
 GIFT_CARDS_MISSING_LABEL = "No gift cards"
 DISCOUNTS_MISSING_LABEL = "No discounts"
 INVOICE_MISSING_LABEL = "No invoice"
+WARRANTY_MISSING_LABEL = "No warranty"
 
 
 def money_v2(node: dict[str, Any] | None) -> dict[str, str]:
@@ -171,6 +172,24 @@ def clerk_invoice_url(node: dict[str, Any]) -> str | None:
     return None
 
 
+def clerk_warranty(node: dict[str, Any]) -> dict[str, str] | None:
+    """Fixture warranty peek. Live Order / LineItem have no official warranty field."""
+    raw = node.get("warranty")
+    if not isinstance(raw, dict):
+        return None
+    period = str(raw.get("period") or "").strip()
+    status = str(raw.get("status") or "").strip()
+    ends_on = str(raw.get("endsOn") or "").strip()
+    out: dict[str, str] = {}
+    if period:
+        out["period"] = period
+    if status:
+        out["status"] = status
+    if ends_on:
+        out["endsOn"] = ends_on
+    return out or None
+
+
 def clerk_customer(node: dict[str, Any]) -> dict[str, Any]:
     email = node.get("defaultEmailAddress")
     return {
@@ -208,6 +227,7 @@ def clerk_order(node: dict[str, Any]) -> dict[str, Any]:
         "fulfillments": fulfillments,
         "discountCodes": clerk_discount_codes(node.get("discountCodes")),
         "invoiceUrl": clerk_invoice_url(node),
+        "warranty": clerk_warranty(node),
     }
 
 

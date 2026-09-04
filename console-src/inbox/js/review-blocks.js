@@ -69,6 +69,13 @@ export function reviewBlockViolations(html) {
     hits.push("empty invoice open");
   }
 
+  const warranty = toggleExpanded(text, "warranty");
+  const warrantyBlock = text.match(/data-toggle="warranty"[\s\S]*?(?:data-toggle="|data-tissue="|$)/);
+  const warrantyPeekEmpty = /No warranty/.test(warrantyBlock ? warrantyBlock[0] : "");
+  if (warranty === true && warrantyPeekEmpty) {
+    hits.push("empty warranty open");
+  }
+
   if (history === true) {
     hits.push("past orders open by default");
   }

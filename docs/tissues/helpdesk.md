@@ -102,6 +102,17 @@ short mute peek of the thread, not a reply. Missing LLM keys return a labeled
   not query an invented field. Fixture Ada has an example `https://` URL.
   Clerk: wire an official Order document URL if/when 2026-07 grows one.
   Do not map `statusPageUrl` as an invoice.
+- `warranty` is a helpdesk DTO (`{ period, status, endsOn } | null`).
+  Admin GraphQL 2026-07
+  [`Order`](https://shopify.dev/docs/api/admin-graphql/2026-07/objects/Order)
+  and
+  [`LineItem`](https://shopify.dev/docs/api/admin-graphql/2026-07/objects/LineItem)
+  have **no** warranty field. Nearby official pieces we did **not** guess
+  onto Order: Product/variant metafields (shop-chosen namespace/key — do not
+  invent names). Live `get_order` returns `warranty: null` and does not query
+  an invented field or metafield. Fixture Ada has `{ period: "1 year",
+  status: "Active", endsOn: "2027-03-12" }`. Clerk: if live warranty is
+  needed later, sign a metafield namespace/key after the shop defines one.
 - `inProgress` is true iff any `returns.nodes[].status === "OPEN"` (`ReturnStatus`)
 - `orderReturnStatus` is `Order.returnStatus` (`OrderReturnStatus`, live `NO_RETURN`)
 - Do not treat `Order.returnStatus === "IN_PROGRESS"` as an OPEN return
