@@ -375,8 +375,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 .gift-hint { color: var(--ink); }
 .track-link { color: var(--accent); font-size: 12px; font-weight: 500; }
 .invoice-link { color: var(--accent); font-size: 12px; font-weight: 500; }
-.warranty-line { margin: 0; padding: 2px 0 0; font-size: 13px; }
-.warranty-line:first-child { padding-top: 0; }
+.warranty-line, .eta-line { margin: 0; padding: 2px 0 0; font-size: 13px; }
+.warranty-line:first-child, .eta-line:first-child { padding-top: 0; }
 .totals { display: grid; gap: 4px; margin: 8px 0; }
 .totals div { display: flex; justify-content: space-between; gap: 8px; }
 .addr-stack { display: flex; flex-direction: column; gap: 10px; }

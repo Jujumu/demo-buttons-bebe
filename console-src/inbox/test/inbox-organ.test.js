@@ -131,6 +131,8 @@ test("inbox organ renders four panes and an ink selected bar", async () => {
   assert.match(snap.html, /<a class="invoice-link"[^>]*>Invoice<\/a>/);
   assert.match(snap.html, /<h3>Warranty<\/h3>\s*<span class="peek">1 year · Active<\/span>/);
   assert.match(snap.html, /<p class="mute warranty-line">Ends 12 Mar 2027<\/p>/);
+  assert.match(snap.html, /<h3>ETA<\/h3>\s*<span class="peek">ETA Tue 8 Sep<\/span>/);
+  assert.match(snap.html, /<p class="mute eta-line">Zone: Domestic<\/p>/);
   assert.match(snap.html, /<h3>Addresses<\/h3>/);
   assert.match(snap.html, /ticket-row is-selected/);
   assert.match(snap.html, /status-line">Open · Friday/);
@@ -494,10 +496,12 @@ test("switching tickets resets rail expand and does not leak Ada OPEN returns", 
   assert.equal(snap.rail.open.discounts, false);
   assert.equal(snap.rail.open.invoice, false);
   assert.equal(snap.rail.open.warranty, false);
+  assert.equal(snap.rail.open.eta, false);
   assert.match(snap.html, /<h3>Gift cards<\/h3>\s*<span class="peek">No gift cards<\/span>/);
   assert.match(snap.html, /<h3>Discounts<\/h3>\s*<span class="peek">No discounts<\/span>/);
   assert.match(snap.html, /<h3>Invoice<\/h3>\s*<span class="peek">No invoice<\/span>/);
   assert.match(snap.html, /<h3>Warranty<\/h3>\s*<span class="peek">No warranty<\/span>/);
+  assert.match(snap.html, /<h3>ETA<\/h3>\s*<span class="peek">No ETA<\/span>/);
 
   await organ.selectTicket("t-jordan-ship");
   snap = organ.snapshot();
@@ -512,6 +516,7 @@ test("switching tickets resets rail expand and does not leak Ada OPEN returns", 
   assert.equal(snap.rail.open.discounts, true);
   assert.equal(snap.rail.open.invoice, true);
   assert.equal(snap.rail.open.warranty, true);
+  assert.equal(snap.rail.open.eta, true);
   assert.match(snap.html, /In transit · 1 item/);
   assert.match(snap.html, /••••4291/);
   assert.match(snap.html, /WELCOME10/);

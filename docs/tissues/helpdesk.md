@@ -113,6 +113,23 @@ short mute peek of the thread, not a reply. Missing LLM keys return a labeled
   an invented field or metafield. Fixture Ada has `{ period: "1 year",
   status: "Active", endsOn: "2027-03-12" }`. Clerk: if live warranty is
   needed later, sign a metafield namespace/key after the shop defines one.
+- `eta` is a helpdesk DTO (`string | null`, ISO date). Sourced from official
+  [`Fulfillment.estimatedDeliveryAt`](https://shopify.dev/docs/api/admin-graphql/2026-07/objects/Fulfillment)
+  (DateTime) on the first fulfillment that has one. Fixture Ada may also set
+  a top-level `eta` when fulfillments are empty. Live `get_order` queries
+  `fulfillments { estimatedDeliveryAt }` and returns null when Shopify has
+  none. Do not invent a day.
+- `shippingZone` is a helpdesk DTO (`string | null`). Admin GraphQL 2026-07
+  [`Order`](https://shopify.dev/docs/api/admin-graphql/2026-07/objects/Order)
+  and
+  [`Fulfillment`](https://shopify.dev/docs/api/admin-graphql/2026-07/objects/Fulfillment)
+  have **no** shipping-zone field. Nearby official pieces we did **not**
+  guess onto Order: [`DeliveryLocationGroupZone`](https://shopify.dev/docs/api/admin-graphql/2026-07/objects/DeliveryLocationGroupZone)
+  (profile zone, not an order) and [`ShippingLine.deliveryCategory`](https://shopify.dev/docs/api/admin-graphql/2026-07/objects/ShippingLine)
+  (method class, not a zone name). Live `get_order` returns
+  `shippingZone: null` and does not query an invented field. Fixture Ada
+  has `Domestic`. Clerk: if live zone is needed later, sign the official
+  Order/Fulfillment path after 2026-07 grows one.
 - `inProgress` is true iff any `returns.nodes[].status === "OPEN"` (`ReturnStatus`)
 - `orderReturnStatus` is `Order.returnStatus` (`OrderReturnStatus`, live `NO_RETURN`)
 - Do not treat `Order.returnStatus === "IN_PROGRESS"` as an OPEN return

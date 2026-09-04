@@ -175,6 +175,52 @@ class DtoLockTests(_ForceLiveHoles):
             payload = invoke(tool, {})
             self.assertEqual(payload["error"], "forbidden")
 
+    def test_sample_order_exposes_fixture_eta_zone_live_empty(self) -> None:
+        order = dispatch("helpdesk.get_order", {"shop": SAMPLE_SHOP, "orderId": ORDER_ADA})["order"]
+        self.assertEqual(order["eta"], "2026-09-08T16:00:00Z")
+        self.assertEqual(order["shippingZone"], "Domestic")
+        casey = dispatch("helpdesk.get_order", {"shop": SAMPLE_SHOP, "orderId": ORDER_CASEY_B})["order"]
+        self.assertIsNone(casey["eta"])
+        self.assertIsNone(casey["shippingZone"])
+        hole = dispatch("helpdesk.get_order", {"shop": LIVE_HOLE_SHOP, "orderId": O_1001})["order"]
+        self.assertIsNone(hole["eta"])
+        self.assertIsNone(hole["shippingZone"])
+        from helpdesk.queries import ORDER_QUERY
+
+        self.assertIn("estimatedDeliveryAt", ORDER_QUERY)
+        self.assertNotIn("shippingZone", ORDER_QUERY)
+        self.assertNotIn("\neta", ORDER_QUERY)
+        self.assertEqual(WRITE_TOOLS, frozenset({"helpdesk.send", "helpdesk.refund", "helpdesk.cancel"}))
+        for tool in ("helpdesk.refund", "helpdesk.cancel"):
+            payload = invoke(tool, {})
+            self.assertEqual(payload["error"], "forbidden")
+
+    def test_fulfillment_estimated_delivery_at_flattens_to_eta(self) -> None:
+        from helpdesk.dto import clerk_order
+
+        mapped = clerk_order(
+            {
+                "id": "gid://shopify/Order/1",
+                "name": "#1",
+                "createdAt": "2026-05-01T15:00:00Z",
+                "displayFinancialStatus": "PAID",
+                "displayFulfillmentStatus": "FULFILLED",
+                "currentTotalPriceSet": {
+                    "shopMoney": {"amount": "1.00", "currencyCode": "USD"}
+                },
+                "lineItems": {"nodes": []},
+                "fulfillments": [
+                    {
+                        "trackingInfo": [],
+                        "estimatedDeliveryAt": "2026-09-08T16:00:00Z",
+                    }
+                ],
+            }
+        )
+        self.assertEqual(mapped["eta"], "2026-09-08T16:00:00Z")
+        self.assertEqual(mapped["fulfillments"][0]["estimatedDeliveryAt"], "2026-09-08T16:00:00Z")
+        self.assertIsNone(mapped["shippingZone"])
+
     def test_sample_customer_exposes_official_gift_card_fields(self) -> None:
         customer = dispatch(
             "helpdesk.get_customer", {"shop": SAMPLE_SHOP, "customerId": ADA}

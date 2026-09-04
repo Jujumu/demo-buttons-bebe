@@ -12,6 +12,7 @@ GIFT_CARDS_MISSING_LABEL = "No gift cards"
 DISCOUNTS_MISSING_LABEL = "No discounts"
 INVOICE_MISSING_LABEL = "No invoice"
 WARRANTY_MISSING_LABEL = "No warranty"
+ETA_MISSING_LABEL = "No ETA"
 
 
 def money_v2(node: dict[str, Any] | None) -> dict[str, str]:
@@ -99,6 +100,9 @@ def clerk_fulfillment(node: dict[str, Any]) -> dict[str, Any]:
     status = node.get("displayStatus")
     if status:
         row["displayStatus"] = str(status)
+    estimated = _iso_datetime(node.get("estimatedDeliveryAt"))
+    if estimated:
+        row["estimatedDeliveryAt"] = estimated
     items = node.get("fulfillmentLineItems") or {}
     nodes = items.get("nodes") if isinstance(items, dict) else None
     mapped = []
@@ -172,6 +176,45 @@ def clerk_invoice_url(node: dict[str, Any]) -> str | None:
     return None
 
 
+def _iso_datetime(raw: Any) -> str | None:
+    """Accept an ISO-8601 / date stamp. Do not invent a day."""
+    if not isinstance(raw, str):
+        return None
+    text = raw.strip()
+    if not text:
+        return None
+    stamp = text if "T" in text else f"{text}T00:00:00Z"
+    if len(stamp) < 10 or stamp[4] != "-" or stamp[7] != "-":
+        return None
+    year, month, day = stamp[0:4], stamp[5:7], stamp[8:10]
+    if not (year.isdigit() and month.isdigit() and day.isdigit()):
+        return None
+    month_n, day_n = int(month), int(day)
+    if month_n < 1 or month_n > 12 or day_n < 1 or day_n > 31:
+        return None
+    return text
+
+
+def clerk_eta(node: dict[str, Any], fulfillments: list[dict[str, Any]] | None = None) -> str | None:
+    """Official Fulfillment.estimatedDeliveryAt, else a fixture order.eta. Live null if absent."""
+    for fulfillment in fulfillments or []:
+        if not isinstance(fulfillment, dict):
+            continue
+        estimated = _iso_datetime(fulfillment.get("estimatedDeliveryAt"))
+        if estimated:
+            return estimated
+    return _iso_datetime(node.get("eta") or node.get("estimatedDeliveryAt"))
+
+
+def clerk_shipping_zone(node: dict[str, Any]) -> str | None:
+    """Fixture shipping-zone label. Live Order / Fulfillment have no official zone field."""
+    raw = node.get("shippingZone")
+    if not isinstance(raw, str):
+        return None
+    zone = raw.strip()
+    return zone or None
+
+
 def clerk_warranty(node: dict[str, Any]) -> dict[str, str] | None:
     """Fixture warranty peek. Live Order / LineItem have no official warranty field."""
     raw = node.get("warranty")
@@ -228,6 +271,8 @@ def clerk_order(node: dict[str, Any]) -> dict[str, Any]:
         "discountCodes": clerk_discount_codes(node.get("discountCodes")),
         "invoiceUrl": clerk_invoice_url(node),
         "warranty": clerk_warranty(node),
+        "eta": clerk_eta(node, fulfillments),
+        "shippingZone": clerk_shipping_zone(node),
     }
 
 

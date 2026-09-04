@@ -80,6 +80,7 @@ test("Ada fixture rail shows a gift card and a discount code", async () => {
   assert.equal(order.hasDiscounts, true);
   assert.equal(order.hasInvoice, true);
   assert.equal(order.hasWarranty, true);
+  assert.equal(order.hasEta, true);
   assert.deepEqual(order.discountCodes, ["WELCOME10"]);
   assert.equal(order.invoiceUrl, "https://example.com/invoice/demo-1001");
   assert.deepEqual(order.warranty, {
@@ -88,8 +89,11 @@ test("Ada fixture rail shows a gift card and a discount code", async () => {
     endsOn: "2027-03-12",
   });
   assert.equal(order.warrantyPeek, "1 year · Active");
+  assert.equal(order.eta, "2026-09-08T16:00:00Z");
+  assert.equal(order.shippingZone, "Domestic");
+  assert.equal(order.etaPeek, "ETA Tue 8 Sep");
   const customerHtml = renderCustomer(customer, { giftCardsOpen: true });
-  const orderHtml = renderOrder(order, { discountsOpen: true, invoiceOpen: true, warrantyOpen: true });
+  const orderHtml = renderOrder(order, { discountsOpen: true, invoiceOpen: true, warrantyOpen: true, etaOpen: true });
   assert.match(customerHtml, /<h3>Gift cards<\/h3>\s*<span class="peek">••••4291<\/span>/);
   assert.match(customerHtml, /<span class="mono gift-hint">••••4291<\/span>/);
   assert.match(customerHtml, /25\.00 USD · Enabled/);
@@ -100,6 +104,9 @@ test("Ada fixture rail shows a gift card and a discount code", async () => {
   assert.match(orderHtml, /<h3>Warranty<\/h3>\s*<span class="peek">1 year · Active<\/span>/);
   assert.match(orderHtml, /<p class="mute warranty-line">1 year · Active<\/p>/);
   assert.match(orderHtml, /<p class="mute warranty-line">Ends 12 Mar 2027<\/p>/);
+  assert.match(orderHtml, /<h3>ETA<\/h3>\s*<span class="peek">ETA Tue 8 Sep<\/span>/);
+  assert.match(orderHtml, /<p class="mute eta-line">ETA Tue 8 Sep<\/p>/);
+  assert.match(orderHtml, /<p class="mute eta-line">Zone: Domestic<\/p>/);
   assert.doesNotMatch(customerHtml, /<(button|a)\b[^>]*>[^<]*Refund/i);
   assert.doesNotMatch(orderHtml, /<(button|a)\b[^>]*>[^<]*\bCancel\b/i);
   assert.doesNotMatch(orderHtml, /<(button|a)\b[^>]*>[^<]*Refund/i);
@@ -116,6 +123,8 @@ test("empty gift cards and discounts peek No gift cards / No discounts", async (
   assert.equal(order.invoicePeek, "No invoice");
   assert.equal(order.hasWarranty, false);
   assert.equal(order.warrantyPeek, "No warranty");
+  assert.equal(order.hasEta, false);
+  assert.equal(order.etaPeek, "No ETA");
   const customerHtml = renderCustomer(customer);
   const orderHtml = renderOrder(order);
   assert.match(customerHtml, /<h3>Gift cards<\/h3>\s*<span class="peek">No gift cards<\/span>/);
@@ -126,9 +135,12 @@ test("empty gift cards and discounts peek No gift cards / No discounts", async (
   assert.match(orderHtml, /<p class="tissue-empty">No invoice<\/p>/);
   assert.match(orderHtml, /<h3>Warranty<\/h3>\s*<span class="peek">No warranty<\/span>/);
   assert.match(orderHtml, /<p class="tissue-empty">No warranty<\/p>/);
+  assert.match(orderHtml, /<h3>ETA<\/h3>\s*<span class="peek">No ETA<\/span>/);
+  assert.match(orderHtml, /<p class="tissue-empty">No ETA<\/p>/);
   assert.match(orderHtml, /data-toggle="discounts"[^>]*aria-expanded="false"/);
   assert.match(orderHtml, /data-toggle="invoice"[^>]*aria-expanded="false"/);
   assert.match(orderHtml, /data-toggle="warranty"[^>]*aria-expanded="false"/);
+  assert.match(orderHtml, /data-toggle="eta"[^>]*aria-expanded="false"/);
   assert.match(customerHtml, /data-toggle="giftCards"[^>]*aria-expanded="false"/);
 });
 
@@ -349,6 +361,7 @@ test("switching tickets resets expand to lock defaults", async () => {
   assert.equal(casey.discounts, false);
   assert.equal(casey.invoice, false);
   assert.equal(casey.warranty, false);
+  assert.equal(casey.eta, false);
 
   await rail.load({ shop: SHOP, customerId: IDS.JORDAN, orderId: null, ticketId: "t-jordan-ship" });
   assert.equal(rail.snapshot().open.returns, false);
@@ -356,6 +369,7 @@ test("switching tickets resets expand to lock defaults", async () => {
   assert.equal(rail.snapshot().open.discounts, false);
   assert.equal(rail.snapshot().open.invoice, false);
   assert.equal(rail.snapshot().open.warranty, false);
+  assert.equal(rail.snapshot().open.eta, false);
 
   await rail.load({ shop: SHOP, customerId: IDS.ADA, orderId: IDS.ORDER_1001, ticketId: "t-ada-track" });
   assert.equal(rail.snapshot().open.returns, true);
@@ -365,6 +379,7 @@ test("switching tickets resets expand to lock defaults", async () => {
   assert.equal(rail.snapshot().open.discounts, true);
   assert.equal(rail.snapshot().open.invoice, true);
   assert.equal(rail.snapshot().open.warranty, true);
+  assert.equal(rail.snapshot().open.eta, true);
 });
 
 test("order-history is newest first and does not replace This order", async () => {
@@ -454,7 +469,8 @@ test("rail fails the PR if an Edit or write control ships", async () => {
 
 test("shipment Track is a separate control and the number stays mono text", async () => {
   const order = await shop.getOrder({ shop: SHOP, orderId: IDS.ORDER_1001 });
-  const html = renderOrder(projectOrder(order), { shipmentOpen: true });
+  const html = renderOrder(projectOrder(order), { shipmentOpen: true, etaOpen: true });
+  assert.match(html, /<h3>ETA<\/h3>[\s\S]*<h3>Shipment<\/h3>/);
   assert.match(html, /<span class="ship-company">Demo Carrier<\/span>/);
   assert.match(html, /<span class="mono ship-number">DEMO-1001<\/span>/);
   assert.match(html, /<a class="track-link"[^>]*>Track<\/a>/);

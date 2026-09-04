@@ -11,8 +11,14 @@ import {
   invoicePeek,
   invoiceUrlOf,
   INVOICE_MISSING_LABEL,
+  formatEta,
+  formatShippingZone,
   formatWarrantyEndsOn,
   lineFulfillmentLabel,
+  etaOf,
+  etaPeek,
+  ETA_MISSING_LABEL,
+  shippingZoneOf,
   warrantyOf,
   warrantyPeek,
   WARRANTY_MISSING_LABEL,
@@ -48,6 +54,10 @@ export function projectOrder(record) {
       warranty: null,
       warrantyPeek: WARRANTY_MISSING_LABEL,
       hasWarranty: false,
+      eta: "",
+      shippingZone: "",
+      etaPeek: ETA_MISSING_LABEL,
+      hasEta: false,
     };
   }
   const nodes = record.lineItems?.nodes || [];
@@ -56,6 +66,8 @@ export function projectOrder(record) {
     .filter(Boolean);
   const invoiceUrl = invoiceUrlOf(record);
   const warranty = warrantyOf(record);
+  const eta = etaOf(record);
+  const shippingZone = shippingZoneOf(record);
   return {
     ok: true,
     peek: [record.name, statusLabel(record.displayFinancialStatus), statusLabel(record.displayFulfillmentStatus)]
@@ -76,6 +88,10 @@ export function projectOrder(record) {
     warranty,
     warrantyPeek: warrantyPeek(warranty),
     hasWarranty: Boolean(warranty),
+    eta,
+    shippingZone,
+    etaPeek: etaPeek(record),
+    hasEta: Boolean(eta || shippingZone),
     record,
   };
 }
@@ -203,6 +219,34 @@ function renderWarranty(model, warrantyOpen) {
   </div>`;
 }
 
+function renderEta(model, etaOpen) {
+  const etaLine = formatEta(model.eta);
+  const zoneLine = formatShippingZone(model.shippingZone);
+  if (!etaLine && !zoneLine) {
+    return `<div class="rail-sub" data-open="${etaOpen ? "true" : "false"}">
+      <button type="button" class="rail-sub-toggle" data-toggle="eta" aria-expanded="${etaOpen ? "true" : "false"}">
+        <h3>ETA</h3> <span class="peek">${esc(ETA_MISSING_LABEL)}</span>
+      </button>
+      <div class="rail-sub-body"${etaOpen ? "" : " hidden"}>
+        <p class="tissue-empty">${esc(ETA_MISSING_LABEL)}</p>
+      </div>
+    </div>`;
+  }
+  const peek = model.etaPeek || etaPeek({ eta: model.eta, shippingZone: model.shippingZone, fulfillments: [] });
+  const rows = [
+    etaLine ? `<p class="mute eta-line">${esc(etaLine)}</p>` : "",
+    zoneLine ? `<p class="mute eta-line">${esc(zoneLine)}</p>` : "",
+  ].filter(Boolean).join("");
+  return `<div class="rail-sub" data-open="${etaOpen ? "true" : "false"}">
+    <button type="button" class="rail-sub-toggle" data-toggle="eta" aria-expanded="${etaOpen ? "true" : "false"}">
+      <h3>ETA</h3> <span class="peek">${esc(peek)}</span>
+    </button>
+    <div class="rail-sub-body"${etaOpen ? "" : " hidden"}>
+      ${rows}
+    </div>
+  </div>`;
+}
+
 function renderAddress(label, address) {
   if (!address) return `<div class="addr"><h4>${esc(label)}</h4><p>Absent</p></div>`;
   const lines = [address.name, address.address1, address.address2, [address.city, address.province, address.zip].filter(Boolean).join(", "), address.country]
@@ -210,7 +254,7 @@ function renderAddress(label, address) {
   return `<div class="addr"><h4>${esc(label)}</h4>${lines.map((line) => `<p>${esc(line)}</p>`).join("")}</div>`;
 }
 
-export function renderOrder(model, { open = true, addressesOpen = false, shipmentOpen, discountsOpen, invoiceOpen, warrantyOpen } = {}) {
+export function renderOrder(model, { open = true, addressesOpen = false, shipmentOpen, discountsOpen, invoiceOpen, warrantyOpen, etaOpen } = {}) {
   const record = model.record;
   const gateHairline = `<div class="order-gate">
       <button type="button" class="btn-hairline" data-write-gate-open>Payments locked</button>
@@ -230,6 +274,7 @@ export function renderOrder(model, { open = true, addressesOpen = false, shipmen
   const codesOpen = discountsOpen == null ? Boolean(model.hasDiscounts) : discountsOpen;
   const invoiceIsOpen = invoiceOpen == null ? Boolean(model.hasInvoice) : invoiceOpen;
   const warrantyIsOpen = warrantyOpen == null ? Boolean(model.hasWarranty) : warrantyOpen;
+  const etaIsOpen = etaOpen == null ? Boolean(model.hasEta) : etaOpen;
   const items = (record.lineItems?.nodes || []).map((item, index) => {
     const skuLabel = model.skuLabels[index] ?? formatSku(item.sku);
     const skuRow = skuLabel
@@ -284,6 +329,7 @@ export function renderOrder(model, { open = true, addressesOpen = false, shipmen
           ${renderAddress("Billing", record.billingAddress)}
         </div>
       </div>
+      ${renderEta(model, etaIsOpen)}
       ${shipment}
     </div>
   </section>`;
