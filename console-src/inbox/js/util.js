@@ -71,6 +71,32 @@ export function addressPeek(shipping, billing) {
 
 /** Empty fulfillments / no trackingInfo. Parallel to "No billing" / "No returns". */
 export const TRACKING_MISSING_LABEL = "No tracking";
+export const GIFT_CARDS_MISSING_LABEL = "No gift cards";
+export const DISCOUNTS_MISSING_LABEL = "No discounts";
+
+export function giftCardHint(card) {
+  if (!card) return "";
+  const masked = String(card.maskedCode || "").trim();
+  if (masked) return masked;
+  const last = String(card.lastCharacters || "").trim();
+  return last ? `••••${last}` : "";
+}
+
+export function giftCardPeek(cards) {
+  const list = Array.isArray(cards) ? cards.filter(Boolean) : [];
+  if (!list.length) return GIFT_CARDS_MISSING_LABEL;
+  return giftCardHint(list[0]) || GIFT_CARDS_MISSING_LABEL;
+}
+
+export function giftCardStatusLabel(enabled) {
+  return enabled ? "Enabled" : "Disabled";
+}
+
+export function discountPeek(codes) {
+  const list = Array.isArray(codes) ? codes.map((code) => String(code || "").trim()).filter(Boolean) : [];
+  if (!list.length) return DISCOUNTS_MISSING_LABEL;
+  return list[0];
+}
 
 export function shipmentPeek(order) {
   if (!hasTracking(order)) return TRACKING_MISSING_LABEL;

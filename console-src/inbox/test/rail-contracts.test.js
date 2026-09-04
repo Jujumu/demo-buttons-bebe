@@ -56,6 +56,7 @@ test("customer DTO uses Clerk Admin GraphQL field names", async () => {
     "createdAt",
     "defaultEmailAddress",
     "displayName",
+    "giftCards",
     "numberOfOrders",
     "tags",
   ]);
@@ -65,6 +66,45 @@ test("customer DTO uses Clerk Admin GraphQL field names", async () => {
   assert.deepEqual(model.record.tags, ["DEMO"]);
   assert.equal(typeof model.record.numberOfOrders, "string");
   assert.equal(model.record.numberOfOrders, "1");
+  assert.equal(model.hasGiftCards, true);
+  assert.equal(model.giftCardPeek, "••••4291");
+  assert.equal(model.record.giftCards[0].lastCharacters, "4291");
+  assert.equal(model.record.giftCards[0].enabled, true);
+  assert.equal(model.record.giftCards[0].balance.amount, "25.00");
+});
+
+test("Ada fixture rail shows a gift card and a discount code", async () => {
+  const customer = projectCustomer(await shop.getCustomer({ shop: SHOP, customerId: IDS.ADA }));
+  const order = projectOrder(await shop.getOrder({ shop: SHOP, orderId: IDS.ORDER_1001 }));
+  assert.equal(customer.hasGiftCards, true);
+  assert.equal(order.hasDiscounts, true);
+  assert.deepEqual(order.discountCodes, ["WELCOME10"]);
+  const customerHtml = renderCustomer(customer, { giftCardsOpen: true });
+  const orderHtml = renderOrder(order, { discountsOpen: true });
+  assert.match(customerHtml, /<h3>Gift cards<\/h3>\s*<span class="peek">••••4291<\/span>/);
+  assert.match(customerHtml, /<span class="mono gift-hint">••••4291<\/span>/);
+  assert.match(customerHtml, /25\.00 USD · Enabled/);
+  assert.match(orderHtml, /<h3>Discounts<\/h3>\s*<span class="peek">WELCOME10<\/span>/);
+  assert.match(orderHtml, /<p class="mono discount-code">WELCOME10<\/p>/);
+  assert.doesNotMatch(customerHtml, /<(button|a)\b[^>]*>[^<]*Refund/i);
+  assert.doesNotMatch(orderHtml, /<(button|a)\b[^>]*>[^<]*\bCancel\b/i);
+});
+
+test("empty gift cards and discounts peek No gift cards / No discounts", async () => {
+  const customer = projectCustomer(await shop.getCustomer({ shop: SHOP, customerId: IDS.CASEY }));
+  const order = projectOrder(await shop.getOrder({ shop: SHOP, orderId: IDS.ORDER_1002 }));
+  assert.equal(customer.hasGiftCards, false);
+  assert.equal(customer.giftCardPeek, "No gift cards");
+  assert.equal(order.hasDiscounts, false);
+  assert.equal(order.discountPeek, "No discounts");
+  const customerHtml = renderCustomer(customer);
+  const orderHtml = renderOrder(order);
+  assert.match(customerHtml, /<h3>Gift cards<\/h3>\s*<span class="peek">No gift cards<\/span>/);
+  assert.match(customerHtml, /<p class="tissue-empty">No gift cards<\/p>/);
+  assert.match(orderHtml, /<h3>Discounts<\/h3>\s*<span class="peek">No discounts<\/span>/);
+  assert.match(orderHtml, /<p class="tissue-empty">No discounts<\/p>/);
+  assert.match(orderHtml, /data-toggle="discounts"[^>]*aria-expanded="false"/);
+  assert.match(customerHtml, /data-toggle="giftCards"[^>]*aria-expanded="false"/);
 });
 
 test("order fixture keeps null SKUs and missing billing", async () => {
@@ -267,14 +307,20 @@ test("switching tickets resets expand to lock defaults", async () => {
   assert.equal(casey.returns, false);
   assert.equal(casey["order-history"], false);
   assert.equal(casey.addresses, false);
+  assert.equal(casey.giftCards, false);
+  assert.equal(casey.discounts, false);
 
   await rail.load({ shop: SHOP, customerId: IDS.JORDAN, orderId: null, ticketId: "t-jordan-ship" });
   assert.equal(rail.snapshot().open.returns, false);
+  assert.equal(rail.snapshot().open.giftCards, false);
+  assert.equal(rail.snapshot().open.discounts, false);
 
   await rail.load({ shop: SHOP, customerId: IDS.ADA, orderId: IDS.ORDER_1001, ticketId: "t-ada-track" });
   assert.equal(rail.snapshot().open.returns, true);
   assert.equal(rail.snapshot().open["order-history"], false);
   assert.equal(rail.snapshot().open.customer, true);
+  assert.equal(rail.snapshot().open.giftCards, true);
+  assert.equal(rail.snapshot().open.discounts, true);
 });
 
 test("order-history is newest first and does not replace This order", async () => {

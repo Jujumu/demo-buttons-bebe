@@ -20,6 +20,7 @@ ADA = "gid://shopify/Customer/9001"
 CASEY = "gid://shopify/Customer/9002"
 JORDAN = "gid://shopify/Customer/9003"
 SKY = "gid://shopify/Customer/9004"
+GIFT_ADA = "gid://shopify/GiftCard/9001"
 ORDER_ADA = "gid://shopify/Order/9001"
 ORDER_CASEY_A = "gid://shopify/Order/9002"
 ORDER_CASEY_B = "gid://shopify/Order/9003"
@@ -35,6 +36,15 @@ CUSTOMERS = {
         "numberOfOrders": "1",
         "amountSpent": USD,
         "tags": ["sample"],
+        "giftCards": [
+            {
+                "id": GIFT_ADA,
+                "lastCharacters": "4291",
+                "maskedCode": "••••4291",
+                "enabled": True,
+                "balance": {"amount": "25.00", "currencyCode": "USD"},
+            }
+        ],
     },
     CASEY: {
         "id": CASEY,
@@ -117,6 +127,7 @@ ORDERS = {
         "shippingAddress": SHIP,
         "lineItems": {"nodes": [_LINE]},
         "fulfillments": [],
+        "discountCodes": ["WELCOME10"],
         "returns": {
             "nodes": [
                 {"id": RETURN_OPEN, "name": "#9001-R1", "status": "OPEN", "totalQuantity": 1},

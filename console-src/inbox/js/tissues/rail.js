@@ -13,6 +13,8 @@ export const RAIL_DEFAULTS = Object.freeze({
   "order-history": false,
   addresses: false,
   shipment: false,
+  giftCards: false,
+  discounts: false,
 });
 
 /**
@@ -43,10 +45,12 @@ export function createRailOrgan({ shop, mailbox }) {
     return `order:${customerId || ""}:${orderId || ""}`;
   }
 
-  function applyLockDefaults(returnsModel, orderModel) {
+  function applyLockDefaults(returnsModel, orderModel, customerModel) {
     Object.assign(open, RAIL_DEFAULTS);
     open.returns = Boolean(returnsModel?.inProgress);
     open.shipment = Boolean(orderModel?.hasTracking);
+    open.giftCards = Boolean(customerModel?.hasGiftCards);
+    open.discounts = Boolean(orderModel?.hasDiscounts);
   }
 
   const ERROR_LABEL = {
@@ -75,13 +79,14 @@ export function createRailOrgan({ shop, mailbox }) {
   function render() {
     const customerHtml = models.customer.error
       ? renderError("customer", "Customer", models.customer.peek)
-      : renderCustomer(models.customer, { open: open.customer });
+      : renderCustomer(models.customer, { open: open.customer, giftCardsOpen: open.giftCards });
     const orderHtml = models.order.error
       ? renderError("order", "This order", models.order.peek)
       : renderOrder(models.order, {
         open: open.order,
         addressesOpen: open.addresses,
         shipmentOpen: open.shipment,
+        discountsOpen: open.discounts,
       });
     const returnsHtml = models.returns.error
       ? renderError("returns", "Returns", models.returns.peek)
@@ -141,7 +146,7 @@ export function createRailOrgan({ shop, mailbox }) {
       returns: returnsModel,
       history: historyModel,
     };
-    if (switched) applyLockDefaults(returnsModel, orderModel);
+    if (switched) applyLockDefaults(returnsModel, orderModel, customerModel);
     for (const [tissueId, model] of Object.entries({ customer: customerModel, order: orderModel, returns: returnsModel, "order-history": historyModel })) {
       if (model.error) mailbox.publish(MAILBOX_TOPICS.TISSUE_ERROR, { tissueId, message: model.error });
     }

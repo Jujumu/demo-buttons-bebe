@@ -122,6 +122,10 @@ test("inbox organ renders four panes and an ink selected bar", async () => {
   assert.doesNotMatch(snap.html, /<a class="track-link"[^>]*>Demo Carrier/);
   assert.match(snap.html, /Skip to thread\./);
   assert.match(snap.html, /<h2>Customer<\/h2>/);
+  assert.match(snap.html, /<h3>Gift cards<\/h3>\s*<span class="peek">••••4291<\/span>/);
+  assert.match(snap.html, /25\.00 USD · Enabled/);
+  assert.match(snap.html, /<h3>Discounts<\/h3>\s*<span class="peek">WELCOME10<\/span>/);
+  assert.match(snap.html, /<p class="mono discount-code">WELCOME10<\/p>/);
   assert.match(snap.html, /<h3>Addresses<\/h3>/);
   assert.match(snap.html, /ticket-row is-selected/);
   assert.match(snap.html, /status-line">Open · Friday/);
@@ -481,6 +485,10 @@ test("switching tickets resets rail expand and does not leak Ada OPEN returns", 
   assert.match(snap.html, /<h2>Returns<\/h2>\s*<span class="peek">No returns<\/span>/);
   assert.match(snap.html, /<h3>Shipment<\/h3>\s*<span class="peek">No tracking<\/span>/);
   assert.equal(snap.rail.open.shipment, false);
+  assert.equal(snap.rail.open.giftCards, false);
+  assert.equal(snap.rail.open.discounts, false);
+  assert.match(snap.html, /<h3>Gift cards<\/h3>\s*<span class="peek">No gift cards<\/span>/);
+  assert.match(snap.html, /<h3>Discounts<\/h3>\s*<span class="peek">No discounts<\/span>/);
 
   await organ.selectTicket("t-jordan-ship");
   snap = organ.snapshot();
@@ -491,7 +499,11 @@ test("switching tickets resets rail expand and does not leak Ada OPEN returns", 
   snap = organ.snapshot();
   assert.equal(snap.rail.open.returns, true);
   assert.equal(snap.rail.open["order-history"], false);
+  assert.equal(snap.rail.open.giftCards, true);
+  assert.equal(snap.rail.open.discounts, true);
   assert.match(snap.html, /In transit · 1 item/);
+  assert.match(snap.html, /••••4291/);
+  assert.match(snap.html, /WELCOME10/);
 });
 
 test("composer Insert and Discard never publish send", () => {
