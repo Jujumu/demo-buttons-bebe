@@ -1,11 +1,12 @@
 import { MAILBOX_TOPICS } from "../contracts.js";
-import { esc, formatWhen } from "../util.js";
+import { esc, formatWhen, screenStatus } from "../util.js";
 
 /**
  * List tissue. Client of helpdesk.list_tickets.
  * In: `{ tickets, selectedTicketId, viewLabel }`
  * Out: `{ ticketId }` on `list/selected`
- * Selected row: 4px ink bar. Uses first-party customerName + snippet.
+ * Selected row: 4px ink bar. Uses first-party customerName, snippet, and
+ * helpdesk status (open / closed / snoozed) — never Return.status.
  */
 export function createListTissue({ mailbox }) {
   let model = { tickets: [], selectedTicketId: null, viewLabel: "Inbox" };
@@ -20,11 +21,19 @@ export function createListTissue({ mailbox }) {
 
   function renderRow(ticket, selectedId) {
     const on = ticket.id === selectedId;
-    return `<button type="button" class="ticket-row${on ? " is-selected" : ""}" data-ticket="${esc(ticket.id)}" aria-current="${on ? "true" : "false"}">
+    const status = ticket.status || "";
+    const statusWord = screenStatus(status);
+    const statusHtml = statusWord
+      ? `<span class="ticket-status">${esc(statusWord)}</span>`
+      : "";
+    return `<button type="button" class="ticket-row${on ? " is-selected" : ""}" data-ticket="${esc(ticket.id)}" data-status="${esc(status)}" aria-current="${on ? "true" : "false"}">
       <span class="ticket-bar" aria-hidden="true"></span>
       <span class="ticket-top">
         <span class="ticket-name">${esc(ticket.customerName || "")}</span>
-        <time class="ticket-time">${esc(formatWhen(ticket.updatedAt))}</time>
+        <span class="ticket-meta">
+          ${statusHtml}
+          <time class="ticket-time">${esc(formatWhen(ticket.updatedAt))}</time>
+        </span>
       </span>
       <span class="ticket-subject">${esc(ticket.subject)}</span>
       <span class="ticket-snippet">${esc(ticket.snippet || "")}</span>

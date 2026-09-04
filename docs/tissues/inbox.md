@@ -49,7 +49,7 @@ Demo names only (Ada Demo, Casey Sandbox, Jordan Preview). No customer PII.
 
 - **In:** `{ tickets, selectedTicketId, viewLabel }` from `helpdesk.list_tickets`
 - **Out:** `{ ticketId }` on `list/selected`
-- Row copy uses first-party `customerName` and `snippet` (never `displayName`)
+- Row copy uses first-party `customerName`, `snippet`, and title-case helpdesk `status` (`Open` / `Closed` / `Snoozed`). Never `Return.status`. Never `Order.displayFulfillmentStatus`.
 - **Selected row:** One leading-edge ink bar on the selected ticket (4px). That is the only selection treatment. No wash, no purple. Surface only (`#FFFDF9`); bar is `#1C1916`.
 - **Degrade:** “No tickets in this view”
 
@@ -91,7 +91,7 @@ Clerk DTO field names are locked. In for each: `{ shop, customerId? , orderId? }
 - Default open. Peek: order number + Paid + Fulfilled
 - Line items and totals stay visible while open
 - Addresses start collapsed (stack, not two columns). Peek `No billing` when `billingAddress` is missing. `Ship ≠ bill` / `Same address` only when both addresses exist
-- Shipment opens only when tracking exists. Tracking is a labeled link, not a URL dump
+- Shipment opens only when tracking exists. Tracking is a labeled link, not a URL dump. Empty fulfillments / no `trackingInfo`: collapsed peek `No tracking` (parallel to `No billing` / `No returns`). Do not invent a number. Do not treat `Order.displayFulfillmentStatus` as a mute status event.
 - Null or empty SKU omits the mono SKU row entirely. Do not print `null`. Do not print an em dash that occupies a SKU column. Do not invent a SKU
 - Clicking a past order does **not** replace this section
 - **Degrade:** “No order on this ticket”

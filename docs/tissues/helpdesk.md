@@ -79,6 +79,7 @@ short mute peek of the thread, not a reply. Missing LLM keys return a labeled
 - Line price is `originalUnitPriceSet.shopMoney`
 - `sku` is `String | null`; omit the key when null (never print the word `null`)
 - `billingAddress` null is real; peek/copy label is `No billing`
+- empty `fulfillments` / no `trackingInfo`: peek/copy label is `No tracking`. Do not invent a number.
 - `inProgress` is true iff any `returns.nodes[].status === "OPEN"` (`ReturnStatus`)
 - `orderReturnStatus` is `Order.returnStatus` (`OrderReturnStatus`, live `NO_RETURN`)
 - Do not treat `Order.returnStatus === "IN_PROGRESS"` as an OPEN return

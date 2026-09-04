@@ -7,6 +7,7 @@ from typing import Any
 from .errors import bad_request
 
 BILLING_MISSING_LABEL = "No billing"
+TRACKING_MISSING_LABEL = "No tracking"
 
 
 def money_v2(node: dict[str, Any] | None) -> dict[str, str]:
@@ -43,6 +44,17 @@ def billing_label(billing_address: Any) -> str:
     if billing_address is None:
         return BILLING_MISSING_LABEL
     return BILLING_MISSING_LABEL if billing_address == {} else "Has billing"
+
+
+def tracking_label(fulfillments: Any) -> str:
+    """Empty fulfillments / no trackingInfo. Does not invent a number."""
+    for fulfillment in fulfillments or []:
+        if not isinstance(fulfillment, dict):
+            continue
+        for info in fulfillment.get("trackingInfo") or []:
+            if isinstance(info, dict) and (info.get("number") or info.get("url")):
+                return "Has tracking"
+    return TRACKING_MISSING_LABEL
 
 
 def line_item(node: dict[str, Any]) -> dict[str, Any]:

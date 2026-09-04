@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from helpdesk.dispatch import dispatch
-from helpdesk.dto import billing_label, clerk_returns
+from helpdesk.dto import billing_label, clerk_returns, tracking_label
 from helpdesk.fixtures_live_holes import C_MULTI, O_1001, O_1002
 from helpdesk.fixtures_sample import ADA, CASEY, ORDER_ADA, ORDER_CASEY_B
 from helpdesk.names import LIVE_HOLE_SHOP, SAMPLE_SHOP
@@ -79,9 +79,11 @@ class DtoLockTests(_ForceLiveHoles):
         self.assertEqual(order["displayFulfillmentStatus"], "UNFULFILLED")
         self.assertIsNone(order["billingAddress"])
         self.assertEqual(order["fulfillments"], [])
+        self.assertEqual(tracking_label(order["fulfillments"]), "No tracking")
         self.assertNotIn("sku", order["lineItems"]["nodes"][0])
         tracked = dispatch("helpdesk.get_order", {"shop": LIVE_HOLE_SHOP, "orderId": O_1002})["order"]
         info = tracked["fulfillments"][0]["trackingInfo"][0]
+        self.assertEqual(tracking_label(tracked["fulfillments"]), "Has tracking")
         self.assertEqual(info["number"], "AI-DEMO-1002")
         self.assertEqual(info["url"], "https://example.com/ai-demo/1002")
         self.assertEqual(info["company"], "Demo Carrier")

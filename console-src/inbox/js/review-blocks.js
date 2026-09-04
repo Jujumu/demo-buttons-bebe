@@ -41,6 +41,13 @@ export function reviewBlockViolations(html) {
     hits.push("empty returns open");
   }
 
+  const shipment = toggleExpanded(text, "shipment");
+  const shipmentBlock = text.match(/data-toggle="shipment"[\s\S]*?(?:data-toggle="|data-tissue="|$)/);
+  const shipmentPeekEmpty = /No tracking/.test(shipmentBlock ? shipmentBlock[0] : "");
+  if (shipment === true && shipmentPeekEmpty) {
+    hits.push("empty shipment open");
+  }
+
   if (history === true) {
     hits.push("past orders open by default");
   }
