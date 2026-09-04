@@ -76,6 +76,23 @@ test("UX Pro mute unsubscribe chrome has no Shopify write control", async () => 
   assert.match(css, /\.thread-request\s*\{/);
 });
 
+test("UX Pro mute privacy chrome has no Shopify write control", async () => {
+  const organ = createInboxOrgan({ viewId: "mine", ticketId: "t-lee-privacy" });
+  const snap = await organ.ready();
+  assert.deepEqual(reviewBlockViolations(snap.html), []);
+  assert.match(snap.html, /class="ticket-status ticket-request"[^>]*>Privacy</);
+  assert.match(snap.html, /class="thread-request mute"[^>]*>Privacy request</);
+  assert.match(snap.html, /<h2>Privacy request<\/h2>\s*<span class="peek">Delete<\/span>/);
+  assert.match(snap.html, /Privacy tools stay locked\. No live data erase or export\./);
+  assert.match(snap.html, /data-privacy-gate-open>Mark privacy handled</);
+  assert.doesNotMatch(snap.html, /<(button|a)\b[^>]*>[^<]*(?:erasure|redact|Customer Privacy)/i);
+  assert.doesNotMatch(snap.html, /#6B46C1|#7C3AED|#5B21B6/);
+  const gated = organ.openPrivacyGate();
+  assert.match(gated.html, /data-privacy-gate/);
+  assert.match(gated.html, /id="gate-sheet-copy">Privacy tools stay locked\. No live data erase or export\.</);
+  assert.doesNotMatch(gated.html, /#6B46C1|#7C3AED|#5B21B6/);
+});
+
 test("UX Pro blocks fail Casey and Jordan default paints", async () => {
   for (const opts of [
     { viewId: "unassigned", ticketId: "t-casey-visor" },

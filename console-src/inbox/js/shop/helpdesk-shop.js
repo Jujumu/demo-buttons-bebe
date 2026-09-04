@@ -199,6 +199,10 @@ export function createHelpdeskShop(opts = {}) {
       if (record) return record;
       return fallback.escalateTicket(args);
     },
+    async markPrivacyHandled(args = {}) {
+      // First-party flag only. No MCP write tool — never a Shopify privacy mutation.
+      return fallback.markPrivacyHandled(args);
+    },
     async writeGateStatus(args = {}) {
       const record = await read(
         "helpdesk.write_gate_status",

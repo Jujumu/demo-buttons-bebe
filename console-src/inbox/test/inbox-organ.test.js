@@ -106,6 +106,33 @@ test("unsubscribe ticket shows mute request type without a Shopify write control
   assert.doesNotMatch(ada.html, /data-tissue="preference"/);
 });
 
+test("privacy ticket shows mute request type without a Shopify write control", async () => {
+  const organ = createInboxOrgan({ viewId: "mine", ticketId: "t-lee-privacy" });
+  const snap = await organ.ready();
+  assert.equal(snap.selectedId, "t-lee-privacy");
+  assert.match(snap.html, /data-ticket="t-lee-privacy"[^>]*data-request-type="privacy_request"/);
+  assert.match(snap.html, /class="ticket-status ticket-request"[^>]*>Privacy</);
+  assert.match(snap.html, /class="thread-request mute"[^>]*>Privacy request</);
+  assert.match(snap.html, /data-tissue="preference"[^>]*data-request-type="privacy_request"/);
+  assert.match(snap.html, /<h2>Privacy request<\/h2>\s*<span class="peek">Delete<\/span>/);
+  assert.match(snap.html, /Privacy tools stay locked\. No live data erase or export\./);
+  assert.match(snap.html, /data-privacy-gate-open>Mark privacy handled</);
+  assert.match(snap.html, /<h2>Customer<\/h2>\s*<span class="peek">No customer<\/span>/);
+  assert.doesNotMatch(snap.html, /data-tissue="privacy"/);
+  assert.doesNotMatch(snap.html, /data-customer-privacy/);
+  assert.doesNotMatch(snap.html, /<(button|a)\b[^>]*>[^<]*(?:erasure|redact|Customer Privacy)/i);
+  assert.deepEqual(snap.forbidden, []);
+  const gated = organ.openPrivacyGate();
+  assert.match(gated.html, /data-privacy-gate/);
+  assert.match(gated.html, /Privacy tools stay locked\. No live data erase or export\./);
+  const handled = await organ.markPrivacyHandled();
+  assert.match(handled.html, /Privacy handled/);
+  assert.doesNotMatch(handled.html, /data-privacy-gate-open/);
+  const priya = await createInboxOrgan({ viewId: "mine", ticketId: "t-priya-unsub" }).ready();
+  assert.match(priya.html, /data-ticket="t-priya-unsub"[^>]*data-request-type="marketing_unsubscribe"/);
+  assert.match(priya.html, /class="ticket-status ticket-request"[^>]*>Unsubscribe</);
+});
+
 test("list rows show helpdesk status open closed snoozed", async () => {
   const snap = await createInboxOrgan({ viewId: "all" }).ready();
   assert.match(snap.html, /data-ticket="t-ada-track"[^>]*data-status="open"/);

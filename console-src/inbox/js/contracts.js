@@ -122,7 +122,7 @@
  * @property {string} updatedAt
  * @property {string} customerId
  * @property {string | null} orderId
- * @property {"marketing_unsubscribe" | null} [requestType]
+ * @property {"marketing_unsubscribe" | "privacy_request" | null} [requestType]
  */
 
 /**
@@ -135,7 +135,9 @@
  * @property {string} updatedAt
  * @property {string} customerId
  * @property {string | null} orderId
- * @property {"marketing_unsubscribe" | null} [requestType]
+ * @property {"marketing_unsubscribe" | "privacy_request" | null} [requestType]
+ * @property {"access" | "delete" | "export" | null} [privacySubtype]
+ * @property {boolean} [privacyHandled]
  * @property {object[]} messages — each talk message has `from` (`customer`|`agent`),
  *   `fromName`, optional `fromEmail`, and `name` (same as fromName). Inbound From
  *   is the customer persona, never the AgentMail/shop mailbox login.
@@ -178,6 +180,9 @@
  * `thread/escalate`      { ticketId, reason? } — first-party; never Send
  * `write-gate/open`      {} — This order hairline opens the payments sheet
  * `write-gate/close`     {}
+ * `privacy-gate/open`    {} — Privacy hairline opens the gated lock sheet
+ * `privacy-gate/close`   {}
+ * `privacy-gate/handled` { ticketId } — first-party flag only; never Shopify
  * `history/peek`         { orderId }  — does not replace This order
  * `tissue/error`         { tissueId, message }
  */
@@ -193,9 +198,16 @@ export const MAILBOX_TOPICS = Object.freeze({
   THREAD_ESCALATE: "thread/escalate",
   WRITE_GATE_OPEN: "write-gate/open",
   WRITE_GATE_CLOSE: "write-gate/close",
+  PRIVACY_GATE_OPEN: "privacy-gate/open",
+  PRIVACY_GATE_CLOSE: "privacy-gate/close",
+  PRIVACY_HANDLED: "privacy-gate/handled",
   HISTORY_PEEK: "history/peek",
   TISSUE_ERROR: "tissue/error",
 });
+
+/** LOCK voice. Gated confirm. Not a Customer Privacy write. */
+export const PRIVACY_LOCKED_COPY =
+  "Privacy tools stay locked. No live data erase or export.";
 
 /** LOCK voice. Hairline + gate sheet. Not a Refund or Cancel control. */
 export const PAYMENTS_LOCKED_COPY =

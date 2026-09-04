@@ -201,6 +201,45 @@ class TicketContractTests(unittest.TestCase):
         self.assertEqual(WRITE_TOOLS, frozenset({"helpdesk.send", "helpdesk.refund", "helpdesk.cancel"}))
         self.assertNotIn("helpdesk.mark_request_type", WRITE_TOOLS)
 
+    def test_privacy_fixture_surfaces_request_type(self) -> None:
+        rows = dispatch("helpdesk.list_tickets", {"view": "open", "limit": 20})["tickets"]
+        lee = next(row for row in rows if row["id"] == "t-lee-privacy")
+        self.assertEqual(lee["requestType"], "privacy_request")
+        self.assertEqual(lee["customerName"], "Lee Chen")
+        self.assertEqual(lee["status"], "open")
+        priya = next(row for row in rows if row["id"] == "t-priya-unsub")
+        self.assertEqual(priya["requestType"], "marketing_unsubscribe")
+        ada = next(row for row in rows if row["id"] == "t-ada-track")
+        self.assertIsNone(ada["requestType"])
+        casey = next(row for row in rows if row["id"] == "t-casey-visor")
+        self.assertIsNone(casey["requestType"])
+        ticket = dispatch("helpdesk.get_ticket", {"ticketId": "t-lee-privacy"})["ticket"]
+        self.assertEqual(ticket["requestType"], "privacy_request")
+        self.assertEqual(ticket["privacySubtype"], "delete")
+        self.assertFalse(ticket["privacyHandled"])
+        self.assertEqual(ticket["status"], "open")
+        self.assertFalse(ticket.get("escalated"))
+        from helpdesk.queries import CUSTOMER_QUERY, ORDER_QUERY
+        from helpdesk.tickets import mark_privacy_handled
+        from unittest.mock import patch
+
+        handled = mark_privacy_handled("t-lee-privacy")
+        self.assertTrue(handled["privacyHandled"])
+        with patch("helpdesk.client.graphql") as gql:
+            again = mark_privacy_handled("t-lee-privacy")
+            gql.assert_not_called()
+        self.assertTrue(again["privacyHandled"])
+        blob = CUSTOMER_QUERY + ORDER_QUERY
+        self.assertNotIn("customerPrivacy", blob)
+        self.assertNotIn("customerRequestDataErasure", blob)
+        self.assertNotIn("customerRedact", blob)
+        self.assertNotIn("dataRequest", blob)
+        self.assertNotIn("gdpr", blob.lower())
+        self.assertEqual(WRITE_TOOLS, frozenset({"helpdesk.send", "helpdesk.refund", "helpdesk.cancel"}))
+        self.assertNotIn("helpdesk.mark_request_type", WRITE_TOOLS)
+        self.assertNotIn("helpdesk.privacy_request", WRITE_TOOLS)
+        self.assertNotIn("helpdesk.mark_privacy_handled", WRITE_TOOLS)
+
     def test_write_gate_status_reports_refused_money_writes(self) -> None:
         os.environ["SHOPIFY_MUTATIONS_ENABLED"] = "0"
         payload = dispatch("helpdesk.write_gate_status", {})

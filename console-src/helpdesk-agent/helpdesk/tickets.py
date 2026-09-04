@@ -28,7 +28,21 @@ from .fixtures_sample import ADA, CASEY, JORDAN, ORDER_ADA, ORDER_CASEY_A, ORDER
 
 VIEWS = ("open", "closed", "all", "snoozed", "mine", "unassigned")
 TICKET_STATUSES = ("open", "closed", "snoozed")
-REQUEST_TYPES = ("marketing_unsubscribe",)
+REQUEST_TYPES = ("marketing_unsubscribe", "privacy_request")
+PRIVACY_SUBTYPES = ("access", "delete", "export")
+_PRIVACY_MARKERS = (
+    "privacy",
+    "gdpr",
+    "delete my data",
+    "data request",
+    "privacy request",
+    "delete my personal data",
+    "data deletion",
+    "data export",
+    "export my data",
+    "right to be forgotten",
+    "erase my data",
+)
 
 ALIASES = {
     "1001": "t-ada-track",
@@ -208,6 +222,32 @@ SEED_TICKETS = (
             {"at": "2026-08-28T15:41:00Z", "status": "open", "note": "created"},
         ],
     },
+    {
+        "id": "t-lee-privacy",
+        "customerName": "Lee Chen",
+        "subject": "GDPR request — please delete my data",
+        "snippet": "Please delete my stored personal data. I do not need a Shopify account change from this inbox.",
+        "status": "open",
+        "assignee": "me",
+        "updatedAt": "2026-08-28T15:50:00Z",
+        "requestType": "privacy_request",
+        "privacySubtype": "delete",
+        "privacyHandled": False,
+        "messages": [
+            {
+                "id": "m9-privacy",
+                "from": "customer",
+                "fromAgent": False,
+                "name": "Lee Chen",
+                "fromName": "Lee Chen",
+                "body": "Please delete my stored personal data. I do not need a Shopify account change from this inbox.",
+                "at": "2026-08-28T15:50:00Z",
+            }
+        ],
+        "statusEvents": [
+            {"at": "2026-08-28T15:51:00Z", "status": "open", "note": "created"},
+        ],
+    },
 ) + tuple(DEMO_SEED_TICKETS)
 
 _store: list[dict] = []
@@ -282,19 +322,35 @@ def _snippet(body: str) -> str:
     return " ".join(str(body or "").split())[:140]
 
 
+def infer_privacy_subtype(subject: str = "", body: str = "") -> str | None:
+    """Optional Access / Delete / Export peek. Never a Shopify write."""
+    hay = f"{subject or ''} {body or ''}".lower()
+    if any(marker in hay for marker in ("delete my data", "data deletion", "erase my data", "right to be forgotten")):
+        return "delete"
+    if any(marker in hay for marker in ("export my data", "data export")):
+        return "export"
+    if any(marker in hay for marker in ("data request", "access my data", "access request")):
+        return "access"
+    return None
+
+
 def infer_request_type(subject: str = "", body: str = "") -> str | None:
-    """First-party type from intake subject. Never a Shopify marketing write."""
-    _ = body
-    hay = f"{subject or ''}".lower()
+    """First-party type from intake subject/body. Never a Shopify write."""
+    subject_hay = f"{subject or ''}".lower()
+    hay = f"{subject or ''} {body or ''}".lower()
     if "unsubscribe-farm" in hay or "unsubscribe farm" in hay:
         return None
-    if "unsubscribe" in hay:
+    if any(marker in hay for marker in _PRIVACY_MARKERS):
+        return "privacy_request"
+    if "unsubscribe" in subject_hay:
         return "marketing_unsubscribe"
     return None
 
 
-def _normalize_request_type(value: str | None, subject: str = "") -> str | None:
-    typed = str(value or "").strip() or infer_request_type(subject)
+def _normalize_request_type(
+    value: str | None, subject: str = "", body: str = ""
+) -> str | None:
+    typed = str(value or "").strip() or infer_request_type(subject, body)
     if typed in REQUEST_TYPES:
         return typed
     return None
@@ -319,7 +375,8 @@ def add_ticket(
     global _next_seq
     ticket_id = f"t-in-{_next_seq}"
     _next_seq += 1
-    typed = _normalize_request_type(request_type, subject)
+    typed = _normalize_request_type(request_type, subject, body)
+    subtype = infer_privacy_subtype(subject, body) if typed == "privacy_request" else None
     ticket = {
         "id": ticket_id,
         "customerName": customer_name,
@@ -334,6 +391,8 @@ def add_ticket(
         "channel": channel,
         "fromEmail": from_email,
         "requestType": typed,
+        "privacySubtype": subtype,
+        "privacyHandled": False,
         "messages": [
             {
                 "id": f"m-{ticket_id}-1",
@@ -427,6 +486,9 @@ def get_ticket(ticket_id: str, gid_source: str = "sample") -> dict:
                 row["escalationReason"] = str(reason)
             if ticket.get("fromEmail"):
                 row["fromEmail"] = ticket.get("fromEmail")
+            subtype = ticket.get("privacySubtype") if row.get("requestType") == "privacy_request" else None
+            row["privacySubtype"] = subtype if subtype in PRIVACY_SUBTYPES else None
+            row["privacyHandled"] = bool(ticket.get("privacyHandled"))
             return row
     raise not_found("ticket", str(ticket_id))
 
@@ -456,6 +518,28 @@ def escalate_ticket(ticket_id: str, reason: str | None = None, gid_source: str =
                 note = f"escalated: {note_reason}"[:140]
             ticket.setdefault("statusEvents", []).append(
                 {"at": now, "status": ticket["status"], "note": note}
+            )
+        return get_ticket(canonical, gid_source)
+    raise not_found("ticket", str(ticket_id))
+
+
+def mark_privacy_handled(ticket_id: str, gid_source: str = "sample") -> dict:
+    """First-party helpdesk flag. Never a Shopify Customer Privacy write."""
+    if not ticket_id:
+        raise bad_request("ticketId is required", field="ticketId")
+    canonical = _resolve_id(ticket_id)
+    for ticket in _store:
+        if ticket["id"] != canonical:
+            continue
+        if ticket.get("requestType") != "privacy_request":
+            raise bad_request("ticket is not a privacy request", field="ticketId")
+        now = _now_iso()
+        already = bool(ticket.get("privacyHandled"))
+        ticket["privacyHandled"] = True
+        ticket["updatedAt"] = now
+        if not already:
+            ticket.setdefault("statusEvents", []).append(
+                {"at": now, "status": ticket["status"], "note": "privacy handled"}
             )
         return get_ticket(canonical, gid_source)
     raise not_found("ticket", str(ticket_id))

@@ -77,9 +77,19 @@ export const INVOICE_MISSING_LABEL = "No invoice";
 export const WARRANTY_MISSING_LABEL = "No warranty";
 export const ETA_MISSING_LABEL = "No ETA";
 export const REQUEST_TYPE_UNSUBSCRIBE = "marketing_unsubscribe";
+export const REQUEST_TYPE_PRIVACY = "privacy_request";
 export const UNSUBSCRIBE_LABEL = "Unsubscribe";
+export const PRIVACY_LABEL = "Privacy";
 export const UNSUBSCRIBE_TITLE = "Marketing unsubscribe";
+export const PRIVACY_TITLE = "Privacy request";
 export const UNSUBSCRIBE_WRITE_PEEK = "No Shopify write — confirm preference out of band";
+export const PRIVACY_LOCK_COPY = "Privacy tools stay locked. No live data erase or export.";
+export const PRIVACY_HANDLED_LABEL = "Mark privacy handled";
+export const PRIVACY_SUBTYPE_LABELS = Object.freeze({
+  access: "Access",
+  delete: "Delete",
+  export: "Export",
+});
 
 export function giftCardHint(card) {
   if (!card) return "";
@@ -262,8 +272,30 @@ export function isMarketingUnsubscribe(value) {
   return String(value || "") === REQUEST_TYPE_UNSUBSCRIBE;
 }
 
+export function isPrivacyRequest(value) {
+  return String(value || "") === REQUEST_TYPE_PRIVACY;
+}
+
 export function requestTypeLabel(value) {
-  return isMarketingUnsubscribe(value) ? UNSUBSCRIBE_LABEL : "";
+  if (isMarketingUnsubscribe(value)) return UNSUBSCRIBE_LABEL;
+  if (isPrivacyRequest(value)) return PRIVACY_LABEL;
+  return "";
+}
+
+export function requestTypeTitle(value) {
+  if (isMarketingUnsubscribe(value)) return UNSUBSCRIBE_TITLE;
+  if (isPrivacyRequest(value)) return PRIVACY_TITLE;
+  return "";
+}
+
+export function requestTypeWritePeek(value, subtype) {
+  if (isMarketingUnsubscribe(value)) return UNSUBSCRIBE_WRITE_PEEK;
+  if (isPrivacyRequest(value)) return privacySubtypeLabel(subtype) || PRIVACY_LOCK_COPY;
+  return "";
+}
+
+export function privacySubtypeLabel(value) {
+  return PRIVACY_SUBTYPE_LABELS[String(value || "")] || "";
 }
 
 export function forbiddenControlHits(html) {

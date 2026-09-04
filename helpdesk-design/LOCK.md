@@ -90,3 +90,24 @@ owns the preference change out of band.
 Do not call marketing unsubscribe mutations. Do not query invented
 consent fields. Official `Customer.emailMarketingConsent` stays unread
 on this slice.
+
+## Privacy request
+
+First-party ticket `requestType`. Same pattern as Unsubscribe. Not a
+Shopify Customer Privacy / GDPR Admin write. Human handles export or
+deletion out of band. No fifth rail tissue.
+
+1. List mutes chip `Privacy` when `requestType` is `privacy_request`.
+   Same mute status voice as Open / Closed / Snoozed / Unsubscribe.
+   Not purple. Not color-alone.
+2. Thread header mutes `Privacy request` under the subject.
+3. Optional subtype peek `Access` / `Delete` / `Export` when intake
+   sets it.
+4. Optional hairline `Mark privacy handled` is a first-party ticket
+   flag only. It does not write Shopify.
+5. Gated lock copy:
+   `Privacy tools stay locked. No live data erase or export.`
+
+Intake keywords (fixture-ok): privacy / GDPR / delete my data /
+data request. Do not call Customer privacy / GDPR / data-request
+Admin mutations. Do not query invented privacy fields.

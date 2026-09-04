@@ -15,6 +15,7 @@ const organ = createInboxOrgan({
   shopHost: live?.shop,
   viewId: params.get("view") || "open",
   ticketId: params.get("ticket") || undefined,
+  privacyGate: params.get("gate") === "privacy",
 });
 if (params.get("pull") === "1") {
   const pullArgs = { limit: Number(params.get("limit") || 20) || 20 };

@@ -1,4 +1,4 @@
-import { MAILBOX_TOPICS, PAYMENTS_LOCKED_COPY } from "./contracts.js";
+import { MAILBOX_TOPICS, PAYMENTS_LOCKED_COPY, PRIVACY_LOCKED_COPY } from "./contracts.js";
 import { SHOP, STORE_NAME, macros as fixtureMacros, ticketInView, tickets as fixtureTickets, viewCounts, views } from "./fixtures/demo-inbox.js";
 import { createMailbox } from "./mailbox.js";
 import { createHelpdeskShop } from "./shop/helpdesk-shop.js";
@@ -61,6 +61,7 @@ export function createInboxOrgan(opts = {}) {
     message: "Shopify writes are refused. SHOPIFY_MUTATIONS_ENABLED stays 0.",
   };
   let writeGateOpen = false;
+  let privacyGateOpen = Boolean(opts.privacyGate);
   let listRows = pinnedCatalog ? pinnedCatalog.filter((ticket) => ticketInView(ticket, viewId)) : [];
   let selected = pinnedCatalog?.find((ticket) => ticket.id === selectedId) || null;
   let counts = pinnedCatalog ? viewCounts(pinnedCatalog) : viewCounts(fixtureTickets);
@@ -133,6 +134,17 @@ export function createInboxOrgan(opts = {}) {
   }
 
   function gateSheetHtml() {
+    if (privacyGateOpen) {
+      return `<div class="gate-sheet-backdrop" data-gate-sheet data-privacy-gate>
+        <div class="gate-sheet" role="dialog" aria-modal="true" aria-labelledby="gate-sheet-copy">
+          <p id="gate-sheet-copy">${PRIVACY_LOCKED_COPY}</p>
+          <div class="gate-sheet-actions">
+            <button type="button" class="btn-hairline" data-privacy-handled>Mark privacy handled</button>
+            <button type="button" class="btn-hairline" data-gate-dismiss>Close</button>
+          </div>
+        </div>
+      </div>`;
+    }
     if (!writeGateOpen) return "";
     return `<div class="gate-sheet-backdrop" data-gate-sheet>
       <div class="gate-sheet" role="dialog" aria-modal="true" aria-labelledby="gate-sheet-copy">
@@ -243,6 +255,33 @@ export function createInboxOrgan(opts = {}) {
     return selected;
   }
 
+  async function markPrivacyHandled() {
+    const ticket = selectedTicket();
+    if (!ticket || ticket.requestType !== "privacy_request") return ticket;
+    if (typeof shop.markPrivacyHandled === "function") {
+      try {
+        const result = await shop.markPrivacyHandled({ ticketId: ticket.id });
+        if (result) {
+          selected = result;
+          privacyGateOpen = false;
+          return result;
+        }
+      } catch {
+        // local flag below
+      }
+    }
+    selected = {
+      ...ticket,
+      privacyHandled: true,
+      statusEvents: [
+        ...(ticket.statusEvents || []),
+        { at: new Date().toISOString(), status: ticket.status, note: "privacy handled" },
+      ],
+    };
+    privacyGateOpen = false;
+    return selected;
+  }
+
   async function refreshMacros(query = "") {
     macroQuery = query;
     if (typeof shop.searchMacros === "function") {
@@ -329,6 +368,8 @@ export function createInboxOrgan(opts = {}) {
       orderId: ticket?.orderId,
       ticketId: ticket?.id,
       requestType: ticket?.requestType || "",
+      privacySubtype: ticket?.privacySubtype || "",
+      privacyHandled: Boolean(ticket?.privacyHandled),
     });
     toEmail = rail.snapshot().models.customer?.record?.defaultEmailAddress?.emailAddress || "";
   }
@@ -429,15 +470,35 @@ export function createInboxOrgan(opts = {}) {
     });
     mailbox.subscribe(MAILBOX_TOPICS.WRITE_GATE_OPEN, () => {
       writeGateOpen = true;
+      privacyGateOpen = false;
       paint();
     });
     mailbox.subscribe(MAILBOX_TOPICS.WRITE_GATE_CLOSE, () => {
       writeGateOpen = false;
       paint();
     });
+    mailbox.subscribe(MAILBOX_TOPICS.PRIVACY_GATE_OPEN, () => {
+      privacyGateOpen = true;
+      writeGateOpen = false;
+      paint();
+    });
+    mailbox.subscribe(MAILBOX_TOPICS.PRIVACY_GATE_CLOSE, () => {
+      privacyGateOpen = false;
+      paint();
+    });
+    mailbox.subscribe(MAILBOX_TOPICS.PRIVACY_HANDLED, ({ ticketId }) => {
+      if (ticketId && ticketId !== selectedId) selectedId = ticketId;
+      markPrivacyHandled().then(() => refreshRail()).then(paint);
+    });
     root.onclick = (event) => {
+      if (event.target.closest("[data-privacy-handled]")) {
+        const ticket = selectedTicket();
+        mailbox.publish(MAILBOX_TOPICS.PRIVACY_HANDLED, { ticketId: ticket?.id });
+        return;
+      }
       if (event.target.closest("[data-gate-dismiss]") || event.target.closest("[data-gate-sheet]") === event.target) {
         writeGateOpen = false;
+        privacyGateOpen = false;
         paint();
       }
     };
@@ -557,10 +618,26 @@ export function createInboxOrgan(opts = {}) {
     },
     openWriteGate() {
       writeGateOpen = true;
+      privacyGateOpen = false;
       return snapshot();
     },
     closeWriteGate() {
       writeGateOpen = false;
+      return snapshot();
+    },
+    openPrivacyGate() {
+      privacyGateOpen = true;
+      writeGateOpen = false;
+      return snapshot();
+    },
+    closePrivacyGate() {
+      privacyGateOpen = false;
+      return snapshot();
+    },
+    async markPrivacyHandled() {
+      const ticket = await markPrivacyHandled();
+      if (ticket && !pinnedCatalog) await refreshThread();
+      await refreshRail();
       return snapshot();
     },
     async requestSummarize() {

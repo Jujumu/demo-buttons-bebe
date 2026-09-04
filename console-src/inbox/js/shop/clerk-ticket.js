@@ -121,6 +121,8 @@ export function clerkTicketRow(ticket) {
     customerId: ticket.customerId || null,
     orderId: ticket.orderId ?? null,
     requestType: ticket.requestType || null,
+    privacySubtype: ticket.privacySubtype || null,
+    privacyHandled: Boolean(ticket.privacyHandled),
   };
 }
 
