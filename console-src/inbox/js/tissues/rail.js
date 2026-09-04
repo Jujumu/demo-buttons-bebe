@@ -17,6 +17,7 @@ export const RAIL_DEFAULTS = Object.freeze({
   discounts: false,
   invoice: false,
   warranty: false,
+  eta: false,
 });
 
 /**
@@ -55,6 +56,7 @@ export function createRailOrgan({ shop, mailbox }) {
     open.discounts = Boolean(orderModel?.hasDiscounts);
     open.invoice = Boolean(orderModel?.hasInvoice);
     open.warranty = Boolean(orderModel?.hasWarranty);
+    open.eta = Boolean(orderModel?.hasEta);
   }
 
   const ERROR_LABEL = {
@@ -93,6 +95,7 @@ export function createRailOrgan({ shop, mailbox }) {
         discountsOpen: open.discounts,
         invoiceOpen: open.invoice,
         warrantyOpen: open.warranty,
+        etaOpen: open.eta,
       });
     const returnsHtml = models.returns.error
       ? renderError("returns", "Returns", models.returns.peek)

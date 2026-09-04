@@ -46,12 +46,15 @@ test("UX Pro blocks fail the default Ada paint", async () => {
   assert.equal(toggleExpanded(snap.html, "discounts"), true);
   assert.equal(toggleExpanded(snap.html, "invoice"), true);
   assert.equal(toggleExpanded(snap.html, "warranty"), true);
+  assert.equal(toggleExpanded(snap.html, "eta"), true);
   assert.match(snap.html, /<h3>Gift cards<\/h3>\s*<span class="peek">••••4291<\/span>/);
   assert.match(snap.html, /<h3>Discounts<\/h3>\s*<span class="peek">WELCOME10<\/span>/);
   assert.match(snap.html, /<h3>Invoice<\/h3>\s*<span class="peek">Invoice<\/span>/);
   assert.match(snap.html, /<a class="invoice-link"[^>]*>Invoice<\/a>/);
   assert.match(snap.html, /<h3>Warranty<\/h3>\s*<span class="peek">1 year · Active<\/span>/);
   assert.match(snap.html, /<p class="mute warranty-line">Ends 12 Mar 2027<\/p>/);
+  assert.match(snap.html, /<h3>ETA<\/h3>\s*<span class="peek">ETA Tue 8 Sep<\/span>/);
+  assert.match(snap.html, /<p class="mute eta-line">Zone: Domestic<\/p>/);
   assert.match(snap.html, /status-badge">Open</);
   assert.match(snap.html, /Status Open/);
   assert.doesNotMatch(snap.html, /status-badge">OPEN</);
@@ -81,10 +84,12 @@ test("UX Pro blocks fail Casey and Jordan default paints", async () => {
       assert.equal(toggleExpanded(snap.html, "discounts"), false);
       assert.equal(toggleExpanded(snap.html, "invoice"), false);
       assert.equal(toggleExpanded(snap.html, "warranty"), false);
+      assert.equal(toggleExpanded(snap.html, "eta"), false);
       assert.match(snap.html, /<h3>Gift cards<\/h3>\s*<span class="peek">No gift cards<\/span>/);
       assert.match(snap.html, /<h3>Discounts<\/h3>\s*<span class="peek">No discounts<\/span>/);
       assert.match(snap.html, /<h3>Invoice<\/h3>\s*<span class="peek">No invoice<\/span>/);
       assert.match(snap.html, /<h3>Warranty<\/h3>\s*<span class="peek">No warranty<\/span>/);
+      assert.match(snap.html, /<h3>ETA<\/h3>\s*<span class="peek">No ETA<\/span>/);
     }
   }
 });
@@ -181,6 +186,8 @@ test("review-block detector flags the wall and a printed null SKU", () => {
     <span class="peek">No invoice</span>
     <button data-toggle="warranty" aria-expanded="true"></button>
     <span class="peek">No warranty</span>
+    <button data-toggle="eta" aria-expanded="true"></button>
+    <span class="peek">No ETA</span>
     <section data-tissue="returns"><span class="peek">No returns</span></section>
     <td class="mono" data-sku="null">null</td>
     <p class="mono line-sku" data-sku="—">—</p>
@@ -193,6 +200,7 @@ test("review-block detector flags the wall and a printed null SKU", () => {
   assert.ok(hits.includes("empty shipment open"));
   assert.ok(hits.includes("empty invoice open"));
   assert.ok(hits.includes("empty warranty open"));
+  assert.ok(hits.includes("empty eta open"));
   assert.ok(hits.includes("past orders open by default"));
   assert.ok(hits.includes("literal null SKU"));
   assert.ok(hits.includes("em dash SKU"));

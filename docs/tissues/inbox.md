@@ -92,7 +92,7 @@ Clerk DTO field names are locked. In for each: `{ shop, customerId? , orderId? }
 
 ### order (This order)
 
-- **Out:** `name`, `createdAt`, `displayFinancialStatus`, `displayFulfillmentStatus`, `currentTotalPriceSet` (MoneyBag `{ shopMoney, presentmentMoney }`), `lineItems` (`title`, `sku`, `qty`, `unfulfilledQuantity`, `originalUnitPriceSet.shopMoney`), stacked `shippingAddress` / `billingAddress`, `fulfillments.trackingInfo` / `displayStatus` / `fulfillmentLineItems`, `discountCodes`, `invoiceUrl` (fixture URL or null), `warranty` (fixture `{ period, status, endsOn }` or null), plus totals when the order object has them
+- **Out:** `name`, `createdAt`, `displayFinancialStatus`, `displayFulfillmentStatus`, `currentTotalPriceSet` (MoneyBag `{ shopMoney, presentmentMoney }`), `lineItems` (`title`, `sku`, `qty`, `unfulfilledQuantity`, `originalUnitPriceSet.shopMoney`), stacked `shippingAddress` / `billingAddress`, `fulfillments.trackingInfo` / `displayStatus` / `estimatedDeliveryAt` / `fulfillmentLineItems`, `discountCodes`, `invoiceUrl` (fixture URL or null), `warranty` (fixture `{ period, status, endsOn }` or null), `eta` (ISO from `Fulfillment.estimatedDeliveryAt` or fixture), `shippingZone` (fixture string or null), plus totals when the order object has them
 - Default open. Peek: order number + Paid + Fulfilled / Partially Fulfilled / Unfulfilled
 - Line items and totals stay visible while open. Each line may show an official `unfulfilledQuantity` cue (`Shipped` / `Unfulfilled` / `N of Q unfulfilled`) so partial ship is visible. Miss → no invented line status.
 - Addresses start collapsed (stack, not two columns). Peek `No billing` when `billingAddress` is missing. `Ship ≠ bill` / `Same address` only when both addresses exist
@@ -103,6 +103,7 @@ Clerk DTO field names are locked. In for each: `{ shop, customerId? , orderId? }
 - Discounts is a nested `h3` under This order. Official `discountCodes`. Opens when a code exists. Empty peek `No discounts`.
 - Invoice is a nested `h3` under This order. Fixture `invoiceUrl` opens as a normal **Invoice** link (new tab, same accent as Track). Opens when a URL exists. Empty peek `No invoice`. Live stays empty until Clerk signs an official Order invoice/receipt URL.
 - Warranty is a nested `h3` under This order. Fixture `{ period, status, endsOn }` peeks `1 year · Active` and shows `Ends 12 Mar 2027` when open. Opens when a warranty exists. Empty peek `No warranty`. Live stays empty until Clerk signs an official Order/LineItem field or a shop metafield.
+- ETA is a nested `h3` under This order, next to Shipment. Official `Fulfillment.estimatedDeliveryAt` peeks `ETA Tue 8 Sep`. Fixture `shippingZone` adds mute `Zone: Domestic` when open. Opens when ETA or zone exists. Empty peek `No ETA` covers both. Live zone stays empty until Clerk signs an official Order/Fulfillment zone field. Track chrome stays company + mono number + Track.
 - **Degrade:** “No order on this ticket”
 
 ### returns

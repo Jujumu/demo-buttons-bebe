@@ -76,6 +76,13 @@ export function reviewBlockViolations(html) {
     hits.push("empty warranty open");
   }
 
+  const eta = toggleExpanded(text, "eta");
+  const etaBlock = text.match(/data-toggle="eta"[\s\S]*?(?:data-toggle="|data-tissue="|$)/);
+  const etaPeekEmpty = /No ETA/.test(etaBlock ? etaBlock[0] : "");
+  if (eta === true && etaPeekEmpty) {
+    hits.push("empty eta open");
+  }
+
   if (history === true) {
     hits.push("past orders open by default");
   }

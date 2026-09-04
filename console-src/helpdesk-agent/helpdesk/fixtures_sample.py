@@ -134,6 +134,8 @@ ORDERS = {
             "status": "Active",
             "endsOn": "2027-03-12",
         },
+        "eta": "2026-09-08T16:00:00Z",
+        "shippingZone": "Domestic",
         "returns": {
             "nodes": [
                 {"id": RETURN_OPEN, "name": "#9001-R1", "status": "OPEN", "totalQuantity": 1},

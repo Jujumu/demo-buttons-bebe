@@ -15,6 +15,7 @@ Empty-copy voice is short and parallel:
 - No discounts
 - No invoice
 - No warranty
+- No ETA
 - No customer on this ticket
 
 Thread inbound From is the customer persona (`From Ada Demo`), not the
@@ -65,3 +66,9 @@ gift-card write.
    (`1 year · Active`) and may show `Ends 12 Mar 2027` when open. Empty peek
    `No warranty`. Live stays empty: Admin GraphQL 2026-07 `Order` / `LineItem`
    have no warranty field. Do not invent metafield namespace/key names.
+5. **ETA / zone** — under This order, next to Shipment. Official
+   `Fulfillment.estimatedDeliveryAt` peeks `ETA Tue 8 Sep`. Fixture
+   `shippingZone` may add mute `Zone: Domestic`. Empty peek `No ETA`
+   covers both. Live zone stays empty: Admin GraphQL 2026-07 Order /
+   Fulfillment have no shipping-zone field. Track chrome stays company +
+   mono number + Track.

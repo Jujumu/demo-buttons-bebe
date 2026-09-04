@@ -44,6 +44,7 @@ query HelpdeskOrder($id: ID!) {
     }
     fulfillments {
       displayStatus
+      estimatedDeliveryAt
       trackingInfo { number url company }
       fulfillmentLineItems(first: 50) {
         nodes { quantity lineItem { title } }

@@ -75,6 +75,7 @@ export const GIFT_CARDS_MISSING_LABEL = "No gift cards";
 export const DISCOUNTS_MISSING_LABEL = "No discounts";
 export const INVOICE_MISSING_LABEL = "No invoice";
 export const WARRANTY_MISSING_LABEL = "No warranty";
+export const ETA_MISSING_LABEL = "No ETA";
 
 export function giftCardHint(card) {
   if (!card) return "";
@@ -147,6 +148,50 @@ export function warrantyPeek(warranty) {
   if (row.period) return row.period;
   if (row.status) return row.status;
   return formatWarrantyEndsOn(row.endsOn) || WARRANTY_MISSING_LABEL;
+}
+
+function parseEtaDate(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  const iso = raw.includes("T") ? raw : `${raw}T00:00:00Z`;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return date;
+}
+
+/** Official Fulfillment.estimatedDeliveryAt, else fixture order.eta. */
+export function etaOf(order) {
+  const top = String(order?.eta || "").trim();
+  if (parseEtaDate(top)) return top;
+  for (const fulfillment of order?.fulfillments || []) {
+    const raw = String(fulfillment?.estimatedDeliveryAt || "").trim();
+    if (parseEtaDate(raw)) return raw;
+  }
+  return "";
+}
+
+/** Fixture shipping-zone label. Live Order has no official zone field. */
+export function shippingZoneOf(order) {
+  return String(order?.shippingZone || "").trim();
+}
+
+export function formatEta(value) {
+  const date = parseEtaDate(value);
+  if (!date) return "";
+  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `ETA ${days[date.getUTCDay()]} ${date.getUTCDate()} ${months[date.getUTCMonth()]}`;
+}
+
+export function formatShippingZone(zone) {
+  const text = String(zone || "").trim();
+  return text ? `Zone: ${text}` : "";
+}
+
+export function etaPeek(order) {
+  const eta = formatEta(etaOf(order));
+  if (eta) return eta;
+  return formatShippingZone(shippingZoneOf(order)) || ETA_MISSING_LABEL;
 }
 
 export function shipmentPeek(order) {

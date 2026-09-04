@@ -110,6 +110,7 @@ export const orders = {
     fulfillments: [
       {
         displayStatus: "IN_TRANSIT",
+        estimatedDeliveryAt: "2026-09-08T16:00:00Z",
         trackingInfo: [
           {
             number: "DEMO-1001",
@@ -126,6 +127,7 @@ export const orders = {
       status: "Active",
       endsOn: "2027-03-12",
     },
+    shippingZone: "Domestic",
     customerId: ADA,
   },
   [ORDER_1002]: {
