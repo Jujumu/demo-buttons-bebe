@@ -49,7 +49,7 @@ Demo names only (Ada Demo, Casey Sandbox, Jordan Preview). No customer PII.
 
 - **In:** `{ tickets, selectedTicketId, viewLabel }` from `helpdesk.list_tickets`
 - **Out:** `{ ticketId }` on `list/selected`
-- Row copy uses first-party `customerName` (never the AgentMail/shop mailbox login), `snippet`, and title-case helpdesk `status` (`Open` / `Closed` / `Snoozed`). Mute list meta `Unsubscribe` when `requestType` is `marketing_unsubscribe`, or `Privacy` when it is `privacy_request`. Never `Return.status`. Never `Order.displayFulfillmentStatus`.
+- Row copy uses first-party `customerName` (never the AgentMail/shop mailbox login), `snippet`, and title-case helpdesk `status` (`Open` / `Closed` / `Snoozed`). Row time is relative (`2h`, `Yesterday`) from `updatedAt`. Absolute stays in the thread message header and the list tooltip. Mute list meta `Unsubscribe` when `requestType` is `marketing_unsubscribe`, or `Privacy` when it is `privacy_request`. Never `Return.status`. Never `Order.displayFulfillmentStatus`.
 - **Selected row:** One leading-edge ink bar on the selected ticket (4px). That is the only selection treatment. No wash, no purple. Surface only (`#FFFDF9`); bar is `#1C1916`.
 - **Degrade:** “No tickets in this view”
 

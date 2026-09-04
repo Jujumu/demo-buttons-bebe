@@ -38,7 +38,7 @@ export function createListTissue({ mailbox }) {
         <span class="ticket-meta">
           ${typeHtml}
           ${statusHtml}
-          <time class="ticket-time">${esc(formatWhen(ticket.updatedAt))}</time>
+          <time class="ticket-time" datetime="${esc(ticket.updatedAt || "")}" title="${esc(formatWhen(ticket.updatedAt))}">${esc(formatWhen(ticket.updatedAt, { relative: true }))}</time>
         </span>
       </span>
       <span class="ticket-subject">${esc(ticket.subject)}</span>

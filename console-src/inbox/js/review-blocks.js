@@ -111,5 +111,10 @@ export function reviewBlockViolations(html) {
     hits.push("literal null SKU");
   }
 
+  const listPane = text.match(/data-pane="list"[\s\S]*?(?:data-pane="|$)/);
+  if (listPane && /<time class="ticket-time"[^>]*>[^<]*,\s*\d{1,2}:\d{2}</.test(listPane[0])) {
+    hits.push("absolute list time");
+  }
+
   return [...new Set(hits)];
 }

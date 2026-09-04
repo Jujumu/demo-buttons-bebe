@@ -2,6 +2,8 @@
 
 Four panes only: views **200** / list **300** / thread **flex** / rail **300**.
 Selected list row is a **4px `#1C1916` ink bar**. No grey wash. IBM Plex.
+List row time is relative (`2h`, `Yesterday`). Absolute stays in the
+thread message header and the list tooltip.
 Palette: ground `#F4F0EA`, surface `#FFFDF9`, ink `#1C1916`, mute `#5C564F`,
 accent `#B5471D`. Human Send only. No Gorgias chrome, purple, Gaia, or a
 fifth AI column. No Customer Edit, Refund, or Cancel.

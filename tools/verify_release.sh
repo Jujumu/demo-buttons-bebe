@@ -200,7 +200,8 @@ node --test console-src/test/connections.test.js
 node --test console-src/inbox/test/rail-contracts.test.js \
   console-src/inbox/test/inbox-organ.test.js \
   console-src/inbox/test/ux-review-blocks.test.js \
-  console-src/inbox/test/helpdesk-shop.test.js
+  console-src/inbox/test/helpdesk-shop.test.js \
+  console-src/inbox/test/format-when.test.js
 node --check kb-admin/server.js
 node --test kb-admin/test/server.test.js
 
