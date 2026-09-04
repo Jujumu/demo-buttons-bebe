@@ -21,8 +21,11 @@ path as MCP + CLI). No second data path. Do not invent tracking.
 1. **Unfulfilled / empty shipment** — peek `No tracking`. Shipment stays
    collapsed. Ada-style `#1001` / empty `fulfillments` is this state.
 2. **Fulfilled / in transit** — when `fulfillments[].trackingInfo` has a
-   number or URL, open Shipment and show the carrier + tracking link.
-   `Fulfillment.displayStatus` (e.g. `IN_TRANSIT`) may peek **In transit**.
+   number or URL, open Shipment. Show **company name** + **tracking number**
+   as copy (number in IBM Plex Mono). A separate **Track** control opens the
+   carrier URL when `url` is present. Do not merge carrier + number into one
+   accent link. `Fulfillment.displayStatus` (e.g. `IN_TRANSIT`) may peek
+   **In transit**. Accent stays on Track only.
 3. **Partially fulfilled** — `Order.displayFulfillmentStatus` is
    `PARTIALLY_FULFILLED`. Each line shows an official
    `LineItem.unfulfilledQuantity` cue so some lines read **Shipped** and

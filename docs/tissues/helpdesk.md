@@ -79,7 +79,7 @@ short mute peek of the thread, not a reply. Missing LLM keys return a labeled
 - Line price is `originalUnitPriceSet.shopMoney`
 - `sku` is `String | null`; omit the key when null (never print the word `null`)
 - `billingAddress` null is real; peek/copy label is `No billing`
-- empty `fulfillments` / no `trackingInfo`: peek/copy label is `No tracking`. Do not invent a number.
+- empty `fulfillments` / no `trackingInfo`: peek/copy label is `No tracking`. Do not invent a number. Tracking chrome is company + number as copy and a separate Track URL when present.
 - `LineItem.unfulfilledQuantity` is official; omit when missing. Do not invent a line status.
 - `Fulfillment.displayStatus` is official (`IN_TRANSIT`, …). `fulfillmentLineItems.nodes[].quantity` + `lineItem.title` are official when a shipment names its lines.
 - `Order.displayFulfillmentStatus` includes `PARTIALLY_FULFILLED` for mixed ship.
