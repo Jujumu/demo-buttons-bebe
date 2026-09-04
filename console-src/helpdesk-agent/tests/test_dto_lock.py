@@ -149,6 +149,27 @@ class DtoLockTests(_ForceLiveHoles):
         from helpdesk.queries import ORDER_QUERY
 
         self.assertNotIn("invoiceUrl", ORDER_QUERY)
+        self.assertNotIn("warranty", ORDER_QUERY)
+        self.assertNotIn("metafield", ORDER_QUERY.lower())
+        self.assertEqual(WRITE_TOOLS, frozenset({"helpdesk.send", "helpdesk.refund", "helpdesk.cancel"}))
+        for tool in ("helpdesk.refund", "helpdesk.cancel"):
+            payload = invoke(tool, {})
+            self.assertEqual(payload["error"], "forbidden")
+
+    def test_sample_order_exposes_fixture_warranty_live_empty(self) -> None:
+        order = dispatch("helpdesk.get_order", {"shop": SAMPLE_SHOP, "orderId": ORDER_ADA})["order"]
+        self.assertEqual(
+            order["warranty"],
+            {"period": "1 year", "status": "Active", "endsOn": "2027-03-12"},
+        )
+        casey = dispatch("helpdesk.get_order", {"shop": SAMPLE_SHOP, "orderId": ORDER_CASEY_B})["order"]
+        self.assertIsNone(casey["warranty"])
+        hole = dispatch("helpdesk.get_order", {"shop": LIVE_HOLE_SHOP, "orderId": O_1001})["order"]
+        self.assertIsNone(hole["warranty"])
+        from helpdesk.queries import ORDER_QUERY
+
+        self.assertNotIn("warranty", ORDER_QUERY)
+        self.assertNotIn("metafield", ORDER_QUERY.lower())
         self.assertEqual(WRITE_TOOLS, frozenset({"helpdesk.send", "helpdesk.refund", "helpdesk.cancel"}))
         for tool in ("helpdesk.refund", "helpdesk.cancel"):
             payload = invoke(tool, {})

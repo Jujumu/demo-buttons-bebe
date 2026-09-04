@@ -14,6 +14,7 @@ Empty-copy voice is short and parallel:
 - No gift cards
 - No discounts
 - No invoice
+- No warranty
 - No customer on this ticket
 
 Thread inbound From is the customer persona (`From Ada Demo`), not the
@@ -60,3 +61,7 @@ gift-card write.
    link (new tab). Empty peek `No invoice`. Live stays empty: Admin GraphQL
    2026-07 `Order` has no invoice/receipt URL. Do not send invoices. Do not
    use `orderInvoiceSend`.
+4. **Warranty** — under This order. Fixture `warranty` peeks period · status
+   (`1 year · Active`) and may show `Ends 12 Mar 2027` when open. Empty peek
+   `No warranty`. Live stays empty: Admin GraphQL 2026-07 `Order` / `LineItem`
+   have no warranty field. Do not invent metafield namespace/key names.

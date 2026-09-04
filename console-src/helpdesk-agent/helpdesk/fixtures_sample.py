@@ -129,6 +129,11 @@ ORDERS = {
         "fulfillments": [],
         "discountCodes": ["WELCOME10"],
         "invoiceUrl": "https://example.com/invoice/demo-9001",
+        "warranty": {
+            "period": "1 year",
+            "status": "Active",
+            "endsOn": "2027-03-12",
+        },
         "returns": {
             "nodes": [
                 {"id": RETURN_OPEN, "name": "#9001-R1", "status": "OPEN", "totalQuantity": 1},

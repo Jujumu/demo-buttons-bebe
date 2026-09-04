@@ -121,6 +121,11 @@ export const orders = {
     ],
     discountCodes: ["WELCOME10"],
     invoiceUrl: "https://example.com/invoice/demo-1001",
+    warranty: {
+      period: "1 year",
+      status: "Active",
+      endsOn: "2027-03-12",
+    },
     customerId: ADA,
   },
   [ORDER_1002]: {

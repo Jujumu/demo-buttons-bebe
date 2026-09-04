@@ -16,6 +16,7 @@ export const RAIL_DEFAULTS = Object.freeze({
   giftCards: false,
   discounts: false,
   invoice: false,
+  warranty: false,
 });
 
 /**
@@ -53,6 +54,7 @@ export function createRailOrgan({ shop, mailbox }) {
     open.giftCards = Boolean(customerModel?.hasGiftCards);
     open.discounts = Boolean(orderModel?.hasDiscounts);
     open.invoice = Boolean(orderModel?.hasInvoice);
+    open.warranty = Boolean(orderModel?.hasWarranty);
   }
 
   const ERROR_LABEL = {
@@ -90,6 +92,7 @@ export function createRailOrgan({ shop, mailbox }) {
         shipmentOpen: open.shipment,
         discountsOpen: open.discounts,
         invoiceOpen: open.invoice,
+        warrantyOpen: open.warranty,
       });
     const returnsHtml = models.returns.error
       ? renderError("returns", "Returns", models.returns.peek)

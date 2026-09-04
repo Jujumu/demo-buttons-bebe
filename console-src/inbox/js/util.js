@@ -74,6 +74,7 @@ export const TRACKING_MISSING_LABEL = "No tracking";
 export const GIFT_CARDS_MISSING_LABEL = "No gift cards";
 export const DISCOUNTS_MISSING_LABEL = "No discounts";
 export const INVOICE_MISSING_LABEL = "No invoice";
+export const WARRANTY_MISSING_LABEL = "No warranty";
 
 export function giftCardHint(card) {
   if (!card) return "";
@@ -111,6 +112,41 @@ export function invoiceUrlOf(order) {
 
 export function invoicePeek(url) {
   return invoiceUrlOf({ invoiceUrl: url }) ? "Invoice" : INVOICE_MISSING_LABEL;
+}
+
+/** Fixture helpdesk DTO. Live Order has no official warranty field. */
+export function warrantyOf(order) {
+  const raw = order?.warranty;
+  if (!raw || typeof raw !== "object") return null;
+  const period = String(raw.period || "").trim();
+  const status = String(raw.status || "").trim();
+  const endsOn = String(raw.endsOn || "").trim();
+  if (!period && !status && !endsOn) return null;
+  return { period, status, endsOn };
+}
+
+export function formatWarrantyEndsOn(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const iso = raw.includes("T") ? raw : `${raw}T00:00:00Z`;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const stamp = date.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+  return `Ends ${stamp}`;
+}
+
+export function warrantyPeek(warranty) {
+  const row = warrantyOf({ warranty });
+  if (!row) return WARRANTY_MISSING_LABEL;
+  if (row.period && row.status) return `${row.period} · ${row.status}`;
+  if (row.period) return row.period;
+  if (row.status) return row.status;
+  return formatWarrantyEndsOn(row.endsOn) || WARRANTY_MISSING_LABEL;
 }
 
 export function shipmentPeek(order) {

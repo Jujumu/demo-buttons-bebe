@@ -11,7 +11,11 @@ import {
   invoicePeek,
   invoiceUrlOf,
   INVOICE_MISSING_LABEL,
+  formatWarrantyEndsOn,
   lineFulfillmentLabel,
+  warrantyOf,
+  warrantyPeek,
+  WARRANTY_MISSING_LABEL,
   shipmentPeek,
   statusLabel,
   TRACKING_MISSING_LABEL,
@@ -41,6 +45,9 @@ export function projectOrder(record) {
       invoiceUrl: "",
       invoicePeek: INVOICE_MISSING_LABEL,
       hasInvoice: false,
+      warranty: null,
+      warrantyPeek: WARRANTY_MISSING_LABEL,
+      hasWarranty: false,
     };
   }
   const nodes = record.lineItems?.nodes || [];
@@ -48,6 +55,7 @@ export function projectOrder(record) {
     .map((code) => String(code || "").trim())
     .filter(Boolean);
   const invoiceUrl = invoiceUrlOf(record);
+  const warranty = warrantyOf(record);
   return {
     ok: true,
     peek: [record.name, statusLabel(record.displayFinancialStatus), statusLabel(record.displayFulfillmentStatus)]
@@ -65,6 +73,9 @@ export function projectOrder(record) {
     invoiceUrl,
     invoicePeek: invoicePeek(invoiceUrl),
     hasInvoice: Boolean(invoiceUrl),
+    warranty,
+    warrantyPeek: warrantyPeek(warranty),
+    hasWarranty: Boolean(warranty),
     record,
   };
 }
@@ -162,6 +173,36 @@ function renderInvoice(model, invoiceOpen) {
   </div>`;
 }
 
+function renderWarranty(model, warrantyOpen) {
+  const warranty = model.warranty;
+  if (!warranty) {
+    return `<div class="rail-sub" data-open="${warrantyOpen ? "true" : "false"}">
+      <button type="button" class="rail-sub-toggle" data-toggle="warranty" aria-expanded="${warrantyOpen ? "true" : "false"}">
+        <h3>Warranty</h3> <span class="peek">${esc(WARRANTY_MISSING_LABEL)}</span>
+      </button>
+      <div class="rail-sub-body"${warrantyOpen ? "" : " hidden"}>
+        <p class="tissue-empty">${esc(WARRANTY_MISSING_LABEL)}</p>
+      </div>
+    </div>`;
+  }
+  const peek = model.warrantyPeek || warrantyPeek(warranty);
+  const ends = formatWarrantyEndsOn(warranty.endsOn);
+  const rows = [
+    peek && peek !== WARRANTY_MISSING_LABEL
+      ? `<p class="mute warranty-line">${esc(peek)}</p>`
+      : "",
+    ends ? `<p class="mute warranty-line">${esc(ends)}</p>` : "",
+  ].filter(Boolean).join("");
+  return `<div class="rail-sub" data-open="${warrantyOpen ? "true" : "false"}">
+    <button type="button" class="rail-sub-toggle" data-toggle="warranty" aria-expanded="${warrantyOpen ? "true" : "false"}">
+      <h3>Warranty</h3> <span class="peek">${esc(peek)}</span>
+    </button>
+    <div class="rail-sub-body"${warrantyOpen ? "" : " hidden"}>
+      ${rows || `<p class="tissue-empty">${esc(WARRANTY_MISSING_LABEL)}</p>`}
+    </div>
+  </div>`;
+}
+
 function renderAddress(label, address) {
   if (!address) return `<div class="addr"><h4>${esc(label)}</h4><p>Absent</p></div>`;
   const lines = [address.name, address.address1, address.address2, [address.city, address.province, address.zip].filter(Boolean).join(", "), address.country]
@@ -169,7 +210,7 @@ function renderAddress(label, address) {
   return `<div class="addr"><h4>${esc(label)}</h4>${lines.map((line) => `<p>${esc(line)}</p>`).join("")}</div>`;
 }
 
-export function renderOrder(model, { open = true, addressesOpen = false, shipmentOpen, discountsOpen, invoiceOpen } = {}) {
+export function renderOrder(model, { open = true, addressesOpen = false, shipmentOpen, discountsOpen, invoiceOpen, warrantyOpen } = {}) {
   const record = model.record;
   const gateHairline = `<div class="order-gate">
       <button type="button" class="btn-hairline" data-write-gate-open>Payments locked</button>
@@ -188,6 +229,7 @@ export function renderOrder(model, { open = true, addressesOpen = false, shipmen
   const shipOpen = shipmentOpen == null ? model.hasTracking : shipmentOpen;
   const codesOpen = discountsOpen == null ? Boolean(model.hasDiscounts) : discountsOpen;
   const invoiceIsOpen = invoiceOpen == null ? Boolean(model.hasInvoice) : invoiceOpen;
+  const warrantyIsOpen = warrantyOpen == null ? Boolean(model.hasWarranty) : warrantyOpen;
   const items = (record.lineItems?.nodes || []).map((item, index) => {
     const skuLabel = model.skuLabels[index] ?? formatSku(item.sku);
     const skuRow = skuLabel
@@ -232,6 +274,7 @@ export function renderOrder(model, { open = true, addressesOpen = false, shipmen
       ${gateHairline}
       ${renderDiscounts(model, codesOpen)}
       ${renderInvoice(model, invoiceIsOpen)}
+      ${renderWarranty(model, warrantyIsOpen)}
       <div class="rail-sub" data-open="${addressesOpen ? "true" : "false"}">
         <button type="button" class="rail-sub-toggle" data-toggle="addresses" aria-expanded="${addressesOpen ? "true" : "false"}">
           <h3>Addresses</h3> <span class="peek">${esc(model.addressPeek)}</span>
