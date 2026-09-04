@@ -90,3 +90,20 @@ owns the preference change out of band.
 Do not call marketing unsubscribe mutations. Do not query invented
 consent fields. Official `Customer.emailMarketingConsent` stays unread
 on this slice.
+
+## Privacy request
+
+First-party ticket `requestType`. Not a Shopify Customer Privacy /
+GDPR Admin write. Human handles export or deletion out of band.
+
+1. List meta mutes `Privacy` when `requestType` is `privacy_request`.
+   Same mute status voice as Open / Closed / Snoozed / Unsubscribe.
+   No purple badge.
+2. Thread header mutes `Privacy request` under the subject.
+3. Rail peeks `Privacy request` +
+   `No Shopify write — handle privacy out of band`. No control that
+   writes Shopify Customer Privacy, erasure, or redaction.
+
+Do not call Customer Privacy / erasure / redaction mutations. Do not
+query invented privacy fields. Official Customer Privacy stays unread
+on this slice.

@@ -1,5 +1,5 @@
 import { MAILBOX_TOPICS } from "../contracts.js";
-import { esc, formatOrderCount, isMarketingUnsubscribe, UNSUBSCRIBE_TITLE, UNSUBSCRIBE_WRITE_PEEK } from "../util.js";
+import { esc, formatOrderCount, requestTypeTitle, requestTypeWritePeek } from "../util.js";
 import { createCustomerTissue, renderCustomer } from "./customer.js";
 import { createOrderHistoryTissue, renderOrderHistory } from "./order-history.js";
 import { createOrderTissue, renderOrder } from "./order.js";
@@ -84,14 +84,16 @@ export function createRailOrgan({ shop, mailbox }) {
 
   function renderPreference() {
     const typed = lastLoad.requestType;
-    if (!isMarketingUnsubscribe(typed)) return "";
+    const title = requestTypeTitle(typed);
+    const peek = requestTypeWritePeek(typed);
+    if (!title) return "";
     return `<section class="rail-card" data-tissue="preference" data-open="true" data-request-type="${esc(typed)}">
       <div class="rail-static">
-        <h2>${esc(UNSUBSCRIBE_TITLE)}</h2>
+        <h2>${esc(title)}</h2>
         <span class="peek">No Shopify write</span>
       </div>
       <div class="rail-body">
-        <p class="mute preference-line">${esc(UNSUBSCRIBE_WRITE_PEEK)}</p>
+        <p class="mute preference-line">${esc(peek)}</p>
       </div>
     </section>`;
   }

@@ -70,10 +70,13 @@ rail can load when a row is selected. Ticket status is first-party
 (`open` / `closed` / `snoozed`) — not `Return.status` and not
 `Order.displayFulfillmentStatus`. `customerName` is first-party — never
 `Customer.displayName`. Ticket tissues keep `{ view, limit }` / `{ ticketId }`.
-`requestType` is first-party (`marketing_unsubscribe` or `null`). It is
-not a Shopify consent field. Intake subjects that contain `unsubscribe`
-(and are not unsubscribe-farm spam) set it. Human confirms the preference
-out of band. Do not call marketing unsubscribe mutations.
+`requestType` is first-party (`marketing_unsubscribe` /
+`privacy_request` or `null`). It is not a Shopify consent or Customer
+Privacy field. Intake subjects that contain `unsubscribe` (and are not
+unsubscribe-farm spam) set marketing unsubscribe. Subjects or bodies
+that clearly signal privacy / GDPR / data-deletion set privacy request.
+Human handles both out of band. Do not call marketing unsubscribe or
+Customer Privacy / erasure / redaction mutations.
 Composer `--ticket` is the ticket id (sample `1001` aliases `t-ada-track`).
 
 Drafts are merchant replies the human Inserts or Discards. Summaries are a

@@ -149,6 +149,10 @@ test("list_tickets rows include customerId and orderId GIDs", async () => {
   assert.ok(priya);
   assert.equal(priya.requestType, "marketing_unsubscribe");
   assert.equal(priya.status, "open");
+  const lee = listed.tickets.find((row) => row.id === "t-lee-privacy");
+  assert.ok(lee);
+  assert.equal(lee.requestType, "privacy_request");
+  assert.equal(lee.status, "open");
   const casey = listed.tickets.find((row) => row.id === "t-casey-visor");
   assert.equal(casey.requestType, null);
 });

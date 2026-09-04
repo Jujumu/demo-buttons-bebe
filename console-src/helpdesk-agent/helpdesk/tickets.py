@@ -28,7 +28,18 @@ from .fixtures_sample import ADA, CASEY, JORDAN, ORDER_ADA, ORDER_CASEY_A, ORDER
 
 VIEWS = ("open", "closed", "all", "snoozed", "mine", "unassigned")
 TICKET_STATUSES = ("open", "closed", "snoozed")
-REQUEST_TYPES = ("marketing_unsubscribe",)
+REQUEST_TYPES = ("marketing_unsubscribe", "privacy_request")
+_PRIVACY_MARKERS = (
+    "gdpr",
+    "privacy request",
+    "delete my data",
+    "delete my personal data",
+    "data deletion",
+    "data export",
+    "export my data",
+    "right to be forgotten",
+    "erase my data",
+)
 
 ALIASES = {
     "1001": "t-ada-track",
@@ -208,6 +219,30 @@ SEED_TICKETS = (
             {"at": "2026-08-28T15:41:00Z", "status": "open", "note": "created"},
         ],
     },
+    {
+        "id": "t-lee-privacy",
+        "customerName": "Lee Chen",
+        "subject": "GDPR request — please delete my data",
+        "snippet": "Please delete my stored personal data. I do not need a Shopify account change from this inbox.",
+        "status": "open",
+        "assignee": "me",
+        "updatedAt": "2026-08-28T15:50:00Z",
+        "requestType": "privacy_request",
+        "messages": [
+            {
+                "id": "m9-privacy",
+                "from": "customer",
+                "fromAgent": False,
+                "name": "Lee Chen",
+                "fromName": "Lee Chen",
+                "body": "Please delete my stored personal data. I do not need a Shopify account change from this inbox.",
+                "at": "2026-08-28T15:50:00Z",
+            }
+        ],
+        "statusEvents": [
+            {"at": "2026-08-28T15:51:00Z", "status": "open", "note": "created"},
+        ],
+    },
 ) + tuple(DEMO_SEED_TICKETS)
 
 _store: list[dict] = []
@@ -283,18 +318,22 @@ def _snippet(body: str) -> str:
 
 
 def infer_request_type(subject: str = "", body: str = "") -> str | None:
-    """First-party type from intake subject. Never a Shopify marketing write."""
-    _ = body
-    hay = f"{subject or ''}".lower()
+    """First-party type from intake subject/body. Never a Shopify write."""
+    subject_hay = f"{subject or ''}".lower()
+    hay = f"{subject or ''} {body or ''}".lower()
     if "unsubscribe-farm" in hay or "unsubscribe farm" in hay:
         return None
-    if "unsubscribe" in hay:
+    if any(marker in hay for marker in _PRIVACY_MARKERS):
+        return "privacy_request"
+    if "unsubscribe" in subject_hay:
         return "marketing_unsubscribe"
     return None
 
 
-def _normalize_request_type(value: str | None, subject: str = "") -> str | None:
-    typed = str(value or "").strip() or infer_request_type(subject)
+def _normalize_request_type(
+    value: str | None, subject: str = "", body: str = ""
+) -> str | None:
+    typed = str(value or "").strip() or infer_request_type(subject, body)
     if typed in REQUEST_TYPES:
         return typed
     return None
@@ -319,7 +358,7 @@ def add_ticket(
     global _next_seq
     ticket_id = f"t-in-{_next_seq}"
     _next_seq += 1
-    typed = _normalize_request_type(request_type, subject)
+    typed = _normalize_request_type(request_type, subject, body)
     ticket = {
         "id": ticket_id,
         "customerName": customer_name,

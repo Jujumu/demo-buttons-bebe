@@ -1,6 +1,6 @@
 import { MAILBOX_TOPICS } from "../contracts.js";
 import { clerkStatusEvents, listCustomerName, messageSpeaker, talkMessages } from "../shop/clerk-ticket.js";
-import { esc, formatWeekday, formatWhen, initials, isMarketingUnsubscribe, screenStatus, UNSUBSCRIBE_TITLE } from "../util.js";
+import { esc, formatWeekday, formatWhen, initials, requestTypeTitle, screenStatus } from "../util.js";
 
 /**
  * Thread tissue.
@@ -85,8 +85,9 @@ export function createThreadTissue({ mailbox }) {
     const escalateControl = ticket.escalated
       ? ""
       : `<button type="button" class="btn-quiet" data-escalate="${esc(ticket.id)}">Escalate</button>`;
-    const typeLine = isMarketingUnsubscribe(ticket.requestType)
-      ? `<p class="thread-request mute" data-request-type="${esc(ticket.requestType)}">${esc(UNSUBSCRIBE_TITLE)}</p>`
+    const typeTitle = requestTypeTitle(ticket.requestType);
+    const typeLine = typeTitle
+      ? `<p class="thread-request mute" data-request-type="${esc(ticket.requestType)}">${esc(typeTitle)}</p>`
       : "";
     return `<div class="pane-inner thread-inner">
       <header class="thread-head">

@@ -43,6 +43,13 @@ PRIYA_UNSUB = {
     "receivedAt": "2026-08-30T14:18:00Z",
 }
 
+LEE_PRIVACY = {
+    "from": "Lee Chen <lee.privacy@example.com>",
+    "subject": "GDPR request — please delete my data",
+    "body": "Please delete my stored personal data. I do not need a Shopify account change from this inbox.",
+    "receivedAt": "2026-08-30T14:20:00Z",
+}
+
 PRIZE_SPAM = {
     "from": "Prize Desk <winner@prize-farm.example>",
     "subject": "You won a $10,000 prize!",

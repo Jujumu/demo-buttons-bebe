@@ -18,6 +18,7 @@ from helpdesk.fixtures_intake import (
     CHAT_WITHOUT_ORDER,
     JORDAN_WRONG,
     PRIYA_RETURN,
+    LEE_PRIVACY,
     PRIYA_UNSUB,
     PRIZE_SPAM,
     SAM_RATTLE,
@@ -75,6 +76,35 @@ class IntakeTests(unittest.TestCase):
         listed = dispatch("helpdesk.list_tickets", {"view": "open", "limit": 20})["tickets"]
         row = next(item for item in listed if item["id"] == payload["id"])
         self.assertEqual(row["requestType"], "marketing_unsubscribe")
+        ada = dispatch(TOOL_INGEST_EMAIL, ADA_TRACKING)
+        self.assertIsNone(ada.get("requestType"))
+        prize = dispatch(TOOL_INGEST_EMAIL, PRIZE_SPAM)
+        self.assertTrue(prize["spam"])
+        self.assertIsNone(prize.get("requestType"))
+        self.assertEqual(WRITE_TOOLS, frozenset({"helpdesk.send", "helpdesk.refund", "helpdesk.cancel"}))
+
+    def test_ingest_email_privacy_subject_or_body_sets_request_type(self) -> None:
+        payload = dispatch(TOOL_INGEST_EMAIL, LEE_PRIVACY)
+        self.assertTrue(payload["ok"])
+        self.assertFalse(payload["spam"])
+        self.assertEqual(payload["requestType"], "privacy_request")
+        listed = dispatch("helpdesk.list_tickets", {"view": "open", "limit": 20})["tickets"]
+        row = next(item for item in listed if item["id"] == payload["id"])
+        self.assertEqual(row["requestType"], "privacy_request")
+        body_only = dispatch(
+            TOOL_INGEST_EMAIL,
+            {
+                "from": "Lee Chen <lee.export@example.com>",
+                "subject": "Account help",
+                "body": "Please export my data under GDPR.",
+                "receivedAt": "2026-08-30T14:22:00Z",
+            },
+        )
+        self.assertTrue(body_only["ok"])
+        self.assertFalse(body_only["spam"])
+        self.assertEqual(body_only["requestType"], "privacy_request")
+        unsub = dispatch(TOOL_INGEST_EMAIL, PRIYA_UNSUB)
+        self.assertEqual(unsub["requestType"], "marketing_unsubscribe")
         ada = dispatch(TOOL_INGEST_EMAIL, ADA_TRACKING)
         self.assertIsNone(ada.get("requestType"))
         prize = dispatch(TOOL_INGEST_EMAIL, PRIZE_SPAM)

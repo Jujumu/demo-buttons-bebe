@@ -122,7 +122,7 @@
  * @property {string} updatedAt
  * @property {string} customerId
  * @property {string | null} orderId
- * @property {"marketing_unsubscribe" | null} [requestType]
+ * @property {"marketing_unsubscribe" | "privacy_request" | null} [requestType]
  */
 
 /**
@@ -135,7 +135,7 @@
  * @property {string} updatedAt
  * @property {string} customerId
  * @property {string | null} orderId
- * @property {"marketing_unsubscribe" | null} [requestType]
+ * @property {"marketing_unsubscribe" | "privacy_request" | null} [requestType]
  * @property {object[]} messages — each talk message has `from` (`customer`|`agent`),
  *   `fromName`, optional `fromEmail`, and `name` (same as fromName). Inbound From
  *   is the customer persona, never the AgentMail/shop mailbox login.
