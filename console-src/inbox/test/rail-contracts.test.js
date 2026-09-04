@@ -85,7 +85,10 @@ test("order fixture keeps null SKUs and missing billing", async () => {
   assert.doesNotMatch(html, /CT-TEETHER|SKU-1001|fake-sku/i);
   assert.match(html, /No billing/);
   assert.match(html, /Absent/);
-  assert.match(html, /Demo Carrier DEMO-1001/);
+  assert.match(html, /<span class="ship-company">Demo Carrier<\/span>/);
+  assert.match(html, /<span class="mono ship-number">DEMO-1001<\/span>/);
+  assert.match(html, /<a class="track-link" href="https:\/\/example\.com\/track\/demo-1001" rel="noreferrer" target="_blank">Track<\/a>/);
+  assert.doesNotMatch(html, /<a class="track-link"[^>]*>Demo Carrier/);
   assert.doesNotMatch(html, />https:\/\/example\.com\/track\/demo-1001</);
   assertMoneyBag(order.currentTotalPriceSet);
   assertMoneyBag(order.lineItems.nodes[0].originalUnitPriceSet);
@@ -136,7 +139,9 @@ test("partial ship shows mixed line status and tracking for the shipped line", a
   assert.match(html, /data-line-fulfill="Unfulfilled">Unfulfilled</);
   assert.match(html, /Muslin Swaddle/);
   assert.match(html, /Knit Baby Booties/);
-  assert.match(html, /Sample Carrier SAMPLE-9004/);
+  assert.match(html, /<span class="ship-company">Sample Carrier<\/span>/);
+  assert.match(html, /<span class="mono ship-number">SAMPLE-9004<\/span>/);
+  assert.match(html, /<a class="track-link" href="https:\/\/example\.com\/sample\/9004" rel="noreferrer" target="_blank">Track<\/a>/);
   assert.match(html, /<h3>Shipment<\/h3>\s*<span class="peek">In transit<\/span>/);
   assert.doesNotMatch(html, /<p class="tissue-empty">No tracking<\/p>/);
 });
@@ -346,6 +351,27 @@ test("rail fails the PR if an Edit or write control ships", async () => {
   assert.doesNotMatch(html, /Status OPEN/);
   assert.equal(railWriteControlHits(`${html}<button>Edit</button>`).includes("Edit"), true);
   assert.equal(railWriteControlHits(`${html}<a href="#">Customer Edit</a>`).includes("Edit"), true);
+});
+
+test("shipment Track is a separate control and the number stays mono text", async () => {
+  const order = await shop.getOrder({ shop: SHOP, orderId: IDS.ORDER_1001 });
+  const html = renderOrder(projectOrder(order), { shipmentOpen: true });
+  assert.match(html, /<span class="ship-company">Demo Carrier<\/span>/);
+  assert.match(html, /<span class="mono ship-number">DEMO-1001<\/span>/);
+  assert.match(html, /<a class="track-link"[^>]*>Track<\/a>/);
+  assert.doesNotMatch(html, /<a class="track-link"[^>]*>[^<]*Demo Carrier[^<]*DEMO-1001/);
+  assert.doesNotMatch(html, /<a class="track-link"[^>]*>[^<]*DEMO-1001/);
+  const noUrl = projectOrder({
+    ...orders[IDS.ORDER_1001],
+    fulfillments: [{
+      displayStatus: "IN_TRANSIT",
+      trackingInfo: [{ company: "Demo Carrier", number: "DEMO-1001" }],
+    }],
+  });
+  const noUrlHtml = renderOrder(noUrl, { shipmentOpen: true });
+  assert.match(noUrlHtml, /<span class="mono ship-number">DEMO-1001<\/span>/);
+  assert.doesNotMatch(noUrlHtml, /class="track-link"/);
+  assert.doesNotMatch(noUrlHtml, />Track</);
 });
 
 test("shop tissue has no mutation surface", () => {

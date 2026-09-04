@@ -77,6 +77,10 @@ test("selected list row CSS is a 4px ink bar with no wash", () => {
   assert.match(css, /\.ticket-row \.ticket-bar[\s\S]*width:\s*4px/);
   assert.match(css, /\.ticket-row\.is-selected\s*\{[^}]*background:\s*var\(--surface\)/);
   assert.match(css, /One leading-edge ink bar on the selected ticket \(4px\)/);
+  assert.match(css, /\.track-link\s*\{[^}]*color:\s*var\(--accent\)/);
+  assert.doesNotMatch(css, /\.track-link\s*\{[^}]*font-family:\s*var\(--mono\)/);
+  assert.match(css, /\.ship-company\s*\{[^}]*color:\s*var\(--mute\)/);
+  assert.match(css, /\.ship-number\s*\{[^}]*font-family:\s*var\(--mono\)/);
   assert.doesNotMatch(css, /\.ticket-row\.is-selected\s*\{[^}]*background:\s*(?:#e|#E|rgba?\(\s*\d+)/);
   assert.doesNotMatch(css, /\.ticket-row\.is-selected\s*\{[^}]*box-shadow:\s*inset/);
   assert.doesNotMatch(css, /#6B46C1|#7C3AED|#5B21B6/);
@@ -112,6 +116,10 @@ test("inbox organ renders four panes and an ink selected bar", async () => {
   assert.match(snap.html, /#1001 · Paid · Fulfilled/);
   assert.match(snap.html, /data-line-fulfill="Shipped">Shipped</);
   assert.match(snap.html, /<h3>Shipment<\/h3>\s*<span class="peek">In transit<\/span>/);
+  assert.match(snap.html, /<span class="ship-company">Demo Carrier<\/span>/);
+  assert.match(snap.html, /<span class="mono ship-number">DEMO-1001<\/span>/);
+  assert.match(snap.html, /<a class="track-link"[^>]*>Track<\/a>/);
+  assert.doesNotMatch(snap.html, /<a class="track-link"[^>]*>Demo Carrier/);
   assert.match(snap.html, /Skip to thread\./);
   assert.match(snap.html, /<h2>Customer<\/h2>/);
   assert.match(snap.html, /<h3>Addresses<\/h3>/);
@@ -129,7 +137,10 @@ test("partial-ship ticket shows mixed lines on the order rail", async () => {
   assert.match(snap.html, /data-line-fulfill="Unfulfilled">Unfulfilled</);
   assert.match(snap.html, /Muslin Swaddle/);
   assert.match(snap.html, /Knit Baby Booties/);
-  assert.match(snap.html, /Sample Carrier SAMPLE-9004/);
+  assert.match(snap.html, /<span class="ship-company">Sample Carrier<\/span>/);
+  assert.match(snap.html, /<span class="mono ship-number">SAMPLE-9004<\/span>/);
+  assert.match(snap.html, /<a class="track-link"[^>]*>Track<\/a>/);
+  assert.doesNotMatch(snap.html, /<a class="track-link"[^>]*>Sample Carrier/);
   assert.match(snap.html, /<h3>Shipment<\/h3>\s*<span class="peek">In transit<\/span>/);
   assert.doesNotMatch(snap.html, /<p class="tissue-empty">No tracking<\/p>/);
 });

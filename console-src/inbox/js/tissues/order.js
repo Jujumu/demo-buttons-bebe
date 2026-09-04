@@ -48,6 +48,22 @@ export function projectOrder(record) {
   };
 }
 
+function renderTrackingCopy(tracking) {
+  const company = tracking.company
+    ? `<span class="ship-company">${esc(tracking.company)}</span>`
+    : "";
+  const number = tracking.number
+    ? `<span class="mono ship-number">${esc(tracking.number)}</span>`
+    : "";
+  const copy = company || number
+    ? `<span class="ship-copy">${[company, number].filter(Boolean).join("")}</span>`
+    : "";
+  const track = tracking.url
+    ? `<a class="track-link" href="${esc(tracking.url)}" rel="noreferrer" target="_blank">Track</a>`
+    : "";
+  return `<p class="ship-track">${copy}${track}</p>`;
+}
+
 function renderShipment(model, shipOpen) {
   const tracking = model.tracking;
   const shipLines = (model.record?.fulfillments || []).flatMap((fulfillment) =>
@@ -65,7 +81,7 @@ function renderShipment(model, shipOpen) {
     return `<div class="rail-sub" data-open="${shipOpen ? "true" : "false"}">
         <button type="button" class="rail-sub-toggle" data-toggle="shipment" aria-expanded="${shipOpen ? "true" : "false"}"><h3>Shipment</h3>${peek}</button>
         <div class="rail-sub-body"${shipOpen ? "" : " hidden"}>
-          <a class="track-link" href="${esc(tracking.url)}" rel="noreferrer">${esc(tracking.company)} ${esc(tracking.number)}</a>
+          ${renderTrackingCopy(tracking)}
           ${shipLines}
         </div>
       </div>`;
