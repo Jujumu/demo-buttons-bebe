@@ -16,8 +16,12 @@ and never appears in `list_tickets`. A real marketing-unsubscribe subject
 `requestType: marketing_unsubscribe`. Subjects or bodies that match
 privacy / GDPR / delete my data / data request (and are not spam)
 become a ticket with `requestType: privacy_request`. Intake may also
-set optional subtype Access / Delete / Export. Those types are
-first-party. They do not write Shopify consent or Customer Privacy.
+set optional subtype Access / Delete / Export. Subjects or bodies
+that match bug / crash (or broken paired with iOS / Android / device
+/ app) become a ticket with `requestType: bug` and may set
+`severity` (`low` / `medium` / `high` / `critical`) and `device`
+(`iOS` / `Android`). Those types are first-party. They do not write
+Shopify consent, Customer Privacy, or product records.
 
 `customerName` is the intake From name, never `Customer.displayName`.
 Ticket status is helpdesk `open`.

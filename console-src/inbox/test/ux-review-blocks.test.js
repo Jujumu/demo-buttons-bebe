@@ -76,6 +76,26 @@ test("UX Pro mute unsubscribe chrome has no Shopify write control", async () => 
   assert.match(css, /\.thread-request\s*\{/);
 });
 
+test("UX Pro mute bug severity chrome has no Shopify write control", async () => {
+  const snap = await createInboxOrgan({ viewId: "mine", ticketId: "t-remy-bug" }).ready();
+  assert.deepEqual(reviewBlockViolations(snap.html), []);
+  assert.match(snap.html, /class="ticket-status ticket-request"[^>]*>Bug</);
+  assert.match(snap.html, /class="ticket-status ticket-severity"[^>]*>High</);
+  assert.match(snap.html, /class="thread-request mute"[^>]*>Bug report</);
+  assert.match(snap.html, /class="thread-request mute"[^>]*>High · iOS</);
+  assert.match(snap.html, /<h2>Bug report<\/h2>\s*<span class="peek">High · iOS<\/span>/);
+  assert.match(snap.html, /No Shopify write/);
+  assert.doesNotMatch(snap.html, /<(button|a)\b[^>]*>[^<]*(?:productUpdate|severity|device)/i);
+  assert.doesNotMatch(snap.html, /#6B46C1|#7C3AED|#5B21B6/);
+  const css = readFileSync(join(here, "../styles.css"), "utf8");
+  assert.match(css, /\.ticket-severity\s*\{[^}]*color:\s*var\(--mute\)/);
+  assert.doesNotMatch(css, /\.ticket-severity\s*\{[^}]*background/);
+  const ada = await createInboxOrgan({ viewId: "mine", ticketId: "t-ada-track" }).ready();
+  assert.doesNotMatch(ada.html, /data-ticket="t-ada-track"[^>]*data-severity/);
+  assert.doesNotMatch(ada.html, /data-tissue="preference"/);
+  assert.doesNotMatch(ada.html, /class="thread-request mute"/);
+});
+
 test("UX Pro mute privacy chrome has no Shopify write control", async () => {
   const organ = createInboxOrgan({ viewId: "mine", ticketId: "t-lee-privacy" });
   const snap = await organ.ready();

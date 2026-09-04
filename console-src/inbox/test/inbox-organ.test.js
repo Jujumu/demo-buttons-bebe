@@ -141,6 +141,31 @@ test("privacy ticket shows mute request type without a Shopify write control", a
   assert.match(priya.html, /class="ticket-status ticket-request"[^>]*>Unsubscribe</);
 });
 
+test("bug ticket shows mute severity and device without a Shopify write control", async () => {
+  const organ = createInboxOrgan({ viewId: "mine", ticketId: "t-remy-bug" });
+  const snap = await organ.ready();
+  assert.equal(snap.selectedId, "t-remy-bug");
+  assert.match(snap.html, /data-ticket="t-remy-bug"[^>]*data-request-type="bug"/);
+  assert.match(snap.html, /data-ticket="t-remy-bug"[^>]*data-severity="high"/);
+  assert.match(snap.html, /class="ticket-status ticket-request"[^>]*>Bug</);
+  assert.match(snap.html, /class="ticket-status ticket-severity"[^>]*>High</);
+  assert.match(snap.html, /class="thread-request mute"[^>]*>Bug report</);
+  assert.match(snap.html, /class="thread-request mute"[^>]*data-severity="high"[^>]*data-device="iOS"[^>]*>High · iOS</);
+  assert.match(snap.html, /data-tissue="preference"[^>]*data-request-type="bug"/);
+  assert.match(snap.html, /<h2>Bug report<\/h2>\s*<span class="peek">High · iOS<\/span>/);
+  assert.match(snap.html, /No Shopify write/);
+  assert.match(snap.html, /<h2>Customer<\/h2>\s*<span class="peek">No customer<\/span>/);
+  assert.doesNotMatch(snap.html, /data-tissue="bug"/);
+  assert.doesNotMatch(snap.html, /data-product-update/);
+  assert.doesNotMatch(snap.html, /<(button|a)\b[^>]*>[^<]*(?:Bug|severity|device)/i);
+  assert.deepEqual(snap.forbidden, []);
+  const ada = await createInboxOrgan({ viewId: "mine", ticketId: "t-ada-track" }).ready();
+  assert.doesNotMatch(ada.html, /data-ticket="t-ada-track"[^>]*data-request-type/);
+  assert.doesNotMatch(ada.html, /data-ticket="t-ada-track"[^>]*data-severity/);
+  assert.doesNotMatch(ada.html, /data-tissue="preference"/);
+  assert.doesNotMatch(ada.html, /class="thread-request mute"/);
+});
+
 test("list rows show helpdesk status open closed snoozed", async () => {
   const snap = await createInboxOrgan({ viewId: "all" }).ready();
   assert.match(snap.html, /data-ticket="t-ada-track"[^>]*data-status="open"/);

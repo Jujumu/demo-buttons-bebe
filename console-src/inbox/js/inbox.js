@@ -370,6 +370,8 @@ export function createInboxOrgan(opts = {}) {
       requestType: ticket?.requestType || "",
       privacySubtype: ticket?.privacySubtype || "",
       privacyHandled: Boolean(ticket?.privacyHandled),
+      severity: ticket?.severity || "",
+      device: ticket?.device || "",
     });
     toEmail = rail.snapshot().models.customer?.record?.defaultEmailAddress?.emailAddress || "";
   }

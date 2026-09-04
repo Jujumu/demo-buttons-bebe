@@ -132,10 +132,19 @@ export const REQUEST_TYPE_PRIVACY = "privacy_request";
 export const REQUEST_TYPE_BUG = "bug";
 export const UNSUBSCRIBE_LABEL = "Unsubscribe";
 export const PRIVACY_LABEL = "Privacy";
+export const BUG_LABEL = "Bug";
 export const UNSUBSCRIBE_TITLE = "Marketing unsubscribe";
 export const PRIVACY_TITLE = "Privacy request";
+export const BUG_TITLE = "Bug report";
 export const UNSUBSCRIBE_WRITE_PEEK = "No Shopify write — confirm preference out of band";
 export const PRIVACY_LOCK_COPY = "Privacy tools stay locked. No live data erase or export.";
+export const BUG_WRITE_PEEK = "No Shopify write";
+export const SEVERITY_LABELS = Object.freeze({
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+  critical: "Critical",
+});
 export const PRIVACY_HANDLED_LABEL = "Mark privacy handled";
 export const PRIVACY_SUBTYPE_LABELS = Object.freeze({
   access: "Access",
@@ -328,22 +337,42 @@ export function isPrivacyRequest(value) {
   return String(value || "") === REQUEST_TYPE_PRIVACY;
 }
 
+export function isBugRequest(value) {
+  return String(value || "") === REQUEST_TYPE_BUG;
+}
+
 export function requestTypeLabel(value) {
   if (isMarketingUnsubscribe(value)) return UNSUBSCRIBE_LABEL;
   if (isPrivacyRequest(value)) return PRIVACY_LABEL;
+  if (isBugRequest(value)) return BUG_LABEL;
   return "";
 }
 
 export function requestTypeTitle(value) {
   if (isMarketingUnsubscribe(value)) return UNSUBSCRIBE_TITLE;
   if (isPrivacyRequest(value)) return PRIVACY_TITLE;
+  if (isBugRequest(value)) return BUG_TITLE;
   return "";
 }
 
 export function requestTypeWritePeek(value, subtype) {
   if (isMarketingUnsubscribe(value)) return UNSUBSCRIBE_WRITE_PEEK;
   if (isPrivacyRequest(value)) return privacySubtypeLabel(subtype) || PRIVACY_LOCK_COPY;
+  if (isBugRequest(value)) return BUG_WRITE_PEEK;
   return "";
+}
+
+export function severityLabel(value) {
+  return SEVERITY_LABELS[String(value || "")] || "";
+}
+
+export function devicePeek(value) {
+  return String(value || "").trim();
+}
+
+export function bugMetaPeek(severity, device) {
+  const parts = [severityLabel(severity), devicePeek(device)].filter(Boolean);
+  return parts.join(" · ");
 }
 
 export function privacySubtypeLabel(value) {

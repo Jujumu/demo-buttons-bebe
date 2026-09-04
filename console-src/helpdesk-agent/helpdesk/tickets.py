@@ -10,6 +10,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -28,8 +29,17 @@ from .fixtures_sample import ADA, CASEY, JORDAN, ORDER_ADA, ORDER_CASEY_A, ORDER
 
 VIEWS = ("open", "closed", "all", "snoozed", "mine", "unassigned")
 TICKET_STATUSES = ("open", "closed", "snoozed")
-REQUEST_TYPES = ("marketing_unsubscribe", "privacy_request")
+REQUEST_TYPES = ("marketing_unsubscribe", "privacy_request", "bug")
 PRIVACY_SUBTYPES = ("access", "delete", "export")
+SEVERITIES = ("low", "medium", "high", "critical")
+_BUG_TYPE_RE = re.compile(r"\b(?:bug|crash(?:es|ed|ing)?)\b", re.I)
+_BROKEN_RE = re.compile(r"\bbroken\b", re.I)
+_TECH_RE = re.compile(r"\b(?:ios|iphone|ipad|android|app|device)\b", re.I)
+_IOS_RE = re.compile(r"\b(?:ios|iphone|ipad)\b", re.I)
+_ANDROID_RE = re.compile(r"\bandroid\b", re.I)
+_CRITICAL_RE = re.compile(r"\bcritical\b", re.I)
+_CRASH_RE = re.compile(r"\bcrash(?:es|ed|ing)?\b", re.I)
+_LOW_RE = re.compile(r"\b(?:low|minor)\b", re.I)
 _PRIVACY_MARKERS = (
     "privacy",
     "gdpr",
@@ -248,6 +258,32 @@ SEED_TICKETS = (
             {"at": "2026-08-28T15:51:00Z", "status": "open", "note": "created"},
         ],
     },
+    {
+        "id": "t-remy-bug",
+        "customerName": "Remy Cole",
+        "subject": "App crash on iOS — checkout bug",
+        "snippet": "The shop app crashes on iOS when I open checkout. I can keep using Android.",
+        "status": "open",
+        "assignee": "me",
+        "updatedAt": "2026-08-28T16:00:00Z",
+        "requestType": "bug",
+        "severity": "high",
+        "device": "iOS",
+        "messages": [
+            {
+                "id": "m10-bug",
+                "from": "customer",
+                "fromAgent": False,
+                "name": "Remy Cole",
+                "fromName": "Remy Cole",
+                "body": "The shop app crashes on iOS when I open checkout. I can keep using Android.",
+                "at": "2026-08-28T16:00:00Z",
+            }
+        ],
+        "statusEvents": [
+            {"at": "2026-08-28T16:01:00Z", "status": "open", "note": "created"},
+        ],
+    },
 ) + tuple(DEMO_SEED_TICKETS)
 
 _store: list[dict] = []
@@ -344,6 +380,36 @@ def infer_request_type(subject: str = "", body: str = "") -> str | None:
         return "privacy_request"
     if "unsubscribe" in subject_hay:
         return "marketing_unsubscribe"
+    if _is_bug_copy(hay):
+        return "bug"
+    return None
+
+
+def _is_bug_copy(hay: str) -> bool:
+    if _BUG_TYPE_RE.search(hay):
+        return True
+    return bool(_BROKEN_RE.search(hay) and _TECH_RE.search(hay))
+
+
+def infer_severity(subject: str = "", body: str = "") -> str | None:
+    """Optional Low / Medium / High / Critical peek. Never a Shopify write."""
+    hay = f"{subject or ''} {body or ''}"
+    if _CRITICAL_RE.search(hay):
+        return "critical"
+    if _CRASH_RE.search(hay):
+        return "high"
+    if _LOW_RE.search(hay):
+        return "low"
+    return "medium"
+
+
+def infer_device(subject: str = "", body: str = "") -> str | None:
+    """Optional iOS / Android peek from intake keywords. Never a product mutation."""
+    hay = f"{subject or ''} {body or ''}"
+    if _IOS_RE.search(hay):
+        return "iOS"
+    if _ANDROID_RE.search(hay):
+        return "Android"
     return None
 
 
@@ -354,6 +420,16 @@ def _normalize_request_type(
     if typed in REQUEST_TYPES:
         return typed
     return None
+
+
+def _normalize_severity(value: str | None) -> str | None:
+    raw = str(value or "").strip().lower()
+    return raw if raw in SEVERITIES else None
+
+
+def _normalize_device(value: str | None) -> str | None:
+    text = " ".join(str(value or "").split())
+    return text[:40] if text else None
 
 
 def add_ticket(
@@ -377,6 +453,8 @@ def add_ticket(
     _next_seq += 1
     typed = _normalize_request_type(request_type, subject, body)
     subtype = infer_privacy_subtype(subject, body) if typed == "privacy_request" else None
+    severity = infer_severity(subject, body) if typed == "bug" else None
+    device = infer_device(subject, body) if typed == "bug" else None
     ticket = {
         "id": ticket_id,
         "customerName": customer_name,
@@ -393,6 +471,8 @@ def add_ticket(
         "requestType": typed,
         "privacySubtype": subtype,
         "privacyHandled": False,
+        "severity": severity,
+        "device": device,
         "messages": [
             {
                 "id": f"m-{ticket_id}-1",
@@ -445,6 +525,9 @@ def ticket_in_view(ticket: dict, view: str) -> bool:
 
 def _row(ticket: dict, gid_source: str = "sample") -> dict:
     customer_id, order_id = _gids_for(ticket, gid_source)
+    typed = ticket.get("requestType") or None
+    severity = _normalize_severity(ticket.get("severity")) if typed == "bug" else None
+    device = _normalize_device(ticket.get("device")) if typed == "bug" else None
     return {
         "id": ticket["id"],
         "customerName": project_customer_name(ticket),
@@ -454,7 +537,9 @@ def _row(ticket: dict, gid_source: str = "sample") -> dict:
         "updatedAt": ticket["updatedAt"],
         "customerId": customer_id,
         "orderId": order_id,
-        "requestType": ticket.get("requestType") or None,
+        "requestType": typed,
+        "severity": severity,
+        "device": device,
     }
 
 
