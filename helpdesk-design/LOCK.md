@@ -115,3 +115,10 @@ deletion out of band. No fifth rail tissue.
 Intake keywords (fixture-ok): privacy / GDPR / delete my data /
 data request. Do not call Customer privacy / GDPR / data-request
 Admin mutations. Do not query invented privacy fields.
+
+## Bug report (draft)
+
+First-party `requestType: bug`. Draft strip acknowledges the report
+and asks for the repro device (`iOS` / `Android`). Never invent
+order, catalog, or destination copy. Human Send only. List / rail
+chrome for Bug stays on the bug-severity slice.

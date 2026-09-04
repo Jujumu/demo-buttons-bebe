@@ -687,7 +687,7 @@ test("intake Ada #1001 first-paints a draft strip from draft_reply", async () =>
   assert.ok(!calls.includes("helpdesk.send"));
 });
 
-test("fixture draft_reply branches on requestType for privacy and unsubscribe", () => {
+test("fixture draft_reply branches on requestType for privacy, unsubscribe, and bug", () => {
   const invented = {
     name: "#1001",
     displayFinancialStatus: "PAID",
@@ -739,11 +739,14 @@ test("fixture draft_reply branches on requestType for privacy and unsubscribe", 
     customerName: "Ada Demo",
     status: "open",
     requestType: "bug",
-    messages: [{ fromAgent: false, name: "Ada Demo", body: "Where is #1001?" }],
+    messages: [{ fromAgent: false, name: "Ada Demo", body: "The app crashes on checkout." }],
   }, { order: invented });
-  assert.match(bug, /#1001/);
-  assert.doesNotMatch(bug, /privacy request|marketing unsubscribe/i);
-  assert.equal(draftForRequestType("bug", "Ada"), "");
+  assert.match(bug, /Hi Ada/);
+  assert.match(bug, /bug report/i);
+  assert.match(bug, /device/i);
+  assert.match(bug, /iOS|Android/);
+  assert.doesNotMatch(bug, /destination|published catalog|#1001|DEMO-1001|I looked at/i);
+  assert.match(draftForRequestType("bug", "Ada"), /bug report/i);
   assert.equal(draftForRequestType(null, "Ada"), "");
 });
 

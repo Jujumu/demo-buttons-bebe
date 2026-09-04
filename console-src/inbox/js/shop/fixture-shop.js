@@ -1,6 +1,6 @@
 import { clerkTicket, clerkTicketRow } from "./clerk-ticket.js";
 import { customers, emptyReturns, macros as fixtureMacros, orders, returnsForOrder, SHOP, ticketInView, tickets as fixtureTickets } from "../fixtures/demo-inbox.js";
-import { REQUEST_TYPE_PRIVACY, REQUEST_TYPE_UNSUBSCRIBE } from "../util.js";
+import { REQUEST_TYPE_BUG, REQUEST_TYPE_PRIVACY, REQUEST_TYPE_UNSUBSCRIBE } from "../util.js";
 
 function assertShop(shop) {
   if (shop && shop !== SHOP) {
@@ -59,6 +59,9 @@ export function draftForRequestType(requestType, name) {
   }
   if (requestType === REQUEST_TYPE_PRIVACY) {
     return `Hi ${who} — I have your privacy request. I will handle the data export or deletion out of band. This inbox does not write Shopify Customer Privacy.`;
+  }
+  if (requestType === REQUEST_TYPE_BUG) {
+    return `Hi ${who} — I have your bug report. Reply with the device you reproduced this on (iOS or Android). This inbox does not invent order or catalog answers.`;
   }
   return "";
 }

@@ -346,11 +346,7 @@ class ComposerTissueTests(unittest.TestCase):
         self.assertNotIn("destination", blob)
         self.assertNotIn("published catalog", blob)
 
-    def test_bug_or_null_request_type_keeps_existing_draft(self) -> None:
-        payload = dispatch("helpdesk.draft_reply", {"ticketId": "1001", "shop": SAMPLE_SHOP})
-        self.assertTrue(payload["ok"])
-        self.assertIn("#9001", payload["draft"])
-        self.assertIn("Ada", payload["draft"])
+    def test_bug_draft_asks_for_device_and_skips_order_invent(self) -> None:
         bug = dispatch(
             "helpdesk.draft_reply",
             {
@@ -360,7 +356,8 @@ class ComposerTissueTests(unittest.TestCase):
                     "customerName": "Ada Demo",
                     "status": "open",
                     "requestType": "bug",
-                    "messages": [{"fromAgent": False, "name": "Ada Demo", "body": "Where is #1001?"}],
+                    "subject": "Checkout crash on iOS",
+                    "messages": [{"fromAgent": False, "name": "Ada Demo", "body": "The app crashes on checkout."}],
                 },
                 "order": {
                     "name": "#1001",
@@ -370,9 +367,34 @@ class ComposerTissueTests(unittest.TestCase):
             },
         )
         self.assertTrue(bug["ok"])
-        self.assertIn("#1001", bug["draft"])
-        self.assertNotIn("privacy request", bug["draft"].lower())
-        self.assertNotIn("marketing unsubscribe", bug["draft"].lower())
+        self.assertEqual(bug["source"], "fixture")
+        draft = bug["draft"]
+        lower = draft.lower()
+        self.assertIn("Hi Ada", draft)
+        self.assertIn("bug report", lower)
+        self.assertIn("device", lower)
+        self.assertTrue("ios" in lower or "android" in lower)
+        for snippet in (
+            "destination",
+            "published catalog",
+            "i looked at",
+            "handed to a carrier",
+            "#1001",
+            "tracking",
+            "fulfilled",
+        ):
+            self.assertNotIn(snippet, lower, snippet)
+        for snippet in FORBIDDEN_DRAFT:
+            self.assertNotIn(snippet, lower, snippet)
+
+    def test_null_request_type_keeps_existing_draft(self) -> None:
+        payload = dispatch("helpdesk.draft_reply", {"ticketId": "1001", "shop": SAMPLE_SHOP})
+        self.assertTrue(payload["ok"])
+        self.assertIn("#9001", payload["draft"])
+        self.assertIn("Ada", payload["draft"])
+        self.assertNotIn("bug report", payload["draft"].lower())
+        self.assertNotIn("privacy request", payload["draft"].lower())
+        self.assertNotIn("marketing unsubscribe", payload["draft"].lower())
 
 
 if __name__ == "__main__":
