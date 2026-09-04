@@ -36,6 +36,13 @@ JORDAN_WRONG = {
     "receivedAt": "2026-08-30T14:14:00Z",
 }
 
+PRIYA_UNSUB = {
+    "from": "Priya Lane <priya.unsub@example.com>",
+    "subject": "Please unsubscribe me from marketing emails",
+    "body": "Please take me off the marketing list. I still want order updates.",
+    "receivedAt": "2026-08-30T14:18:00Z",
+}
+
 PRIZE_SPAM = {
     "from": "Prize Desk <winner@prize-farm.example>",
     "subject": "You won a $10,000 prize!",

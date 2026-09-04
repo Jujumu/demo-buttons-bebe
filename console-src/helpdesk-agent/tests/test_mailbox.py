@@ -137,7 +137,9 @@ class MailboxPullTests(unittest.TestCase):
         self.assertEqual(payload["spam"], [])
         self.assertEqual(payload["skipped"], 5)
         listed = dispatch("helpdesk.list_tickets", {"view": "all", "limit": 100})["tickets"]
-        self.assertEqual(len(listed), 35)
+        from helpdesk.tickets import SEED_TICKETS
+
+        self.assertEqual(len(listed), len(SEED_TICKETS))
         self.assertFalse(any(row["id"].startswith("t-in-") for row in listed))
 
     def test_persisted_seen_survives_reset(self) -> None:
@@ -154,7 +156,9 @@ class MailboxPullTests(unittest.TestCase):
             self.assertEqual(second["ingested"], [])
             self.assertEqual(second["skipped"], 5)
             listed = dispatch("helpdesk.list_tickets", {"view": "all", "limit": 100})["tickets"]
-            self.assertEqual(len(listed), 35)
+            from helpdesk.tickets import SEED_TICKETS
+
+            self.assertEqual(len(listed), len(SEED_TICKETS))
             self.assertFalse(any(row["id"].startswith("t-in-") for row in listed))
             self.assertIn(ADA_MESSAGE_ID, seen_path.read_text(encoding="utf-8"))
         finally:

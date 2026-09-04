@@ -120,6 +120,7 @@ export function clerkTicketRow(ticket) {
     updatedAt: ticket.updatedAt,
     customerId: ticket.customerId || null,
     orderId: ticket.orderId ?? null,
+    requestType: ticket.requestType || null,
   };
 }
 

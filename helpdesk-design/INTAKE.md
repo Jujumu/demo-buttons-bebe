@@ -11,7 +11,10 @@ It is not a Shopify object. Do not create inboxes.
 Out: `{ ingested: [ticket rows], spam: [{ from, subject }], skipped: n }`
 
 Spam (prize / lottery / unsubscribe-farm) returns `{ spam: true, ticketId: null }`
-and never appears in `list_tickets`.
+and never appears in `list_tickets`. A real marketing-unsubscribe subject
+(`unsubscribe`, not the farm markers) becomes a ticket with
+`requestType: marketing_unsubscribe`. That type is first-party. It does
+not write Shopify consent.
 
 `customerName` is the intake From name, never `Customer.displayName`.
 Ticket status is helpdesk `open`.
