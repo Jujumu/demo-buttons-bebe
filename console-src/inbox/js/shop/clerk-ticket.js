@@ -123,6 +123,7 @@ export function clerkTicketRow(ticket) {
     requestType: ticket.requestType || null,
     privacySubtype: ticket.privacySubtype || null,
     privacyHandled: Boolean(ticket.privacyHandled),
+    unsubscribeHandled: Boolean(ticket.unsubscribeHandled),
     severity: ticket.severity || null,
     device: ticket.device || null,
   };

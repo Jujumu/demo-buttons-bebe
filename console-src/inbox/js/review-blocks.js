@@ -96,6 +96,9 @@ export function reviewBlockViolations(html) {
 
   const rail = text.match(/data-pane="rail"[\s\S]*?(?:data-pane="|$)/);
   const railHtml = rail ? rail[0] : text;
+  if (/data-tissue="preference"/.test(railHtml) || /data-tissue="(?:unsubscribe|privacy|bug)"/.test(railHtml)) {
+    hits.push("fifth rail request-type tissue");
+  }
   if (/<(button|a)\b[^>]*>\s*(?:customer\s+)?edit\b/i.test(railHtml) || /\bdata-edit\b/i.test(railHtml)) {
     hits.push("customer Edit");
   }

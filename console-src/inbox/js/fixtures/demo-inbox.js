@@ -413,6 +413,7 @@ export const tickets = [
     customerId: null,
     orderId: null,
     requestType: "marketing_unsubscribe",
+    unsubscribeHandled: false,
     updatedAt: "2026-08-28T15:40:00Z",
     stubDraft: "Hi Priya — I have your marketing unsubscribe request. I will confirm the preference out of band. This inbox does not change Shopify marketing settings.",
     stubSummary: "Priya asked to leave the marketing list and keep order updates.",

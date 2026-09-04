@@ -217,6 +217,7 @@ SEED_TICKETS = (
         "assignee": "me",
         "updatedAt": "2026-08-28T15:40:00Z",
         "requestType": "marketing_unsubscribe",
+        "unsubscribeHandled": False,
         "messages": [
             {
                 "id": "m8-unsub",
@@ -471,6 +472,7 @@ def add_ticket(
         "requestType": typed,
         "privacySubtype": subtype,
         "privacyHandled": False,
+        "unsubscribeHandled": False,
         "severity": severity,
         "device": device,
         "messages": [
@@ -574,6 +576,7 @@ def get_ticket(ticket_id: str, gid_source: str = "sample") -> dict:
             subtype = ticket.get("privacySubtype") if row.get("requestType") == "privacy_request" else None
             row["privacySubtype"] = subtype if subtype in PRIVACY_SUBTYPES else None
             row["privacyHandled"] = bool(ticket.get("privacyHandled"))
+            row["unsubscribeHandled"] = bool(ticket.get("unsubscribeHandled"))
             return row
     raise not_found("ticket", str(ticket_id))
 
@@ -625,6 +628,28 @@ def mark_privacy_handled(ticket_id: str, gid_source: str = "sample") -> dict:
         if not already:
             ticket.setdefault("statusEvents", []).append(
                 {"at": now, "status": ticket["status"], "note": "privacy handled"}
+            )
+        return get_ticket(canonical, gid_source)
+    raise not_found("ticket", str(ticket_id))
+
+
+def mark_unsubscribed(ticket_id: str, gid_source: str = "sample") -> dict:
+    """First-party helpdesk flag. Never a Shopify marketing consent write."""
+    if not ticket_id:
+        raise bad_request("ticketId is required", field="ticketId")
+    canonical = _resolve_id(ticket_id)
+    for ticket in _store:
+        if ticket["id"] != canonical:
+            continue
+        if ticket.get("requestType") != "marketing_unsubscribe":
+            raise bad_request("ticket is not a marketing unsubscribe request", field="ticketId")
+        now = _now_iso()
+        already = bool(ticket.get("unsubscribeHandled"))
+        ticket["unsubscribeHandled"] = True
+        ticket["updatedAt"] = now
+        if not already:
+            ticket.setdefault("statusEvents", []).append(
+                {"at": now, "status": ticket["status"], "note": "unsubscribed"}
             )
         return get_ticket(canonical, gid_source)
     raise not_found("ticket", str(ticket_id))

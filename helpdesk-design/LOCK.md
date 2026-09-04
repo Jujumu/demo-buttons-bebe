@@ -85,11 +85,14 @@ owns the preference change out of band.
    `marketing_unsubscribe`. Same mute status voice as Open / Closed /
    Snoozed. No purple badge.
 2. Thread header mutes `Marketing unsubscribe` under the subject.
-3. Rail peeks `Marketing unsubscribe` +
-   `No Shopify write — confirm preference out of band`. No control that
-   writes Shopify consent.
-4. Draft strip (`helpdesk.draft_reply`) confirms opt-out / marketing
+3. Optional hairline `Mark unsubscribed` in the thread header. First-party
+   ticket flag only. It does not write Shopify.
+4. Gated lock copy:
+   `Marketing consent stays locked. No live unsubscribe.`
+5. Draft strip (`helpdesk.draft_reply`) confirms opt-out / marketing
    preference path. Never invent order, catalog, or destination copy.
+
+No fifth rail tissue. Customer stays the top rail section.
 
 Do not call marketing unsubscribe mutations. Do not query invented
 consent fields. Official `Customer.emailMarketingConsent` stays unread
@@ -106,13 +109,16 @@ deletion out of band. No fifth rail tissue.
    Not purple. Not color-alone.
 2. Thread header mutes `Privacy request` under the subject.
 3. Optional subtype peek `Access` / `Delete` / `Export` when intake
-   sets it.
-4. Optional hairline `Mark privacy handled` is a first-party ticket
-   flag only. It does not write Shopify.
+   sets it. Lives next to the thread-header mute label.
+4. Optional hairline `Mark privacy handled` in the thread header.
+   First-party ticket flag only. It does not write Shopify.
 5. Gated lock copy:
    `Privacy tools stay locked. No live data erase or export.`
+   Confirm in the gate sheet can be ink.
 6. Draft strip explains the privacy path out of band (export / deletion).
    Never invent order, catalog, or destination copy.
+
+Customer stays the top rail section.
 
 Intake keywords (fixture-ok): privacy / GDPR / delete my data /
 data request. Do not call Customer privacy / GDPR / data-request

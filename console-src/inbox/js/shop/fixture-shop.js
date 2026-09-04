@@ -246,6 +246,17 @@ export function createFixtureShop(opts = {}) {
       ];
       return clerkTicket(withEscalate(ticket));
     },
+    markUnsubscribed({ ticketId } = {}) {
+      maybeFail("unsubscribe-handled");
+      const ticket = fixtureTickets.find((row) => row.id === ticketId);
+      if (!ticket || ticket.requestType !== "marketing_unsubscribe") return null;
+      ticket.unsubscribeHandled = true;
+      ticket.statusEvents = [
+        ...(ticket.statusEvents || []),
+        { at: new Date().toISOString(), status: ticket.status, note: "unsubscribed" },
+      ];
+      return clerkTicket(withEscalate(ticket));
+    },
     writeGateStatus() {
       maybeFail("write-gate");
       return {

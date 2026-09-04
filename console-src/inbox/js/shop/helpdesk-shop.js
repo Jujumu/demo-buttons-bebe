@@ -203,6 +203,10 @@ export function createHelpdeskShop(opts = {}) {
       // First-party flag only. No MCP write tool — never a Shopify privacy mutation.
       return fallback.markPrivacyHandled(args);
     },
+    async markUnsubscribed(args = {}) {
+      // First-party flag only. No MCP write tool — never a Shopify marketing mutation.
+      return fallback.markUnsubscribed(args);
+    },
     async writeGateStatus(args = {}) {
       const record = await read(
         "helpdesk.write_gate_status",

@@ -63,14 +63,20 @@ test("UX Pro blocks fail the default Ada paint", async () => {
 });
 
 test("UX Pro mute unsubscribe chrome has no Shopify write control", async () => {
-  const snap = await createInboxOrgan({ viewId: "mine", ticketId: "t-priya-unsub" }).ready();
+  const organ = createInboxOrgan({ viewId: "mine", ticketId: "t-priya-unsub" });
+  const snap = await organ.ready();
   assert.deepEqual(reviewBlockViolations(snap.html), []);
   assert.match(snap.html, /class="ticket-status ticket-request"[^>]*>Unsubscribe</);
   assert.match(snap.html, /class="thread-request mute"[^>]*>Marketing unsubscribe</);
-  assert.match(snap.html, /<h2>Marketing unsubscribe<\/h2>\s*<span class="peek">No Shopify write<\/span>/);
-  assert.match(snap.html, /No Shopify write — confirm preference out of band/);
-  assert.doesNotMatch(snap.html, /<(button|a)\b[^>]*>[^<]*(?:Unsubscribe|opt out|marketing consent)/i);
+  assert.match(snap.html, /btn-hairline"[^>]*data-marketing-gate-open>Mark unsubscribed</);
+  assert.match(snap.html, /data-pane="rail"[\s\S]*?<section class="rail-card"[^>]*data-tissue="customer"/);
+  assert.doesNotMatch(snap.html, /data-tissue="preference"/);
+  assert.doesNotMatch(snap.html, /<(button|a)\b[^>]*>\s*Unsubscribe</i);
+  assert.doesNotMatch(snap.html, /<(button|a)\b[^>]*>[^<]*(?:opt out|marketing consent)/i);
   assert.doesNotMatch(snap.html, /#6B46C1|#7C3AED|#5B21B6/);
+  const gated = organ.openMarketingGate();
+  assert.match(gated.html, /id="gate-sheet-copy">Marketing consent stays locked\. No live unsubscribe\.</);
+  assert.match(gated.html, /btn-ink"[^>]*data-unsubscribe-handled>Confirm</);
   const css = readFileSync(join(here, "../styles.css"), "utf8");
   assert.match(css, /\.ticket-request\s*\{[^}]*color:\s*var\(--mute\)/);
   assert.match(css, /\.thread-request\s*\{/);
@@ -102,14 +108,16 @@ test("UX Pro mute privacy chrome has no Shopify write control", async () => {
   assert.deepEqual(reviewBlockViolations(snap.html), []);
   assert.match(snap.html, /class="ticket-status ticket-request"[^>]*>Privacy</);
   assert.match(snap.html, /class="thread-request mute"[^>]*>Privacy request</);
-  assert.match(snap.html, /<h2>Privacy request<\/h2>\s*<span class="peek">Delete<\/span>/);
-  assert.match(snap.html, /Privacy tools stay locked\. No live data erase or export\./);
-  assert.match(snap.html, /data-privacy-gate-open>Mark privacy handled</);
+  assert.match(snap.html, /thread-request-subtype mute">Delete</);
+  assert.match(snap.html, /btn-hairline"[^>]*data-privacy-gate-open>Mark privacy handled</);
+  assert.match(snap.html, /data-pane="rail"[\s\S]*?<section class="rail-card"[^>]*data-tissue="customer"/);
+  assert.doesNotMatch(snap.html, /data-tissue="preference"/);
   assert.doesNotMatch(snap.html, /<(button|a)\b[^>]*>[^<]*(?:erasure|redact|Customer Privacy)/i);
   assert.doesNotMatch(snap.html, /#6B46C1|#7C3AED|#5B21B6/);
   const gated = organ.openPrivacyGate();
   assert.match(gated.html, /data-privacy-gate/);
   assert.match(gated.html, /id="gate-sheet-copy">Privacy tools stay locked\. No live data erase or export\.</);
+  assert.match(gated.html, /btn-ink"[^>]*data-privacy-handled>Confirm</);
   assert.doesNotMatch(gated.html, /#6B46C1|#7C3AED|#5B21B6/);
 });
 
@@ -243,7 +251,7 @@ test("review-block detector flags the wall and a printed null SKU", () => {
     <td class="mono" data-sku="null">null</td>
     <p class="mono line-sku" data-sku="—">—</p>
     <button>Ask Gaia</button>
-    <aside data-pane="rail"><button>Edit</button></aside>
+    <aside data-pane="rail"><section data-tissue="preference"></section><button>Edit</button></aside>
     <style>:root{--acc:#6B46C1}</style>`;
   const hits = reviewBlockViolations(wall);
   assert.ok(hits.includes("fully-open rail wall"));
@@ -258,6 +266,7 @@ test("review-block detector flags the wall and a printed null SKU", () => {
   assert.ok(hits.includes("Gaia"));
   assert.ok(hits.includes("Gorgias purple"));
   assert.ok(hits.includes("customer Edit"));
+  assert.ok(hits.includes("fifth rail request-type tissue"));
 });
 
 test("UX Pro blocks absolute clock time in the list", async () => {

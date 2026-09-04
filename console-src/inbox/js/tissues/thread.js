@@ -1,6 +1,6 @@
 import { MAILBOX_TOPICS } from "../contracts.js";
 import { clerkStatusEvents, listCustomerName, messageSpeaker, talkMessages } from "../shop/clerk-ticket.js";
-import { bugMetaPeek, esc, formatWeekday, formatWhen, initials, requestTypeTitle, screenStatus } from "../util.js";
+import { bugMetaPeek, esc, formatWeekday, formatWhen, initials, requestTypeChrome, screenStatus } from "../util.js";
 
 /**
  * Thread tissue.
@@ -85,9 +85,21 @@ export function createThreadTissue({ mailbox }) {
     const escalateControl = ticket.escalated
       ? ""
       : `<button type="button" class="btn-quiet" data-escalate="${esc(ticket.id)}">Escalate</button>`;
-    const typeTitle = requestTypeTitle(ticket.requestType);
-    const typeLine = typeTitle
-      ? `<p class="thread-request mute" data-request-type="${esc(ticket.requestType)}">${esc(typeTitle)}</p>`
+    const chrome = requestTypeChrome(ticket);
+    const subtype = chrome?.subtype
+      ? `<span class="thread-request-subtype mute">${esc(chrome.subtype)}</span>`
+      : "";
+    const mark = !chrome
+      ? ""
+      : chrome.handled
+        ? `<p class="thread-request-handled mute">${esc(chrome.doneLabel)}</p>`
+        : `<button type="button" class="btn-hairline" ${chrome.gateAttr}>${esc(chrome.markLabel)}</button>`;
+    const typeLine = chrome
+      ? `<div class="thread-request-row">
+          <p class="thread-request mute" data-request-type="${esc(chrome.type)}">${esc(chrome.title)}</p>
+          ${subtype}
+          ${mark}
+        </div>`
       : "";
     const bugMeta = bugMetaPeek(ticket.severity, ticket.device);
     const bugLine = bugMeta
@@ -119,6 +131,14 @@ export function createThreadTissue({ mailbox }) {
       const escalate = event.target.closest("[data-escalate]");
       if (escalate) {
         mailbox.publish(MAILBOX_TOPICS.THREAD_ESCALATE, { ticketId: escalate.dataset.escalate });
+        return;
+      }
+      if (event.target.closest("[data-privacy-gate-open]")) {
+        mailbox.publish(MAILBOX_TOPICS.PRIVACY_GATE_OPEN, {});
+        return;
+      }
+      if (event.target.closest("[data-marketing-gate-open]")) {
+        mailbox.publish(MAILBOX_TOPICS.MARKETING_GATE_OPEN, {});
         return;
       }
       const button = event.target.closest("[data-summarize]");
