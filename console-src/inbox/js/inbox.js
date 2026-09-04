@@ -447,7 +447,9 @@ export function createInboxOrgan(opts = {}) {
         ...(ticket.messages || []),
         {
           id: `out-${Date.now()}`,
+          from: "agent",
           fromAgent: true,
+          fromName: STORE_NAME,
           name: STORE_NAME,
           at: new Date().toISOString(),
           body: text,

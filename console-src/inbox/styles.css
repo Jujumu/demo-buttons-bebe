@@ -146,8 +146,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 }
 .thread-scroll { flex: 1; overflow: auto; padding: 18px 20px 8px; }
 .bubble { max-width: 38rem; margin: 0 0 14px; }
-.bubble-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; color: var(--mute); font-size: 12px; }
+.bubble-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; color: var(--mute); font-size: 12px; flex-wrap: wrap; }
 .bubble-meta strong { color: var(--ink); font-weight: 600; }
+.from-email { color: var(--mute); font-size: 11px; }
 .avatar {
   width: 22px; height: 22px;
   display: grid; place-items: center;

@@ -162,5 +162,25 @@ class MailboxPullTests(unittest.TestCase):
             seen_path.unlink(missing_ok=True)
 
 
+class FormatFromTests(unittest.TestCase):
+    def test_format_from_keeps_persona_on_sdk_objects(self) -> None:
+        from types import SimpleNamespace
+
+        from helpdesk.mailbox import format_from
+
+        self.assertEqual(
+            format_from("Pat Rivera <teddyjubu@agentmail.to>"),
+            "Pat Rivera <teddyjubu@agentmail.to>",
+        )
+        self.assertEqual(
+            format_from(SimpleNamespace(name="Pat Rivera", email="teddyjubu@agentmail.to")),
+            "Pat Rivera <teddyjubu@agentmail.to>",
+        )
+        self.assertEqual(
+            format_from([SimpleNamespace(name="Ada", email="ada.tracking@example.com")]),
+            "Ada <ada.tracking@example.com>",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

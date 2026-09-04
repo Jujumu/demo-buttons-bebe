@@ -2,17 +2,13 @@
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
 from .errors import bad_request
 from .fixtures_intake import MAILBOX_ADDRESS, MAILBOX_DISPLAY
 from .join import join_shopify
+from .speakers import split_from
 from . import tickets
-
-_FROM = re.compile(
-    r"^\s*(?:(?P<name>.*?)\s*<\s*(?P<email>[^<>\s]+@[^<>\s]+)\s*>|(?P<bare>[^\s@]+@[^\s@]+)|(?P<plain>.+))\s*$"
-)
 
 _SPAM_MARKERS = (
     "prize",
@@ -28,16 +24,10 @@ _SPAM_MARKERS = (
 
 
 def parse_from(value: str) -> tuple[str, str | None]:
-    match = _FROM.match(str(value or "").strip())
-    if not match:
-        raise bad_request("from is required", field="from")
-    email = (match.group("email") or match.group("bare") or "").strip() or None
-    name = (match.group("name") or match.group("plain") or "").strip()
-    if not name and email:
-        name = email
+    name, email = split_from(str(value or ""))
     if not name:
-        raise bad_request("from name is required", field="from")
-    return name, email.lower() if email else None
+        raise bad_request("from is required", field="from")
+    return name, email
 
 
 def is_spam(subject: str = "", body: str = "") -> bool:

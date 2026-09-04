@@ -1,4 +1,5 @@
 import { MAILBOX_TOPICS } from "../contracts.js";
+import { listCustomerName } from "../shop/clerk-ticket.js";
 import { esc, formatWhen, screenStatus } from "../util.js";
 
 /**
@@ -29,7 +30,7 @@ export function createListTissue({ mailbox }) {
     return `<button type="button" class="ticket-row${on ? " is-selected" : ""}" data-ticket="${esc(ticket.id)}" data-status="${esc(status)}" aria-current="${on ? "true" : "false"}">
       <span class="ticket-bar" aria-hidden="true"></span>
       <span class="ticket-top">
-        <span class="ticket-name">${esc(ticket.customerName || "")}</span>
+        <span class="ticket-name">${esc(listCustomerName(ticket))}</span>
         <span class="ticket-meta">
           ${statusHtml}
           <time class="ticket-time">${esc(formatWhen(ticket.updatedAt))}</time>

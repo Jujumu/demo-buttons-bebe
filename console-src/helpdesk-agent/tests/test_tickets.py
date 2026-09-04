@@ -70,6 +70,15 @@ class TicketContractTests(unittest.TestCase):
         self.assertEqual(ticket["status"], "open")
         self.assertNotEqual(ticket["status"], "OPEN")
         self.assertEqual(ticket["statusEvents"][0]["status"], "open")
+        inbound = ticket["messages"][0]
+        self.assertEqual(inbound["from"], "customer")
+        self.assertEqual(inbound["fromName"], "Ada Demo")
+        self.assertEqual(inbound["name"], "Ada Demo")
+        self.assertNotEqual(inbound["fromName"].lower(), "teddyjubu")
+        agent = ticket["messages"][1]
+        self.assertEqual(agent["from"], "agent")
+        self.assertEqual(agent["fromName"], "Demo Shop")
+        self.assertNotEqual(agent["fromName"], inbound["fromName"])
 
     def test_closed_ada_has_a_closed_status_event(self) -> None:
         ticket = dispatch("helpdesk.get_ticket", {"ticketId": "t-ada-closed"})["ticket"]

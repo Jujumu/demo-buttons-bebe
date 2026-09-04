@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .errors import bad_request, not_found
+from .speakers import project_customer_name, project_message
 from .fixtures_live_holes import (
     C_FULFILLED,
     C_MULTI,
@@ -67,6 +68,7 @@ SEED_TICKETS = (
                 "from": "customer",
                 "fromAgent": False,
                 "name": "Ada Demo",
+                "fromName": "Ada Demo",
                 "body": "Where is my order #1001? The tracking has not updated.",
                 "at": "2026-08-28T14:02:00Z",
             },
@@ -75,6 +77,7 @@ SEED_TICKETS = (
                 "from": "agent",
                 "fromAgent": True,
                 "name": STORE_NAME,
+                "fromName": STORE_NAME,
                 "body": "Looking at the shipment now — I will write back with the carrier update.",
                 "at": "2026-08-28T14:40:00Z",
             },
@@ -97,6 +100,7 @@ SEED_TICKETS = (
                 "from": "customer",
                 "fromAgent": False,
                 "name": "Casey Sandbox",
+                "fromName": "Casey Sandbox",
                 "body": "Please tell me when order #1002 will leave. I need the visor this week.",
                 "at": "2026-08-28T16:20:00Z",
             }
@@ -117,6 +121,7 @@ SEED_TICKETS = (
                 "from": "customer",
                 "fromAgent": False,
                 "name": "Casey Sandbox",
+                "fromName": "Casey Sandbox",
                 "body": "Did the merino throw on #1003 go out? I want to confirm the shipment.",
                 "at": "2026-08-27T11:05:00Z",
             }
@@ -137,6 +142,7 @@ SEED_TICKETS = (
                 "from": "customer",
                 "fromAgent": False,
                 "name": "Jordan Preview",
+                "fromName": "Jordan Preview",
                 "body": "Do you ship the demo catalog to Canada, or is it local-only?",
                 "at": "2026-08-26T09:00:00Z",
             }
@@ -159,6 +165,7 @@ SEED_TICKETS = (
                 "from": "customer",
                 "fromAgent": False,
                 "name": "Ada Demo",
+                "fromName": "Ada Demo",
                 "body": "The rattle from #1001 arrived. Thank you — you can close this.",
                 "at": "2026-08-25T17:50:00Z",
             },
@@ -167,6 +174,7 @@ SEED_TICKETS = (
                 "from": "agent",
                 "fromAgent": True,
                 "name": STORE_NAME,
+                "fromName": STORE_NAME,
                 "body": "Glad it reached you, Ada.",
                 "at": "2026-08-25T18:10:00Z",
             },
@@ -286,6 +294,7 @@ def add_ticket(
                 "from": "customer",
                 "fromAgent": False,
                 "name": customer_name,
+                "fromName": customer_name,
                 "body": body,
                 "at": received_at,
             }
@@ -294,6 +303,8 @@ def add_ticket(
             {"at": received_at, "status": "open", "note": "created"},
         ],
     }
+    if from_email:
+        ticket["messages"][0]["fromEmail"] = from_email
     _store.insert(0, ticket)
     _by_dedupe[dedupe_key] = ticket
     return _row(ticket, gid_source="joined")
@@ -331,7 +342,7 @@ def _row(ticket: dict, gid_source: str = "sample") -> dict:
     customer_id, order_id = _gids_for(ticket, gid_source)
     return {
         "id": ticket["id"],
-        "customerName": ticket["customerName"],
+        "customerName": project_customer_name(ticket),
         "subject": ticket["subject"],
         "snippet": ticket["snippet"],
         "status": ticket["status"],
@@ -361,12 +372,14 @@ def get_ticket(ticket_id: str, gid_source: str = "sample") -> dict:
     for ticket in _store:
         if ticket["id"] == canonical:
             row = _row(ticket, gid_source)
-            row["messages"] = [dict(message) for message in ticket["messages"]]
+            row["messages"] = [project_message(ticket, message) for message in ticket["messages"]]
             row["statusEvents"] = [dict(event) for event in ticket["statusEvents"]]
             row["escalated"] = bool(ticket.get("escalated"))
             reason = ticket.get("escalationReason")
             if reason:
                 row["escalationReason"] = str(reason)
+            if ticket.get("fromEmail"):
+                row["fromEmail"] = ticket.get("fromEmail")
             return row
     raise not_found("ticket", str(ticket_id))
 
