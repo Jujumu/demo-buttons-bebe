@@ -440,6 +440,8 @@ export const tickets = [
     customerId: null,
     orderId: null,
     requestType: "privacy_request",
+    privacySubtype: "delete",
+    privacyHandled: false,
     updatedAt: "2026-08-28T15:50:00Z",
     stubDraft: "Hi Lee — I have your privacy request. I will handle the data export or deletion out of band. This inbox does not write Shopify Customer Privacy.",
     stubSummary: "Lee asked to delete stored personal data. No Shopify privacy write from this inbox.",

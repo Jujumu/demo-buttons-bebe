@@ -215,10 +215,20 @@ class TicketContractTests(unittest.TestCase):
         self.assertIsNone(casey["requestType"])
         ticket = dispatch("helpdesk.get_ticket", {"ticketId": "t-lee-privacy"})["ticket"]
         self.assertEqual(ticket["requestType"], "privacy_request")
+        self.assertEqual(ticket["privacySubtype"], "delete")
+        self.assertFalse(ticket["privacyHandled"])
         self.assertEqual(ticket["status"], "open")
         self.assertFalse(ticket.get("escalated"))
         from helpdesk.queries import CUSTOMER_QUERY, ORDER_QUERY
+        from helpdesk.tickets import mark_privacy_handled
+        from unittest.mock import patch
 
+        handled = mark_privacy_handled("t-lee-privacy")
+        self.assertTrue(handled["privacyHandled"])
+        with patch("helpdesk.client.graphql") as gql:
+            again = mark_privacy_handled("t-lee-privacy")
+            gql.assert_not_called()
+        self.assertTrue(again["privacyHandled"])
         blob = CUSTOMER_QUERY + ORDER_QUERY
         self.assertNotIn("customerPrivacy", blob)
         self.assertNotIn("customerRequestDataErasure", blob)
@@ -228,6 +238,7 @@ class TicketContractTests(unittest.TestCase):
         self.assertEqual(WRITE_TOOLS, frozenset({"helpdesk.send", "helpdesk.refund", "helpdesk.cancel"}))
         self.assertNotIn("helpdesk.mark_request_type", WRITE_TOOLS)
         self.assertNotIn("helpdesk.privacy_request", WRITE_TOOLS)
+        self.assertNotIn("helpdesk.mark_privacy_handled", WRITE_TOOLS)
 
     def test_write_gate_status_reports_refused_money_writes(self) -> None:
         os.environ["SHOPIFY_MUTATIONS_ENABLED"] = "0"

@@ -1,5 +1,14 @@
 import { MAILBOX_TOPICS } from "../contracts.js";
-import { esc, formatOrderCount, requestTypeTitle, requestTypeWritePeek } from "../util.js";
+import {
+  esc,
+  formatOrderCount,
+  isPrivacyRequest,
+  PRIVACY_HANDLED_LABEL,
+  PRIVACY_LOCK_COPY,
+  privacySubtypeLabel,
+  requestTypeTitle,
+  requestTypeWritePeek,
+} from "../util.js";
 import { createCustomerTissue, renderCustomer } from "./customer.js";
 import { createOrderHistoryTissue, renderOrderHistory } from "./order-history.js";
 import { createOrderTissue, renderOrder } from "./order.js";
@@ -41,7 +50,15 @@ export function createRailOrgan({ shop, mailbox }) {
   let peekedHistoryId = null;
   let currentOrderId = null;
   let currentTicketKey = null;
-  let lastLoad = { shop: "", customerId: "", orderId: "", ticketId: "", requestType: "" };
+  let lastLoad = {
+    shop: "",
+    customerId: "",
+    orderId: "",
+    ticketId: "",
+    requestType: "",
+    privacySubtype: "",
+    privacyHandled: false,
+  };
 
   function ticketKey({ ticketId, customerId, orderId }) {
     if (ticketId) return `ticket:${ticketId}`;
@@ -85,15 +102,28 @@ export function createRailOrgan({ shop, mailbox }) {
   function renderPreference() {
     const typed = lastLoad.requestType;
     const title = requestTypeTitle(typed);
-    const peek = requestTypeWritePeek(typed);
     if (!title) return "";
+    const subtype = privacySubtypeLabel(lastLoad.privacySubtype);
+    const peek = isPrivacyRequest(typed)
+      ? (subtype || "No Shopify write")
+      : "No Shopify write";
+    const line = isPrivacyRequest(typed)
+      ? PRIVACY_LOCK_COPY
+      : requestTypeWritePeek(typed);
+    const handled = Boolean(lastLoad.privacyHandled);
+    const action = isPrivacyRequest(typed)
+      ? (handled
+        ? `<p class="mute preference-handled">Privacy handled</p>`
+        : `<button type="button" class="btn-hairline" data-privacy-gate-open>${esc(PRIVACY_HANDLED_LABEL)}</button>`)
+      : "";
     return `<section class="rail-card" data-tissue="preference" data-open="true" data-request-type="${esc(typed)}">
       <div class="rail-static">
         <h2>${esc(title)}</h2>
-        <span class="peek">No Shopify write</span>
+        <span class="peek">${esc(peek)}</span>
       </div>
       <div class="rail-body">
-        <p class="mute preference-line">${esc(peek)}</p>
+        <p class="mute preference-line">${esc(line)}</p>
+        ${action}
       </div>
     </section>`;
   }
@@ -153,8 +183,16 @@ export function createRailOrgan({ shop, mailbox }) {
     }));
   }
 
-  async function load({ shop: shopId, customerId, orderId, ticketId, requestType }) {
-    lastLoad = { shop: shopId, customerId, orderId, ticketId, requestType: requestType || "" };
+  async function load({ shop: shopId, customerId, orderId, ticketId, requestType, privacySubtype, privacyHandled }) {
+    lastLoad = {
+      shop: shopId,
+      customerId,
+      orderId,
+      ticketId,
+      requestType: requestType || "",
+      privacySubtype: privacySubtype || "",
+      privacyHandled: Boolean(privacyHandled),
+    };
     const nextKey = ticketKey({ ticketId, customerId, orderId });
     const switched = nextKey !== currentTicketKey;
     currentTicketKey = nextKey;
@@ -190,6 +228,11 @@ export function createRailOrgan({ shop, mailbox }) {
   function mount(el) {
     el.innerHTML = render();
     el.onclick = (event) => {
+      const privacyGate = event.target.closest("[data-privacy-gate-open]");
+      if (privacyGate) {
+        mailbox.publish(MAILBOX_TOPICS.PRIVACY_GATE_OPEN, {});
+        return;
+      }
       const gate = event.target.closest("[data-write-gate-open]");
       if (gate) {
         mailbox.publish(MAILBOX_TOPICS.WRITE_GATE_OPEN, {});

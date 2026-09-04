@@ -74,9 +74,11 @@ rail can load when a row is selected. Ticket status is first-party
 `privacy_request` or `null`). It is not a Shopify consent or Customer
 Privacy field. Intake subjects that contain `unsubscribe` (and are not
 unsubscribe-farm spam) set marketing unsubscribe. Subjects or bodies
-that clearly signal privacy / GDPR / data-deletion set privacy request.
-Human handles both out of band. Do not call marketing unsubscribe or
-Customer Privacy / erasure / redaction mutations.
+that match privacy / GDPR / delete my data / data request set privacy
+request and may set subtype Access / Delete / Export. Human handles
+both out of band. `privacyHandled` is a first-party ticket flag only.
+Do not call marketing unsubscribe or Customer privacy / GDPR /
+data-request Admin mutations.
 Composer `--ticket` is the ticket id (sample `1001` aliases `t-ada-track`).
 
 Drafts are merchant replies the human Inserts or Discards. Summaries are a

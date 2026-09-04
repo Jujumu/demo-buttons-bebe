@@ -13,10 +13,11 @@ Out: `{ ingested: [ticket rows], spam: [{ from, subject }], skipped: n }`
 Spam (prize / lottery / unsubscribe-farm) returns `{ spam: true, ticketId: null }`
 and never appears in `list_tickets`. A real marketing-unsubscribe subject
 (`unsubscribe`, not the farm markers) becomes a ticket with
-`requestType: marketing_unsubscribe`. Subjects or bodies that clearly
-signal privacy / GDPR / data-deletion become a ticket with
-`requestType: privacy_request`. Those types are first-party. They do
-not write Shopify consent or Customer Privacy.
+`requestType: marketing_unsubscribe`. Subjects or bodies that match
+privacy / GDPR / delete my data / data request (and are not spam)
+become a ticket with `requestType: privacy_request`. Intake may also
+set optional subtype Access / Delete / Export. Those types are
+first-party. They do not write Shopify consent or Customer Privacy.
 
 `customerName` is the intake From name, never `Customer.displayName`.
 Ticket status is helpdesk `open`.

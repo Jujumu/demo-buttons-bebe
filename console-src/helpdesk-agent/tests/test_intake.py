@@ -91,6 +91,9 @@ class IntakeTests(unittest.TestCase):
         listed = dispatch("helpdesk.list_tickets", {"view": "open", "limit": 20})["tickets"]
         row = next(item for item in listed if item["id"] == payload["id"])
         self.assertEqual(row["requestType"], "privacy_request")
+        ticket = dispatch("helpdesk.get_ticket", {"ticketId": payload["id"]})["ticket"]
+        self.assertEqual(ticket["privacySubtype"], "delete")
+        self.assertFalse(ticket["privacyHandled"])
         body_only = dispatch(
             TOOL_INGEST_EMAIL,
             {
@@ -103,6 +106,20 @@ class IntakeTests(unittest.TestCase):
         self.assertTrue(body_only["ok"])
         self.assertFalse(body_only["spam"])
         self.assertEqual(body_only["requestType"], "privacy_request")
+        export_ticket = dispatch("helpdesk.get_ticket", {"ticketId": body_only["id"]})["ticket"]
+        self.assertEqual(export_ticket["privacySubtype"], "export")
+        keyword = dispatch(
+            TOOL_INGEST_EMAIL,
+            {
+                "from": "Lee Chen <lee.access@example.com>",
+                "subject": "Data request",
+                "body": "This is a privacy data request for a copy of my records.",
+                "receivedAt": "2026-08-30T14:23:00Z",
+            },
+        )
+        self.assertEqual(keyword["requestType"], "privacy_request")
+        access_ticket = dispatch("helpdesk.get_ticket", {"ticketId": keyword["id"]})["ticket"]
+        self.assertEqual(access_ticket["privacySubtype"], "access")
         unsub = dispatch(TOOL_INGEST_EMAIL, PRIYA_UNSUB)
         self.assertEqual(unsub["requestType"], "marketing_unsubscribe")
         ada = dispatch(TOOL_INGEST_EMAIL, ADA_TRACKING)

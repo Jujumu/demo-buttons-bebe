@@ -83,7 +83,13 @@ export const PRIVACY_LABEL = "Privacy";
 export const UNSUBSCRIBE_TITLE = "Marketing unsubscribe";
 export const PRIVACY_TITLE = "Privacy request";
 export const UNSUBSCRIBE_WRITE_PEEK = "No Shopify write — confirm preference out of band";
-export const PRIVACY_WRITE_PEEK = "No Shopify write — handle privacy out of band";
+export const PRIVACY_LOCK_COPY = "Privacy tools stay locked. No live data erase or export.";
+export const PRIVACY_HANDLED_LABEL = "Mark privacy handled";
+export const PRIVACY_SUBTYPE_LABELS = Object.freeze({
+  access: "Access",
+  delete: "Delete",
+  export: "Export",
+});
 
 export function giftCardHint(card) {
   if (!card) return "";
@@ -282,10 +288,14 @@ export function requestTypeTitle(value) {
   return "";
 }
 
-export function requestTypeWritePeek(value) {
+export function requestTypeWritePeek(value, subtype) {
   if (isMarketingUnsubscribe(value)) return UNSUBSCRIBE_WRITE_PEEK;
-  if (isPrivacyRequest(value)) return PRIVACY_WRITE_PEEK;
+  if (isPrivacyRequest(value)) return privacySubtypeLabel(subtype) || PRIVACY_LOCK_COPY;
   return "";
+}
+
+export function privacySubtypeLabel(value) {
+  return PRIVACY_SUBTYPE_LABELS[String(value || "")] || "";
 }
 
 export function forbiddenControlHits(html) {

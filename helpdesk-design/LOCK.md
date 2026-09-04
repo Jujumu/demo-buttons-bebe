@@ -93,17 +93,21 @@ on this slice.
 
 ## Privacy request
 
-First-party ticket `requestType`. Not a Shopify Customer Privacy /
-GDPR Admin write. Human handles export or deletion out of band.
+First-party ticket `requestType`. Same pattern as Unsubscribe. Not a
+Shopify Customer Privacy / GDPR Admin write. Human handles export or
+deletion out of band. No fifth rail tissue.
 
-1. List meta mutes `Privacy` when `requestType` is `privacy_request`.
+1. List mutes chip `Privacy` when `requestType` is `privacy_request`.
    Same mute status voice as Open / Closed / Snoozed / Unsubscribe.
-   No purple badge.
+   Not purple. Not color-alone.
 2. Thread header mutes `Privacy request` under the subject.
-3. Rail peeks `Privacy request` +
-   `No Shopify write — handle privacy out of band`. No control that
-   writes Shopify Customer Privacy, erasure, or redaction.
+3. Optional subtype peek `Access` / `Delete` / `Export` when intake
+   sets it.
+4. Optional hairline `Mark privacy handled` is a first-party ticket
+   flag only. It does not write Shopify.
+5. Gated lock copy:
+   `Privacy tools stay locked. No live data erase or export.`
 
-Do not call Customer Privacy / erasure / redaction mutations. Do not
-query invented privacy fields. Official Customer Privacy stays unread
-on this slice.
+Intake keywords (fixture-ok): privacy / GDPR / delete my data /
+data request. Do not call Customer privacy / GDPR / data-request
+Admin mutations. Do not query invented privacy fields.
