@@ -81,6 +81,7 @@ def _msg(mid: str, name: str, body: str, at: str, *, agent: bool = False, attach
         "from": "agent" if agent else "customer",
         "fromAgent": agent,
         "name": STORE if agent else name,
+        "fromName": STORE if agent else name,
         "body": body,
         "at": at,
     }

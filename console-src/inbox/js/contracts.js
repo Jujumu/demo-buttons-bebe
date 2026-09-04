@@ -134,7 +134,10 @@
  * @property {string} updatedAt
  * @property {string} customerId
  * @property {string | null} orderId
- * @property {object[]} messages
+ * @property {object[]} messages — each talk message has `from` (`customer`|`agent`),
+ *   `fromName`, optional `fromEmail`, and `name` (same as fromName). Inbound From
+ *   is the customer persona, never the AgentMail/shop mailbox login.
+
  * @property {{ at: string, status: string, note?: string }[]} statusEvents
  * @property {boolean} [escalated]
  * @property {string} [escalationReason]

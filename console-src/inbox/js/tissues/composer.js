@@ -1,4 +1,5 @@
 import { MAILBOX_TOPICS } from "../contracts.js";
+import { listCustomerName } from "../shop/clerk-ticket.js";
 import { esc } from "../util.js";
 
 function macroTitle(macro) {
@@ -72,7 +73,7 @@ export function createComposerTissue({ mailbox }) {
   function recipient(ticket) {
     if (!ticket) return { name: "", email: "" };
     return {
-      name: ticket.customerName || ticket.messages?.[0]?.name || "",
+      name: listCustomerName(ticket) || ticket.messages?.[0]?.fromName || ticket.messages?.[0]?.name || "",
       email: ticket.toEmail || "",
     };
   }

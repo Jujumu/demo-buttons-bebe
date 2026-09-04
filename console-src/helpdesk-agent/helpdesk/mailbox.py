@@ -102,8 +102,28 @@ def format_from(value: Any) -> str:
     if isinstance(value, (list, tuple)):
         parts = [format_from(item) for item in value]
         return ", ".join(part for part in parts if part)
-    name = _attr(value, "name", "display_name", "displayName")
-    email = _attr(value, "email", "address", "email_address", "emailAddress")
+    nested = _attr(value, "from_address", "fromAddress")
+    if nested is not None and nested is not value:
+        nested_text = format_from(nested)
+        if nested_text:
+            return nested_text
+    name = _attr(
+        value,
+        "name",
+        "display_name",
+        "displayName",
+        "from_name",
+        "fromName",
+    )
+    email = _attr(
+        value,
+        "email",
+        "address",
+        "email_address",
+        "emailAddress",
+        "from_email",
+        "fromEmail",
+    )
     name = str(name or "").strip()
     email = str(email or "").strip()
     if name and email:
@@ -192,9 +212,18 @@ def _normalize(message: Any) -> dict[str, Any] | None:
     mid = message_id_of(message)
     if not mid:
         return None
+    formatted = format_from(_attr(message, "from_", "from"))
+    extra_name = str(_attr(message, "from_name", "fromName") or "").strip()
+    extra_email = str(_attr(message, "from_email", "fromEmail") or "").strip()
+    if extra_name and extra_email:
+        formatted = f"{extra_name} <{extra_email}>"
+    elif extra_name and "<" not in formatted:
+        formatted = f"{extra_name} <{formatted}>" if formatted else extra_name
+    elif extra_email and not formatted:
+        formatted = extra_email
     return {
         "message_id": mid,
-        "from": format_from(_attr(message, "from_", "from")),
+        "from": formatted,
         "subject": str(_attr(message, "subject") or ""),
         "body": message_body(message),
         "received_at": message_received_at(message),

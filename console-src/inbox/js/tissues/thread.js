@@ -1,11 +1,12 @@
 import { MAILBOX_TOPICS } from "../contracts.js";
-import { clerkStatusEvents, talkMessages } from "../shop/clerk-ticket.js";
+import { clerkStatusEvents, listCustomerName, messageSpeaker, talkMessages } from "../shop/clerk-ticket.js";
 import { esc, formatWeekday, formatWhen, initials, screenStatus } from "../util.js";
 
 /**
  * Thread tissue.
  * In: `{ ticket }` from helpdesk.get_ticket
  * Out: summarize on `composer/summarize`; escalate on `thread/escalate`.
+ * Inbound From is the customer persona, not the AgentMail/shop mailbox login.
  * Status-change events are muted as `Closed · Tuesday`. Escalate writes
  * `Escalated · Tuesday` the same way. No Escalated badge. No Send.
  */
@@ -32,12 +33,16 @@ export function createThreadTissue({ mailbox }) {
     return figures ? `<div class="bubble-attachments">${figures}</div>` : "";
   }
 
-  function renderMessage(message) {
-    const who = message.fromAgent || message.from === "agent" ? "agent" : "customer";
-    return `<article class="bubble ${who}">
+  function renderMessage(ticket, message) {
+    const speaker = messageSpeaker(ticket, message);
+    const email = speaker.email
+      ? `<span class="from-email">${esc(speaker.email)}</span>`
+      : "";
+    return `<article class="bubble ${speaker.role}">
       <div class="bubble-meta">
-        <span class="avatar">${esc(initials(message.name))}</span>
-        <strong>${esc(message.name)}</strong>
+        <span class="avatar">${esc(initials(speaker.name))}</span>
+        <strong>From ${esc(speaker.name)}</strong>
+        ${email}
         <time>${esc(formatWhen(message.at))}</time>
       </div>
       <p>${esc(message.body)}</p>
@@ -59,7 +64,7 @@ export function createThreadTissue({ mailbox }) {
   function timeline(ticket) {
     const events = clerkStatusEvents(ticket);
     const items = [
-      ...talkMessages(ticket).map((message) => ({ at: message.at, html: renderMessage(message) })),
+      ...talkMessages(ticket).map((message) => ({ at: message.at, html: renderMessage(ticket, message) })),
       ...events.map((event) => ({ at: event.at, html: renderStatus(event) })),
     ];
     if (ticket.escalated && !events.some(isEscalateEvent)) {
@@ -83,7 +88,7 @@ export function createThreadTissue({ mailbox }) {
     return `<div class="pane-inner thread-inner">
       <header class="thread-head">
         <div>
-          <h2>${esc(ticket.customerName || "Customer")}</h2>
+          <h2>${esc(listCustomerName(ticket))}</h2>
           <p class="thread-subject">${esc(ticket.subject)}</p>
         </div>
         <div class="thread-head-actions">

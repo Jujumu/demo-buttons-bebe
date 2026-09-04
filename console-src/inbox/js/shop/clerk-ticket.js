@@ -2,15 +2,118 @@
  * First-party Clerk ticket projection.
  * customerName is ours — never Customer.displayName.
  * status is open / closed / snoozed — never Return.status OPEN.
+ * Inbound From is the customer persona, not the AgentMail/shop mailbox login.
  */
 
 export const TICKET_STATUSES = Object.freeze(["open", "closed", "snoozed"]);
+export const STORE_NAME = "Demo Shop";
+
+const MAILBOX_EMAILS = new Set([
+  "helpdesk-support@agentmail.to",
+  "teddyjubu@agentmail.to",
+]);
+const MAILBOX_NAMES = new Set([
+  "demo shop support",
+  "demo shop",
+  "agentmail",
+  "teddyjubu",
+  "helpdesk-support",
+]);
+
+function clean(value) {
+  return String(value ?? "").trim();
+}
+
+function emailLocal(email) {
+  const addr = clean(email).toLowerCase();
+  return addr.includes("@") ? addr.split("@", 1)[0] : addr;
+}
+
+export function isMailboxEmail(email) {
+  const addr = clean(email).toLowerCase();
+  if (!addr) return false;
+  if (MAILBOX_EMAILS.has(addr)) return true;
+  return addr.endsWith("@agentmail.to") && MAILBOX_NAMES.has(emailLocal(addr));
+}
+
+export function isMailboxName(name, email) {
+  const named = clean(name);
+  if (!named) return true;
+  const lower = named.toLowerCase();
+  if (MAILBOX_NAMES.has(lower)) return true;
+  if (isMailboxEmail(named)) return true;
+  const addr = clean(email).toLowerCase();
+  const local = emailLocal(addr);
+  return Boolean(isMailboxEmail(email) && (lower === addr || (local && lower === local)));
+}
+
+export function isAgentMessage(message) {
+  if (!message) return false;
+  if (message.fromAgent === true) return true;
+  return clean(message.from).toLowerCase() === "agent";
+}
+
+function splitFrom(value) {
+  const text = clean(value);
+  const angled = text.match(/^(.*?)\s*<\s*([^<>\s]+@[^<>\s]+)\s*>$/);
+  if (angled) return { name: clean(angled[1]), email: angled[2].toLowerCase() };
+  const bare = text.match(/^([^\s@]+@[^\s@]+)$/);
+  if (bare) return { name: bare[1], email: bare[1].toLowerCase() };
+  return { name: text, email: "" };
+}
+
+export function messageSpeaker(ticket, message) {
+  if (isAgentMessage(message)) {
+    const name = clean(message?.fromName || message?.name) || STORE_NAME;
+    return { role: "agent", name, email: "" };
+  }
+  let fromEmail = clean(message?.fromEmail || ticket?.fromEmail);
+  const candidates = [message?.fromName, message?.name, ticket?.customerName];
+  const rawFrom = message?.from;
+  if (rawFrom && !["customer", "agent", ""].includes(clean(rawFrom).toLowerCase())) {
+    const parsed = splitFrom(rawFrom);
+    if (parsed.name) candidates.unshift(parsed.name);
+    fromEmail = fromEmail || parsed.email;
+  }
+  let name = "";
+  for (const candidate of candidates) {
+    const text = clean(candidate);
+    if (text && !isMailboxName(text, fromEmail)) {
+      name = text;
+      break;
+    }
+  }
+  if (!name) {
+    name = fromEmail && !isMailboxEmail(fromEmail) ? fromEmail : "Customer";
+  }
+  return {
+    role: "customer",
+    name,
+    email: fromEmail && !isMailboxEmail(fromEmail) ? fromEmail : "",
+  };
+}
+
+export function listCustomerName(ticket) {
+  const name = clean(ticket?.customerName);
+  const email = clean(ticket?.fromEmail);
+  if (name && !isMailboxName(name, email)) return name;
+  for (const message of ticket?.messages || []) {
+    if (isAgentMessage(message)) continue;
+    const speaker = messageSpeaker(ticket, message);
+    if (speaker.name && !isMailboxName(speaker.name, speaker.email || email)) {
+      return speaker.name;
+    }
+  }
+  if (email && !isMailboxEmail(email)) return email;
+  if (name && !isMailboxName(name, email)) return name;
+  return isMailboxName(name, email) ? "Customer" : (name || "Customer");
+}
 
 export function clerkTicketRow(ticket) {
   if (!ticket) return null;
   return {
     id: ticket.id,
-    customerName: ticket.customerName || "",
+    customerName: listCustomerName(ticket),
     subject: ticket.subject || "",
     snippet: ticket.snippet || "",
     status: ticket.status,

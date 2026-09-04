@@ -163,6 +163,48 @@ test("closed Ada thread mutes Closed · Tuesday", async () => {
   }
 });
 
+test("Ada inbound From is the customer persona, not teddyjubu", async () => {
+  const organ = createInboxOrgan({ viewId: "mine" });
+  const snap = await organ.ready();
+  assert.match(snap.html, /<strong>From Ada Demo<\/strong>/);
+  assert.match(snap.html, /<strong>From Demo Shop<\/strong>/);
+  assert.match(snap.html, /status-line">Open · Friday/);
+  assert.doesNotMatch(snap.html, /From teddyjubu/i);
+  assert.doesNotMatch(snap.html, /teddyjubu@agentmail\.to/i);
+  const inboundAt = snap.html.indexOf("From Ada Demo");
+  const agentAt = snap.html.indexOf("From Demo Shop");
+  assert.ok(inboundAt > -1 && agentAt > inboundAt, "customer From precedes staff From");
+});
+
+test("staff outbound From stays the shop identity and does not pretend to be the customer", async () => {
+  const ada = fixtureTickets.find((ticket) => ticket.id === "t-ada-track");
+  const organ = createInboxOrgan({
+    viewId: "mine",
+    ticketId: "t-ada-track",
+    tickets: [{
+      ...ada,
+      messages: [
+        ...ada.messages,
+        {
+          id: "out-1",
+          from: "agent",
+          fromAgent: true,
+          fromName: "Demo Shop",
+          name: "Demo Shop",
+          at: "2026-08-28T15:00:00Z",
+          body: "Checking the carrier now, Ada.",
+        },
+      ],
+    }],
+  });
+  const snap = await organ.ready();
+  assert.match(snap.html, /<strong>From Ada Demo<\/strong>/);
+  const agentHits = [...snap.html.matchAll(/<strong>From Demo Shop<\/strong>/g)];
+  assert.ok(agentHits.length >= 2, "staff From stays Demo Shop on outbound");
+  assert.match(snap.html, /Checking the carrier now, Ada/);
+  assert.doesNotMatch(snap.html, /From teddyjubu/i);
+});
+
 test("discarding the AI strip does not restore the draft", async () => {
   const organ = createInboxOrgan({ viewId: "mine" });
   let snap = await organ.ready();
@@ -365,9 +407,47 @@ test("Sam unjoined ticket with null GIDs says No customer on this ticket", async
   assert.match(snap.html, /No customer on this ticket/);
   assert.doesNotMatch(snap.html, /Customer unavailable/);
   assert.match(snap.html, /No order on this ticket/);
+  assert.match(snap.html, /<strong>From Sam<\/strong>/);
+  assert.doesNotMatch(snap.html, /From teddyjubu/i);
+  assert.match(snap.html, /ticket-name">Sam</);
   assert.equal(snap.rail.models.customer.ok, false);
   assert.equal(snap.rail.models.customer.record, null);
   assert.equal(snap.rail.currentOrderId, null);
+});
+
+test("inbound From falls back to ticket customerName when message name is the mailbox login", async () => {
+  const organ = createInboxOrgan({
+    viewId: "unassigned",
+    ticketId: "t-ada-mailbox-from",
+    tickets: [{
+      id: "t-ada-mailbox-from",
+      customerName: "Ada",
+      subject: "Tracking on order #1001 has not moved",
+      snippet: "Where is my order #1001?",
+      status: "open",
+      view: "unassigned",
+      assignee: null,
+      customerId: null,
+      orderId: null,
+      updatedAt: "2026-08-30T14:02:00Z",
+      fromEmail: "teddyjubu@agentmail.to",
+      messages: [{
+        id: "m-ada-mailbox",
+        from: "customer",
+        fromAgent: false,
+        name: "teddyjubu",
+        fromEmail: "teddyjubu@agentmail.to",
+        at: "2026-08-30T14:02:00Z",
+        body: "Where is my order #1001? The tracking has not updated.",
+      }],
+      statusEvents: [],
+    }],
+  });
+  const snap = await organ.ready();
+  assert.match(snap.html, /<strong>From Ada<\/strong>/);
+  assert.match(snap.html, /ticket-name">Ada</);
+  assert.doesNotMatch(snap.html, /From teddyjubu/i);
+  assert.doesNotMatch(snap.html, /teddyjubu@agentmail\.to/i);
 });
 
 test("Jordan ticket without an order does not blank the thread", async () => {

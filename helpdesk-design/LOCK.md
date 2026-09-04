@@ -13,6 +13,12 @@ Empty-copy voice is short and parallel:
 - No tracking
 - No customer on this ticket
 
+Thread inbound From is the customer persona (`From Ada Demo`), not the
+AgentMail/shop mailbox login. Mute the email when it helps; omit mailbox
+addresses (`helpdesk-support@`, `teddyjubu@agentmail.to`). Staff/outbound
+From stays the shop identity (`From Demo Shop`). Mute status events stay
+(`Closed · Tuesday`, `Escalated · …`).
+
 ## This order — fulfillment + partial ship
 
 The rail is a client of `helpdesk.get_order` (same `dispatch()` / `invoke()`

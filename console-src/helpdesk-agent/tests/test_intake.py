@@ -49,6 +49,10 @@ class IntakeTests(unittest.TestCase):
         ticket = dispatch("helpdesk.get_ticket", {"ticketId": payload["id"]})["ticket"]
         self.assertEqual(ticket["messages"][0]["body"], ADA_TRACKING["body"])
         self.assertEqual(ticket["messages"][0]["name"], "Ada")
+        self.assertEqual(ticket["messages"][0]["from"], "customer")
+        self.assertEqual(ticket["messages"][0]["fromName"], "Ada")
+        self.assertEqual(ticket["messages"][0]["fromEmail"], "ada.tracking@example.com")
+        self.assertNotEqual(ticket["messages"][0]["fromName"].lower(), "teddyjubu")
         self.assertNotIn("displayName", ticket["messages"][0])
         self.assertNotIn("customerId", ticket["messages"][0])
         self.assertNotIn("orderId", ticket["messages"][0])
@@ -98,6 +102,48 @@ class IntakeTests(unittest.TestCase):
         self.assertNotEqual(payload["customerName"], customer["displayName"])
         sample = dispatch("helpdesk.get_customer", {"shop": SAMPLE_SHOP, "customerId": ADA})["customer"]
         self.assertNotEqual(payload["customerName"], sample["displayName"])
+
+    def test_roleplay_from_uses_persona_not_mailbox_login(self) -> None:
+        payload = dispatch(
+            TOOL_INGEST_EMAIL,
+            {
+                "from": "Pat Rivera <teddyjubu@agentmail.to>",
+                "subject": "Thank you — gift arrived perfectly",
+                "body": "I'm Pat Rivera. The gift arrived perfectly.",
+                "receivedAt": "2026-09-04T04:51:09Z",
+            },
+        )
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["customerName"], "Pat Rivera")
+        self.assertNotEqual(payload["customerName"].lower(), "teddyjubu")
+        ticket = dispatch("helpdesk.get_ticket", {"ticketId": payload["id"]})["ticket"]
+        inbound = ticket["messages"][0]
+        self.assertEqual(inbound["from"], "customer")
+        self.assertEqual(inbound["fromName"], "Pat Rivera")
+        self.assertEqual(inbound["name"], "Pat Rivera")
+        self.assertEqual(inbound["fromEmail"], "teddyjubu@agentmail.to")
+        listed = dispatch("helpdesk.list_tickets", {"view": "open", "limit": 20})["tickets"]
+        row = next(item for item in listed if item["id"] == payload["id"])
+        self.assertEqual(row["customerName"], "Pat Rivera")
+
+    def test_mailbox_login_alone_is_not_the_visible_from(self) -> None:
+        payload = dispatch(
+            TOOL_INGEST_EMAIL,
+            {
+                "from": "teddyjubu <teddyjubu@agentmail.to>",
+                "subject": "Where is my order",
+                "body": "Any update on this order?",
+                "receivedAt": "2026-09-04T04:52:00Z",
+            },
+        )
+        self.assertTrue(payload["ok"])
+        ticket = dispatch("helpdesk.get_ticket", {"ticketId": payload["id"]})["ticket"]
+        self.assertEqual(ticket["customerName"], "Customer")
+        self.assertEqual(ticket["messages"][0]["fromName"], "Customer")
+        self.assertNotEqual(ticket["messages"][0]["fromName"].lower(), "teddyjubu")
+        listed = dispatch("helpdesk.list_tickets", {"view": "open", "limit": 20})["tickets"]
+        row = next(item for item in listed if item["id"] == payload["id"])
+        self.assertEqual(row["customerName"], "Customer")
 
     def test_join_uses_default_email_address_never_customer_email_field(self) -> None:
         for document in (CUSTOMER_QUERY, CUSTOMER_BY_EMAIL_QUERY, ORDER_BY_NAME_QUERY):
