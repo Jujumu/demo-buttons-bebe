@@ -82,6 +82,19 @@ test("selected list row CSS is a 4px ink bar with no wash", () => {
   assert.doesNotMatch(css, /#6B46C1|#7C3AED|#5B21B6/);
 });
 
+test("list rows show helpdesk status open closed snoozed", async () => {
+  const snap = await createInboxOrgan({ viewId: "all" }).ready();
+  assert.match(snap.html, /data-ticket="t-ada-track"[^>]*data-status="open"/);
+  assert.match(snap.html, /data-ticket="t-ada-closed"[^>]*data-status="closed"/);
+  assert.match(snap.html, /data-ticket="t-jordan-ship"[^>]*data-status="snoozed"/);
+  assert.match(snap.html, /class="ticket-status">Open</);
+  assert.match(snap.html, /class="ticket-status">Closed</);
+  assert.match(snap.html, /class="ticket-status">Snoozed</);
+  assert.doesNotMatch(snap.html, /class="ticket-status">OPEN</);
+  assert.doesNotMatch(snap.html, /class="ticket-status">CLOSED</);
+  assert.doesNotMatch(snap.html, /class="ticket-status">SNOOZED</);
+});
+
 test("inbox organ renders four panes and an ink selected bar", async () => {
   const organ = createInboxOrgan({ viewId: "mine" });
   const snap = await organ.ready();
@@ -305,6 +318,8 @@ test("switching tickets resets rail expand and does not leak Ada OPEN returns", 
   assert.equal(snap.rail.open.order, true);
   assert.equal(snap.rail.open.addresses, false);
   assert.match(snap.html, /<h2>Returns<\/h2>\s*<span class="peek">No returns<\/span>/);
+  assert.match(snap.html, /<h3>Shipment<\/h3>\s*<span class="peek">No tracking<\/span>/);
+  assert.equal(snap.rail.open.shipment, false);
 
   await organ.selectTicket("t-jordan-ship");
   snap = organ.snapshot();

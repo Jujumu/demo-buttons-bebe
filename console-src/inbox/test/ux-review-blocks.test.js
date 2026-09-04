@@ -63,6 +63,10 @@ test("UX Pro blocks fail Casey and Jordan default paints", async () => {
       assert.equal(toggleExpanded(snap.html, "addresses"), false);
     }
     assert.match(snap.html, /<h2>Returns<\/h2>\s*<span class="peek">No returns<\/span>/);
+    if (opts.ticketId === "t-casey-visor") {
+      assert.match(snap.html, /<h3>Shipment<\/h3>\s*<span class="peek">No tracking<\/span>/);
+      assert.equal(toggleExpanded(snap.html, "shipment"), false);
+    }
   }
 });
 
@@ -150,6 +154,8 @@ test("review-block detector flags the wall and a printed null SKU", () => {
     <button data-toggle="returns" aria-expanded="true"></button>
     <button data-toggle="addresses" aria-expanded="true"></button>
     <button data-toggle="order-history" aria-expanded="true"></button>
+    <button data-toggle="shipment" aria-expanded="true"></button>
+    <span class="peek">No tracking</span>
     <section data-tissue="returns"><span class="peek">No returns</span></section>
     <td class="mono" data-sku="null">null</td>
     <p class="mono line-sku" data-sku="—">—</p>
@@ -159,6 +165,7 @@ test("review-block detector flags the wall and a printed null SKU", () => {
   const hits = reviewBlockViolations(wall);
   assert.ok(hits.includes("fully-open rail wall"));
   assert.ok(hits.includes("empty returns open"));
+  assert.ok(hits.includes("empty shipment open"));
   assert.ok(hits.includes("past orders open by default"));
   assert.ok(hits.includes("literal null SKU"));
   assert.ok(hits.includes("em dash SKU"));

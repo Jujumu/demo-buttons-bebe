@@ -69,6 +69,13 @@ export function addressPeek(shipping, billing) {
   return "Same address";
 }
 
+/** Empty fulfillments / no trackingInfo. Parallel to "No billing" / "No returns". */
+export const TRACKING_MISSING_LABEL = "No tracking";
+
+export function shipmentPeek(order) {
+  return hasTracking(order) ? "" : TRACKING_MISSING_LABEL;
+}
+
 export function statusLabel(value) {
   if (!value) return "";
   const text = String(value).replace(/_/g, " ").toLowerCase();

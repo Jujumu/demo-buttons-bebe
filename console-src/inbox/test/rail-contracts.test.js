@@ -93,13 +93,29 @@ test("order fixture keeps null SKUs and missing billing", async () => {
   assert.equal(order.lineItems.nodes[0].price, undefined);
 });
 
-test("unfulfilled order has no shipment block and still null SKU", async () => {
+test("empty fulfillments with blank trackingInfo still peek No tracking", () => {
+  const model = projectOrder({
+    ...orders[IDS.ORDER_1002],
+    fulfillments: [{ trackingInfo: [{}] }, { trackingInfo: [] }],
+  });
+  assert.equal(model.hasTracking, false);
+  assert.equal(model.shipmentPeek, "No tracking");
+  const html = renderOrder(model, { shipmentOpen: true });
+  assert.match(html, /<p class="tissue-empty">No tracking<\/p>/);
+  assert.doesNotMatch(html, /undefined undefined|null null/);
+});
+
+test("unfulfilled order peeks No tracking and stays collapsed", async () => {
   const order = await shop.getOrder({ shop: SHOP, orderId: IDS.ORDER_1002 });
   const model = projectOrder(order);
   assert.equal(order.lineItems.nodes[0].sku, null);
   assert.equal(model.hasTracking, false);
+  assert.equal(model.shipmentPeek, "No tracking");
   const html = renderOrder(model);
-  assert.doesNotMatch(html, /Shipment/);
+  assert.match(html, /<h3>Shipment<\/h3>\s*<span class="peek">No tracking<\/span>/);
+  assert.match(html, /<p class="tissue-empty">No tracking<\/p>/);
+  assert.match(html, /data-toggle="shipment"[^>]*aria-expanded="false"/);
+  assert.doesNotMatch(html, /DEMO-1001|DEMO-1002|invented-track/i);
   assert.doesNotMatch(html, /data-sku=/);
   assert.equal(model.addressPeek, "No billing");
 });

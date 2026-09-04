@@ -81,7 +81,7 @@ export function createRailOrgan({ shop, mailbox }) {
       : renderOrder(models.order, {
         open: open.order,
         addressesOpen: open.addresses,
-        shipmentOpen: models.order.hasTracking ? open.shipment : false,
+        shipmentOpen: open.shipment,
       });
     const returnsHtml = models.returns.error
       ? renderError("returns", "Returns", models.returns.peek)

@@ -13,7 +13,7 @@ import { createInboxOrgan } from "../js/inbox.js";
 import { createFixtureShop } from "../js/shop/fixture-shop.js";
 import { createMailbox } from "../js/mailbox.js";
 import { createRailOrgan } from "../js/tissues/rail.js";
-import { projectOrder } from "../js/tissues/order.js";
+import { projectOrder, renderOrder } from "../js/tissues/order.js";
 import { projectReturns } from "../js/tissues/returns.js";
 import { projectOrderHistory } from "../js/tissues/order-history.js";
 
@@ -435,7 +435,15 @@ test("live-holes returns stay empty and never inherit Ada OPEN", async () => {
   const order = await shop.getOrder({ shop: LIVE_SHOP, orderId: LIVE_IDS.O_1001 });
   assert.equal(order.billingAddress, null);
   assert.equal(order.lineItems.nodes[0].sku, undefined);
-  assert.equal(projectOrder(order).addressPeek, "No billing");
+  const projected = projectOrder(order);
+  assert.equal(projected.addressPeek, "No billing");
+  assert.equal(projected.hasTracking, false);
+  assert.equal(projected.shipmentPeek, "No tracking");
+  assert.equal(order.fulfillments?.length || 0, 0);
+  const html = renderOrder(projected);
+  assert.match(html, /<h3>Shipment<\/h3>\s*<span class="peek">No tracking<\/span>/);
+  assert.match(html, /<p class="tissue-empty">No tracking<\/p>/);
+  assert.doesNotMatch(html, /AI-DEMO-|invented-track/i);
 });
 
 test("fixture fallback keeps Ada OPEN when helpdesk is down", async () => {

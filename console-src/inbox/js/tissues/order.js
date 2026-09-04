@@ -6,16 +6,30 @@ import {
   formatSku,
   formatWhen,
   hasTracking,
+  shipmentPeek,
   statusLabel,
+  TRACKING_MISSING_LABEL,
 } from "../util.js";
 
 /**
  * This-order rail tissue.
  * In: `{ shop, orderId }` via shop tissue.
  * Out: Clerk order DTO. Peek: name + Paid + Fulfilled.
+ * Empty fulfillments/tracking: shipment peek "No tracking". Do not invent tracking.
  */
 export function projectOrder(record) {
-  if (!record) return { ok: false, peek: "No order", record: null, skuLabels: [], addressPeek: "No address" };
+  if (!record) {
+    return {
+      ok: false,
+      peek: "No order",
+      record: null,
+      skuLabels: [],
+      addressPeek: "No address",
+      hasTracking: false,
+      tracking: null,
+      shipmentPeek: TRACKING_MISSING_LABEL,
+    };
+  }
   const nodes = record.lineItems?.nodes || [];
   return {
     ok: true,
@@ -26,8 +40,29 @@ export function projectOrder(record) {
     addressPeek: addressPeek(record.shippingAddress, record.billingAddress),
     hasTracking: hasTracking(record),
     tracking: firstTracking(record),
+    shipmentPeek: shipmentPeek(record),
     record,
   };
+}
+
+function renderShipment(model, shipOpen) {
+  const tracking = model.tracking;
+  if (model.hasTracking && tracking) {
+    return `<div class="rail-sub" data-open="${shipOpen ? "true" : "false"}">
+        <button type="button" class="rail-sub-toggle" data-toggle="shipment" aria-expanded="${shipOpen ? "true" : "false"}"><h3>Shipment</h3></button>
+        <div class="rail-sub-body"${shipOpen ? "" : " hidden"}>
+          <a class="track-link" href="${esc(tracking.url)}" rel="noreferrer">${esc(tracking.company)} ${esc(tracking.number)}</a>
+        </div>
+      </div>`;
+  }
+  return `<div class="rail-sub" data-open="${shipOpen ? "true" : "false"}">
+      <button type="button" class="rail-sub-toggle" data-toggle="shipment" aria-expanded="${shipOpen ? "true" : "false"}">
+        <h3>Shipment</h3> <span class="peek">${esc(model.shipmentPeek || TRACKING_MISSING_LABEL)}</span>
+      </button>
+      <div class="rail-sub-body"${shipOpen ? "" : " hidden"}>
+        <p class="tissue-empty">${esc(TRACKING_MISSING_LABEL)}</p>
+      </div>
+    </div>`;
 }
 
 function renderAddress(label, address) {
@@ -69,15 +104,7 @@ export function renderOrder(model, { open = true, addressesOpen = false, shipmen
       </div>
     </li>`;
   }).join("");
-  const tracking = model.tracking;
-  const shipment = model.hasTracking && tracking
-    ? `<div class="rail-sub" data-open="${shipOpen ? "true" : "false"}">
-        <button type="button" class="rail-sub-toggle" data-toggle="shipment" aria-expanded="${shipOpen ? "true" : "false"}"><h3>Shipment</h3></button>
-        <div class="rail-sub-body"${shipOpen ? "" : " hidden"}>
-          <a class="track-link" href="${esc(tracking.url)}" rel="noreferrer">${esc(tracking.company)} ${esc(tracking.number)}</a>
-        </div>
-      </div>`
-    : "";
+  const shipment = renderShipment(model, shipOpen);
   return `<section class="rail-card" data-tissue="order" data-open="${open ? "true" : "false"}">
     <button type="button" class="rail-toggle" data-toggle="order" aria-expanded="${open ? "true" : "false"}">
       <h2>This order</h2>
