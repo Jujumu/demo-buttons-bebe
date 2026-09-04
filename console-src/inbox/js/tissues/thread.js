@@ -6,8 +6,8 @@ import { esc, formatWeekday, formatWhen, initials, screenStatus } from "../util.
  * Thread tissue.
  * In: `{ ticket }` from helpdesk.get_ticket
  * Out: summarize on `composer/summarize`; escalate on `thread/escalate`.
- * Status-change events are muted as `Closed · Tuesday`. Escalate is secondary.
- * No Send.
+ * Status-change events are muted as `Closed · Tuesday`. Escalate writes
+ * `Escalated · Tuesday` the same way. No Escalated badge. No Send.
  */
 export function createThreadTissue({ mailbox }) {
   let model = { ticket: null };
@@ -45,15 +45,27 @@ export function createThreadTissue({ mailbox }) {
     </article>`;
   }
 
+  function isEscalateEvent(event) {
+    return /^escalated\b/i.test(event?.note || "") || String(event?.status || "").toLowerCase() === "escalated";
+  }
+
   function renderStatus(event) {
-    return `<p class="status-line">${esc(screenStatus(event.status))} · ${esc(formatWeekday(event.at))}</p>`;
+    const escalated = isEscalateEvent(event);
+    const word = escalated ? "Escalated" : screenStatus(event.status);
+    const mark = escalated ? " data-escalated" : "";
+    return `<p class="status-line"${mark}>${esc(word)} · ${esc(formatWeekday(event.at))}</p>`;
   }
 
   function timeline(ticket) {
+    const events = clerkStatusEvents(ticket);
     const items = [
       ...talkMessages(ticket).map((message) => ({ at: message.at, html: renderMessage(message) })),
-      ...clerkStatusEvents(ticket).map((event) => ({ at: event.at, html: renderStatus(event) })),
+      ...events.map((event) => ({ at: event.at, html: renderStatus(event) })),
     ];
+    if (ticket.escalated && !events.some(isEscalateEvent)) {
+      const at = ticket.updatedAt || ticket.statusEvents?.at?.(-1)?.at || "";
+      items.push({ at, html: renderStatus({ at, status: ticket.status, note: "escalated" }) });
+    }
     items.sort((a, b) => String(a.at || "").localeCompare(String(b.at || "")));
     return items.map((item) => item.html).join("");
   }
@@ -65,9 +77,8 @@ export function createThreadTissue({ mailbox }) {
     }
     const count = talkMessages(ticket).length;
     const summarizeLabel = count === 1 ? "Summarize 1 message" : `Summarize ${count} messages`;
-    const escalated = Boolean(ticket.escalated);
-    const escalateControl = escalated
-      ? `<span class="status-badge" data-escalated>Escalated</span>`
+    const escalateControl = ticket.escalated
+      ? ""
       : `<button type="button" class="btn-quiet" data-escalate="${esc(ticket.id)}">Escalate</button>`;
     return `<div class="pane-inner thread-inner">
       <header class="thread-head">
