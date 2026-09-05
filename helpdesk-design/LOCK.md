@@ -118,9 +118,25 @@ Intake keywords (fixture-ok): privacy / GDPR / delete my data /
 data request. Do not call Customer privacy / GDPR / data-request
 Admin mutations. Do not query invented privacy fields.
 
-## Bug report (draft)
+## Bug report
 
-First-party `requestType: bug`. Draft strip acknowledges the report
-and asks for the repro device (`iOS` / `Android`). Never invent
-order, catalog, or destination copy. Human Send only. List / rail
-chrome for Bug stays on the bug-severity slice.
+First-party ticket `requestType`. Same mute voice as Unsubscribe /
+Privacy. Not a Shopify product or catalog write. Severity and device
+are helpdesk fields only.
+
+1. List mutes chip `Bug` when `requestType` is `bug`, plus the
+   severity word (`Low` / `Medium` / `High` / `Critical`). Same mute
+   status voice as Open / Closed / Snoozed. Not purple. Not
+   color-alone.
+2. Thread header mutes `Bug report` under the subject, then optional
+   `High · iOS` (severity word · device).
+3. Rail peeks the same title plus severity / device. Copy
+   `No Shopify write`. No product mutation control.
+4. Draft strip acknowledges the report and asks for the repro device
+   (`iOS` / `Android`). Never invent order, catalog, or destination
+   copy. Human Send only.
+
+Intake keywords (fixture-ok): bug / crash; broken when paired with
+iOS / Android / device / app. Device peek is `iOS` or `Android`.
+Do not call product create / update mutations. Do not invent
+Shopify product fields.

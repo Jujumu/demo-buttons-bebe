@@ -1,6 +1,6 @@
 import { MAILBOX_TOPICS } from "../contracts.js";
 import { listCustomerName } from "../shop/clerk-ticket.js";
-import { esc, formatWhen, requestTypeLabel, screenStatus } from "../util.js";
+import { esc, formatWhen, requestTypeLabel, screenStatus, severityLabel } from "../util.js";
 
 /**
  * List tissue. Client of helpdesk.list_tickets.
@@ -25,18 +25,26 @@ export function createListTissue({ mailbox }) {
     const status = ticket.status || "";
     const statusWord = screenStatus(status);
     const typeWord = requestTypeLabel(ticket.requestType);
+    const severityWord = severityLabel(ticket.severity);
     const statusHtml = statusWord
       ? `<span class="ticket-status">${esc(statusWord)}</span>`
       : "";
     const typeHtml = typeWord
       ? `<span class="ticket-status ticket-request" data-request-type="${esc(ticket.requestType)}">${esc(typeWord)}</span>`
       : "";
-    return `<button type="button" class="ticket-row${on ? " is-selected" : ""}" data-ticket="${esc(ticket.id)}" data-status="${esc(status)}"${typeWord ? ` data-request-type="${esc(ticket.requestType)}"` : ""} aria-current="${on ? "true" : "false"}">
+    const severityHtml = severityWord
+      ? `<span class="ticket-status ticket-severity" data-severity="${esc(ticket.severity)}">${esc(severityWord)}</span>`
+      : "";
+    const typeAttr = typeWord ? ` data-request-type="${esc(ticket.requestType)}"` : "";
+    const severityAttr = severityWord ? ` data-severity="${esc(ticket.severity)}"` : "";
+    const deviceAttr = ticket.device ? ` data-device="${esc(ticket.device)}"` : "";
+    return `<button type="button" class="ticket-row${on ? " is-selected" : ""}" data-ticket="${esc(ticket.id)}" data-status="${esc(status)}"${typeAttr}${severityAttr}${deviceAttr} aria-current="${on ? "true" : "false"}">
       <span class="ticket-bar" aria-hidden="true"></span>
       <span class="ticket-top">
         <span class="ticket-name">${esc(listCustomerName(ticket))}</span>
         <span class="ticket-meta">
           ${typeHtml}
+          ${severityHtml}
           ${statusHtml}
           <time class="ticket-time" datetime="${esc(ticket.updatedAt || "")}" title="${esc(formatWhen(ticket.updatedAt))}">${esc(formatWhen(ticket.updatedAt, { relative: true }))}</time>
         </span>

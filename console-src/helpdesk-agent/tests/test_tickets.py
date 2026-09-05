@@ -240,6 +240,55 @@ class TicketContractTests(unittest.TestCase):
         self.assertNotIn("helpdesk.privacy_request", WRITE_TOOLS)
         self.assertNotIn("helpdesk.mark_privacy_handled", WRITE_TOOLS)
 
+    def test_bug_fixture_surfaces_severity_and_device(self) -> None:
+        rows = dispatch("helpdesk.list_tickets", {"view": "open", "limit": 20})["tickets"]
+        remy = next(row for row in rows if row["id"] == "t-remy-bug")
+        self.assertEqual(remy["requestType"], "bug")
+        self.assertEqual(remy["severity"], "high")
+        self.assertEqual(remy["device"], "iOS")
+        self.assertEqual(remy["customerName"], "Remy Cole")
+        self.assertEqual(remy["status"], "open")
+        lee = next(row for row in rows if row["id"] == "t-lee-privacy")
+        self.assertEqual(lee["requestType"], "privacy_request")
+        self.assertIsNone(lee["severity"])
+        self.assertIsNone(lee["device"])
+        priya = next(row for row in rows if row["id"] == "t-priya-unsub")
+        self.assertEqual(priya["requestType"], "marketing_unsubscribe")
+        self.assertIsNone(priya["severity"])
+        self.assertIsNone(priya["device"])
+        ada = next(row for row in rows if row["id"] == "t-ada-track")
+        self.assertIsNone(ada["requestType"])
+        self.assertIsNone(ada["severity"])
+        self.assertIsNone(ada["device"])
+        casey = next(row for row in rows if row["id"] == "t-casey-visor")
+        self.assertIsNone(casey["requestType"])
+        self.assertIsNone(casey["severity"])
+        self.assertIsNone(casey["device"])
+        ticket = dispatch("helpdesk.get_ticket", {"ticketId": "t-remy-bug"})["ticket"]
+        self.assertEqual(ticket["requestType"], "bug")
+        self.assertEqual(ticket["severity"], "high")
+        self.assertEqual(ticket["device"], "iOS")
+        self.assertEqual(ticket["status"], "open")
+        self.assertFalse(ticket.get("escalated"))
+        from helpdesk.queries import CUSTOMER_QUERY, ORDER_QUERY
+        from unittest.mock import patch
+
+        blob = CUSTOMER_QUERY + ORDER_QUERY
+        self.assertNotIn("productUpdate", blob)
+        self.assertNotIn("productCreate", blob)
+        self.assertNotIn("severity", blob)
+        self.assertNotIn("device", blob)
+        with patch("helpdesk.client.graphql") as gql:
+            again = dispatch("helpdesk.get_ticket", {"ticketId": "t-remy-bug"})
+            gql.assert_not_called()
+        self.assertEqual(again["ticket"]["severity"], "high")
+        self.assertEqual(WRITE_TOOLS, frozenset({"helpdesk.send", "helpdesk.refund", "helpdesk.cancel"}))
+        self.assertNotIn("helpdesk.mark_request_type", WRITE_TOOLS)
+        self.assertNotIn("helpdesk.bug_report", WRITE_TOOLS)
+        for tool in ("helpdesk.refund", "helpdesk.cancel"):
+            payload = invoke(tool, {"ticketId": "t-remy-bug"})
+            self.assertEqual(payload["error"], "forbidden")
+
     def test_write_gate_status_reports_refused_money_writes(self) -> None:
         os.environ["SHOPIFY_MUTATIONS_ENABLED"] = "0"
         payload = dispatch("helpdesk.write_gate_status", {})

@@ -50,6 +50,13 @@ LEE_PRIVACY = {
     "receivedAt": "2026-08-30T14:20:00Z",
 }
 
+REMY_BUG = {
+    "from": "Remy Cole <remy.bug@example.com>",
+    "subject": "App crash on iOS — checkout bug",
+    "body": "The shop app crashes on iOS when I open checkout. I can keep using Android.",
+    "receivedAt": "2026-08-30T14:24:00Z",
+}
+
 PRIZE_SPAM = {
     "from": "Prize Desk <winner@prize-farm.example>",
     "subject": "You won a $10,000 prize!",

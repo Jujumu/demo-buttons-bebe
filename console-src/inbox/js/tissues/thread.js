@@ -1,6 +1,6 @@
 import { MAILBOX_TOPICS } from "../contracts.js";
 import { clerkStatusEvents, listCustomerName, messageSpeaker, talkMessages } from "../shop/clerk-ticket.js";
-import { esc, formatWeekday, formatWhen, initials, requestTypeTitle, screenStatus } from "../util.js";
+import { bugMetaPeek, esc, formatWeekday, formatWhen, initials, requestTypeTitle, screenStatus } from "../util.js";
 
 /**
  * Thread tissue.
@@ -89,12 +89,17 @@ export function createThreadTissue({ mailbox }) {
     const typeLine = typeTitle
       ? `<p class="thread-request mute" data-request-type="${esc(ticket.requestType)}">${esc(typeTitle)}</p>`
       : "";
+    const bugMeta = bugMetaPeek(ticket.severity, ticket.device);
+    const bugLine = bugMeta
+      ? `<p class="thread-request mute" data-severity="${esc(ticket.severity || "")}"${ticket.device ? ` data-device="${esc(ticket.device)}"` : ""}>${esc(bugMeta)}</p>`
+      : "";
     return `<div class="pane-inner thread-inner">
       <header class="thread-head">
         <div>
           <h2>${esc(listCustomerName(ticket))}</h2>
           <p class="thread-subject">${esc(ticket.subject)}</p>
           ${typeLine}
+          ${bugLine}
         </div>
         <div class="thread-head-actions">
           <span class="status-badge">${esc(screenStatus(ticket.status))}</span>

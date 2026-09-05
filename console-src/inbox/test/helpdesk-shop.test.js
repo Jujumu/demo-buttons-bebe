@@ -153,8 +153,15 @@ test("list_tickets rows include customerId and orderId GIDs", async () => {
   assert.ok(lee);
   assert.equal(lee.requestType, "privacy_request");
   assert.equal(lee.status, "open");
+  const remy = listed.tickets.find((row) => row.id === "t-remy-bug");
+  assert.ok(remy);
+  assert.equal(remy.requestType, "bug");
+  assert.equal(remy.severity, "high");
+  assert.equal(remy.device, "iOS");
   const casey = listed.tickets.find((row) => row.id === "t-casey-visor");
   assert.equal(casey.requestType, null);
+  assert.equal(casey.severity, null);
+  assert.equal(casey.device, null);
 });
 
 test("get_ticket returns messages and statusEvents", async () => {

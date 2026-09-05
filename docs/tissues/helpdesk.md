@@ -19,8 +19,8 @@ state (escalated/pending). It is not a Shopify mutation.
 
 | Tool | Tissue | CLI | In | Out |
 |---|---|---|---|---|
-| `helpdesk.list_tickets` | list | `helpdesk list-tickets` | `{ view, limit }` | ticket rows (`id`, `customerName`, `subject`, `snippet`, `status`, `updatedAt`, `customerId`, `orderId`, `requestType`) |
-| `helpdesk.get_ticket` | thread | `helpdesk get-ticket` | `{ ticketId }` | ticket + `messages` + `statusEvents` + `requestType`. Each message carries `from` (`customer`/`agent`), `fromName`, and optional `fromEmail`. Inbound From is the customer persona, never the mailbox login. |
+| `helpdesk.list_tickets` | list | `helpdesk list-tickets` | `{ view, limit }` | ticket rows (`id`, `customerName`, `subject`, `snippet`, `status`, `updatedAt`, `customerId`, `orderId`, `requestType`, `severity`, `device`) |
+| `helpdesk.get_ticket` | thread | `helpdesk get-ticket` | `{ ticketId }` | ticket + `messages` + `statusEvents` + `requestType` + `severity` + `device`. Each message carries `from` (`customer`/`agent`), `fromName`, and optional `fromEmail`. Inbound From is the customer persona, never the mailbox login. |
 | `helpdesk.get_customer` | customer | `helpdesk get-customer` | `{ shop, customerId }` GID | `ClerkCustomer` |
 | `helpdesk.get_order` | order | `helpdesk get-order` | `{ shop, orderId }` GID | `ClerkOrder` |
 | `helpdesk.get_returns` | returns | `helpdesk get-returns` | `{ shop, orderId }` GID | returns payload |
@@ -71,14 +71,17 @@ rail can load when a row is selected. Ticket status is first-party
 `Order.displayFulfillmentStatus`. `customerName` is first-party — never
 `Customer.displayName`. Ticket tissues keep `{ view, limit }` / `{ ticketId }`.
 `requestType` is first-party (`marketing_unsubscribe` /
-`privacy_request` or `null`). It is not a Shopify consent or Customer
-Privacy field. Intake subjects that contain `unsubscribe` (and are not
-unsubscribe-farm spam) set marketing unsubscribe. Subjects or bodies
-that match privacy / GDPR / delete my data / data request set privacy
-request and may set subtype Access / Delete / Export. Human handles
-both out of band. `privacyHandled` is a first-party ticket flag only.
-Do not call marketing unsubscribe or Customer privacy / GDPR /
-data-request Admin mutations.
+`privacy_request` / `bug` or `null`). It is not a Shopify consent,
+Customer Privacy, or product field. Intake subjects that contain
+`unsubscribe` (and are not unsubscribe-farm spam) set marketing
+unsubscribe. Subjects or bodies that match privacy / GDPR / delete my
+data / data request set privacy request and may set subtype Access /
+Delete / Export. Subjects or bodies that match bug / crash (or broken
+paired with iOS / Android / device / app) set `bug` and may set
+`severity` and `device`. Human handles all three out of band.
+`privacyHandled` is a first-party ticket flag only. Do not call
+marketing unsubscribe, Customer privacy / GDPR / data-request, or
+product create / update Admin mutations.
 Composer `--ticket` is the ticket id (sample `1001` aliases `t-ada-track`).
 
 Drafts are merchant replies the human Inserts or Discards. Summaries are a

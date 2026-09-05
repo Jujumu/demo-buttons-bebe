@@ -1,7 +1,9 @@
 import { MAILBOX_TOPICS } from "../contracts.js";
 import {
+  bugMetaPeek,
   esc,
   formatOrderCount,
+  isBugRequest,
   isPrivacyRequest,
   PRIVACY_HANDLED_LABEL,
   PRIVACY_LOCK_COPY,
@@ -58,6 +60,8 @@ export function createRailOrgan({ shop, mailbox }) {
     requestType: "",
     privacySubtype: "",
     privacyHandled: false,
+    severity: "",
+    device: "",
   };
 
   function ticketKey({ ticketId, customerId, orderId }) {
@@ -104,9 +108,12 @@ export function createRailOrgan({ shop, mailbox }) {
     const title = requestTypeTitle(typed);
     if (!title) return "";
     const subtype = privacySubtypeLabel(lastLoad.privacySubtype);
+    const bugPeek = bugMetaPeek(lastLoad.severity, lastLoad.device);
     const peek = isPrivacyRequest(typed)
       ? (subtype || "No Shopify write")
-      : "No Shopify write";
+      : isBugRequest(typed)
+        ? (bugPeek || "No Shopify write")
+        : "No Shopify write";
     const line = isPrivacyRequest(typed)
       ? PRIVACY_LOCK_COPY
       : requestTypeWritePeek(typed);
@@ -183,7 +190,7 @@ export function createRailOrgan({ shop, mailbox }) {
     }));
   }
 
-  async function load({ shop: shopId, customerId, orderId, ticketId, requestType, privacySubtype, privacyHandled }) {
+  async function load({ shop: shopId, customerId, orderId, ticketId, requestType, privacySubtype, privacyHandled, severity, device }) {
     lastLoad = {
       shop: shopId,
       customerId,
@@ -192,6 +199,8 @@ export function createRailOrgan({ shop, mailbox }) {
       requestType: requestType || "",
       privacySubtype: privacySubtype || "",
       privacyHandled: Boolean(privacyHandled),
+      severity: severity || "",
+      device: device || "",
     };
     const nextKey = ticketKey({ ticketId, customerId, orderId });
     const switched = nextKey !== currentTicketKey;
