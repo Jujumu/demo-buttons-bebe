@@ -239,3 +239,11 @@ test("review-block detector flags the wall and a printed null SKU", () => {
   assert.ok(hits.includes("Gorgias purple"));
   assert.ok(hits.includes("customer Edit"));
 });
+
+test("UX Pro blocks absolute clock time in the list", async () => {
+  const snap = await createInboxOrgan({ viewId: "mine" }).ready();
+  assert.deepEqual(reviewBlockViolations(snap.html), []);
+  assert.doesNotMatch(snap.html, /data-pane="list"[\s\S]*?<time class="ticket-time"[^>]*>[^<]*,\s*\d{1,2}:\d{2}</);
+  const hits = reviewBlockViolations(`<aside data-pane="list"><time class="ticket-time">28 Aug, 15:10</time></aside>`);
+  assert.ok(hits.includes("absolute list time"));
+});

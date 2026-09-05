@@ -28,10 +28,34 @@ export function formatOrderCount(n) {
   return `${count} ${count === 1 ? "order" : "orders"}`;
 }
 
-export function formatWhen(iso) {
-  if (!iso) return "";
+function parseWhen(iso) {
+  if (!iso) return null;
   const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "";
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function startOfLocalDay(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+}
+
+function sameLocalDay(a, b) {
+  return startOfLocalDay(a) === startOfLocalDay(b);
+}
+
+function localYesterday(then, now) {
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  return sameLocalDay(then, yesterday);
+}
+
+function resolveNow(now) {
+  if (now instanceof Date) return now.getTime();
+  if (now == null) return Date.now();
+  const ms = Number(now);
+  return Number.isFinite(ms) ? ms : Date.now();
+}
+
+function absoluteWhen(date) {
   return date.toLocaleString("en-GB", {
     day: "numeric",
     month: "short",
@@ -40,11 +64,38 @@ export function formatWhen(iso) {
   });
 }
 
+function relativeWhen(date, nowInput) {
+  const nowMs = resolveNow(nowInput);
+  const delta = nowMs - date.getTime();
+  if (delta < 0) return absoluteWhen(date);
+
+  const sec = Math.floor(delta / 1000);
+  if (sec < 45) return "now";
+  if (sec < 3600) return `${Math.max(1, Math.floor(sec / 60))}m`;
+
+  const now = new Date(nowMs);
+  if (sameLocalDay(date, now)) {
+    return `${Math.max(1, Math.floor(sec / 3600))}h`;
+  }
+  if (localYesterday(date, now)) return "Yesterday";
+
+  const days = Math.floor(delta / 86400000);
+  if (days < 30) return `${Math.max(1, days)}d`;
+  return date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
+/** One formatter. Absolute by default; `{ relative: true }` for the list. */
+export function formatWhen(iso, options) {
+  const date = parseWhen(iso);
+  if (!date) return "";
+  if (options?.relative) return relativeWhen(date, options.now);
+  return absoluteWhen(date);
+}
+
 /** Status-event mute line: `Closed · Tuesday`. */
 export function formatWeekday(iso) {
-  if (!iso) return "";
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "";
+  const date = parseWhen(iso);
+  if (!date) return "";
   return date.toLocaleDateString("en-GB", { weekday: "long", timeZone: "UTC" });
 }
 
