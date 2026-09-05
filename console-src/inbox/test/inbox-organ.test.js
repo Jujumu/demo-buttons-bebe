@@ -706,9 +706,91 @@ test("Summarize fills a mute peek and does not enable Send", async () => {
   assert.match(snap.html, /Summarize 2 messages/);
 });
 
+test("macros stay collapsed by default", async () => {
+  const organ = createInboxOrgan({ viewId: "mine" });
+  const snap = await organ.ready();
+  assert.equal(snap.searchOpen, false);
+  assert.match(snap.html, /data-macro-open="false"/);
+  assert.match(snap.html, /data-macros/);
+  assert.match(snap.html, />Macros</);
+  assert.match(snap.html, /data-draft-strip/);
+  assert.match(snap.html, /data-body/);
+  assert.match(snap.html, /\bdata-send\b/);
+  assert.doesNotMatch(snap.html, /data-macro-search/);
+  assert.doesNotMatch(snap.html, /data-macro-list/);
+  assert.doesNotMatch(snap.html, /data-macro-insert/);
+  assert.doesNotMatch(snap.html, /data-macro-append/);
+  assert.doesNotMatch(snap.html, />Replace</);
+  const boxStart = snap.html.indexOf("composer-box");
+  const boxEnd = snap.html.indexOf("composer-actions");
+  const box = snap.html.slice(boxStart, boxEnd);
+  assert.match(box, /data-body/);
+  assert.doesNotMatch(box, /data-macro-search|data-macro-list|Shipping delay/);
+  assert.equal(snap.sendDisabled, true);
+  assert.equal(snap.sent.length, 0);
+});
+
+test("macros open on focus or Macros control", () => {
+  const mailbox = createMailbox();
+  const events = [];
+  mailbox.subscribe(MAILBOX_TOPICS.COMPOSER_MACROS, (payload) => events.push(["macros", payload]));
+  mailbox.subscribe(MAILBOX_TOPICS.COMPOSER_SEND, (payload) => events.push(["send", payload]));
+  const composer = createComposerTissue({ mailbox });
+  const ticket = fixtureTickets[0];
+  composer.update({
+    ticket,
+    macros: [
+      { id: "shipping-delay", title: "Shipping delay", tags: ["shipping"], body: "Hi — delay body." },
+    ],
+  });
+  const el = { innerHTML: "", querySelector() { return null; } };
+  composer.mount(el);
+  assert.match(el.innerHTML, /data-macro-open="false"/);
+  assert.doesNotMatch(el.innerHTML, /data-macro-search/);
+
+  el.onfocusin({ target: { matches: (sel) => sel === "[data-macros]" } });
+  assert.match(el.innerHTML, /data-macro-open="true"/);
+  assert.match(el.innerHTML, /data-macro-search/);
+  assert.match(el.innerHTML, /data-macro-list/);
+  assert.match(el.innerHTML, /data-macro-insert/);
+  assert.match(el.innerHTML, />Replace</);
+  assert.deepEqual(events, [["macros", { open: true }]]);
+
+  composer.update({ searchOpen: false, selectedMacroId: "" });
+  composer.mount(el);
+  events.length = 0;
+  let slashHeld = false;
+  el.onkeydown({
+    key: "/",
+    target: { matches: (sel) => sel === "[data-body]" },
+    preventDefault() { slashHeld = true; },
+  });
+  assert.equal(slashHeld, true);
+  assert.match(el.innerHTML, /data-macro-search/);
+  assert.deepEqual(events, [["macros", { open: true }]]);
+
+  composer.update({ searchOpen: false, selectedMacroId: "" });
+  composer.mount(el);
+  events.length = 0;
+  el.onclick({
+    target: {
+      matches: () => false,
+      closest: (sel) => (sel === "[data-macros]" ? {} : null),
+    },
+  });
+  assert.match(el.innerHTML, /data-macro-search/);
+  assert.match(el.innerHTML, /Shipping delay/);
+  assert.deepEqual(events, [["macros", { open: true }]]);
+  assert.ok(events.every((row) => row[0] !== "send"));
+});
+
 test("macro search lives in the composer box and Insert fills the textarea", async () => {
   const organ = createInboxOrgan({ viewId: "mine" });
   let snap = await organ.ready();
+  assert.equal(snap.searchOpen, false);
+  assert.doesNotMatch(snap.html, /data-macro-search/);
+  snap = organ.openMacros();
+  assert.equal(snap.searchOpen, true);
   assert.match(snap.html, /data-macro-search/);
   assert.match(snap.html, /data-macro-list/);
   assert.match(snap.html, /data-macro-insert/);

@@ -181,6 +181,7 @@
  * `composer/body`        { text }
  * `composer/insert`      { text }
  * `composer/discard`
+ * `composer/macros`      { open } — picker only; never Send
  * `composer/send`        { text, close: boolean }
  * `composer/summarize`   { ticketId }
  * `thread/escalate`      { ticketId, reason? } — first-party; never Send
@@ -203,6 +204,7 @@ export const MAILBOX_TOPICS = Object.freeze({
   COMPOSER_BODY: "composer/body",
   COMPOSER_INSERT: "composer/insert",
   COMPOSER_DISCARD: "composer/discard",
+  COMPOSER_MACROS: "composer/macros",
   COMPOSER_SEND: "composer/send",
   COMPOSER_SUMMARIZE: "composer/summarize",
   THREAD_ESCALATE: "thread/escalate",

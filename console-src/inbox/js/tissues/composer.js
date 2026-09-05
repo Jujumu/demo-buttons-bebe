@@ -21,8 +21,10 @@ export function composeMacroText(macro, currentBody = "", mode = "replace") {
  * Composer tissue.
  * In: `{ ticket, draft, summarize, macros, body }`
  * Out: body / insert / discard / send. AI strip and macros never Send.
- * Macro search lives inside the composer box. Replace overwrites; Append adds.
- * Draft-strip Insert stays named Insert. The strip sits above the composer box.
+ * Default paint is Draft strip + textarea + Send. Macro search stays collapsed
+ * until focus, `/`, or the Macros hairline. Once open, search lives inside the
+ * composer box. Replace overwrites; Append adds. Draft-strip Insert stays named
+ * Insert. The strip sits above the composer box.
  */
 export function createComposerTissue({ mailbox }) {
   let model = {
@@ -34,7 +36,7 @@ export function createComposerTissue({ mailbox }) {
     strip: "",
     query: "",
     selectedMacroId: "",
-    searchOpen: true,
+    searchOpen: false,
     writeGate: null,
   };
 
@@ -48,7 +50,7 @@ export function createComposerTissue({ mailbox }) {
       strip: input.strip ?? input.draft ?? "",
       query: input.query || "",
       selectedMacroId: input.selectedMacroId || "",
-      searchOpen: input.searchOpen ?? true,
+      searchOpen: input.searchOpen === true,
       writeGate: input.writeGate || null,
     };
   }
@@ -120,9 +122,10 @@ export function createComposerTissue({ mailbox }) {
       ? ""
       : `<button type="button" class="btn-hairline${idle ? " is-disabled" : ""}" data-send-close ${idle ? "disabled" : ""}>Send &amp; close</button>`;
     const macroLocked = selected ? "" : "disabled";
-    const searchOpen = next.searchOpen !== false;
+    const searchOpen = next.searchOpen === true;
     const picker = searchOpen
-      ? `<div class="macro-list" data-macro-list>${macroItems || `<p class="macro-empty">No macros match.</p>`}</div>
+      ? `<input class="macro-search" data-macro-search type="search" placeholder="Search macros by name or tags" value="${esc(next.query)}" aria-label="Search macros">
+        <div class="macro-list" data-macro-list>${macroItems || `<p class="macro-empty">No macros match.</p>`}</div>
         <div class="macro-actions">
           <button type="button" class="btn-quiet" data-macro-insert ${macroLocked}>Replace</button>
           <button type="button" class="btn-quiet" data-macro-append ${macroLocked}>Append</button>
@@ -134,13 +137,15 @@ export function createComposerTissue({ mailbox }) {
       ${writeGate}
       ${strip}
       <div class="composer-box" data-macro-open="${searchOpen ? "true" : "false"}">
-        <input class="macro-search" data-macro-search type="search" placeholder="Search macros by name or tags" value="${esc(next.query)}" aria-label="Search macros">
         ${picker}
         <textarea data-body placeholder="Write the reply. The human always sends.">${esc(next.body)}</textarea>
       </div>
       <div class="composer-actions">
-        <button type="button" class="btn-ink btn-send${idle ? " is-disabled" : ""}" data-send ${idle ? "disabled" : ""}>Send</button>
-        ${sendClose}
+        <button type="button" class="btn-hairline" data-macros aria-expanded="${searchOpen ? "true" : "false"}">Macros</button>
+        <div class="composer-send">
+          <button type="button" class="btn-ink btn-send${idle ? " is-disabled" : ""}" data-send ${idle ? "disabled" : ""}>Send</button>
+          ${sendClose}
+        </div>
       </div>
     </section>`;
   }
@@ -148,6 +153,19 @@ export function createComposerTissue({ mailbox }) {
   function emitBody(text) {
     model = { ...model, body: text };
     mailbox.publish(MAILBOX_TOPICS.COMPOSER_BODY, { text });
+  }
+
+  function setSearchOpen(open) {
+    const next = Boolean(open);
+    if (model.searchOpen === next) return false;
+    model = {
+      ...model,
+      searchOpen: next,
+      query: next ? model.query : "",
+      selectedMacroId: next ? model.selectedMacroId : "",
+    };
+    mailbox.publish(MAILBOX_TOPICS.COMPOSER_MACROS, { open: next });
+    return true;
   }
 
   function applySelected(mode) {
@@ -162,11 +180,19 @@ export function createComposerTissue({ mailbox }) {
       query: "",
       selectedMacroId: "",
     };
+    mailbox.publish(MAILBOX_TOPICS.COMPOSER_MACROS, { open: false });
     mailbox.publish(MAILBOX_TOPICS.COMPOSER_INSERT, { text, mode, macroId: macro.id });
+  }
+
+  function focusSearch(el) {
+    const again = el.querySelector?.("[data-macro-search]");
+    if (again?.focus) again.focus();
+    return again;
   }
 
   function mount(el) {
     el.innerHTML = render(model);
+    let macrosPointer = false;
     el.oninput = (event) => {
       if (event.target.matches("[data-body]")) emitBody(event.target.value);
       if (event.target.matches("[data-macro-search]")) {
@@ -181,12 +207,31 @@ export function createComposerTissue({ mailbox }) {
         }
       }
     };
-    el.onclick = (event) => {
-      if (event.target.matches?.("[data-macro-search]") && model.searchOpen === false) {
-        model = { ...model, searchOpen: true };
+    el.onpointerdown = (event) => {
+      macrosPointer = Boolean(event.target.closest?.("[data-macros]"));
+    };
+    el.onfocusin = (event) => {
+      if (macrosPointer) return;
+      if (event.target.matches?.("[data-macros]") && setSearchOpen(true)) {
         el.innerHTML = render(model);
-        const again = el.querySelector("[data-macro-search]");
-        if (again) again.focus();
+        focusSearch(el);
+      }
+    };
+    el.onkeydown = (event) => {
+      if (event.target.matches?.("[data-body]") && event.key === "/" && !model.searchOpen) {
+        event.preventDefault?.();
+        setSearchOpen(true);
+        el.innerHTML = render(model);
+        focusSearch(el);
+      }
+    };
+    el.onclick = (event) => {
+      if (event.target.closest?.("[data-macros]")) {
+        macrosPointer = false;
+        if (setSearchOpen(true)) {
+          el.innerHTML = render(model);
+          focusSearch(el);
+        }
         return;
       }
       const row = event.target.closest("[data-macro]");
