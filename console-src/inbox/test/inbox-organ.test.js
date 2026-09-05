@@ -352,11 +352,40 @@ test("thread header shows Escalate as a secondary control", async () => {
 test("composer shows write-gate copy without Refund or Cancel controls", async () => {
   const organ = createInboxOrgan({ viewId: "mine" });
   const snap = await organ.ready();
+  assert.ok(fixtureTickets[0].orderId, "Ada fixture is joined to an order");
   assert.match(snap.html, /data-write-gate/);
   assert.match(snap.html, /Refunds and cancels are gated/);
   assert.deepEqual(snap.forbidden, []);
   assert.doesNotMatch(snap.html, /<(button|a)\b[^>]*>[^<]*Refund/i);
   assert.doesNotMatch(snap.html, /<(button|a)\b[^>]*>[^<]*\bCancel\b/i);
+});
+
+test("composer write-gate copy is gated on orderId", async () => {
+  const withOrder = createInboxOrgan({ viewId: "mine", ticketId: "t-ada-track" });
+  const joined = await withOrder.ready();
+  assert.match(joined.html, /data-write-gate>/);
+  assert.match(joined.html, /Refunds and cancels are gated/);
+
+  const noOrder = createInboxOrgan({ viewId: "snoozed", ticketId: "t-jordan-ship" });
+  const empty = await noOrder.ready();
+  assert.equal(empty.rail.currentOrderId, null);
+  assert.match(empty.html, /No order on this ticket/);
+  assert.doesNotMatch(empty.html, /data-write-gate>/);
+  assert.doesNotMatch(empty.html, /Refunds and cancels are gated/);
+});
+
+test("composer write-gate note requires ticket orderId", () => {
+  const mailbox = createMailbox();
+  const composer = createComposerTissue({ mailbox });
+  const writeGate = { mutationsEnabled: false, refused: ["refund", "cancel"] };
+  const ada = fixtureTickets.find((ticket) => ticket.id === "t-ada-track");
+  composer.update({ ticket: ada, writeGate });
+  assert.match(composer.render(), /data-write-gate/);
+  assert.match(composer.render(), /Refunds and cancels are gated/);
+
+  composer.update({ ticket: { ...ada, orderId: null }, writeGate });
+  assert.doesNotMatch(composer.render(), /data-write-gate/);
+  assert.doesNotMatch(composer.render(), /Refunds and cancels are gated/);
 });
 
 test("escalate marks the ticket and does not Send", async () => {

@@ -76,7 +76,7 @@ Demo names only (Ada Demo, Casey Sandbox, Jordan Preview). No customer PII.
 - Summarize is a mute peek **above** the composer box, never a send. It does not enable Send by itself.
 - Send is ink fill (min-height 40px; 44px on coarse pointers) and disabled while the body is empty
 - Send & close is hairline secondary, not a second ink primary. It hides on a closed ticket
-- Mute write-gate copy: **Refunds and cancels are gated.** Client of `helpdesk.write_gate_status`. Not a Refund or Cancel control.
+- Mute write-gate copy: **Refunds and cancels are gated.** Shown only when the ticket has an `orderId`. Empty order matches the rail: no money chrome. Client of `helpdesk.write_gate_status`. Not a Refund or Cancel control.
 - This order shows a hairline **Payments locked** control (same hairline language as Send & close). It opens a gate sheet: **Payments are locked until Syeed names an exact write. Refunds and cancels stay refused.**
 - **Degrade:** “Select a ticket to reply.”
 
