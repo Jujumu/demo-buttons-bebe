@@ -35,7 +35,7 @@ Speak only when something moved: a PR opened, shots landed, a sign-off, or a blo
 - **Architecture:** every tissue is a black box with a contract **and** an MCP tool or CLI on the same code path. UI is one client, not the product.
 - **Shop:** Cute Things / `yznyc1-ez.myshopify.com` is **read-only**. No refunds, cancels, `customerCreate`, or other Admin writes unless the human named that action. `SHOPIFY_MUTATIONS_ENABLED=0`. `WRITE_TOOLS` refuse send / refund / cancel.
 - **Human Send only.** Suggest-reply strip may Insert/Discard. Never Send from the strip. Never auto-send.
-- **Design:** `LOCK.md` + `TOKENS.md`. Four panes 200 / 300 / flex / 300. Selected list row is a **4px `#1C1916` ink bar**, no grey wash. IBM Plex. No Gorgias chrome, purple, Gaia, fifth AI column, Customer Edit, Refund, Cancel.
+- **Design:** `LOCK.md` + `TOKENS.md`. Inbox chrome is list / thread / rail (views live in the list toolbar; list 300 / flex / rail 300). Selected list row is a **4px `#1C1916` ink bar**, no grey wash. IBM Plex. No Gorgias chrome, purple, Gaia, fifth AI column, Customer Edit, Refund, Cancel.
 - **Ticket row (Clerk):** `id`, `customerName`, `subject`, `snippet`, `status`, `updatedAt`, `customerId`, `orderId`, `requestType`. `customerName` is intake From, never `Customer.displayName`. Ticket `status` is helpdesk `open` / `closed` / `snoozed`, not `Return.status`. `requestType` is first-party (`marketing_unsubscribe` / `privacy_request` / `bug` or `null`), not a Shopify consent, Customer Privacy, or product write. Bug tickets may add first-party `severity` and `device`.
 - **Join (INTAKE.md):** look-only. Parse `Order.name` (`#1001`) first, else `customers(query: email:…)` against `defaultEmailAddress.emailAddress` (never deprecated `Customer.email`). Miss → GIDs null. No `customerCreate`.
 - **Spam:** prize / lottery / unsubscribe-farm → `{ spam: true, ticketId: null }`. Never appears in `list_tickets`.
@@ -92,10 +92,11 @@ When signed, tell the human: Ready for review, then squash-merge. Do not nag the
 
 ## Learned User Preferences
 
-- Prefers verifying work by opening the inbox UI, not CLI-only reports.
+- Prefers verifying visual work in the browser (inbox UI or hosted pages), not CLI-only reports; when hosting, wants a public link plus a screenshot that it actually renders.
 - Explicit Shopify catalog/seed requests count as naming a write; still no refunds, cancels, or `customerCreate` unless named.
-- Prefers kid-simple architecture explanations using the organ/tissue analogy; use Excalidraw or the click-to-enter 3D sim when drawing it.
+- Prefers kid-simple architecture explanations using the organ/tissue analogy; use Excalidraw or the click-to-enter 3D sim; keep organs and wires accurate to this demo, not production Hermes (no Gorgias, Redo, or KB as peer organs).
 - Prefers Surge (`*.surge.sh`) for quick public static hosting; do not use Cloudflare tunnels for that.
+- Prefers inbox chrome in the live preview (browser element select + screenshots) over design canvases; folds view filters into the ticket list instead of a separate first column.
 
 ## Learned Workspace Facts
 
@@ -107,5 +108,7 @@ When signed, tell the human: Ready for review, then squash-merge. Do not nag the
 - Order rail line items show 48×48 product thumbnails from Shopify `lineItems.image.url` (PR 13).
 - Demo inbox baseline is 35 seed tickets; normal boot does not auto-pull mail — use `?pull=1` (optional `force=1` for fixtures).
 - Cross-boot AgentMail dedupe persists seen message ids in `console-src/inbox/data/seen_messages.json`.
-- Organ/tissue architecture: Excalidraw at `docs/tissues/organ-tissue.excalidraw`; interactive 3D sim at `docs/tissues/architecture-3d-sim.html`.
+- Inbox UI is list / thread / rail (no separate views column): Inbox title + view filters live in the list toolbar; list pane collapses to a thin strip with an expand chevron.
+- Organ/tissue architecture: Excalidraw at `docs/tissues/organ-tissue.excalidraw`; click-to-enter 3D sim at `docs/tissues/architecture-3d-sim.html` (world in `architecture-world.js`): LEGO-house organs, inside-Inbox list/thread/rail wireframe, info card off by default; mail → helpdesk intake, Shopify look-only, Send stays on the local thread.
+- This demo’s look-up path is Shopify Admin GraphQL only (`get_customer` / `get_order` / `get_returns` / `list_past_orders`); Redo and KB belong to production Hermes, not this repo’s helpdesk tissues.
 - Surge CLI is installed globally on this VPS (`surge` on PATH); publish a folder that contains `index.html`.

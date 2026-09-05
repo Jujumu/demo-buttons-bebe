@@ -67,7 +67,7 @@ const ORGANS = [
       {
         name: "View",
         shape: "cards",
-        kid: "Picks which pile of tickets you are looking at: assigned, all, snoozed, closed.",
+        kid: "Picks which pile of tickets you are looking at: Assigned to me, Unassigned, All, Snoozed, Closed.",
         inn: "{ views, counts, selectedViewId }",
         out: "view/selected → { viewId }",
       },
@@ -106,7 +106,7 @@ const ORGANS = [
     id: "helpdesk",
     name: "Helpdesk organ",
     form: "cluster",
-    kid: "The real body. Every tissue is a black box: In → Out. MCP and CLI share the same room.",
+    kid: "The real body. Every tissue is a black box: In → Out. MCP, CLI, and the inbox HTTP door share dispatch().",
     color: 0xfb923c,
     pos: [3.2, 2.0, 0],
     size: [5.4, 4.0, 3.6],
@@ -970,19 +970,21 @@ function drawInboxWireframe() {
   const paper = "#FFFDF9";
   const ground = "#F4F0EA";
   const mute = "#5C564F";
-  const line = "rgba(28,25,22,0.14)";
+  const line = "rgba(28,25,22,0.12)";
   ctx.fillStyle = ground;
   ctx.fillRect(0, 0, W, H);
-  const viewW = 274;
-  const listW = 411;
-  const railW = 411;
+  // LOCK: view 200 / list 300 / thread+composer flex / rail 300.
+  const viewW = 200;
+  const listW = 300;
+  const railW = 300;
   const threadW = W - viewW - listW - railW;
   const xs = [0, viewW, viewW + listW, viewW + listW + threadW];
   const ws = [viewW, listW, threadW, railW];
   const titles = ["View", "List", "Thread + composer", "Rail"];
+  const paneFill = [ground, paper, paper, ground];
 
   for (let i = 0; i < 4; i++) {
-    ctx.fillStyle = paper;
+    ctx.fillStyle = paneFill[i];
     ctx.fillRect(xs[i], 0, ws[i], H);
     ctx.strokeStyle = line;
     ctx.lineWidth = 2;
@@ -991,119 +993,150 @@ function drawInboxWireframe() {
     ctx.lineTo(xs[i] + 0.5, H);
     ctx.stroke();
     ctx.fillStyle = mute;
-    ctx.font = "600 22px Arial";
-    ctx.fillText(titles[i], xs[i] + 22, 42);
+    ctx.font = "600 20px Arial";
+    ctx.fillText(titles[i], xs[i] + 16, 38);
   }
 
-  // View list
+  ctx.fillStyle = mute;
+  ctx.font = "500 14px Arial";
+  ctx.fillText("CONSOLE", xs[0] + 16, 64);
+  ctx.fillStyle = ink;
+  ctx.font = "600 22px Arial";
+  ctx.fillText("Inbox", xs[0] + 16, 92);
+
   const views = ["Assigned to me", "Unassigned", "All", "Snoozed", "Closed"];
   views.forEach((name, i) => {
-    const y = 78 + i * 56;
-    if (i === 2) {
-      ctx.fillStyle = ink;
-      ctx.fillRect(xs[0], y - 18, 8, 44);
-      ctx.font = "600 26px Arial";
-    } else {
-      ctx.fillStyle = mute;
-      ctx.font = "400 26px Arial";
-    }
-    ctx.fillText(name, xs[0] + 28, y + 12);
-  });
-
-  // Ticket rows
-  const rows = [
-    ["Ada Demo", "Where is order #1001?"],
-    ["Sam", "Broken rattle"],
-    ["Priya", "Start a return"],
-  ];
-  rows.forEach((row, i) => {
-    const y = 78 + i * 92;
+    const y = 118 + i * 48;
     if (i === 0) {
       ctx.fillStyle = ink;
-      ctx.fillRect(xs[1], y - 8, 8, 72);
+      ctx.fillRect(xs[0], y - 14, 4, 36);
+      ctx.font = "600 18px Arial";
+    } else {
+      ctx.fillStyle = mute;
+      ctx.font = "400 18px Arial";
+    }
+    ctx.fillText(name, xs[0] + 18, y + 10);
+  });
+
+  const rows = [
+    ["Ada Demo", "Tracking on order #1001 has not moved"],
+    ["Maya Chen", "Tracking stuck on order #1001"],
+    ["Noah Patel", "Wrong romper color in #1002"],
+  ];
+  rows.forEach((row, i) => {
+    const y = 70 + i * 88;
+    if (i === 0) {
+      ctx.fillStyle = ink;
+      ctx.fillRect(xs[1], y - 6, 4, 72);
     }
     ctx.fillStyle = ink;
-    ctx.font = "600 26px Arial";
-    ctx.fillText(row[0], xs[1] + 28, y + 18);
+    ctx.font = "600 20px Arial";
+    ctx.fillText(row[0], xs[1] + 22, y + 18);
     ctx.fillStyle = mute;
-    ctx.font = "400 22px Arial";
-    ctx.fillText(row[1], xs[1] + 28, y + 48);
+    ctx.font = "400 16px Arial";
+    ctx.fillText(row[1], xs[1] + 22, y + 44);
     ctx.strokeStyle = line;
     ctx.beginPath();
-    ctx.moveTo(xs[1] + 16, y + 72);
-    ctx.lineTo(xs[1] + ws[1] - 16, y + 72);
+    ctx.moveTo(xs[1] + 12, y + 70);
+    ctx.lineTo(xs[1] + ws[1] - 12, y + 70);
     ctx.stroke();
   });
 
-  // Thread bubbles
-  const tx = xs[2] + 28;
-  roundCanvasRect(ctx, tx, 78, 420, 88, 12);
+  const tx = xs[2] + 24;
+  const boxW = threadW - 48;
+  ctx.fillStyle = ink;
+  ctx.font = "600 22px Arial";
+  ctx.fillText("Ada Demo", tx, 64);
+  ctx.fillStyle = mute;
+  ctx.font = "400 16px Arial";
+  ctx.fillText("Tracking on order #1001 has not moved", tx, 88);
+  roundCanvasRect(ctx, xs[2] + threadW - 96, 48, 72, 28, 14);
+  ctx.strokeStyle = ink;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.fillStyle = ink;
+  ctx.font = "600 14px Arial";
+  ctx.fillText("Open", xs[2] + threadW - 76, 68);
+
+  roundCanvasRect(ctx, tx, 110, 520, 72, 12);
   ctx.fillStyle = "#efe8de";
   ctx.fill();
   ctx.fillStyle = ink;
-  ctx.font = "400 22px Arial";
-  ctx.fillText("Hi — any update on #1001?", tx + 18, 128);
-  roundCanvasRect(ctx, tx + 80, 188, 460, 72, 12);
+  ctx.font = "400 18px Arial";
+  ctx.fillText("Where is my order #1001? The tracking has not updated.", tx + 16, 154);
+
+  roundCanvasRect(ctx, tx + 80, 198, 560, 64, 12);
   ctx.fillStyle = "#e8f0e6";
   ctx.fill();
-  ctx.fillStyle = mute;
-  ctx.font = "400 20px Arial";
-  ctx.fillText("Closed · Tuesday", tx + 98, 232);
+  ctx.fillStyle = ink;
+  ctx.font = "400 18px Arial";
+  ctx.fillText("Looking at the shipment now — I will write back with the carrier update.", tx + 96, 238);
 
-  // Draft strip
-  roundCanvasRect(ctx, tx, 290, threadW - 56, 86, 10);
+  roundCanvasRect(ctx, tx, 280, boxW, 78, 10);
   ctx.strokeStyle = line;
   ctx.lineWidth = 2;
   ctx.stroke();
   ctx.fillStyle = mute;
-  ctx.font = "600 18px Arial";
-  ctx.fillText("Suggested draft  ·  Insert   Discard", tx + 16, 324);
-  ctx.font = "400 20px Arial";
+  ctx.font = "600 14px Arial";
+  ctx.fillText("AI draft     Insert     Discard", tx + 16, 306);
+  ctx.font = "400 16px Arial";
   ctx.fillStyle = ink;
-  ctx.fillText("Hi Ada — #1001 is still packing.", tx + 16, 356);
+  ctx.fillText("Hi Ada — order #1001 is paid and fulfilled. Demo Carrier has it under DEMO-1001.", tx + 16, 336);
 
-  // Composer box
-  roundCanvasRect(ctx, tx, 400, threadW - 56, 280, 12);
+  ctx.fillStyle = mute;
+  ctx.font = "400 16px Arial";
+  ctx.fillText("To   Ada Demo    ada.demo@example.com", tx, 390);
+
+  roundCanvasRect(ctx, tx, 404, boxW, 220, 12);
   ctx.strokeStyle = ink;
   ctx.lineWidth = 2;
   ctx.stroke();
   ctx.fillStyle = mute;
-  ctx.font = "400 18px Arial";
-  ctx.fillText("To  Ada Demo", tx + 16, 432);
-  ctx.fillStyle = "#d6d3d1";
-  ctx.fillRect(tx + 16, 452, threadW - 88, 140);
+  ctx.font = "400 16px Arial";
+  ctx.fillText("Search macros by name or tags", tx + 16, 434);
+  ctx.fillStyle = ink;
+  ctx.font = "600 16px Arial";
+  ctx.fillText("Shipping delay", tx + 16, 468);
+  ctx.font = "400 16px Arial";
   ctx.fillStyle = mute;
-  ctx.font = "400 20px Arial";
-  ctx.fillText("Type a reply…", tx + 28, 490);
+  ctx.fillText("Replace     Append", tx + 16, 498);
+  ctx.fillStyle = "#d6d3d1";
+  ctx.fillRect(tx + 16, 516, boxW - 32, 90);
+  ctx.fillStyle = mute;
+  ctx.font = "400 18px Arial";
+  ctx.fillText("Write the reply. The human always sends.", tx + 28, 554);
 
-  roundCanvasRect(ctx, tx + 16, 612, 140, 48, 6);
+  roundCanvasRect(ctx, tx + 16, 620, 120, 40, 6);
   ctx.fillStyle = ink;
   ctx.fill();
   ctx.fillStyle = paper;
-  ctx.font = "600 22px Arial";
-  ctx.fillText("Send", tx + 56, 644);
-  roundCanvasRect(ctx, tx + 170, 612, 180, 48, 6);
+  ctx.font = "600 18px Arial";
+  ctx.fillText("Send", tx + 52, 646);
+  roundCanvasRect(ctx, tx + 148, 620, 140, 40, 6);
   ctx.strokeStyle = ink;
   ctx.stroke();
   ctx.fillStyle = ink;
-  ctx.font = "600 20px Arial";
-  ctx.fillText("Send & close", tx + 188, 644);
+  ctx.font = "600 16px Arial";
+  ctx.fillText("Send & close", tx + 164, 646);
 
-  // Rail cards
-  const cards = ["Customer", "This order", "Returns", "Past orders"];
-  const peeks = ["Ada Demo", "#1001 · Paid", "No returns", "3 orders"];
-  cards.forEach((name, i) => {
-    const y = 78 + i * 230;
-    roundCanvasRect(ctx, xs[3] + 22, y, railW - 44, 210, 10);
+  const cards = [
+    ["Customer", "Ada Demo"],
+    ["This order", "#1001 · Paid · Fulfilled"],
+    ["Returns", "In transit · 1 item"],
+    ["Past orders", "0 orders"],
+  ];
+  cards.forEach((row, i) => {
+    const y = 64 + i * 240;
+    roundCanvasRect(ctx, xs[3] + 16, y, railW - 32, 216, 10);
     ctx.strokeStyle = line;
     ctx.lineWidth = 2;
     ctx.stroke();
     ctx.fillStyle = ink;
-    ctx.font = "600 26px Arial";
-    ctx.fillText(name, xs[3] + 40, y + 44);
+    ctx.font = "600 22px Arial";
+    ctx.fillText(row[0], xs[3] + 32, y + 44);
     ctx.fillStyle = mute;
-    ctx.font = "400 22px Arial";
-    ctx.fillText(peeks[i], xs[3] + 40, y + 84);
+    ctx.font = "400 18px Arial";
+    ctx.fillText(row[1], xs[3] + 32, y + 80);
   });
 
   const tex = new THREE.CanvasTexture(c);
@@ -1325,7 +1358,7 @@ function mountInboxStudio(organ, crumbPrefix) {
 
   const paneHits = {};
   const paneNames = ["View", "List", "Thread", "Rail"];
-  const composerSplit = 0.58;
+  const composerSplit = 0.37;
   paneNames.forEach((name, i) => {
     const tissue = name === "Thread" ? tissueByName(organ, "Thread") : tissueByName(organ, name);
     if (!tissue) return;
@@ -1386,7 +1419,7 @@ function mountInboxStudio(organ, crumbPrefix) {
     crumbPrefix || `Inside · ${organ.name}`,
     "Inbox UI wireframe",
     "Panes drop letters in the mailbox. They do not peek in each other's rooms. Click a pane.",
-    "view/selected → list. list/selected → thread, rail, composer. Summarize is thread → composer. Send is composer → local thread."
+    "LOCK panes 200 / 300 / flex / 300. Selected row is a 4px ink bar. Ada first paint: Assigned to me, #1001 Paid · Fulfilled, In transit · 1 item. Macros live inside the composer box (Replace / Append). Send stays local."
   );
 }
 
