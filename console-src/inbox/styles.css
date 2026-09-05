@@ -9,6 +9,11 @@
   --warn: #9A6B12;
   --sans: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, monospace;
+  /* Micro-feedback timings — hover subtle, press short, menus slightly longer */
+  --motion-press: 80ms;
+  --motion-hover: 120ms;
+  --motion-menu: 160ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 * { box-sizing: border-box; margin: 0; }
@@ -62,6 +67,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   letter-spacing: .04em;
   text-transform: uppercase;
   text-decoration: none;
+  transition: color var(--motion-hover) var(--ease-out);
 }
 .console-link:hover { color: var(--ink); }
 
@@ -76,7 +82,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   background: transparent;
   color: var(--mute);
   text-align: left;
+  transition:
+    color var(--motion-hover) var(--ease-out),
+    background-color var(--motion-hover) var(--ease-out),
+    transform var(--motion-press) var(--ease-out);
 }
+.view-item:hover { color: var(--ink); }
+.view-item:active { transform: translateY(1px); }
 .view-item.is-selected { color: var(--ink); font-weight: 600; box-shadow: inset 4px 0 0 var(--ink); }
 .view-count { font-variant-numeric: tabular-nums; font-size: 12px; }
 
@@ -90,7 +102,24 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   border-bottom: 1px solid var(--line);
   background: transparent;
   text-align: left;
+  transition:
+    background-color var(--motion-hover) var(--ease-out),
+    transform var(--motion-press) var(--ease-out);
 }
+.ticket-row .ticket-snippet,
+.ticket-row .ticket-time,
+.ticket-row .ticket-status {
+  transition: color var(--motion-hover) var(--ease-out);
+}
+/* Unselected hover only: light ground tint + mute→ink on meta. Selected stays ink bar only. */
+.ticket-row:not(.is-selected):hover {
+  background: color-mix(in srgb, var(--ground) 70%, transparent);
+}
+.ticket-row:not(.is-selected):hover .ticket-snippet,
+.ticket-row:not(.is-selected):hover .ticket-time {
+  color: var(--ink);
+}
+.ticket-row:active { transform: translateY(1px); }
 .ticket-row .ticket-bar {
   display: none;
   position: absolute;
@@ -102,6 +131,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 .ticket-row.is-selected {
   background: var(--surface);
   box-shadow: none;
+}
+.ticket-row.is-selected:hover {
+  background: var(--surface);
 }
 .ticket-row.is-selected .ticket-bar {
   display: block;
@@ -198,14 +230,31 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 .composer-to { font-size: 12px; margin-bottom: 8px; }
 .composer-to .mute, .mute { color: var(--mute); }
 .write-gate { color: var(--mute); font-size: 12px; margin: 0 0 8px; }
-.composer-box { border: 1px solid var(--line); background: var(--ground); padding: 8px; }
+.composer-box {
+  border: 1px solid var(--line);
+  background: var(--ground);
+  padding: 8px;
+  transition: border-color var(--motion-hover) var(--ease-out), background-color var(--motion-hover) var(--ease-out);
+}
+.composer-box:focus-within {
+  border-color: var(--ink);
+}
 .macro-search {
   width: 100%;
   border: 0;
   background: transparent;
   padding: 6px 8px;
+  transition: background-color var(--motion-hover) var(--ease-out);
+}
+.macro-search:focus {
+  background: var(--surface);
 }
 .macro-list { max-height: 88px; overflow: auto; padding: 0 0 4px; }
+.composer-box[data-macro-open="true"] .macro-search,
+.composer-box[data-macro-open="true"] .macro-list,
+.composer-box[data-macro-open="true"] .macro-actions {
+  animation: feedback-in var(--motion-menu) var(--ease-out);
+}
 .macro-row {
   position: relative;
   width: 100%;
@@ -218,16 +267,27 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   border: 0;
   background: transparent;
   text-align: left;
+  transition:
+    color var(--motion-hover) var(--ease-out),
+    background-color var(--motion-hover) var(--ease-out),
+    transform var(--motion-press) var(--ease-out);
 }
+.macro-row:hover {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+}
+.macro-row:active { transform: translateY(1px); }
 .macro-row .macro-bar {
-  display: none;
+  display: block;
   position: absolute;
   left: 0; top: 2px; bottom: 2px;
   width: 3px;
   background: var(--ink);
+  opacity: 0;
+  transition: opacity var(--motion-hover) var(--ease-out);
 }
 .macro-row.is-selected { color: var(--ink); font-weight: 500; }
-.macro-row.is-selected .macro-bar { display: block; }
+.macro-row.is-selected .macro-bar { opacity: 1; }
 .macro-title { font-size: 12px; }
 .macro-empty { color: var(--mute); font-size: 12px; padding: 4px 8px; }
 .macro-actions {
@@ -243,6 +303,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   background: var(--surface);
   padding: 10px 8px;
   resize: vertical;
+  transition: background-color var(--motion-hover) var(--ease-out);
+}
+.composer-box textarea:focus {
+  background: var(--surface);
 }
 .composer-box[data-macro-open="true"] textarea {
   border-top: 1px solid var(--line);
@@ -251,6 +315,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   margin: 0 0 10px;
   padding: 0;
   color: var(--mute);
+  animation: feedback-in var(--motion-menu) var(--ease-out);
 }
 .summarize-peek .summarize-text {
   font-size: 12px;
@@ -266,6 +331,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   padding: 10px 12px;
   border: 1px solid var(--line);
   background: var(--ground);
+  animation: feedback-in var(--motion-menu) var(--ease-out);
 }
 .draft-kicker { font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--mute); }
 .draft-text { font-size: 13px; margin-top: 4px; }
@@ -285,6 +351,12 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   padding: 7px 12px;
   font-size: 13px;
   font-weight: 500;
+  transition:
+    background-color var(--motion-hover) var(--ease-out),
+    border-color var(--motion-hover) var(--ease-out),
+    color var(--motion-hover) var(--ease-out),
+    transform var(--motion-press) var(--ease-out),
+    opacity var(--motion-hover) var(--ease-out);
 }
 .btn-ink { background: var(--ink); border-color: var(--ink); color: #FFFDF9; }
 .btn-quiet { color: var(--ink); }
@@ -293,6 +365,19 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   border-color: var(--line);
   color: var(--ink);
 }
+.btn-quiet:hover:not(:disabled):not(.is-disabled),
+.btn-hairline:hover:not(:disabled):not(.is-disabled) {
+  background: var(--ground);
+}
+.btn-ink:hover:not(:disabled):not(.is-disabled) {
+  background: color-mix(in srgb, var(--ink) 88%, var(--surface));
+  border-color: color-mix(in srgb, var(--ink) 88%, var(--surface));
+}
+.btn-ink:active:not(:disabled):not(.is-disabled),
+.btn-quiet:active:not(:disabled):not(.is-disabled),
+.btn-hairline:active:not(:disabled):not(.is-disabled) {
+  transform: translateY(1px) scale(0.98);
+}
 .btn-send { min-height: 40px; }
 .btn-send:disabled,
 .btn-send.is-disabled {
@@ -300,11 +385,18 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   border-color: var(--line);
   color: var(--mute);
   opacity: 1;
+  transform: none;
 }
 .btn-hairline:disabled,
 .btn-hairline.is-disabled {
   color: var(--mute);
   opacity: 1;
+  transform: none;
+}
+.btn-quiet:disabled,
+.btn-quiet.is-disabled,
+.btn-ink:disabled {
+  transform: none;
 }
 
 .order-gate { margin: 10px 0 8px; }
@@ -339,6 +431,17 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   text-align: left;
   font-weight: 600;
   font-size: 13px;
+  transition:
+    background-color var(--motion-hover) var(--ease-out),
+    transform var(--motion-press) var(--ease-out);
+}
+.rail-toggle:hover,
+.rail-sub-toggle:hover {
+  background: color-mix(in srgb, var(--ground) 80%, transparent);
+}
+.rail-toggle:active,
+.rail-sub-toggle:active {
+  transform: translateY(1px);
 }
 .rail-toggle h2, .rail-sub-toggle h3, .rail-static h2 {
   margin: 0;
@@ -418,7 +521,14 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   border-top: 1px solid var(--line);
   background: transparent;
   text-align: left;
+  transition:
+    background-color var(--motion-hover) var(--ease-out),
+    transform var(--motion-press) var(--ease-out);
 }
+.history-row:hover {
+  background: color-mix(in srgb, var(--ground) 70%, transparent);
+}
+.history-row:active { transform: translateY(1px); }
 .history-row.is-peeked { box-shadow: inset 4px 0 0 var(--ink); }
 .tissue-empty, .tissue-error, .empty-pane { color: var(--mute); font-size: 13px; padding: 16px; }
 .rail-sub-body .tissue-empty { padding: 4px 0; }
@@ -449,4 +559,59 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 
 @media (pointer: coarse) {
   .btn-send { min-height: 44px; }
+}
+
+@keyframes feedback-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Honor reduced motion: no transforms / transitions / enter fades */
+@media (prefers-reduced-motion: reduce) {
+  .view-item,
+  .ticket-row,
+  .ticket-row .ticket-snippet,
+  .ticket-row .ticket-time,
+  .ticket-row .ticket-status,
+  .macro-row,
+  .macro-row .macro-bar,
+  .macro-search,
+  .composer-box,
+  .composer-box textarea,
+  .btn-ink,
+  .btn-quiet,
+  .btn-hairline,
+  .rail-toggle,
+  .rail-sub-toggle,
+  .history-row,
+  .console-link {
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+  }
+
+  .draft-strip,
+  .summarize-peek,
+  .composer-box[data-macro-open="true"] .macro-search,
+  .composer-box[data-macro-open="true"] .macro-list,
+  .composer-box[data-macro-open="true"] .macro-actions {
+    animation: none !important;
+  }
+
+  .view-item:active,
+  .ticket-row:active,
+  .macro-row:active,
+  .btn-ink:active:not(:disabled):not(.is-disabled),
+  .btn-quiet:active:not(:disabled):not(.is-disabled),
+  .btn-hairline:active:not(:disabled):not(.is-disabled),
+  .rail-toggle:active,
+  .rail-sub-toggle:active,
+  .history-row:active {
+    transform: none !important;
+  }
 }
