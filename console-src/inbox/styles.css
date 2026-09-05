@@ -49,8 +49,17 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   flex-direction: column;
 }
 .pane:last-child { border-right: 0; }
-.pane-views { flex: 0 0 200px; width: 200px; background: var(--ground); }
 .pane-list { flex: 0 0 300px; width: 300px; }
+.pane-list.is-collapsed {
+  flex: 0 0 36px;
+  width: 36px;
+  min-width: 36px;
+}
+.pane-list.is-collapsed .list-toolbar,
+.pane-list.is-collapsed .ticket-list,
+.pane-list.is-collapsed .empty-pane {
+  display: none;
+}
 .pane-thread { flex: 1 1 auto; min-width: 0; }
 .pane-rail { flex: 0 0 300px; width: 300px; background: var(--ground); }
 
@@ -58,6 +67,150 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 .pane-head { padding: 16px 16px 10px; border-bottom: 1px solid var(--line); }
 .pane-head h1 { font-size: 18px; font-weight: 600; letter-spacing: -.02em; }
 .pane-head h2 { font-size: 14px; font-weight: 600; }
+
+/* List column chrome: Inbox title + views filter / sort / collapse. */
+.pane-list .list-toolbar {
+  padding: 10px 12px 8px;
+  border-top-left-radius: 10px;
+  border-top-right-radius: 10px;
+  background: var(--surface);
+}
+.pane-list .list-toolbar .console-link {
+  display: inline-block;
+  margin-bottom: 4px;
+}
+.list-toolbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 28px;
+}
+.list-scope { position: relative; min-width: 0; }
+.list-scope-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 2px 4px 2px 2px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -.02em;
+  line-height: 1.2;
+}
+.list-scope-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.list-scope-chevron { flex: 0 0 auto; color: var(--mute); }
+.list-filter-wrap { position: relative; }
+.list-scope-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 3;
+  min-width: 200px;
+  padding: 4px 0;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.list-scope-menu.is-open { display: block; }
+.list-menu-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--mute);
+  text-align: left;
+  font-size: 13px;
+}
+.list-menu-item.is-selected,
+.list-menu-item:hover {
+  color: var(--ink);
+  font-weight: 600;
+}
+.list-menu-item.is-selected {
+  box-shadow: inset 4px 0 0 var(--ink);
+}
+.list-menu-count {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: var(--mute);
+}
+.list-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+.list-tool-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink);
+}
+.list-tool-btn:hover,
+.list-tool-btn[aria-pressed="true"] {
+  background: var(--ground);
+}
+.list-tool-icon { display: block; }
+
+.list-expand-btn {
+  display: none;
+  width: 100%;
+  height: 100%;
+  min-height: 120px;
+  padding: 16px 0;
+  border: 0;
+  background: var(--surface);
+  color: var(--ink);
+  flex-direction: column;
+  gap: 10px;
+}
+.list-expand-icon {
+  display: block;
+  flex: 0 0 auto;
+  color: var(--ink);
+}
+.list-expand-label {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  color: var(--mute);
+}
+.list-expand-btn:hover,
+.list-expand-btn:focus-visible {
+  background: var(--ground);
+}
+.list-expand-btn:hover .list-expand-label,
+.list-expand-btn:focus-visible .list-expand-label {
+  color: var(--ink);
+}
+.pane-list.is-collapsed .list-expand-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+.pane-list.is-collapsed .pane-inner {
+  height: 100%;
+}
 .console-link {
   display: inline-block;
   margin-bottom: 6px;

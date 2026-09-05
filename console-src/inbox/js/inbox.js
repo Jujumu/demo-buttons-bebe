@@ -6,7 +6,6 @@ import { createComposerTissue } from "./tissues/composer.js";
 import { createListTissue } from "./tissues/list.js";
 import { createRailOrgan } from "./tissues/rail.js";
 import { createThreadTissue } from "./tissues/thread.js";
-import { createViewTissue } from "./tissues/view.js";
 import { forbiddenControlHits, GATE_CONFIRM_LABEL } from "./util.js";
 
 function withRecipient(ticket, email) {
@@ -29,7 +28,8 @@ function safeMount(tissue, el, input) {
 }
 
 /**
- * Inbox organ: view + list + thread + rail + composer.
+ * Inbox organ: list + thread + rail + composer.
+ * Views live in the list filter menu (no separate views pane).
  * One tissue error stays in its pane.
  */
 export function createInboxOrgan(opts = {}) {
@@ -37,7 +37,6 @@ export function createInboxOrgan(opts = {}) {
   const shop = opts.shop || createHelpdeskShop({ fail: opts.fail });
   const shopHost = opts.shopHost || shop.shop || SHOP;
   const pinnedCatalog = opts.tickets || null;
-  const viewTissue = createViewTissue({ mailbox });
   const listTissue = createListTissue({ mailbox });
   const threadTissue = createThreadTissue({ mailbox });
   const composerTissue = createComposerTissue({ mailbox });
@@ -55,6 +54,7 @@ export function createInboxOrgan(opts = {}) {
   let macroQuery = "";
   let selectedMacroId = "";
   let macrosOpen = false;
+  let listCollapsed = false;
   let writeGate = {
     mutationsEnabled: false,
     refused: ["send", "refund", "cancel"],
@@ -171,8 +171,7 @@ export function createInboxOrgan(opts = {}) {
   function shell() {
     return `<div class="inbox" data-organ="inbox">
       <a class="skip-link" href="#inbox-thread">Skip to thread.</a>
-      <aside class="pane pane-views" data-pane="views"></aside>
-      <section class="pane pane-list" data-pane="list"></section>
+      <section class="pane pane-list${listCollapsed ? " is-collapsed" : ""}" data-pane="list"></section>
       <section class="pane pane-thread" id="inbox-thread" data-pane="thread" tabindex="-1">
         <div data-slot="thread"></div>
         <div data-slot="composer"></div>
@@ -381,27 +380,33 @@ export function createInboxOrgan(opts = {}) {
     };
   }
 
+  function listInput() {
+    return {
+      tickets: visibleTickets(),
+      selectedTicketId: selectedId,
+      views,
+      counts,
+      selectedViewId: viewId,
+      collapsed: listCollapsed,
+    };
+  }
+
   function snapshot() {
     ensureSelection();
     const ticket = selectedTicket();
-    const viewModel = viewTissue.update({ views, counts, selectedViewId: viewId });
-    const listModel = listTissue.update({
-      tickets: visibleTickets(),
-      selectedTicketId: selectedId,
-      viewLabel: views.find((view) => view.id === viewId)?.label || "Inbox",
-    });
+    const listModel = listTissue.update(listInput());
     const threadModel = threadTissue.update({ ticket });
     const composerModel = composerTissue.update(composerInput(ticket));
     const html = `<div class="inbox" data-organ="inbox">
       <a class="skip-link" href="#inbox-thread">Skip to thread.</a>
-      <aside class="pane pane-views" data-pane="views">${viewTissue.render(viewModel)}</aside>
-      <section class="pane pane-list" data-pane="list">${listTissue.render(listModel)}</section>
+      <section class="pane pane-list${listCollapsed ? " is-collapsed" : ""}" data-pane="list">${listTissue.render(listModel)}</section>
       <section class="pane pane-thread" id="inbox-thread" data-pane="thread" tabindex="-1">${threadTissue.render(threadModel)}${composerTissue.render(composerModel)}</section>
       <aside class="pane pane-rail" data-pane="rail">${rail.render()}</aside>
     </div>${gateSheetHtml()}`;
     return {
       html,
-      panes: { views: true, list: true, thread: true, rail: true },
+      panes: { views: false, list: true, thread: true, rail: true },
+      listCollapsed,
       viewId,
       selectedId,
       selectedHasInkBar: Boolean(selectedId) && html.includes(`data-ticket="${selectedId}"`) && html.includes("is-selected"),
@@ -438,7 +443,6 @@ export function createInboxOrgan(opts = {}) {
   async function mount(root) {
     root.innerHTML = shell();
     const panes = {
-      views: root.querySelector('[data-pane="views"]'),
       list: root.querySelector('[data-pane="list"]'),
       thread: root.querySelector("[data-slot=thread]"),
       composer: root.querySelector("[data-slot=composer]"),
@@ -454,12 +458,8 @@ export function createInboxOrgan(opts = {}) {
 
     const paint = () => {
       const ticket = selectedTicket();
-      safeMount(viewTissue, panes.views, { views, counts, selectedViewId: viewId });
-      safeMount(listTissue, panes.list, {
-        tickets: visibleTickets(),
-        selectedTicketId: selectedId,
-        viewLabel: views.find((view) => view.id === viewId)?.label || "Inbox",
-      });
+      panes.list?.classList?.toggle?.("is-collapsed", listCollapsed);
+      safeMount(listTissue, panes.list, listInput());
       const threadResult = safeMount(threadTissue, panes.thread, { ticket });
       safeMount(composerTissue, panes.composer, composerInput(ticket));
       try {
@@ -475,6 +475,10 @@ export function createInboxOrgan(opts = {}) {
       if (host) host.innerHTML = gateSheetHtml();
     };
 
+    mailbox.subscribe(MAILBOX_TOPICS.LIST_COLLAPSED, ({ collapsed }) => {
+      listCollapsed = Boolean(collapsed);
+      paint();
+    });
     mailbox.subscribe(MAILBOX_TOPICS.VIEW_SELECTED, ({ viewId: next }) => {
       viewId = next;
       selectedId = null;
@@ -651,6 +655,10 @@ export function createInboxOrgan(opts = {}) {
       selectedMacroId = "";
       macrosOpen = false;
       return refreshThread().then(refreshRail).then(refreshComposer).then(() => refreshMacros(macroQuery));
+    },
+    collapseList(collapsed = true) {
+      listCollapsed = Boolean(collapsed);
+      return snapshot();
     },
     toggleRail(key) {
       return rail.toggle(key);

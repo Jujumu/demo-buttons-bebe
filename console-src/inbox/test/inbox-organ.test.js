@@ -197,15 +197,18 @@ test("list rows show helpdesk status open closed snoozed", async () => {
   assert.doesNotMatch(snap.html, /class="ticket-status">SNOOZED</);
 });
 
-test("inbox organ renders four panes and an ink selected bar", async () => {
+test("inbox organ renders three panes and an ink selected bar", async () => {
   const organ = createInboxOrgan({ viewId: "mine" });
   const snap = await organ.ready();
-  assert.equal(snap.panes.views && snap.panes.list && snap.panes.thread && snap.panes.rail, true);
-  assert.match(snap.html, /data-pane="views"/);
+  assert.equal(snap.panes.list && snap.panes.thread && snap.panes.rail, true);
+  assert.equal(snap.panes.views, false);
+  assert.doesNotMatch(snap.html, /data-pane="views"/);
   assert.match(snap.html, /data-pane="list"/);
   assert.match(snap.html, /data-pane="thread"/);
   assert.match(snap.html, /data-pane="rail"/);
   assert.doesNotMatch(snap.html, /data-pane="icons"|fifth-column/);
+  assert.match(snap.html, /list-scope-label">Inbox</);
+  assert.match(snap.html, /data-list-filter/);
   assert.match(snap.html, /data-view="mine"/);
   assert.match(snap.html, /ticket-bar/);
   assert.equal(snap.selectedHasInkBar, true);
@@ -652,6 +655,22 @@ test("switching tickets resets rail expand and does not leak Ada OPEN returns", 
   assert.match(snap.html, /WELCOME10/);
   assert.match(snap.html, /<a class="invoice-link"[^>]*>Invoice<\/a>/);
   assert.match(snap.html, /1 year · Active/);
+});
+
+test("list X collapses the ticket column and expand brings it back", async () => {
+  const organ = createInboxOrgan({ viewId: "mine" });
+  let snap = await organ.ready();
+  assert.equal(snap.listCollapsed, false);
+  assert.match(snap.html, /data-list-collapse/);
+  assert.doesNotMatch(snap.html, /data-list-expand/);
+  snap = organ.collapseList(true);
+  assert.equal(snap.listCollapsed, true);
+  assert.match(snap.html, /pane-list is-collapsed/);
+  assert.match(snap.html, /data-list-expand/);
+  assert.doesNotMatch(snap.html, /data-list-collapse/);
+  snap = organ.collapseList(false);
+  assert.equal(snap.listCollapsed, false);
+  assert.match(snap.html, /data-list-collapse/);
 });
 
 test("composer Insert and Discard never publish send", () => {

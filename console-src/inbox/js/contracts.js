@@ -178,6 +178,7 @@
  *
  * `view/selected`        { viewId }
  * `list/selected`        { ticketId }
+ * `list/collapsed`       { collapsed: boolean }
  * `composer/body`        { text }
  * `composer/insert`      { text }
  * `composer/discard`
@@ -201,6 +202,7 @@
 export const MAILBOX_TOPICS = Object.freeze({
   VIEW_SELECTED: "view/selected",
   LIST_SELECTED: "list/selected",
+  LIST_COLLAPSED: "list/collapsed",
   COMPOSER_BODY: "composer/body",
   COMPOSER_INSERT: "composer/insert",
   COMPOSER_DISCARD: "composer/discard",
