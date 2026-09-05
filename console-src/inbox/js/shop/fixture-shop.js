@@ -257,6 +257,17 @@ export function createFixtureShop(opts = {}) {
       ];
       return clerkTicket(withEscalate(ticket));
     },
+    markBugHandled({ ticketId } = {}) {
+      maybeFail("bug-handled");
+      const ticket = fixtureTickets.find((row) => row.id === ticketId);
+      if (!ticket || ticket.requestType !== "bug") return null;
+      ticket.bugHandled = true;
+      ticket.statusEvents = [
+        ...(ticket.statusEvents || []),
+        { at: new Date().toISOString(), status: ticket.status, note: "bug handled" },
+      ];
+      return clerkTicket(withEscalate(ticket));
+    },
     writeGateStatus() {
       maybeFail("write-gate");
       return {

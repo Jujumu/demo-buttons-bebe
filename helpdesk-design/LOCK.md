@@ -76,6 +76,10 @@ gift-card write.
    Fulfillment have no shipping-zone field. Track chrome stays company +
    mono number + Track.
 
+Payments chrome (`Payments locked`, Refund, Cancel) shows only when
+This order has an `orderId`. Empty tickets peek `No order on this ticket`
+and hide the money gate.
+
 ## Marketing unsubscribe
 
 First-party ticket `requestType`. Not a Shopify Marketing write. Human
@@ -136,11 +140,13 @@ are helpdesk fields only.
    color-alone.
 2. Thread header mutes `Bug report` under the subject, then optional
    `High · iOS` (severity word · device).
-3. Rail peeks the same title plus severity / device. Copy
-   `No Shopify write`. No product mutation control.
+3. Optional hairline `Mark bug handled` in the thread header.
+   First-party ticket flag only. It does not write Shopify.
 4. Draft strip acknowledges the report and asks for the repro device
    (`iOS` / `Android`). Never invent order, catalog, or destination
    copy. Human Send only.
+
+No fifth rail tissue. Customer stays the top rail section.
 
 Intake keywords (fixture-ok): bug / crash; broken when paired with
 iOS / Android / device / app. Device peek is `iOS` or `Android`.

@@ -1,6 +1,6 @@
 import { MAILBOX_TOPICS } from "../contracts.js";
 import { clerkStatusEvents, listCustomerName, messageSpeaker, talkMessages } from "../shop/clerk-ticket.js";
-import { bugMetaPeek, esc, formatWeekday, formatWhen, initials, requestTypeChrome, screenStatus } from "../util.js";
+import { esc, formatWeekday, formatWhen, initials, requestTypeChrome, screenStatus } from "../util.js";
 
 /**
  * Thread tissue.
@@ -96,14 +96,10 @@ export function createThreadTissue({ mailbox }) {
         : `<button type="button" class="btn-hairline" ${chrome.gateAttr}>${esc(chrome.markLabel)}</button>`;
     const typeLine = chrome
       ? `<div class="thread-request-row">
-          <p class="thread-request mute" data-request-type="${esc(chrome.type)}">${esc(chrome.title)}</p>
+          <p class="thread-request mute" data-request-type="${esc(chrome.type)}"${chrome.severityAttr || ""}>${esc(chrome.title)}</p>
           ${subtype}
           ${mark}
         </div>`
-      : "";
-    const bugMeta = bugMetaPeek(ticket.severity, ticket.device);
-    const bugLine = bugMeta
-      ? `<p class="thread-request mute" data-severity="${esc(ticket.severity || "")}"${ticket.device ? ` data-device="${esc(ticket.device)}"` : ""}>${esc(bugMeta)}</p>`
       : "";
     return `<div class="pane-inner thread-inner">
       <header class="thread-head">
@@ -111,7 +107,6 @@ export function createThreadTissue({ mailbox }) {
           <h2>${esc(listCustomerName(ticket))}</h2>
           <p class="thread-subject">${esc(ticket.subject)}</p>
           ${typeLine}
-          ${bugLine}
         </div>
         <div class="thread-head-actions">
           <span class="status-badge">${esc(screenStatus(ticket.status))}</span>
@@ -139,6 +134,10 @@ export function createThreadTissue({ mailbox }) {
       }
       if (event.target.closest("[data-marketing-gate-open]")) {
         mailbox.publish(MAILBOX_TOPICS.MARKETING_GATE_OPEN, {});
+        return;
+      }
+      if (event.target.closest("[data-bug-handled]")) {
+        mailbox.publish(MAILBOX_TOPICS.BUG_HANDLED, { ticketId: model.ticket?.id });
         return;
       }
       const button = event.target.closest("[data-summarize]");

@@ -62,7 +62,7 @@ Demo names only (Ada Demo, Casey Sandbox, Jordan Preview). No customer PII.
 - The ticket badge is title case (`Open`), not `OPEN`. Ticket status is `open` / `closed` / `snoozed`, never `Return.status`.
 - Marketing unsubscribe tickets mute `Marketing unsubscribe` under the subject and may show a hairline `Mark unsubscribed` in the thread header. Confirm opens a gate sheet: `Marketing consent stays locked. No live unsubscribe.` No fifth rail tissue. No Shopify marketing write control.
 - Privacy request tickets mute `Privacy request` under the subject (optional `Access` / `Delete` / `Export` beside it) and may show a hairline `Mark privacy handled` in the thread header. Confirm is ink in the gate sheet: `Privacy tools stay locked. No live data erase or export.` No fifth rail tissue. Customer is the top rail section. No Shopify Customer Privacy write control.
-- Bug tickets mute `Bug report` under the subject, then optional `High · iOS` (severity word · device). No fifth rail tissue. No Shopify product write control.
+- Bug tickets mute `Bug report` under the subject, then optional `High · iOS` (severity word · device), and may show a hairline `Mark bug handled`. No fifth rail tissue. No Shopify product write control.
 - **Escalate** is a quiet secondary control in the thread header. It calls `helpdesk.escalate_ticket` (first-party). It does not Send and is not a Shopify write. After escalate the thread shows a mute status line `Escalated · Tuesday` (same voice as `Closed · Tuesday`). No Escalated badge or chip.
 - Skip-link copy is `Skip to thread.`
 - Summarize publishes `composer/summarize`. Caduceus fills a mute peek via `helpdesk.summarize_thread`. It does not Send and does not open an AI sidebar.
@@ -102,7 +102,7 @@ Clerk DTO field names are locked. In for each: `{ shop, customerId? , orderId? }
 - Shipment opens only when tracking exists. Mute company + tracking number are copy (number in IBM Plex Mono), not a merged accent link. Separate **Track** opens the carrier URL when present. Empty fulfillments / no `trackingInfo`: collapsed peek `No tracking` (parallel to `No billing` / `No returns`). Do not invent a number. When tracking exists, `Fulfillment.displayStatus` may peek `In transit`. Do not treat `Order.displayFulfillmentStatus` as a mute status event.
 - Null or empty SKU omits the mono SKU row entirely. Do not print `null`. Do not print an em dash that occupies a SKU column. Do not invent a SKU
 - Clicking a past order does **not** replace this section
-- Hairline **Payments locked** (same language as Send & close) opens the payments gate sheet. Not a Refund or Cancel control.
+- Hairline **Payments locked** (same language as Send & close) opens the payments gate sheet when an `orderId` is present. Hide it under `No order on this ticket`. Not a Refund or Cancel control.
 - Discounts is a nested `h3` under This order. Official `discountCodes`. Opens when a code exists. Empty peek `No discounts`.
 - Invoice is a nested `h3` under This order. Fixture `invoiceUrl` opens as a normal **Invoice** link (new tab, same accent as Track). Opens when a URL exists. Empty peek `No invoice`. Live stays empty until Clerk signs an official Order invoice/receipt URL.
 - Warranty is a nested `h3` under This order. Fixture `{ period, status, endsOn }` peeks `1 year · Active` and shows `Ends 12 Mar 2027` when open. Opens when a warranty exists. Empty peek `No warranty`. Live stays empty until Clerk signs an official Order/LineItem field or a shop metafield.

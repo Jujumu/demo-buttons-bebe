@@ -472,6 +472,7 @@ export const tickets = [
     requestType: "bug",
     severity: "high",
     device: "iOS",
+    bugHandled: false,
     updatedAt: "2026-08-28T16:00:00Z",
     stubDraft: "Hi Remy — I have the iOS checkout crash. I will log the bug out of band. This inbox does not change the Shopify catalog.",
     stubSummary: "Remy reported a high-severity iOS checkout crash. No Shopify product write from this inbox.",

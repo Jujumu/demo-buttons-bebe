@@ -88,9 +88,12 @@ test("UX Pro mute bug severity chrome has no Shopify write control", async () =>
   assert.match(snap.html, /class="ticket-status ticket-request"[^>]*>Bug</);
   assert.match(snap.html, /class="ticket-status ticket-severity"[^>]*>High</);
   assert.match(snap.html, /class="thread-request mute"[^>]*>Bug report</);
-  assert.match(snap.html, /class="thread-request mute"[^>]*>High · iOS</);
-  assert.match(snap.html, /<h2>Bug report<\/h2>\s*<span class="peek">High · iOS<\/span>/);
-  assert.match(snap.html, /No Shopify write/);
+  assert.match(snap.html, /thread-request-subtype mute">High · iOS</);
+  assert.match(snap.html, /btn-hairline"[^>]*data-bug-handled>Mark bug handled</);
+  assert.match(snap.html, /data-pane="rail"[\s\S]*?<section class="rail-card"[^>]*data-tissue="customer"/);
+  assert.doesNotMatch(snap.html, /data-tissue="preference"/);
+  assert.doesNotMatch(snap.html, /<h2>Bug report<\/h2>/);
+  assert.doesNotMatch(snap.html, />Payments locked</);
   assert.doesNotMatch(snap.html, /<(button|a)\b[^>]*>[^<]*(?:productUpdate|severity|device)/i);
   assert.doesNotMatch(snap.html, /#6B46C1|#7C3AED|#5B21B6/);
   const css = readFileSync(join(here, "../styles.css"), "utf8");

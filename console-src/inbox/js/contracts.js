@@ -141,6 +141,7 @@
  * @property {"access" | "delete" | "export" | null} [privacySubtype]
  * @property {boolean} [privacyHandled]
  * @property {boolean} [unsubscribeHandled]
+ * @property {boolean} [bugHandled]
  * @property {"low" | "medium" | "high" | "critical" | null} [severity]
  * @property {string | null} [device]
  * @property {object[]} messages — each talk message has `from` (`customer`|`agent`),
@@ -191,6 +192,7 @@
  * `marketing-gate/open`  {} — thread-header hairline opens the gated lock sheet
  * `marketing-gate/close` {}
  * `marketing-gate/handled` { ticketId } — first-party flag only; never Shopify
+ * `bug-handled`          { ticketId } — first-party flag only; never Shopify
  * `history/peek`         { orderId }  — does not replace This order
  * `tissue/error`         { tissueId, message }
  */
@@ -212,6 +214,7 @@ export const MAILBOX_TOPICS = Object.freeze({
   MARKETING_GATE_OPEN: "marketing-gate/open",
   MARKETING_GATE_CLOSE: "marketing-gate/close",
   MARKETING_HANDLED: "marketing-gate/handled",
+  BUG_HANDLED: "bug-handled",
   HISTORY_PEEK: "history/peek",
   TISSUE_ERROR: "tissue/error",
 });

@@ -321,6 +321,31 @@ export function createInboxOrgan(opts = {}) {
     return selected;
   }
 
+  async function markBugHandled() {
+    const ticket = selectedTicket();
+    if (!ticket || ticket.requestType !== "bug") return ticket;
+    if (typeof shop.markBugHandled === "function") {
+      try {
+        const result = await shop.markBugHandled({ ticketId: ticket.id });
+        if (result) {
+          selected = result;
+          return result;
+        }
+      } catch {
+        // local flag below
+      }
+    }
+    selected = {
+      ...ticket,
+      bugHandled: true,
+      statusEvents: [
+        ...(ticket.statusEvents || []),
+        { at: new Date().toISOString(), status: ticket.status, note: "bug handled" },
+      ],
+    };
+    return selected;
+  }
+
   async function refreshMacros(query = "") {
     macroQuery = query;
     if (typeof shop.searchMacros === "function") {
@@ -542,6 +567,10 @@ export function createInboxOrgan(opts = {}) {
       if (ticketId && ticketId !== selectedId) selectedId = ticketId;
       markUnsubscribed().then(() => refreshRail()).then(paint);
     });
+    mailbox.subscribe(MAILBOX_TOPICS.BUG_HANDLED, ({ ticketId }) => {
+      if (ticketId && ticketId !== selectedId) selectedId = ticketId;
+      markBugHandled().then(() => refreshRail()).then(paint);
+    });
     root.onclick = (event) => {
       if (event.target.closest("[data-privacy-handled]")) {
         const ticket = selectedTicket();
@@ -551,6 +580,11 @@ export function createInboxOrgan(opts = {}) {
       if (event.target.closest("[data-unsubscribe-handled]")) {
         const ticket = selectedTicket();
         mailbox.publish(MAILBOX_TOPICS.MARKETING_HANDLED, { ticketId: ticket?.id });
+        return;
+      }
+      if (event.target.closest("[data-bug-handled]")) {
+        const ticket = selectedTicket();
+        mailbox.publish(MAILBOX_TOPICS.BUG_HANDLED, { ticketId: ticket?.id });
         return;
       }
       if (event.target.closest("[data-gate-dismiss]") || event.target.closest("[data-gate-sheet]") === event.target) {
@@ -712,6 +746,12 @@ export function createInboxOrgan(opts = {}) {
     },
     async markUnsubscribed() {
       const ticket = await markUnsubscribed();
+      if (ticket && !pinnedCatalog) await refreshThread();
+      await refreshRail();
+      return snapshot();
+    },
+    async markBugHandled() {
+      const ticket = await markBugHandled();
       if (ticket && !pinnedCatalog) await refreshThread();
       await refreshRail();
       return snapshot();

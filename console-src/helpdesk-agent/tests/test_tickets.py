@@ -279,8 +279,13 @@ class TicketContractTests(unittest.TestCase):
         self.assertEqual(ticket["requestType"], "bug")
         self.assertEqual(ticket["severity"], "high")
         self.assertEqual(ticket["device"], "iOS")
+        self.assertFalse(ticket["bugHandled"])
         self.assertEqual(ticket["status"], "open")
         self.assertFalse(ticket.get("escalated"))
+        from helpdesk.tickets import mark_bug_handled
+
+        handled = mark_bug_handled("t-remy-bug")
+        self.assertTrue(handled["bugHandled"])
         from helpdesk.queries import CUSTOMER_QUERY, ORDER_QUERY
         from unittest.mock import patch
 
@@ -296,6 +301,7 @@ class TicketContractTests(unittest.TestCase):
         self.assertEqual(WRITE_TOOLS, frozenset({"helpdesk.send", "helpdesk.refund", "helpdesk.cancel"}))
         self.assertNotIn("helpdesk.mark_request_type", WRITE_TOOLS)
         self.assertNotIn("helpdesk.bug_report", WRITE_TOOLS)
+        self.assertNotIn("helpdesk.mark_bug_handled", WRITE_TOOLS)
         for tool in ("helpdesk.refund", "helpdesk.cancel"):
             payload = invoke(tool, {"ticketId": "t-remy-bug"})
             self.assertEqual(payload["error"], "forbidden")
