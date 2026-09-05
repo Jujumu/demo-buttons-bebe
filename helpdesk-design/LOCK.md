@@ -1,12 +1,23 @@
 # Inbox lock
 
-Four panes only: views **200** / list **300** / thread **flex** / rail **300**.
-Selected list row is a **4px `#1C1916` ink bar**. No grey wash. IBM Plex.
+Chrome is list / thread / rail (views live in the list toolbar). Column
+balance is roughly **24% / 54% / 22%** (list / thread / rail) with
+sensible min-widths; list and rail each collapse to a ~36px strip.
+Selected list row is a **narrow accent edge** (`3–4px` `#B5471D`) plus a
+**pale accent wash** (`color-mix` accent into surface ~8–12%). No grey
+wash. No ink-only bar. IBM Plex.
 List row time is relative (`2h`, `Yesterday`). Absolute stays in the
 thread message header and the list tooltip.
+Unread is session-local (no Shopify field): unread names bold; selecting
+a ticket marks it read. Omit repeating **Open** in open queues; keep
+Closed / Snoozed. Privacy / Unsubscribe / Bug / severity are small mute
+badges — not purple.
 Palette: ground `#F4F0EA`, surface `#FFFDF9`, ink `#1C1916`, mute `#5C564F`,
 accent `#B5471D`. Human Send only. No Gorgias chrome, purple, Gaia, or a
 fifth AI column. No Customer Edit, Refund, or Cancel.
+Composer stays anchored under the thread scroll. Attachment images are
+small expandable thumbs. AI draft is full-width with **Use draft** /
+**Regenerate** / **Dismiss** under the text — never Send from the strip.
 
 Empty-copy voice is short and parallel:
 
@@ -18,8 +29,13 @@ Empty-copy voice is short and parallel:
 - No invoice
 - No warranty
 - No ETA
-- No customer on this ticket
+- No customer
+- No order
 - No Shopify write
+
+Empty Customer / This order bodies stay compact (one short line). Peek
+stays `No customer` / `No order`. **Find customer** / **Link order** open
+gated lock sheets only — no live join tool in this lock.
 
 Thread inbound From is the customer persona (`From Ada Demo`), not the
 AgentMail/shop mailbox login. Mute the email when it helps; omit mailbox
@@ -77,8 +93,9 @@ gift-card write.
    mono number + Track.
 
 Payments chrome (`Payments locked`, Refund, Cancel) shows only when
-This order has an `orderId`. Empty tickets peek `No order on this ticket`
-and hide the money gate.
+This order has an `orderId`. Empty tickets peek `No order` and hide the
+money gate. Compact **Find customer** / **Link order** open gated lock
+sheets only.
 
 ## Marketing unsubscribe
 
@@ -94,7 +111,8 @@ owns the preference change out of band.
 4. Gated lock copy:
    `Marketing consent stays locked. No live unsubscribe.`
 5. Draft strip (`helpdesk.draft_reply`) confirms opt-out / marketing
-   preference path. Never invent order, catalog, or destination copy.
+   preference path. Verbs: Use draft / Regenerate / Dismiss — never Send.
+   Never invent order, catalog, or destination copy.
 
 No fifth rail tissue. Customer stays the top rail section.
 
@@ -120,6 +138,7 @@ deletion out of band. No fifth rail tissue.
    `Privacy tools stay locked. No live data erase or export.`
    Confirm in the gate sheet can be ink.
 6. Draft strip explains the privacy path out of band (export / deletion).
+   Verbs: Use draft / Regenerate / Dismiss — never Send.
    Never invent order, catalog, or destination copy.
 
 Customer stays the top rail section.
@@ -143,8 +162,15 @@ are helpdesk fields only.
 3. Optional hairline `Mark bug handled` in the thread header.
    First-party ticket flag only. It does not write Shopify.
 4. Draft strip acknowledges the report and asks for the repro device
-   (`iOS` / `Android`). Never invent order, catalog, or destination
-   copy. Human Send only.
+   (`iOS` / `Android`). Verbs: Use draft / Regenerate / Dismiss — never
+   Send. Never invent order, catalog, or destination copy. Human Send only.
+
+## Damage / torn photo (no order)
+
+When a ticket is a damage / torn / cracked photo without an order GID
+(`t-demo-03-damaged-rattle`, `t-demo-17-plush`, or keyword match), the
+draft acknowledges the tear/photo and asks for an order number. Never
+say “destination.” Never invent order or catalog copy. Human Send only.
 
 No fifth rail tissue. Customer stays the top rail section.
 

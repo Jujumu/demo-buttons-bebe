@@ -7,9 +7,9 @@ The shop tissue is a client of `helpdesk.get_customer` / `get_order` /
 and thread are clients of `helpdesk.list_tickets` (`{ view, limit }`) and
 `helpdesk.get_ticket` (`{ ticketId }`) on that same `invoke()` path. List
 rows carry `customerId` / `orderId` GIDs so the rail lights when a ticket is
-selected. Composer Insert/Discard and the mute summarize peek are clients of
+selected. Composer Use draft / Regenerate / Dismiss and the mute summarize peek are clients of
 `helpdesk.draft_reply` and `helpdesk.summarize_thread`. In-box macro search is
-a client of `helpdesk.search_macros`; Insert/Append call `helpdesk.apply_macro`
+a client of `helpdesk.search_macros`; Replace/Append call `helpdesk.apply_macro`
 (`replace` or `append`) and never send. Email/chat intake is a client of
 `helpdesk.ingest_email` / `helpdesk.ingest_chat` / `helpdesk.pull_mailbox`
 on that same path. `pull_mailbox` is the AgentMail bridge: it maps unread
@@ -28,12 +28,17 @@ Demo names only (Ada Demo, Casey Sandbox, Jordan Preview). No customer PII.
 |---|---|---|
 | `view/selected` | `{ viewId }` | view |
 | `list/selected` | `{ ticketId }` | list |
+| `list/collapsed` | `{ collapsed }` | list |
+| `rail/collapsed` | `{ collapsed }` | rail |
 | `composer/body` | `{ text }` | composer |
-| `composer/insert` | `{ text }` | composer (macro or AI Insert) |
-| `composer/discard` | `{}` | composer (AI Discard) |
+| `composer/insert` | `{ text }` | composer (macro or AI Use draft) |
+| `composer/discard` | `{}` | composer (AI Dismiss) |
+| `composer/regenerate` | `{}` | composer (AI Regenerate) |
 | `composer/macros` | `{ open }` | composer (Macros hairline / `/` / focus) — never Send |
 | `composer/send` | `{ text, close }` | composer Send / Send & close — never the AI strip |
 | `composer/summarize` | `{ ticketId }` | thread |
+| `customer-join-gate/open` | `{}` | rail Find customer — gated only |
+| `order-link-gate/open` | `{}` | rail Link order — gated only |
 | `history/peek` | `{ orderId }` | order-history — does **not** replace This order |
 | `tissue/error` | `{ tissueId, message }` | any tissue that fails closed |
 
@@ -48,10 +53,11 @@ Demo names only (Ada Demo, Casey Sandbox, Jordan Preview). No customer PII.
 
 ### list
 
-- **In:** `{ tickets, selectedTicketId, viewLabel }` from `helpdesk.list_tickets`
+- **In:** `{ tickets, selectedTicketId, viewLabel, unreadIds }` from `helpdesk.list_tickets`
 - **Out:** `{ ticketId }` on `list/selected`
-- Row copy uses first-party `customerName` (never the AgentMail/shop mailbox login), `snippet`, and title-case helpdesk `status` (`Open` / `Closed` / `Snoozed`). Row time is relative (`2h`, `Yesterday`) from `updatedAt`. Absolute stays in the thread message header and the list tooltip. Mute list meta `Unsubscribe` when `requestType` is `marketing_unsubscribe`, `Privacy` when it is `privacy_request`, or `Bug` plus the severity word (`High`) when it is `bug`. Never `Return.status`. Never `Order.displayFulfillmentStatus`.
-- **Selected row:** One leading-edge ink bar on the selected ticket (4px). That is the only selection treatment. No wash, no purple. Surface only (`#FFFDF9`); bar is `#1C1916`.
+- Row copy uses first-party `customerName` (never the AgentMail/shop mailbox login), `snippet`, and title-case helpdesk `status` (`Closed` / `Snoozed`; omit repeating `Open`). Row time is relative (`2h`, `Yesterday`) from `updatedAt`. Absolute stays in the thread message header and the list tooltip. Small mute badges for `Unsubscribe` / `Privacy` / `Bug` / severity. Never `Return.status`. Never `Order.displayFulfillmentStatus`.
+- **Selected row:** Pale accent wash + narrow accent edge (`3–4px` `#B5471D`). No grey wash, no purple, no ink-only bar.
+- **Unread:** Session-local set (no Shopify field). Fixtures start unread; selecting marks read. Unread name is bold.
 - **Degrade:** “No tickets in this view”
 
 ### thread
@@ -72,9 +78,9 @@ Demo names only (Ada Demo, Casey Sandbox, Jordan Preview). No customer PII.
 ### composer
 
 - **In:** `{ ticket, draft, summarize, macros, body }`
-- **Out:** body / insert / discard / send
-- To is visible. Default composer is Draft strip (if any) + textarea + Send. Macro search is collapsed until focus, `/`, or the **Macros** hairline. Once open, search lives **inside** the composer box (not a floating panel over the thread). Pick a row, then Replace or Append. Those fill the textarea via `helpdesk.apply_macro` and never Send. Replace (not Insert) is the macro verb so it does not collide with the signed draft-strip Insert. After Replace/Append the picker closes.
-- AI draft is a strip **above** the composer box (outside `.composer-box`) with Insert / Discard — never Send. The AI draft kicker is mute (accent is unread/error only). Draft text comes from `helpdesk.draft_reply` and branches on ticket `requestType` (unsubscribe / privacy answer the ask; `bug` acknowledges the report and asks for a repro device; null keeps the existing draft). Greeting uses ticket `customerName`, never `Customer.displayName`.
+- **Out:** body / insert / discard / regenerate / send
+- To is visible. Composer docks under the thread scroll. Default paint is Draft strip (if any) + textarea + Send. Macro search is collapsed until focus, `/`, or the **Macros** hairline. Once open, search lives **inside** the composer box (not a floating panel over the thread). Pick a row, then Replace or Append. Those fill the textarea via `helpdesk.apply_macro` and never Send. Replace is the macro verb so it does not collide with the draft-strip **Use draft**. After Replace/Append the picker closes.
+- AI draft is a strip **above** the composer box (outside `.composer-box`): full-width text with **Use draft** / **Regenerate** / **Dismiss** under it — never Send. The AI draft kicker is mute. Draft text comes from `helpdesk.draft_reply` and branches on ticket `requestType` (unsubscribe / privacy answer the ask; `bug` acknowledges the report and asks for a repro device; damage/torn photo without an order asks for an order # and never says “destination”; null keeps the existing draft). Greeting uses ticket `customerName`, never `Customer.displayName`.
 - Summarize is a mute peek **above** the composer box, never a send. It does not enable Send by itself.
 - Send is ink fill (min-height 40px; 44px on coarse pointers) and disabled while the body is empty
 - Send & close is hairline secondary, not a second ink primary. It hides on a closed ticket
@@ -92,7 +98,7 @@ Clerk DTO field names are locked. In for each: `{ shop, customerId? , orderId? }
 - Default open. Peek: name
 - Gift cards is a nested `h3` under Customer. Opens when a fixture card exists. Peek `No gift cards` when empty. Show masked last-four, MoneyV2 balance, Enabled/Disabled. Live stays empty until Clerk wires `giftCards(query:)`.
 - No Customer Edit link. No `customerUpdate` / address writes.
-- **Degrade:** “No customer on this ticket” in this card only
+- **Degrade:** compact “No customer” + hairline **Find customer** (gated lock sheet only; no live join)
 
 ### order (This order)
 
@@ -103,12 +109,12 @@ Clerk DTO field names are locked. In for each: `{ shop, customerId? , orderId? }
 - Shipment opens only when tracking exists. Mute company + tracking number are copy (number in IBM Plex Mono), not a merged accent link. Separate **Track** opens the carrier URL when present. Empty fulfillments / no `trackingInfo`: collapsed peek `No tracking` (parallel to `No billing` / `No returns`). Do not invent a number. When tracking exists, `Fulfillment.displayStatus` may peek `In transit`. Do not treat `Order.displayFulfillmentStatus` as a mute status event.
 - Null or empty SKU omits the mono SKU row entirely. Do not print `null`. Do not print an em dash that occupies a SKU column. Do not invent a SKU
 - Clicking a past order does **not** replace this section
-- Hairline **Payments locked** (same language as Send & close) opens the payments gate sheet when an `orderId` is present. Hide it under `No order on this ticket`. Not a Refund or Cancel control.
+- Hairline **Payments locked** (same language as Send & close) opens the payments gate sheet when an `orderId` is present. Hide it under `No order`. Not a Refund or Cancel control.
 - Discounts is a nested `h3` under This order. Official `discountCodes`. Opens when a code exists. Empty peek `No discounts`.
 - Invoice is a nested `h3` under This order. Fixture `invoiceUrl` opens as a normal **Invoice** link (new tab, same accent as Track). Opens when a URL exists. Empty peek `No invoice`. Live stays empty until Clerk signs an official Order invoice/receipt URL.
 - Warranty is a nested `h3` under This order. Fixture `{ period, status, endsOn }` peeks `1 year · Active` and shows `Ends 12 Mar 2027` when open. Opens when a warranty exists. Empty peek `No warranty`. Live stays empty until Clerk signs an official Order/LineItem field or a shop metafield.
 - ETA is a nested `h3` under This order, next to Shipment. Official `Fulfillment.estimatedDeliveryAt` peeks `ETA Tue 8 Sep`. Fixture `shippingZone` adds mute `Zone: Domestic` when open. Opens when ETA or zone exists. Empty peek `No ETA` covers both. Live zone stays empty until Clerk signs an official Order/Fulfillment zone field. Track chrome stays company + mono number + Track.
-- **Degrade:** “No order on this ticket”
+- **Degrade:** compact “No order” + hairline **Link order** (gated lock sheet only; no live link)
 
 ### returns
 
@@ -138,7 +144,7 @@ Clerk DTO field names are locked. In for each: `{ shop, customerId? , orderId? }
 - Views / list / thread use the same client for `helpdesk.list_tickets` and
   `helpdesk.get_ticket`. Composer uses it for `helpdesk.draft_reply`,
   `helpdesk.summarize_thread`, `helpdesk.search_macros`, and
-  `helpdesk.apply_macro`. Draft-strip Insert/Discard and macro Replace/Append never call send.
+  `helpdesk.apply_macro`. Draft-strip Use draft / Regenerate / Dismiss and macro Replace/Append never call send.
 - Fallback: `console-src/inbox/js/shop/fixture-shop.js` when mint/Admin/HTTP
   is unavailable, or when the requested GID is only on the fixture catalog
 - Live Cute Things (`source=live`) remounts the inbox onto live GIDs. Empty

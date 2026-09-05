@@ -267,7 +267,10 @@ export function renderOrder(model, { open = true, addressesOpen = false, shipmen
         <h2>This order</h2><span class="peek">${esc(model.peek)}</span>
       </button>
       <div class="rail-body">
-        <p class="tissue-empty">No order on this ticket</p>
+        <div class="rail-empty-next">
+          <p class="tissue-empty">No order</p>
+          <button type="button" class="btn-hairline" data-order-link-gate-open>Link order</button>
+        </div>
       </div>
     </section>`;
   }

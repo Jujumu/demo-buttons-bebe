@@ -71,19 +71,20 @@ test("mount first-paints the Ada draft strip above the composer box", async () =
   assert.doesNotMatch(composer.slice(boxAt), /data-draft-strip/);
 });
 
-test("selected list row CSS is a 4px ink bar with no wash", () => {
+test("selected list row CSS is pale accent wash + narrow accent edge", () => {
   const css = readFileSync(join(here, "../styles.css"), "utf8");
   assert.match(css, /--ink:\s*#1C1916/);
-  assert.match(css, /\.ticket-row \.ticket-bar[\s\S]*width:\s*4px/);
-  assert.match(css, /\.ticket-row\.is-selected\s*\{[^}]*background:\s*var\(--surface\)/);
-  assert.match(css, /One leading-edge ink bar on the selected ticket \(4px\)/);
+  assert.match(css, /--accent:\s*#B5471D/);
+  assert.match(css, /\.ticket-row \.ticket-bar[\s\S]*width:\s*3px/);
+  assert.match(css, /\.ticket-row\.is-selected\s*\{[^}]*color-mix\([^)]*var\(--accent\)/);
+  assert.match(css, /Pale accent wash \+ narrow accent edge on the selected ticket/);
   assert.match(css, /\.track-link\s*\{[^}]*color:\s*var\(--accent\)/);
   assert.match(css, /\.invoice-link\s*\{[^}]*color:\s*var\(--accent\)/);
   assert.doesNotMatch(css, /\.track-link\s*\{[^}]*font-family:\s*var\(--mono\)/);
   assert.match(css, /\.ship-company\s*\{[^}]*color:\s*var\(--mute\)/);
   assert.match(css, /\.ship-number\s*\{[^}]*font-family:\s*var\(--mono\)/);
-  assert.doesNotMatch(css, /\.ticket-row\.is-selected\s*\{[^}]*background:\s*(?:#e|#E|rgba?\(\s*\d+)/);
-  assert.doesNotMatch(css, /\.ticket-row\.is-selected\s*\{[^}]*box-shadow:\s*inset/);
+  assert.doesNotMatch(css, /\.ticket-row\.is-selected\s*\{[^}]*background:\s*var\(--surface\)\s*;/);
+  assert.doesNotMatch(css, /\.ticket-row\.is-selected \.ticket-bar[\s\S]*background:\s*#1C1916/);
   assert.doesNotMatch(css, /#6B46C1|#7C3AED|#5B21B6/);
 });
 
@@ -92,7 +93,7 @@ test("unsubscribe ticket shows mute request type without a Shopify write control
   const snap = await organ.ready();
   assert.equal(snap.selectedId, "t-priya-unsub");
   assert.match(snap.html, /data-ticket="t-priya-unsub"[^>]*data-request-type="marketing_unsubscribe"/);
-  assert.match(snap.html, /class="ticket-status ticket-request"[^>]*>Unsubscribe</);
+  assert.match(snap.html, /class="ticket-badge ticket-request"[^>]*>Unsubscribe</);
   assert.match(snap.html, /class="thread-request mute"[^>]*>Marketing unsubscribe</);
   assert.match(snap.html, /btn-hairline"[^>]*data-marketing-gate-open>Mark unsubscribed</);
   assert.match(snap.html, /data-pane="rail"[\s\S]*?<section class="rail-card"[^>]*data-tissue="customer"/);
@@ -124,7 +125,7 @@ test("privacy ticket shows mute request type without a Shopify write control", a
   const snap = await organ.ready();
   assert.equal(snap.selectedId, "t-lee-privacy");
   assert.match(snap.html, /data-ticket="t-lee-privacy"[^>]*data-request-type="privacy_request"/);
-  assert.match(snap.html, /class="ticket-status ticket-request"[^>]*>Privacy</);
+  assert.match(snap.html, /class="ticket-badge ticket-request"[^>]*>Privacy</);
   assert.match(snap.html, /class="thread-request mute"[^>]*>Privacy request</);
   assert.match(snap.html, /thread-request-subtype mute">Delete</);
   assert.match(snap.html, /btn-hairline"[^>]*data-privacy-gate-open>Mark privacy handled</);
@@ -149,7 +150,7 @@ test("privacy ticket shows mute request type without a Shopify write control", a
   assert.doesNotMatch(handled.html, /data-privacy-gate-open/);
   const priya = await createInboxOrgan({ viewId: "mine", ticketId: "t-priya-unsub" }).ready();
   assert.match(priya.html, /data-ticket="t-priya-unsub"[^>]*data-request-type="marketing_unsubscribe"/);
-  assert.match(priya.html, /class="ticket-status ticket-request"[^>]*>Unsubscribe</);
+  assert.match(priya.html, /class="ticket-badge ticket-request"[^>]*>Unsubscribe</);
 });
 
 test("bug ticket shows mute severity and device without a Shopify write control", async () => {
@@ -158,14 +159,14 @@ test("bug ticket shows mute severity and device without a Shopify write control"
   assert.equal(snap.selectedId, "t-remy-bug");
   assert.match(snap.html, /data-ticket="t-remy-bug"[^>]*data-request-type="bug"/);
   assert.match(snap.html, /data-ticket="t-remy-bug"[^>]*data-severity="high"/);
-  assert.match(snap.html, /class="ticket-status ticket-request"[^>]*>Bug</);
-  assert.match(snap.html, /class="ticket-status ticket-severity"[^>]*>High</);
+  assert.match(snap.html, /class="ticket-badge ticket-request"[^>]*>Bug</);
+  assert.match(snap.html, /class="ticket-badge ticket-severity"[^>]*>High</);
   assert.match(snap.html, /class="thread-request mute"[^>]*>Bug report</);
   assert.match(snap.html, /thread-request-subtype mute">High · iOS</);
   assert.match(snap.html, /btn-hairline"[^>]*data-bug-handled>Mark bug handled</);
   assert.match(snap.html, /data-pane="rail"[\s\S]*?<section class="rail-card"[^>]*data-tissue="customer"/);
   assert.match(snap.html, /<h2>Customer<\/h2>\s*<span class="peek">No customer<\/span>/);
-  assert.match(snap.html, /No order on this ticket/);
+  assert.match(snap.html, /No order/);
   assert.doesNotMatch(snap.html, /data-tissue="preference"/);
   assert.doesNotMatch(snap.html, /<h2>Bug report<\/h2>/);
   assert.doesNotMatch(snap.html, /data-tissue="bug"/);
@@ -184,12 +185,12 @@ test("bug ticket shows mute severity and device without a Shopify write control"
   assert.doesNotMatch(ada.html, /class="thread-request mute"/);
 });
 
-test("list rows show helpdesk status open closed snoozed", async () => {
+test("list rows show helpdesk status closed snoozed and omit Open chip", async () => {
   const snap = await createInboxOrgan({ viewId: "all" }).ready();
   assert.match(snap.html, /data-ticket="t-ada-track"[^>]*data-status="open"/);
   assert.match(snap.html, /data-ticket="t-ada-closed"[^>]*data-status="closed"/);
   assert.match(snap.html, /data-ticket="t-jordan-ship"[^>]*data-status="snoozed"/);
-  assert.match(snap.html, /class="ticket-status">Open</);
+  assert.doesNotMatch(snap.html, /class="ticket-status">Open</);
   assert.match(snap.html, /class="ticket-status">Closed</);
   assert.match(snap.html, /class="ticket-status">Snoozed</);
   assert.doesNotMatch(snap.html, /class="ticket-status">OPEN</);
@@ -415,7 +416,7 @@ test("composer write-gate copy is gated on orderId", async () => {
   const noOrder = createInboxOrgan({ viewId: "snoozed", ticketId: "t-jordan-ship" });
   const empty = await noOrder.ready();
   assert.equal(empty.rail.currentOrderId, null);
-  assert.match(empty.html, /No order on this ticket/);
+  assert.match(empty.html, /No order/);
   assert.doesNotMatch(empty.html, /data-write-gate>/);
   assert.doesNotMatch(empty.html, /Refunds and cancels are gated/);
 });
@@ -516,7 +517,7 @@ test("one rail tissue error leaves thread and other rail sections up", async () 
   assert.ok(snap.html.includes("data-tissue=\"order-history\""));
 });
 
-test("Sam unjoined ticket with null GIDs says No customer on this ticket", async () => {
+test("Sam unjoined ticket with null GIDs says No customer", async () => {
   const organ = createInboxOrgan({
     viewId: "unassigned",
     ticketId: "t-sam-unjoined",
@@ -544,9 +545,11 @@ test("Sam unjoined ticket with null GIDs says No customer on this ticket", async
   const snap = await organ.ready();
   assert.equal(snap.selectedId, "t-sam-unjoined");
   assert.match(snap.html, /<h2>Customer<\/h2>\s*<span class="peek">No customer<\/span>/);
-  assert.match(snap.html, /No customer on this ticket/);
+  assert.match(snap.html, /No customer/);
+  assert.match(snap.html, /data-customer-join-gate-open>Find customer</);
   assert.doesNotMatch(snap.html, /Customer unavailable/);
-  assert.match(snap.html, /No order on this ticket/);
+  assert.match(snap.html, /No order/);
+  assert.match(snap.html, /data-order-link-gate-open>Link order</);
   assert.match(snap.html, /<strong>From Sam<\/strong>/);
   assert.doesNotMatch(snap.html, /From teddyjubu/i);
   assert.match(snap.html, /ticket-name">Sam</);
@@ -595,7 +598,7 @@ test("Jordan ticket without an order does not blank the thread", async () => {
   const snap = await organ.ready();
   assert.match(snap.html, /Jordan Preview/);
   assert.match(snap.html, /Do you ship the demo catalog to Canada/);
-  assert.match(snap.html, /No order on this ticket/);
+  assert.match(snap.html, /No order/);
   assert.doesNotMatch(snap.html, /data-write-gate-open/);
   assert.doesNotMatch(snap.html, />Payments locked</);
   assert.doesNotMatch(snap.html, /<(button|a)\b[^>]*>[^<]*Refund/i);
@@ -673,7 +676,7 @@ test("list X collapses the ticket column and expand brings it back", async () =>
   assert.match(snap.html, /data-list-collapse/);
 });
 
-test("composer Insert and Discard never publish send", () => {
+test("composer Use draft and Dismiss never publish send", () => {
   const mailbox = createMailbox();
   const events = [];
   mailbox.subscribe(MAILBOX_TOPICS.COMPOSER_SEND, (payload) => events.push(["send", payload]));
@@ -692,11 +695,14 @@ test("composer Insert and Discard never publish send", () => {
   assert.ok(events.every((row) => row[0] !== "send"));
 });
 
-test("Insert puts the draft in the textarea and does not send", async () => {
+test("Use draft puts the draft in the textarea and does not send", async () => {
   const organ = createInboxOrgan({ viewId: "mine" });
   let snap = await organ.ready();
   assert.match(snap.html, /data-draft-strip/);
   assert.match(snap.html, /draft-kicker">AI draft</);
+  assert.match(snap.html, /data-insert>Use draft</);
+  assert.match(snap.html, /data-regenerate>Regenerate</);
+  assert.match(snap.html, /data-discard>Dismiss</);
   const stripAt = snap.html.indexOf("data-draft-strip");
   const boxAt = snap.html.indexOf("composer-box");
   assert.ok(stripAt > -1 && boxAt > stripAt, "draft strip sits above the composer box");
@@ -709,6 +715,43 @@ test("Insert puts the draft in the textarea and does not send", async () => {
   assert.match(snap.html, /Hi Ada/);
   assert.equal(snap.sendDisabled, false);
   assert.equal(snap.sent.length, 0);
+});
+
+test("Find customer and Link order open gated lock sheets", async () => {
+  const organ = createInboxOrgan({
+    viewId: "unassigned",
+    ticketId: "t-sam-join",
+    tickets: [{
+      id: "t-sam-join",
+      customerName: "Sam",
+      subject: "Broken rattle",
+      snippet: "Cracked.",
+      status: "open",
+      view: "unassigned",
+      assignee: null,
+      customerId: null,
+      orderId: null,
+      updatedAt: "2026-08-30T14:10:00Z",
+      messages: [{ id: "m1", fromAgent: false, name: "Sam", at: "2026-08-30T14:10:00Z", body: "Cracked." }],
+      statusEvents: [],
+    }],
+  });
+  await organ.ready();
+  const join = organ.openCustomerJoinGate();
+  assert.match(join.html, /data-customer-join-gate/);
+  assert.match(join.html, /Customer join stays locked\. No live find yet\./);
+  const link = organ.openOrderLinkGate();
+  assert.match(link.html, /data-order-link-gate/);
+  assert.match(link.html, /Order link stays locked\. No live link yet\./);
+});
+
+test("session-local unread bold clears on select", async () => {
+  const organ = createInboxOrgan({ viewId: "mine", ticketId: "t-ada-track" });
+  const snap = await organ.ready();
+  assert.ok(!snap.unreadIds.includes("t-ada-track"));
+  assert.match(snap.html, /class="ticket-row is-selected"[^>]*data-ticket="t-ada-track"/);
+  assert.doesNotMatch(snap.html, /class="ticket-row[^"]*is-unread[^"]*"[^>]*data-ticket="t-ada-track"/);
+  assert.match(snap.html, /class="ticket-row is-unread"[^>]*data-ticket="t-priya-unsub"/);
 });
 
 test("Summarize fills a mute peek and does not enable Send", async () => {

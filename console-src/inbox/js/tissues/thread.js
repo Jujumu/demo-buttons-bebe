@@ -9,9 +9,12 @@ import { esc, formatWeekday, formatWhen, initials, requestTypeChrome, screenStat
  * Inbound From is the customer persona, not the AgentMail/shop mailbox login.
  * Status-change events are muted as `Closed · Tuesday`. Escalate writes
  * `Escalated · Tuesday` the same way. No Escalated badge. No Send.
+ * Attachment images are small thumbs; click opens a simple lightbox.
  */
 export function createThreadTissue({ mailbox }) {
   let model = { ticket: null };
+  let lightbox = null;
+  let host = null;
 
   function project(input) {
     return { ticket: input.ticket || null };
@@ -25,12 +28,24 @@ export function createThreadTissue({ mailbox }) {
       .map((item) => {
         const alt = item.alt || "Attachment";
         return `<figure class="bubble-attach">
-          <img src="${esc(item.url)}" alt="${esc(alt)}" loading="lazy" />
+          <button type="button" class="bubble-thumb" data-attach-open data-attach-url="${esc(item.url)}" data-attach-alt="${esc(alt)}" aria-label="Expand ${esc(alt)}">
+            <img src="${esc(item.url)}" alt="${esc(alt)}" loading="lazy" width="80" height="80" />
+          </button>
           <figcaption>${esc(alt)}</figcaption>
         </figure>`;
       })
       .join("");
     return figures ? `<div class="bubble-attachments">${figures}</div>` : "";
+  }
+
+  function renderLightbox() {
+    if (!lightbox?.url) return "";
+    return `<div class="attach-lightbox-backdrop" data-attach-lightbox role="dialog" aria-modal="true" aria-label="Attachment">
+      <figure class="attach-lightbox">
+        <img src="${esc(lightbox.url)}" alt="${esc(lightbox.alt || "Attachment")}" />
+        <figcaption>${esc(lightbox.alt || "Attachment")}</figcaption>
+      </figure>
+    </div>`;
   }
 
   function renderMessage(ticket, message) {
@@ -78,7 +93,7 @@ export function createThreadTissue({ mailbox }) {
   function render(next = model) {
     const ticket = next.ticket;
     if (!ticket) {
-      return `<div class="pane-inner"><p class="empty-pane">Select a ticket.</p></div>`;
+      return `<div class="pane-inner"><p class="empty-pane">Select a ticket.</p></div>${renderLightbox()}`;
     }
     const count = talkMessages(ticket).length;
     const summarizeLabel = count === 1 ? "Summarize 1 message" : `Summarize ${count} messages`;
@@ -117,12 +132,37 @@ export function createThreadTissue({ mailbox }) {
       <div class="summarize-row">
         <button type="button" class="btn-quiet" data-summarize="${esc(ticket.id)}">${esc(summarizeLabel)}</button>
       </div>
-    </div>`;
+    </div>${renderLightbox()}`;
+  }
+
+  function paint() {
+    if (!host) return;
+    host.innerHTML = render(model);
+  }
+
+  function closeLightbox() {
+    if (!lightbox) return;
+    lightbox = null;
+    paint();
   }
 
   function mount(el) {
-    el.innerHTML = render(model);
+    host = el;
+    paint();
     el.onclick = (event) => {
+      const openAttach = event.target.closest("[data-attach-open]");
+      if (openAttach) {
+        lightbox = {
+          url: openAttach.dataset.attachUrl || "",
+          alt: openAttach.dataset.attachAlt || "Attachment",
+        };
+        paint();
+        return;
+      }
+      if (event.target.closest("[data-attach-lightbox]") === event.target) {
+        closeLightbox();
+        return;
+      }
       const escalate = event.target.closest("[data-escalate]");
       if (escalate) {
         mailbox.publish(MAILBOX_TOPICS.THREAD_ESCALATE, { ticketId: escalate.dataset.escalate });
@@ -143,6 +183,12 @@ export function createThreadTissue({ mailbox }) {
       const button = event.target.closest("[data-summarize]");
       if (!button) return;
       mailbox.publish(MAILBOX_TOPICS.COMPOSER_SUMMARIZE, { ticketId: button.dataset.summarize });
+    };
+    el.onkeydown = (event) => {
+      if (event.key === "Escape" && lightbox) {
+        event.preventDefault?.();
+        closeLightbox();
+      }
     };
   }
 

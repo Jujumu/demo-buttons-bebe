@@ -66,18 +66,82 @@ export function draftForRequestType(requestType, name) {
   return "";
 }
 
+function scenarioDraft(ticketId, name, orderName, financial, fulfill) {
+  const oid = orderName || "";
+  const money = financial || "Paid";
+  const ship = fulfill || "Unfulfilled";
+  if (ticketId === "t-demo-04-return") {
+    const looked = oid || "#1003";
+    return `Hi ${name} — I looked at ${looked}. To start a return on the merino throw, reply with the item name and whether tags are still on, and we will walk you through the return portal steps from here. A prepaid label is not automatic — once the return is set up, we will confirm whether a label is included or you need to buy postage. I will not refund or cancel from this chat. Let me know if you need anything else.`;
+  }
+  if (ticketId === "t-demo-05-cancel") {
+    const looked = oid || "#1001";
+    return `Hi ${name} — I looked at ${looked}. It is ${money} and ${ship}, so it has not been handed to a carrier yet. I see you asked to cancel because of the wrong size. I will not cancel or refund from here — a teammate needs to review the hold before anything changes. I will write back once that review is done. Let me know if you need anything else.`;
+  }
+  if (ticketId === "t-demo-08-canada") {
+    return `Hi ${name} — Yes, we can ship the Muslin Swaddle Trio to Montreal. International shipping is offered at checkout (about $35 USD as a typical rate — please confirm the live total before you place the order). Any customs or import duties charged in Canada are the customer’s responsibility. I cannot promise a carrier delivery date from this chat. Let me know if you need anything else.`;
+  }
+  if (ticketId === "t-demo-14-duplicate") {
+    const looked = oid || "#1001";
+    return `Hi ${name} — I looked at ${looked}. Thanks for flagging the two bank lines that look like this order. I am checking whether one is a pending authorization versus a second capture. I will not refund from here — once we confirm what the bank is showing, a teammate can advise next steps. Let me know if you need anything else.`;
+  }
+  if (ticketId === "t-demo-18-exchange") {
+    const looked = oid || "#1003";
+    return `Hi ${name} — I looked at ${looked}. Happy to help with an exchange on the Organic Cotton Bath Towel Hood for the next size. Reply with the size you want and whether the current towel is unused with tags on, and we will outline the swap steps from here. I will not issue a refund from this chat. Let me know if you need anything else.`;
+  }
+  if (ticketId === "t-demo-22-policy") {
+    return `Hi ${name} — For unused baby apparel with tags still on, our demo return window is 7 days after delivery for refund eligibility — the return needs a carrier scan within that window. After that, eligible returns are usually store credit instead. Final-sale items follow different rules. I will not process a refund from this chat; write back with an order number if you want us to check a specific item. Let me know if you need anything else.`;
+  }
+  if (ticketId === "t-demo-03-damaged-rattle" || ticketId === "t-demo-17-plush" || ticketId === "t-demo-12-damaged-box") {
+    return `Hi ${name} — Thanks for the photo of the damage. I am sorry it arrived that way. Reply with your order number (like #1001) so I can look this up, and we will sort next steps from here. I will not refund from this chat. Let me know if you need anything else.`;
+  }
+  return "";
+}
+
+function looksLikeDamage(asked, subject = "") {
+  const blob = `${asked || ""} ${subject || ""}`.toLowerCase();
+  return /torn|tear|cracked|crack|damaged|damage|broke|broken|seam|ripped/.test(blob);
+}
+
+function customerPhotoCount(thread) {
+  let total = 0;
+  for (const message of thread.messages || []) {
+    if (message.kind === "status" || message.fromAgent === true) continue;
+    const attachments = message.attachments || [];
+    if (Array.isArray(attachments)) {
+      total += attachments.filter((item) => item && item.url).length;
+    }
+  }
+  return total;
+}
+
 /** Labeled fixture draft from already-loaded thread + rail DTOs. Never displayName. */
 export function fixtureDraftFromThread(thread = {}, rail = {}) {
   const full = ticketCustomerName(thread);
   const name = full.trim().split(/\s+/)[0] || "there";
   const typed = draftForRequestType(thread.requestType, name);
   if (typed) return typed;
-  if (thread.stubDraft) return thread.stubDraft;
   const status = String(thread.status || "").toLowerCase();
   const order = rail.order && typeof rail.order === "object" ? rail.order : {};
   const orderName = String(order.name || "").trim();
   const financial = titleCase(order.displayFinancialStatus);
   const fulfill = titleCase(order.displayFulfillmentStatus);
+  const ticketId = String(thread.id || "").trim();
+  const scenario = scenarioDraft(ticketId, name, orderName, financial, fulfill);
+  if (scenario) return scenario;
+  const asked = (() => {
+    for (const message of [...(thread.messages || [])].reverse()) {
+      if (message.kind === "status" || message.fromAgent === true) continue;
+      if (message.body) return String(message.body).trim();
+    }
+    return String(thread.snippet || thread.subject || "").trim();
+  })();
+  if (!orderName && looksLikeDamage(asked, thread.subject)) {
+    const photos = customerPhotoCount(thread);
+    const photoBit = photos ? "Thanks for the photo of the damage. " : "Thanks for flagging the damage. ";
+    return `Hi ${name} — ${photoBit}I am sorry it arrived that way. Reply with your order number (like #1001) so I can look this up, and we will sort next steps from here. I will not refund from this chat. Let me know if you need anything else.`;
+  }
+  if (thread.stubDraft) return thread.stubDraft;
   const { company, number } = trackingOf(order);
   const sentences = [];
   if (status === "closed") {
@@ -93,7 +157,7 @@ export function fixtureDraftFromThread(thread = {}, rail = {}) {
   } else if (orderName) {
     sentences.push(`${greet} I looked at ${orderName}.`);
   } else {
-    sentences.push(`${greet} I can confirm the destination once an order is on this ticket.`);
+    sentences.push(`${greet} Happy to help once an order is on this ticket.`);
   }
   if (number) {
     sentences.push(`The carrier update is ${company ? `${company} ${number}` : number}.`);

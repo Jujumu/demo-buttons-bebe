@@ -66,7 +66,7 @@ test("UX Pro mute unsubscribe chrome has no Shopify write control", async () => 
   const organ = createInboxOrgan({ viewId: "mine", ticketId: "t-priya-unsub" });
   const snap = await organ.ready();
   assert.deepEqual(reviewBlockViolations(snap.html), []);
-  assert.match(snap.html, /class="ticket-status ticket-request"[^>]*>Unsubscribe</);
+  assert.match(snap.html, /class="ticket-badge ticket-request"[^>]*>Unsubscribe</);
   assert.match(snap.html, /class="thread-request mute"[^>]*>Marketing unsubscribe</);
   assert.match(snap.html, /btn-hairline"[^>]*data-marketing-gate-open>Mark unsubscribed</);
   assert.match(snap.html, /data-pane="rail"[\s\S]*?<section class="rail-card"[^>]*data-tissue="customer"/);
@@ -85,8 +85,8 @@ test("UX Pro mute unsubscribe chrome has no Shopify write control", async () => 
 test("UX Pro mute bug severity chrome has no Shopify write control", async () => {
   const snap = await createInboxOrgan({ viewId: "mine", ticketId: "t-remy-bug" }).ready();
   assert.deepEqual(reviewBlockViolations(snap.html), []);
-  assert.match(snap.html, /class="ticket-status ticket-request"[^>]*>Bug</);
-  assert.match(snap.html, /class="ticket-status ticket-severity"[^>]*>High</);
+  assert.match(snap.html, /class="ticket-badge ticket-request"[^>]*>Bug</);
+  assert.match(snap.html, /class="ticket-badge ticket-severity"[^>]*>High</);
   assert.match(snap.html, /class="thread-request mute"[^>]*>Bug report</);
   assert.match(snap.html, /thread-request-subtype mute">High · iOS</);
   assert.match(snap.html, /btn-hairline"[^>]*data-bug-handled>Mark bug handled</);
@@ -109,7 +109,7 @@ test("UX Pro mute privacy chrome has no Shopify write control", async () => {
   const organ = createInboxOrgan({ viewId: "mine", ticketId: "t-lee-privacy" });
   const snap = await organ.ready();
   assert.deepEqual(reviewBlockViolations(snap.html), []);
-  assert.match(snap.html, /class="ticket-status ticket-request"[^>]*>Privacy</);
+  assert.match(snap.html, /class="ticket-badge ticket-request"[^>]*>Privacy</);
   assert.match(snap.html, /class="thread-request mute"[^>]*>Privacy request</);
   assert.match(snap.html, /thread-request-subtype mute">Delete</);
   assert.match(snap.html, /btn-hairline"[^>]*data-privacy-gate-open>Mark privacy handled</);

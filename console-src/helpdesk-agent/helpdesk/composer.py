@@ -266,7 +266,30 @@ def _scenario_draft(
             "with an order number if you want us to check a specific item. Let me know if you need "
             "anything else."
         )
+    if ticket_id in {"t-demo-03-damaged-rattle", "t-demo-17-plush", "t-demo-12-damaged-box"}:
+        return (
+            f"Hi {name} — Thanks for the photo of the damage. I am sorry it arrived that way. "
+            "Reply with your order number (like #1001) so I can look this up, and we will sort next "
+            "steps from here. I will not refund from this chat. Let me know if you need anything else."
+        )
     return None
+
+
+def _looks_like_damage(asked: str, subject: str = "") -> bool:
+    blob = f"{asked} {subject}".lower()
+    needles = (
+        "torn",
+        "tear",
+        "cracked",
+        "crack",
+        "damaged",
+        "damage",
+        "broke",
+        "broken",
+        "seam",
+        "ripped",
+    )
+    return any(word in blob for word in needles)
 
 
 def fixture_draft(thread: dict[str, Any], rail: dict[str, Any]) -> str:
@@ -283,6 +306,7 @@ def fixture_draft(thread: dict[str, Any], rail: dict[str, Any]) -> str:
     company, tracking = _tracking(order_rec)
     open_return = _open_return(returns if isinstance(returns, dict) else None)
     asked = _last_customer_body(thread)
+    subject = str(thread.get("subject") or "")
     ticket_id = str(thread.get("id") or "").strip()
 
     typed = draft_for_request_type(_request_type(thread), name)
@@ -292,6 +316,15 @@ def fixture_draft(thread: dict[str, Any], rail: dict[str, Any]) -> str:
     scenario = _scenario_draft(ticket_id, name, order_name, financial, fulfill)
     if scenario is not None:
         return scenario
+
+    if not order_name and _looks_like_damage(asked, subject):
+        photos = _customer_photo_count(thread)
+        photo_bit = "Thanks for the photo of the damage. " if photos else "Thanks for flagging the damage. "
+        return (
+            f"Hi {name} — {photo_bit}I am sorry it arrived that way. "
+            "Reply with your order number (like #1001) so I can look this up, and we will sort next "
+            "steps from here. I will not refund from this chat. Let me know if you need anything else."
+        )
 
     sentences: list[str] = []
     if status == "closed":
@@ -308,7 +341,7 @@ def fixture_draft(thread: dict[str, Any], rail: dict[str, Any]) -> str:
     elif order_name:
         sentences.append(f"{greet} I looked at {order_name}.")
     else:
-        sentences.append(f"{greet} I can confirm the destination once an order is on this ticket.")
+        sentences.append(f"{greet} Happy to help once an order is on this ticket.")
 
     if tracking:
         label = f"{company} {tracking}".strip() if company else tracking

@@ -4,11 +4,12 @@ import { esc, formatWhen, requestTypeLabel, screenStatus, severityLabel } from "
 
 /**
  * List tissue. Client of helpdesk.list_tickets + view switcher.
- * In: `{ tickets, selectedTicketId, views, counts, selectedViewId, collapsed }`
+ * In: `{ tickets, selectedTicketId, views, counts, selectedViewId, collapsed, unreadIds }`
  * Out: `{ ticketId }` on `list/selected`, `{ viewId }` on `view/selected`,
  *      `{ collapsed }` on `list/collapsed`
- * Selected row: 4px ink bar. Uses first-party customerName, snippet, and
- * helpdesk status (open / closed / snoozed) — never Return.status.
+ * Selected row: pale accent wash + narrow accent edge. Uses first-party
+ * customerName, snippet, and helpdesk status (open / closed / snoozed) —
+ * never Return.status. Unread is session-local (bold name).
  * Chrome: Inbox title + filter (views) / sort / collapse — no separate views pane.
  */
 
@@ -43,6 +44,7 @@ export function createListTissue({ mailbox }) {
     counts: {},
     selectedViewId: "mine",
     collapsed: false,
+    unreadIds: [],
   };
   let ui = { sort: "default", filterOpen: false };
   let host = null;
@@ -55,6 +57,7 @@ export function createListTissue({ mailbox }) {
       counts: input.counts || {},
       selectedViewId: input.selectedViewId || "mine",
       collapsed: Boolean(input.collapsed),
+      unreadIds: Array.isArray(input.unreadIds) ? input.unreadIds : [],
     };
   }
 
@@ -106,25 +109,27 @@ export function createListTissue({ mailbox }) {
     </header>`;
   }
 
-  function renderRow(ticket, selectedId) {
+  function renderRow(ticket, selectedId, unreadIds) {
     const on = ticket.id === selectedId;
+    const unread = unreadIds.includes(ticket.id);
     const status = ticket.status || "";
-    const statusWord = screenStatus(status);
+    const statusWord = status === "open" ? "" : screenStatus(status);
     const typeWord = requestTypeLabel(ticket.requestType);
     const severityWord = severityLabel(ticket.severity);
     const statusHtml = statusWord
       ? `<span class="ticket-status">${esc(statusWord)}</span>`
       : "";
     const typeHtml = typeWord
-      ? `<span class="ticket-status ticket-request" data-request-type="${esc(ticket.requestType)}">${esc(typeWord)}</span>`
+      ? `<span class="ticket-badge ticket-request" data-request-type="${esc(ticket.requestType)}">${esc(typeWord)}</span>`
       : "";
     const severityHtml = severityWord
-      ? `<span class="ticket-status ticket-severity" data-severity="${esc(ticket.severity)}">${esc(severityWord)}</span>`
+      ? `<span class="ticket-badge ticket-severity" data-severity="${esc(ticket.severity)}">${esc(severityWord)}</span>`
       : "";
     const typeAttr = typeWord ? ` data-request-type="${esc(ticket.requestType)}"` : "";
     const severityAttr = severityWord ? ` data-severity="${esc(ticket.severity)}"` : "";
     const deviceAttr = ticket.device ? ` data-device="${esc(ticket.device)}"` : "";
-    return `<button type="button" class="ticket-row${on ? " is-selected" : ""}" data-ticket="${esc(ticket.id)}" data-status="${esc(status)}"${typeAttr}${severityAttr}${deviceAttr} aria-current="${on ? "true" : "false"}">
+    const unreadClass = unread ? " is-unread" : "";
+    return `<button type="button" class="ticket-row${on ? " is-selected" : ""}${unreadClass}" data-ticket="${esc(ticket.id)}" data-status="${esc(status)}"${typeAttr}${severityAttr}${deviceAttr} aria-current="${on ? "true" : "false"}">
       <span class="ticket-bar" aria-hidden="true"></span>
       <span class="ticket-top">
         <span class="ticket-name">${esc(listCustomerName(ticket))}</span>
@@ -150,8 +155,9 @@ export function createListTissue({ mailbox }) {
       </div>`;
     }
     const tickets = sortedTickets(next.tickets);
+    const unreadIds = next.unreadIds || [];
     const rows = tickets.length
-      ? tickets.map((ticket) => renderRow(ticket, next.selectedTicketId)).join("")
+      ? tickets.map((ticket) => renderRow(ticket, next.selectedTicketId, unreadIds)).join("")
       : `<p class="empty-pane">No tickets in this view.</p>`;
     return `<div class="pane-inner">
       ${renderToolbar(next)}
