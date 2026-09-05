@@ -227,6 +227,175 @@ class ComposerTissueTests(unittest.TestCase):
                         self.assertNotIn(snippet, lower, f"cancel ticket: {snippet!r}")
                     self.assertIn("i will not cancel or refund", lower)
 
+    def test_unsubscribe_draft_confirms_opt_out_and_skips_order_invent(self) -> None:
+        from helpdesk.tickets import reset as reset_tickets
+
+        reset_tickets()
+        payload = dispatch("helpdesk.draft_reply", {"ticketId": "t-priya-unsub"})
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["source"], "fixture")
+        draft = payload["draft"]
+        lower = draft.lower()
+        self.assertIn("Hi Priya", draft)
+        self.assertIn("marketing unsubscribe", lower)
+        self.assertIn("preference", lower)
+        self.assertIn("out of band", lower)
+        for snippet in (
+            "destination",
+            "published catalog",
+            "i looked at",
+            "handed to a carrier",
+            "#1001",
+            "#1002",
+            "tracking",
+            "fulfilled",
+        ):
+            self.assertNotIn(snippet, lower, snippet)
+        for snippet in FORBIDDEN_DRAFT:
+            self.assertNotIn(snippet, lower, snippet)
+        self.assertNotIn("helpdesk.send", draft)
+
+        invented = dispatch(
+            "helpdesk.draft_reply",
+            {
+                "ticketId": "t-priya-unsub",
+                "thread": {
+                    "id": "t-priya-unsub",
+                    "customerName": "Priya Lane",
+                    "status": "open",
+                    "requestType": "marketing_unsubscribe",
+                    "subject": "Please unsubscribe me from marketing emails",
+                    "messages": [
+                        {
+                            "fromAgent": False,
+                            "name": "Priya Lane",
+                            "body": "Please take me off the marketing list.",
+                        }
+                    ],
+                },
+                "order": {
+                    "name": "#1001",
+                    "displayFinancialStatus": "PAID",
+                    "displayFulfillmentStatus": "FULFILLED",
+                    "fulfillments": [{"trackingInfo": [{"number": "DEMO-1001", "company": "Demo Carrier"}]}],
+                },
+            },
+        )
+        blob = invented["draft"].lower()
+        self.assertIn("marketing unsubscribe", blob)
+        self.assertNotIn("#1001", invented["draft"])
+        self.assertNotIn("demo-1001", blob)
+        self.assertNotIn("destination", blob)
+        self.assertNotIn("published catalog", blob)
+
+    def test_privacy_draft_explains_path_and_skips_order_invent(self) -> None:
+        from helpdesk.tickets import reset as reset_tickets
+
+        reset_tickets()
+        payload = dispatch("helpdesk.draft_reply", {"ticketId": "t-lee-privacy"})
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["source"], "fixture")
+        draft = payload["draft"]
+        lower = draft.lower()
+        self.assertIn("Hi Lee", draft)
+        self.assertIn("privacy request", lower)
+        self.assertIn("out of band", lower)
+        self.assertTrue("export" in lower or "deletion" in lower)
+        for snippet in (
+            "destination",
+            "published catalog",
+            "i looked at",
+            "handed to a carrier",
+            "#1001",
+            "#1002",
+            "tracking",
+            "fulfilled",
+        ):
+            self.assertNotIn(snippet, lower, snippet)
+        for snippet in FORBIDDEN_DRAFT:
+            self.assertNotIn(snippet, lower, snippet)
+
+        invented = dispatch(
+            "helpdesk.draft_reply",
+            {
+                "ticketId": "t-lee-privacy",
+                "thread": {
+                    "id": "t-lee-privacy",
+                    "customerName": "Lee Chen",
+                    "status": "open",
+                    "requestType": "privacy_request",
+                    "subject": "GDPR request — please delete my data",
+                    "messages": [
+                        {
+                            "fromAgent": False,
+                            "name": "Lee Chen",
+                            "body": "Please delete my stored personal data.",
+                        }
+                    ],
+                },
+                "order": {
+                    "name": "#1001",
+                    "displayFinancialStatus": "PAID",
+                    "displayFulfillmentStatus": "UNFULFILLED",
+                },
+            },
+        )
+        blob = invented["draft"].lower()
+        self.assertIn("privacy request", blob)
+        self.assertNotIn("#1001", invented["draft"])
+        self.assertNotIn("destination", blob)
+        self.assertNotIn("published catalog", blob)
+
+    def test_bug_draft_asks_for_device_and_skips_order_invent(self) -> None:
+        bug = dispatch(
+            "helpdesk.draft_reply",
+            {
+                "ticketId": "t-bug",
+                "thread": {
+                    "id": "t-bug",
+                    "customerName": "Ada Demo",
+                    "status": "open",
+                    "requestType": "bug",
+                    "subject": "Checkout crash on iOS",
+                    "messages": [{"fromAgent": False, "name": "Ada Demo", "body": "The app crashes on checkout."}],
+                },
+                "order": {
+                    "name": "#1001",
+                    "displayFinancialStatus": "PAID",
+                    "displayFulfillmentStatus": "FULFILLED",
+                },
+            },
+        )
+        self.assertTrue(bug["ok"])
+        self.assertEqual(bug["source"], "fixture")
+        draft = bug["draft"]
+        lower = draft.lower()
+        self.assertIn("Hi Ada", draft)
+        self.assertIn("bug report", lower)
+        self.assertIn("device", lower)
+        self.assertTrue("ios" in lower or "android" in lower)
+        for snippet in (
+            "destination",
+            "published catalog",
+            "i looked at",
+            "handed to a carrier",
+            "#1001",
+            "tracking",
+            "fulfilled",
+        ):
+            self.assertNotIn(snippet, lower, snippet)
+        for snippet in FORBIDDEN_DRAFT:
+            self.assertNotIn(snippet, lower, snippet)
+
+    def test_null_request_type_keeps_existing_draft(self) -> None:
+        payload = dispatch("helpdesk.draft_reply", {"ticketId": "1001", "shop": SAMPLE_SHOP})
+        self.assertTrue(payload["ok"])
+        self.assertIn("#9001", payload["draft"])
+        self.assertIn("Ada", payload["draft"])
+        self.assertNotIn("bug report", payload["draft"].lower())
+        self.assertNotIn("privacy request", payload["draft"].lower())
+        self.assertNotIn("marketing unsubscribe", payload["draft"].lower())
+
 
 if __name__ == "__main__":
     unittest.main()

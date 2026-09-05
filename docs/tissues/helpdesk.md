@@ -84,7 +84,12 @@ Composer `--ticket` is the ticket id (sample `1001` aliases `t-ada-track`).
 Drafts are merchant replies the human Inserts or Discards. Summaries are a
 short mute peek of the thread, not a reply. Missing LLM keys return a labeled
 `source: fixture` draft (Ada / demo names only). The greeting uses ticket
-`customerName`, never `Customer.displayName`. Never auto-send.
+`customerName`, never `Customer.displayName`. `draft_reply` branches on
+first-party `requestType`: `marketing_unsubscribe` confirms opt-out /
+preference out of band; `privacy_request` explains the privacy path out of
+band; `bug` acknowledges the report and asks for the repro device. Null
+keeps the existing order/catalog draft. Typed drafts never invent order,
+catalog, or destination copy. Never auto-send.
 
 ## Clerk types (do not invent names)
 

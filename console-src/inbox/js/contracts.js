@@ -122,7 +122,7 @@
  * @property {string} updatedAt
  * @property {string} customerId
  * @property {string | null} orderId
- * @property {"marketing_unsubscribe" | "privacy_request" | null} [requestType]
+ * @property {"marketing_unsubscribe" | "privacy_request" | "bug" | null} [requestType]
  */
 
 /**
@@ -135,7 +135,7 @@
  * @property {string} updatedAt
  * @property {string} customerId
  * @property {string | null} orderId
- * @property {"marketing_unsubscribe" | "privacy_request" | null} [requestType]
+ * @property {"marketing_unsubscribe" | "privacy_request" | "bug" | null} [requestType]
  * @property {"access" | "delete" | "export" | null} [privacySubtype]
  * @property {boolean} [privacyHandled]
  * @property {object[]} messages — each talk message has `from` (`customer`|`agent`),

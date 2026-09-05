@@ -173,6 +173,37 @@ def _load_rail(args: dict[str, Any], thread: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+REQUEST_TYPE_UNSUBSCRIBE = "marketing_unsubscribe"
+REQUEST_TYPE_PRIVACY = "privacy_request"
+REQUEST_TYPE_BUG = "bug"
+
+
+def _request_type(thread: dict[str, Any]) -> str:
+    return str(thread.get("requestType") or "").strip()
+
+
+def draft_for_request_type(request_type: str, name: str) -> str | None:
+    """Typed fixture drafts. Never invent order, catalog, or destination copy."""
+    typed = str(request_type or "").strip()
+    who = name or "there"
+    if typed == REQUEST_TYPE_UNSUBSCRIBE:
+        return (
+            f"Hi {who} — I have your marketing unsubscribe request. I will confirm "
+            "the preference out of band. This inbox does not change Shopify marketing settings."
+        )
+    if typed == REQUEST_TYPE_PRIVACY:
+        return (
+            f"Hi {who} — I have your privacy request. I will handle the data export "
+            "or deletion out of band. This inbox does not write Shopify Customer Privacy."
+        )
+    if typed == REQUEST_TYPE_BUG:
+        return (
+            f"Hi {who} — I have your bug report. Reply with the device you reproduced "
+            "this on (iOS or Android). This inbox does not invent order or catalog answers."
+        )
+    return None
+
+
 def _scenario_draft(
     ticket_id: str,
     name: str,
@@ -253,6 +284,10 @@ def fixture_draft(thread: dict[str, Any], rail: dict[str, Any]) -> str:
     open_return = _open_return(returns if isinstance(returns, dict) else None)
     asked = _last_customer_body(thread)
     ticket_id = str(thread.get("id") or "").strip()
+
+    typed = draft_for_request_type(_request_type(thread), name)
+    if typed is not None:
+        return typed
 
     scenario = _scenario_draft(ticket_id, name, order_name, financial, fulfill)
     if scenario is not None:

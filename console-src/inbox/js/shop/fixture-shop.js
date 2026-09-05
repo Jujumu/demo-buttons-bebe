@@ -1,5 +1,6 @@
 import { clerkTicket, clerkTicketRow } from "./clerk-ticket.js";
 import { customers, emptyReturns, macros as fixtureMacros, orders, returnsForOrder, SHOP, ticketInView, tickets as fixtureTickets } from "../fixtures/demo-inbox.js";
+import { REQUEST_TYPE_BUG, REQUEST_TYPE_PRIVACY, REQUEST_TYPE_UNSUBSCRIBE } from "../util.js";
 
 function assertShop(shop) {
   if (shop && shop !== SHOP) {
@@ -50,11 +51,28 @@ function hasOpenReturn(returns) {
   return (returns.returns?.nodes || []).some((node) => String(node.status || "") === "OPEN");
 }
 
+/** Typed fixture drafts. Never invent order, catalog, or destination copy. */
+export function draftForRequestType(requestType, name) {
+  const who = String(name || "").trim() || "there";
+  if (requestType === REQUEST_TYPE_UNSUBSCRIBE) {
+    return `Hi ${who} — I have your marketing unsubscribe request. I will confirm the preference out of band. This inbox does not change Shopify marketing settings.`;
+  }
+  if (requestType === REQUEST_TYPE_PRIVACY) {
+    return `Hi ${who} — I have your privacy request. I will handle the data export or deletion out of band. This inbox does not write Shopify Customer Privacy.`;
+  }
+  if (requestType === REQUEST_TYPE_BUG) {
+    return `Hi ${who} — I have your bug report. Reply with the device you reproduced this on (iOS or Android). This inbox does not invent order or catalog answers.`;
+  }
+  return "";
+}
+
 /** Labeled fixture draft from already-loaded thread + rail DTOs. Never displayName. */
 export function fixtureDraftFromThread(thread = {}, rail = {}) {
-  if (thread.stubDraft) return thread.stubDraft;
   const full = ticketCustomerName(thread);
   const name = full.trim().split(/\s+/)[0] || "there";
+  const typed = draftForRequestType(thread.requestType, name);
+  if (typed) return typed;
+  if (thread.stubDraft) return thread.stubDraft;
   const status = String(thread.status || "").toLowerCase();
   const order = rail.order && typeof rail.order === "object" ? rail.order : {};
   const orderName = String(order.name || "").trim();
@@ -167,7 +185,7 @@ export function createFixtureShop(opts = {}) {
       const thread = args.thread || {};
       return {
         source: "sample",
-        draft: thread.stubDraft || fixtureDraftFromThread(thread, args),
+        draft: fixtureDraftFromThread(thread, args),
       };
     },
     summarizeThread(args = {}) {

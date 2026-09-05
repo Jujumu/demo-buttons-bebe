@@ -78,6 +78,7 @@ export const WARRANTY_MISSING_LABEL = "No warranty";
 export const ETA_MISSING_LABEL = "No ETA";
 export const REQUEST_TYPE_UNSUBSCRIBE = "marketing_unsubscribe";
 export const REQUEST_TYPE_PRIVACY = "privacy_request";
+export const REQUEST_TYPE_BUG = "bug";
 export const UNSUBSCRIBE_LABEL = "Unsubscribe";
 export const PRIVACY_LABEL = "Privacy";
 export const UNSUBSCRIBE_TITLE = "Marketing unsubscribe";

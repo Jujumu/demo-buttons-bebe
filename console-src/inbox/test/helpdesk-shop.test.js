@@ -10,7 +10,7 @@ import { createHelpdeskShop, resolveLiveInbox } from "../js/shop/helpdesk-shop.j
 import { TOOL_NAMES, WRITE_TOOLS } from "../js/shop/helpdesk-tools.js";
 import { LIVE_IDS, LIVE_SHOP, liveTickets } from "../js/shop/live-catalog.js";
 import { createInboxOrgan } from "../js/inbox.js";
-import { createFixtureShop } from "../js/shop/fixture-shop.js";
+import { createFixtureShop, draftForRequestType, fixtureDraftFromThread } from "../js/shop/fixture-shop.js";
 import { createMailbox } from "../js/mailbox.js";
 import { createRailOrgan } from "../js/tissues/rail.js";
 import { projectOrder, renderOrder } from "../js/tissues/order.js";
@@ -685,6 +685,87 @@ test("intake Ada #1001 first-paints a draft strip from draft_reply", async () =>
   assert.doesNotMatch(snap.html, /You won a \$10,000 prize/i);
   assert.doesNotMatch(snap.html, /lottery winnings/i);
   assert.ok(!calls.includes("helpdesk.send"));
+});
+
+test("fixture draft_reply branches on requestType for privacy, unsubscribe, and bug", () => {
+  const invented = {
+    name: "#1001",
+    displayFinancialStatus: "PAID",
+    displayFulfillmentStatus: "FULFILLED",
+    fulfillments: [{ trackingInfo: [{ number: "DEMO-1001", company: "Demo Carrier" }] }],
+  };
+  const unsub = fixtureDraftFromThread({
+    customerName: "Priya Lane",
+    status: "open",
+    requestType: "marketing_unsubscribe",
+    messages: [{ fromAgent: false, name: "Priya Lane", body: "Please take me off the marketing list." }],
+  }, { order: invented });
+  assert.match(unsub, /Hi Priya/);
+  assert.match(unsub, /marketing unsubscribe/i);
+  assert.match(unsub, /preference/i);
+  assert.match(unsub, /out of band/i);
+  assert.doesNotMatch(unsub, /destination|published catalog|#1001|DEMO-1001|I looked at/i);
+
+  const privacy = fixtureDraftFromThread({
+    customerName: "Lee Chen",
+    status: "open",
+    requestType: "privacy_request",
+    messages: [{ fromAgent: false, name: "Lee Chen", body: "Please delete my stored personal data." }],
+  }, { order: invented });
+  assert.match(privacy, /Hi Lee/);
+  assert.match(privacy, /privacy request/i);
+  assert.match(privacy, /out of band/i);
+  assert.match(privacy, /export|deletion/i);
+  assert.doesNotMatch(privacy, /destination|published catalog|#1001|DEMO-1001|I looked at/i);
+
+  const shop = createFixtureShop();
+  const priya = shop.draftReply({
+    ticketId: "t-priya-unsub",
+    thread: { customerName: "Priya Lane", requestType: "marketing_unsubscribe", stubDraft: "Hi Priya — I looked at #1001." },
+    order: invented,
+  });
+  assert.match(priya.draft, /marketing unsubscribe/i);
+  assert.doesNotMatch(priya.draft, /#1001|destination/i);
+
+  const lee = shop.draftReply({
+    ticketId: "t-lee-privacy",
+    thread: { customerName: "Lee Chen", requestType: "privacy_request", stubDraft: "Happy to answer from the published catalog." },
+    order: invented,
+  });
+  assert.match(lee.draft, /privacy request/i);
+  assert.doesNotMatch(lee.draft, /published catalog|destination/i);
+
+  const bug = fixtureDraftFromThread({
+    customerName: "Ada Demo",
+    status: "open",
+    requestType: "bug",
+    messages: [{ fromAgent: false, name: "Ada Demo", body: "The app crashes on checkout." }],
+  }, { order: invented });
+  assert.match(bug, /Hi Ada/);
+  assert.match(bug, /bug report/i);
+  assert.match(bug, /device/i);
+  assert.match(bug, /iOS|Android/);
+  assert.doesNotMatch(bug, /destination|published catalog|#1001|DEMO-1001|I looked at/i);
+  assert.match(draftForRequestType("bug", "Ada"), /bug report/i);
+  assert.equal(draftForRequestType(null, "Ada"), "");
+});
+
+test("CLI draft_reply branches on privacy and unsubscribe fixtures", () => {
+  const unsub = pythonInvoke("helpdesk.draft_reply", { ticketId: "t-priya-unsub" });
+  assert.equal(unsub.ok, true);
+  assert.match(unsub.draft, /Hi Priya/);
+  assert.match(unsub.draft, /marketing unsubscribe/i);
+  assert.doesNotMatch(unsub.draft, /destination|published catalog|#1001/i);
+
+  const privacy = pythonInvoke("helpdesk.draft_reply", { ticketId: "t-lee-privacy" });
+  assert.equal(privacy.ok, true);
+  assert.match(privacy.draft, /Hi Lee/);
+  assert.match(privacy.draft, /privacy request/i);
+  assert.doesNotMatch(privacy.draft, /destination|published catalog|#1001/i);
+
+  const ada = pythonInvoke("helpdesk.draft_reply", { ticketId: "1001", shop: SAMPLE_SHOP });
+  assert.equal(ada.ok, true);
+  assert.match(ada.draft, /Ada|#9001/);
 });
 
 test("fixture draft_reply fallback greets ticket customerName not displayName", async () => {

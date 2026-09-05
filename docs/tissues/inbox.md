@@ -72,7 +72,7 @@ Demo names only (Ada Demo, Casey Sandbox, Jordan Preview). No customer PII.
 - **In:** `{ ticket, draft, summarize, macros, body }`
 - **Out:** body / insert / discard / send
 - To is visible. Macro search lives **inside** the composer box (not a floating panel over the thread). Pick a row, then Replace or Append. Those fill the textarea via `helpdesk.apply_macro` and never Send. Replace (not Insert) is the macro verb so it does not collide with the signed draft-strip Insert. After Replace/Append the picker closes.
-- AI draft is a strip **above** the composer box (outside `.composer-box`) with Insert / Discard — never Send. The AI draft kicker is mute (accent is unread/error only). Draft text comes from `helpdesk.draft_reply`. Greeting uses ticket `customerName`, never `Customer.displayName`.
+- AI draft is a strip **above** the composer box (outside `.composer-box`) with Insert / Discard — never Send. The AI draft kicker is mute (accent is unread/error only). Draft text comes from `helpdesk.draft_reply` and branches on ticket `requestType` (unsubscribe / privacy answer the ask; `bug` acknowledges the report and asks for a repro device; null keeps the existing draft). Greeting uses ticket `customerName`, never `Customer.displayName`.
 - Summarize is a mute peek **above** the composer box, never a send. It does not enable Send by itself.
 - Send is ink fill (min-height 40px; 44px on coarse pointers) and disabled while the body is empty
 - Send & close is hairline secondary, not a second ink primary. It hides on a closed ticket
