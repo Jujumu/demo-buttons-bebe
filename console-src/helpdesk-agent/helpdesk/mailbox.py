@@ -292,6 +292,7 @@ def _ticket_row(payload: dict[str, Any]) -> dict[str, Any]:
         "updatedAt": payload["updatedAt"],
         "customerId": payload.get("customerId"),
         "orderId": payload.get("orderId"),
+        "requestType": payload.get("requestType") or None,
     }
 
 

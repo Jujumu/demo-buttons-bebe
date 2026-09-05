@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from helpdesk.dispatch import WRITE_TOOLS, dispatch, invoke
-from helpdesk.dto import billing_label, clerk_returns, tracking_label
+from helpdesk.dto import billing_label, clerk_returns, line_item, tracking_label
 from helpdesk.fixtures_live_holes import C_MULTI, C_UNFULFILLED, O_1001, O_1002
 from helpdesk.fixtures_sample import ADA, CASEY, ORDER_ADA, ORDER_CASEY_B
 from helpdesk.names import LIVE_HOLE_SHOP, SAMPLE_SHOP
@@ -51,6 +51,14 @@ class DtoLockTests(_ForceLiveHoles):
         self.assertIn("originalUnitPriceSet", line)
         self.assertIn("shopMoney", line["originalUnitPriceSet"])
         self.assertNotIn("price", line)
+
+    def test_line_item_omits_price_when_shop_money_missing(self) -> None:
+        row = line_item({"title": "Visor", "quantity": 1, "originalUnitPriceSet": {}})
+        self.assertEqual(row["title"], "Visor")
+        self.assertEqual(row["quantity"], 1)
+        self.assertNotIn("originalUnitPriceSet", row)
+        row = line_item({"title": "Visor", "quantity": 1})
+        self.assertNotIn("originalUnitPriceSet", row)
 
     def test_null_sku_omitted(self) -> None:
         order = dispatch("helpdesk.get_order", {"shop": SAMPLE_SHOP, "orderId": ORDER_ADA})["order"]
@@ -265,6 +273,17 @@ class ReturnEnumTests(_ForceLiveHoles):
         self.assertEqual(mapped["orderReturnStatus"], "IN_PROGRESS")
         self.assertEqual(mapped["returns"]["nodes"], [])
         self.assertFalse(mapped["inProgress"])
+
+    def test_clerk_returns_skips_non_dict_nodes(self) -> None:
+        mapped = clerk_returns(
+            {
+                "returnStatus": "IN_PROGRESS",
+                "returns": {"nodes": [None, "OPEN", {"id": "gid://shopify/Return/1", "status": "OPEN"}]},
+            }
+        )
+        self.assertEqual(len(mapped["returns"]["nodes"]), 1)
+        self.assertEqual(mapped["returns"]["nodes"][0]["status"], "OPEN")
+        self.assertTrue(mapped["inProgress"])
 
     def test_live_returns_empty(self) -> None:
         payload = dispatch(

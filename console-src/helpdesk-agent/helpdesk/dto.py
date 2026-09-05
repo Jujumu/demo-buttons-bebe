@@ -68,8 +68,9 @@ def line_item(node: dict[str, Any]) -> dict[str, Any]:
     row: dict[str, Any] = {
         "title": node.get("title"),
         "quantity": node.get("quantity"),
-        "originalUnitPriceSet": {"shopMoney": money_v2(shop_money)},
     }
+    if isinstance(shop_money, dict) and "amount" in shop_money and "currencyCode" in shop_money:
+        row["originalUnitPriceSet"] = {"shopMoney": money_v2(shop_money)}
     sku = node.get("sku")
     if sku is not None:
         row["sku"] = sku
@@ -281,6 +282,8 @@ def clerk_returns(order: dict[str, Any]) -> dict[str, Any]:
     connection = order.get("returns") or {}
     nodes = []
     for item in connection.get("nodes") or []:
+        if not isinstance(item, dict):
+            continue
         nodes.append(
             {
                 "id": item.get("id"),
