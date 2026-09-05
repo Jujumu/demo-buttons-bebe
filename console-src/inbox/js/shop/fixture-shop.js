@@ -95,12 +95,21 @@ function scenarioDraft(ticketId, name, orderName, financial, fulfill) {
   if (ticketId === "t-demo-03-damaged-rattle" || ticketId === "t-demo-17-plush" || ticketId === "t-demo-12-damaged-box") {
     return `Hi ${name} — Thanks for the photo of the damage. I am sorry it arrived that way. Reply with your order number (like #1001) so I can look this up, and we will sort next steps from here. I will not refund from this chat. Let me know if you need anything else.`;
   }
+  if (ticketId === "t-jordan-ship" || ticketId === "t-multi-snoozed") {
+    return `Hi ${name} — Yes, we ship the demo catalog to Canada. International rates show at checkout; any customs or import duties are the customer’s responsibility. I cannot promise a carrier delivery date from this chat. Let me know if you need anything else.`;
+  }
   return "";
 }
 
 function looksLikeDamage(asked, subject = "") {
   const blob = `${asked || ""} ${subject || ""}`.toLowerCase();
   return /torn|tear|cracked|crack|damaged|damage|broke|broken|seam|ripped/.test(blob);
+}
+
+function looksLikeCanadaShip(asked, subject = "") {
+  const blob = `${asked || ""} ${subject || ""}`.toLowerCase();
+  if (!/canada|montreal/.test(blob)) return false;
+  return /ship|shipping|catalog|deliver/.test(blob);
 }
 
 function customerPhotoCount(thread) {
@@ -140,6 +149,9 @@ export function fixtureDraftFromThread(thread = {}, rail = {}) {
     const photos = customerPhotoCount(thread);
     const photoBit = photos ? "Thanks for the photo of the damage. " : "Thanks for flagging the damage. ";
     return `Hi ${name} — ${photoBit}I am sorry it arrived that way. Reply with your order number (like #1001) so I can look this up, and we will sort next steps from here. I will not refund from this chat. Let me know if you need anything else.`;
+  }
+  if (!orderName && looksLikeCanadaShip(asked, thread.subject)) {
+    return `Hi ${name} — Yes, we ship the demo catalog to Canada. International rates show at checkout; any customs or import duties are the customer’s responsibility. I cannot promise a carrier delivery date from this chat. Let me know if you need anything else.`;
   }
   if (thread.stubDraft) return thread.stubDraft;
   const { company, number } = trackingOf(order);

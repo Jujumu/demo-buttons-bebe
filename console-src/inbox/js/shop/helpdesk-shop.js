@@ -1,4 +1,4 @@
-import { tickets as fixtureTickets, SHOP as FIXTURE_SHOP } from "../fixtures/demo-inbox.js";
+import { tickets as fixtureTickets, SHOP as FIXTURE_SHOP, customers as fixtureCustomers, orders as fixtureOrders } from "../fixtures/demo-inbox.js";
 import { createHelpdeskClient } from "./helpdesk-client.js";
 import { createFixtureShop } from "./fixture-shop.js";
 import { LIVE_IDS, LIVE_PROBE_CUSTOMER, LIVE_SHOP, liveTickets } from "./live-catalog.js";
@@ -6,9 +6,56 @@ import { WRITE_TOOLS } from "./helpdesk-tools.js";
 
 const LIVE_GID_SET = new Set(Object.values(LIVE_IDS));
 
+/** Python sample / SEED GIDs (fixtures_sample). Must not hit Cute Things. */
+const SAMPLE_GIDS = Object.freeze([
+  "gid://shopify/Customer/9001",
+  "gid://shopify/Customer/9002",
+  "gid://shopify/Customer/9003",
+  "gid://shopify/Customer/9004",
+  "gid://shopify/Order/9001",
+  "gid://shopify/Order/9002",
+  "gid://shopify/Order/9003",
+  "gid://shopify/Order/9004",
+  "gid://shopify/GiftCard/9001",
+  "gid://shopify/Return/90011",
+]);
+const SAMPLE_GID_SET = new Set(SAMPLE_GIDS);
+
+/**
+ * Offline JS fixture keys historically used 90001 / 80001.
+ * Helpdesk SEED returns sample 9001 / 9001 — alias so fixture fallback joins.
+ */
+const FIXTURE_ID_ALIASES = Object.freeze({
+  "gid://shopify/Customer/9001": "gid://shopify/Customer/90001",
+  "gid://shopify/Customer/9002": "gid://shopify/Customer/90002",
+  "gid://shopify/Customer/9003": "gid://shopify/Customer/90003",
+  "gid://shopify/Order/9001": "gid://shopify/Order/80001",
+  "gid://shopify/Order/9002": "gid://shopify/Order/80002",
+  "gid://shopify/Order/9003": "gid://shopify/Order/80003",
+});
+
+function fixtureId(gid) {
+  return FIXTURE_ID_ALIASES[gid] || gid;
+}
+
+function isSampleGid(gid) {
+  if (!gid) return false;
+  if (SAMPLE_GID_SET.has(gid)) return true;
+  if (FIXTURE_ID_ALIASES[gid]) return true;
+  if (Object.values(FIXTURE_ID_ALIASES).includes(gid)) return true;
+  if (fixtureCustomers?.[gid] || fixtureOrders?.[gid]) return true;
+  return false;
+}
+
+/**
+ * Route GIDs to the shop that can actually load them.
+ * Live Cute Things GIDs → live shop. Sample/SEED GIDs → fixture shop.
+ * Never send sample 9001.* to yznyc1-ez (not_found → empty rail / bad draft).
+ */
 function shopForGid(shop, gid) {
   if (gid && LIVE_GID_SET.has(gid)) return LIVE_SHOP;
-  return shop;
+  if (isSampleGid(gid)) return FIXTURE_SHOP;
+  return shop || FIXTURE_SHOP;
 }
 
 function extractReturns(payload) {
@@ -66,7 +113,7 @@ export function createHelpdeskShop(opts = {}) {
         (payload) => payload.customer,
       );
       if (record) return record;
-      return fallback.getCustomer({ shop: fallback.shop, customerId });
+      return fallback.getCustomer({ shop: fallback.shop, customerId: fixtureId(customerId) });
     },
     async getOrder({ shop, orderId }) {
       if (!orderId) return null;
@@ -76,7 +123,7 @@ export function createHelpdeskShop(opts = {}) {
         (payload) => payload.order,
       );
       if (record) return record;
-      return fallback.getOrder({ shop: fallback.shop, orderId });
+      return fallback.getOrder({ shop: fallback.shop, orderId: fixtureId(orderId) });
     },
     async getReturns({ shop, orderId }) {
       const record = await read(
@@ -85,7 +132,7 @@ export function createHelpdeskShop(opts = {}) {
         extractReturns,
       );
       if (record) return record;
-      return fallback.getReturns({ shop: fallback.shop, orderId });
+      return fallback.getReturns({ shop: fallback.shop, orderId: orderId ? fixtureId(orderId) : orderId });
     },
     async getOrderHistory({ shop, customerId }) {
       if (!customerId) return [];
@@ -95,16 +142,37 @@ export function createHelpdeskShop(opts = {}) {
         (payload) => payload.orders,
       );
       if (rows) return rows;
-      return fallback.getOrderHistory({ shop: fallback.shop, customerId });
+      return fallback.getOrderHistory({ shop: fallback.shop, customerId: fixtureId(customerId) });
     },
     async draftReply(args = {}) {
+      const thread = args.thread || {};
+      const orderId = args.orderId || thread.orderId || null;
+      const customerId = args.customerId || thread.customerId || null;
+      const shop = shopForGid(args.shop || activeShop, orderId || customerId);
       const record = await read(
         "helpdesk.draft_reply",
-        { ...args, shop: args.shop || activeShop },
+        { ...args, shop, customerId, orderId },
         (payload) => ({ draft: payload.draft || "", source: payload.source || "live" }),
       );
-      if (record?.draft) return record;
-      return fallback.draftReply(args);
+      // Hollow "once an order…" drafts are not ok when a join GID is present — fall through.
+      const hollow =
+        orderId
+        && record?.draft
+        && /once an order is on this ticket/i.test(record.draft);
+      if (record?.draft && !hollow) return record;
+      return fallback.draftReply({
+        ...args,
+        shop: fallback.shop,
+        customerId: customerId ? fixtureId(customerId) : customerId,
+        orderId: orderId ? fixtureId(orderId) : orderId,
+        thread: thread.id
+          ? {
+            ...thread,
+            customerId: thread.customerId ? fixtureId(thread.customerId) : thread.customerId,
+            orderId: thread.orderId ? fixtureId(thread.orderId) : thread.orderId,
+          }
+          : thread,
+      });
     },
     async summarizeThread(args = {}) {
       const record = await read(
@@ -251,3 +319,6 @@ export async function resolveLiveInbox(client) {
 export function fixtureInboxCatalog() {
   return { shop: FIXTURE_SHOP, tickets: fixtureTickets, source: "sample" };
 }
+
+/** Test/helper export: sample GIDs must resolve to the fixture shop. */
+export { shopForGid, fixtureId, SAMPLE_GIDS };

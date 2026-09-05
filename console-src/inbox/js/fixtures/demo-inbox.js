@@ -548,7 +548,7 @@ export const tickets = [
     customerId: JORDAN,
     orderId: null,
     updatedAt: "2026-08-26T09:00:00Z",
-    stubDraft: "Hi Jordan — this demo shop ships the fixture catalog on the published demo timeline. I can confirm the destination once an order exists.",
+    stubDraft: "Hi Jordan — Yes, we ship the demo catalog to Canada. International rates show at checkout; any customs or import duties are the customer’s responsibility. I cannot promise a carrier delivery date from this chat. Let me know if you need anything else.",
     stubSummary: "Jordan asked whether the demo catalog ships to Canada. No order is attached.",
     messages: [
       {
