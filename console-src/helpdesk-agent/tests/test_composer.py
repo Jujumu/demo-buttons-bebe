@@ -37,7 +37,7 @@ class ComposerTissueTests(unittest.TestCase):
         self.assertIsInstance(payload["draft"], str)
         self.assertGreater(len(payload["draft"]), 20)
         self.assertIn("Ada", payload["draft"])
-        self.assertIn("#9001", payload["draft"])
+        self.assertIn("#1001", payload["draft"])
         blob = payload["draft"].lower()
         for snippet in FORBIDDEN_DRAFT:
             self.assertNotIn(snippet, blob, snippet)
@@ -401,7 +401,7 @@ class ComposerTissueTests(unittest.TestCase):
     def test_null_request_type_keeps_existing_draft(self) -> None:
         payload = dispatch("helpdesk.draft_reply", {"ticketId": "1001", "shop": SAMPLE_SHOP})
         self.assertTrue(payload["ok"])
-        self.assertIn("#9001", payload["draft"])
+        self.assertIn("#1001", payload["draft"])
         self.assertIn("Ada", payload["draft"])
         self.assertNotIn("bug report", payload["draft"].lower())
         self.assertNotIn("privacy request", payload["draft"].lower())

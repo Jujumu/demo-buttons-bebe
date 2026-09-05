@@ -117,7 +117,8 @@ PARTIAL_BAG = {
 ORDERS = {
     ORDER_ADA: {
         "id": ORDER_ADA,
-        "name": "#9001",
+        # Display name matches LOCK / intake Ada reading state (#1001), not the sample GID.
+        "name": "#1001",
         "createdAt": "2026-05-01T15:00:00Z",
         "displayFinancialStatus": "PAID",
         "displayFulfillmentStatus": "UNFULFILLED",
@@ -128,7 +129,7 @@ ORDERS = {
         "lineItems": {"nodes": [_LINE]},
         "fulfillments": [],
         "discountCodes": ["WELCOME10"],
-        "invoiceUrl": "https://example.com/invoice/demo-9001",
+        "invoiceUrl": "https://example.com/invoice/demo-1001",
         "warranty": {
             "period": "1 year",
             "status": "Active",
@@ -138,7 +139,7 @@ ORDERS = {
         "shippingZone": "Domestic",
         "returns": {
             "nodes": [
-                {"id": RETURN_OPEN, "name": "#9001-R1", "status": "OPEN", "totalQuantity": 1},
+                {"id": RETURN_OPEN, "name": "#1001-R1", "status": "OPEN", "totalQuantity": 1},
             ]
         },
         "customerId": ADA,

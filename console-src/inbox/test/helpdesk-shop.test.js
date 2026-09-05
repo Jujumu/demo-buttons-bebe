@@ -772,7 +772,7 @@ test("CLI draft_reply branches on privacy and unsubscribe fixtures", () => {
 
   const ada = pythonInvoke("helpdesk.draft_reply", { ticketId: "1001", shop: SAMPLE_SHOP });
   assert.equal(ada.ok, true);
-  assert.match(ada.draft, /Ada|#9001/);
+  assert.match(ada.draft, /Ada|#1001/);
 });
 
 test("fixture draft_reply fallback greets ticket customerName not displayName", async () => {
@@ -838,7 +838,7 @@ test("composer tools share invoke and are not writes", async () => {
 test("CLI draft-reply and summarize-thread return text", () => {
   const draft = pythonInvoke("helpdesk.draft_reply", { ticketId: "1001", shop: SAMPLE_SHOP });
   assert.equal(draft.ok, true);
-  assert.match(draft.draft, /Ada|#9001/);
+  assert.match(draft.draft, /Ada|#1001/);
   assert.doesNotMatch(draft.draft, /gorgias|Malky|Rivky|refund you/i);
   const summary = pythonInvoke("helpdesk.summarize_thread", { ticketId: "1001" });
   assert.equal(summary.ok, true);
@@ -1024,9 +1024,11 @@ test("live shop host still joins Ada sample GIDs to rail and order-aware draft",
   assert.equal(snap.rail.models.customer.ok, true);
   assert.match(snap.rail.models.customer.peek, /Ada/);
   assert.equal(snap.rail.models.order.ok, true);
-  assert.match(snap.rail.models.order.peek, /#9001|Unfulfilled|Paid/);
+  assert.match(snap.rail.models.order.peek, /#1001|Unfulfilled|Paid/);
+  assert.doesNotMatch(snap.rail.models.order.peek, /#9001/);
   assert.doesNotMatch(snap.html, /data-customer-join-gate-open|data-order-link-gate-open/);
-  assert.match(snap.strip || "", /#9001|looked at|Unfulfilled|Paid/i);
+  assert.match(snap.strip || "", /#1001|looked at|Unfulfilled|Paid/i);
+  assert.doesNotMatch(snap.strip || "", /#9001/);
   assert.doesNotMatch(snap.strip || "", /once an order is on this ticket/i);
   assert.ok(calls.some(([tool, shopHost]) => tool === "helpdesk.get_customer" && shopHost !== LIVE_SHOP));
 });
