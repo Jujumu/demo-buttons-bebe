@@ -149,7 +149,7 @@ class DtoLockTests(_ForceLiveHoles):
 
     def test_sample_order_exposes_fixture_invoice_url_live_empty(self) -> None:
         order = dispatch("helpdesk.get_order", {"shop": SAMPLE_SHOP, "orderId": ORDER_ADA})["order"]
-        self.assertEqual(order["invoiceUrl"], "https://example.com/invoice/demo-9001")
+        self.assertEqual(order["invoiceUrl"], "https://example.com/invoice/demo-1001")
         casey = dispatch("helpdesk.get_order", {"shop": SAMPLE_SHOP, "orderId": ORDER_CASEY_B})["order"]
         self.assertIsNone(casey["invoiceUrl"])
         hole = dispatch("helpdesk.get_order", {"shop": LIVE_HOLE_SHOP, "orderId": O_1001})["order"]

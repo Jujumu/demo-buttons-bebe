@@ -20,11 +20,11 @@ export function composeMacroText(macro, currentBody = "", mode = "replace") {
 /**
  * Composer tissue.
  * In: `{ ticket, draft, summarize, macros, body }`
- * Out: body / insert / discard / send. AI strip and macros never Send.
+ * Out: body / insert / discard / regenerate / send. AI strip and macros never Send.
  * Default paint is Draft strip + textarea + Send. Macro search stays collapsed
  * until focus, `/`, or the Macros hairline. Once open, search lives inside the
- * composer box. Replace overwrites; Append adds. Draft-strip Insert stays named
- * Insert. The strip sits above the composer box.
+ * composer box. Replace overwrites; Append adds. Draft-strip verbs are
+ * Use draft / Regenerate / Dismiss. The strip sits above the composer box.
  */
 export function createComposerTissue({ mailbox }) {
   let model = {
@@ -107,13 +107,14 @@ export function createComposerTissue({ mailbox }) {
       : "";
     const strip = next.strip
       ? `<div class="draft-strip" data-draft-strip>
-          <div>
+          <div class="draft-body">
             <p class="draft-kicker">AI draft</p>
             <p class="draft-text">${esc(next.strip)}</p>
           </div>
           <div class="draft-actions">
-            <button type="button" class="btn-quiet" data-insert>Insert</button>
-            <button type="button" class="btn-quiet" data-discard>Discard</button>
+            <button type="button" class="btn-quiet" data-insert>Use draft</button>
+            <button type="button" class="btn-quiet" data-regenerate>Regenerate</button>
+            <button type="button" class="btn-quiet btn-dismiss" data-discard>Dismiss</button>
           </div>
         </div>`
       : "";
@@ -257,6 +258,10 @@ export function createComposerTissue({ mailbox }) {
         model = { ...model, body: next, strip: "" };
         mailbox.publish(MAILBOX_TOPICS.COMPOSER_INSERT, { text });
         el.innerHTML = render(model);
+        return;
+      }
+      if (event.target.closest("[data-regenerate]")) {
+        mailbox.publish(MAILBOX_TOPICS.COMPOSER_REGENERATE, {});
         return;
       }
       if (event.target.closest("[data-discard]")) {

@@ -772,7 +772,7 @@ test("CLI draft_reply branches on privacy and unsubscribe fixtures", () => {
 
   const ada = pythonInvoke("helpdesk.draft_reply", { ticketId: "1001", shop: SAMPLE_SHOP });
   assert.equal(ada.ok, true);
-  assert.match(ada.draft, /Ada|#9001/);
+  assert.match(ada.draft, /Ada|#1001/);
 });
 
 test("fixture draft_reply fallback greets ticket customerName not displayName", async () => {
@@ -838,7 +838,7 @@ test("composer tools share invoke and are not writes", async () => {
 test("CLI draft-reply and summarize-thread return text", () => {
   const draft = pythonInvoke("helpdesk.draft_reply", { ticketId: "1001", shop: SAMPLE_SHOP });
   assert.equal(draft.ok, true);
-  assert.match(draft.draft, /Ada|#9001/);
+  assert.match(draft.draft, /Ada|#1001/);
   assert.doesNotMatch(draft.draft, /gorgias|Malky|Rivky|refund you/i);
   const summary = pythonInvoke("helpdesk.summarize_thread", { ticketId: "1001" });
   assert.equal(summary.ok, true);
@@ -947,6 +947,90 @@ test("resolveLiveInbox remounts only when source is live", async () => {
     },
   });
   assert.equal(down, null);
+});
+
+test("live shop host still joins Ada sample GIDs to rail and order-aware draft", async () => {
+  const calls = [];
+  const shop = createHelpdeskShop({
+    shop: LIVE_SHOP,
+    client: {
+      async invoke(tool, args) {
+        calls.push([tool, args.shop || null]);
+        if (tool === "helpdesk.list_tickets") {
+          return {
+            ok: true,
+            source: "sample",
+            tickets: [{
+              id: "t-ada-track",
+              customerName: "Ada Demo",
+              subject: "Tracking on order #1001 has not moved",
+              snippet: "Where is my order #1001?",
+              status: "open",
+              updatedAt: "2026-08-28T15:10:00Z",
+              customerId: SAMPLE_ADA,
+              orderId: SAMPLE_ADA_ORDER,
+              requestType: null,
+            }],
+          };
+        }
+        if (tool === "helpdesk.get_ticket") {
+          return {
+            ok: true,
+            source: "sample",
+            ticket: {
+              id: "t-ada-track",
+              customerName: "Ada Demo",
+              subject: "Tracking on order #1001 has not moved",
+              snippet: "Where is my order #1001?",
+              status: "open",
+              updatedAt: "2026-08-28T15:10:00Z",
+              customerId: SAMPLE_ADA,
+              orderId: SAMPLE_ADA_ORDER,
+              messages: [{
+                id: "m1",
+                fromAgent: false,
+                name: "Ada Demo",
+                at: "2026-08-28T14:02:00Z",
+                body: "Where is my order #1001? The tracking has not updated.",
+              }],
+              statusEvents: [],
+            },
+          };
+        }
+        if (tool === "helpdesk.get_customer") {
+          if (args.shop === LIVE_SHOP) return { ok: false, error: "not_found" };
+          return pythonInvoke(tool, args);
+        }
+        if (tool === "helpdesk.get_order" || tool === "helpdesk.get_returns" || tool === "helpdesk.list_past_orders") {
+          if (args.shop === LIVE_SHOP) return { ok: false, error: "not_found" };
+          return pythonInvoke(tool, args);
+        }
+        if (tool === "helpdesk.draft_reply") {
+          assert.notEqual(args.shop, LIVE_SHOP, "sample GIDs must not draft against Cute Things");
+          return pythonInvoke(tool, args);
+        }
+        if (tool === "helpdesk.write_gate_status") {
+          return { ok: true, mutationsEnabled: false, refused: ["send", "refund", "cancel"] };
+        }
+        if (tool === "helpdesk.search_macros") return { ok: true, macros: [] };
+        return { ok: false, error: "not_found" };
+      },
+    },
+  });
+  shop.setShop(LIVE_SHOP);
+  const organ = createInboxOrgan({ shop, shopHost: LIVE_SHOP, viewId: "mine", ticketId: "t-ada-track" });
+  const snap = await organ.ready();
+  assert.equal(snap.selectedId, "t-ada-track");
+  assert.equal(snap.rail.models.customer.ok, true);
+  assert.match(snap.rail.models.customer.peek, /Ada/);
+  assert.equal(snap.rail.models.order.ok, true);
+  assert.match(snap.rail.models.order.peek, /#1001|Unfulfilled|Paid/);
+  assert.doesNotMatch(snap.rail.models.order.peek, /#9001/);
+  assert.doesNotMatch(snap.html, /data-customer-join-gate-open|data-order-link-gate-open/);
+  assert.match(snap.strip || "", /#1001|looked at|Unfulfilled|Paid/i);
+  assert.doesNotMatch(snap.strip || "", /#9001/);
+  assert.doesNotMatch(snap.strip || "", /once an order is on this ticket/i);
+  assert.ok(calls.some(([tool, shopHost]) => tool === "helpdesk.get_customer" && shopHost !== LIVE_SHOP));
 });
 
 test("null SKU and missing billing stay hidden on a live-hole order", async () => {

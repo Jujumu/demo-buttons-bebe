@@ -81,7 +81,10 @@ export function renderCustomer(model, { open = true, giftCardsOpen } = {}) {
   const record = model.record;
   const cardsOpen = giftCardsOpen == null ? Boolean(model.hasGiftCards) : giftCardsOpen;
   const body = !model.ok || !record
-    ? `<p class="tissue-empty">No customer on this ticket</p>`
+    ? `<div class="rail-empty-next">
+        <p class="tissue-empty">No customer</p>
+        <button type="button" class="btn-hairline" data-customer-join-gate-open>Find customer</button>
+      </div>`
     : `<dl class="rail-dl">
         <div><dt>Name</dt><dd>${esc(record.displayName)}</dd></div>
         <div><dt>Email</dt><dd>${esc(record.defaultEmailAddress?.emailAddress || "—")}</dd></div>

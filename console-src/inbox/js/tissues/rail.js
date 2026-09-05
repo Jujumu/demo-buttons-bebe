@@ -107,11 +107,20 @@ export function createRailOrgan({ shop, mailbox }) {
     const historyHtml = models.history.error
       ? renderError("order-history", "Past orders", models.history.peek)
       : renderOrderHistory(historyView, { open: open["order-history"], peekedId: peekedHistoryId });
-    return `<div class="pane-inner rail-inner">
-      ${customerHtml}
-      ${orderHtml}
-      ${returnsHtml}
-      ${historyHtml}
+    return `<div class="pane-inner">
+      <div class="rail-toolbar">
+        <button type="button" class="list-tool-btn" data-rail-collapse title="Collapse customer rail" aria-label="Collapse customer rail">
+          <svg class="list-tool-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+            <path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" d="M4.25 4.25l7.5 7.5M11.75 4.25l-7.5 7.5"/>
+          </svg>
+        </button>
+      </div>
+      <div class="rail-inner">
+        ${customerHtml}
+        ${orderHtml}
+        ${returnsHtml}
+        ${historyHtml}
+      </div>
     </div>`;
   }
 
@@ -173,6 +182,18 @@ export function createRailOrgan({ shop, mailbox }) {
   function mount(el) {
     el.innerHTML = render();
     el.onclick = (event) => {
+      if (event.target.closest("[data-rail-collapse]")) {
+        mailbox.publish(MAILBOX_TOPICS.RAIL_COLLAPSED, { collapsed: true });
+        return;
+      }
+      if (event.target.closest("[data-customer-join-gate-open]")) {
+        mailbox.publish(MAILBOX_TOPICS.CUSTOMER_JOIN_GATE_OPEN, {});
+        return;
+      }
+      if (event.target.closest("[data-order-link-gate-open]")) {
+        mailbox.publish(MAILBOX_TOPICS.ORDER_LINK_GATE_OPEN, {});
+        return;
+      }
       const gate = event.target.closest("[data-write-gate-open]");
       if (gate) {
         mailbox.publish(MAILBOX_TOPICS.WRITE_GATE_OPEN, {});

@@ -1,4 +1,4 @@
-import { MAILBOX_TOPICS, MARKETING_LOCKED_COPY, PAYMENTS_LOCKED_COPY, PRIVACY_LOCKED_COPY } from "./contracts.js";
+import { MAILBOX_TOPICS, MARKETING_LOCKED_COPY, PAYMENTS_LOCKED_COPY, PRIVACY_LOCKED_COPY, CUSTOMER_JOIN_LOCKED_COPY, ORDER_LINK_LOCKED_COPY } from "./contracts.js";
 import { SHOP, STORE_NAME, macros as fixtureMacros, ticketInView, tickets as fixtureTickets, viewCounts, views } from "./fixtures/demo-inbox.js";
 import { createMailbox } from "./mailbox.js";
 import { createHelpdeskShop } from "./shop/helpdesk-shop.js";
@@ -7,6 +7,10 @@ import { createListTissue } from "./tissues/list.js";
 import { createRailOrgan } from "./tissues/rail.js";
 import { createThreadTissue } from "./tissues/thread.js";
 import { forbiddenControlHits, GATE_CONFIRM_LABEL } from "./util.js";
+
+const RAIL_EXPAND_ICON = `<svg class="list-expand-icon" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" focusable="false">
+  <path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M9 2.5 4.5 7 9 11.5"/>
+</svg>`;
 
 function withRecipient(ticket, email) {
   if (!ticket) return null;
@@ -55,17 +59,28 @@ export function createInboxOrgan(opts = {}) {
   let selectedMacroId = "";
   let macrosOpen = false;
   let listCollapsed = false;
+  let railCollapsed = false;
+  /** Session-local unread ids. Fixtures start unread; selecting marks read. No Shopify field. */
+  const unreadIds = new Set(
+    (pinnedCatalog || fixtureTickets).map((ticket) => ticket.id).filter(Boolean),
+  );
   let writeGate = {
     mutationsEnabled: false,
     refused: ["send", "refund", "cancel"],
     message: "Shopify writes are refused. SHOPIFY_MUTATIONS_ENABLED stays 0.",
   };
   let writeGateOpen = false;
+  let customerJoinGateOpen = false;
+  let orderLinkGateOpen = false;
   let privacyGateOpen = Boolean(opts.privacyGate);
   let marketingGateOpen = Boolean(opts.marketingGate);
   let listRows = pinnedCatalog ? pinnedCatalog.filter((ticket) => ticketInView(ticket, viewId)) : [];
   let selected = pinnedCatalog?.find((ticket) => ticket.id === selectedId) || null;
   let counts = pinnedCatalog ? viewCounts(pinnedCatalog) : viewCounts(fixtureTickets);
+
+  function markRead(ticketId) {
+    if (ticketId) unreadIds.delete(ticketId);
+  }
 
   function visibleTickets() {
     return listRows;
@@ -80,6 +95,7 @@ export function createInboxOrgan(opts = {}) {
     if (!visible.some((ticket) => ticket.id === selectedId)) {
       selectedId = visible[0]?.id || null;
     }
+    if (selectedId) markRead(selectedId);
   }
 
   async function refreshList() {
@@ -134,6 +150,14 @@ export function createInboxOrgan(opts = {}) {
       || null;
   }
 
+  function closeAllGates() {
+    writeGateOpen = false;
+    privacyGateOpen = false;
+    marketingGateOpen = false;
+    customerJoinGateOpen = false;
+    orderLinkGateOpen = false;
+  }
+
   function gateSheetHtml() {
     if (privacyGateOpen) {
       return `<div class="gate-sheet-backdrop" data-gate-sheet data-privacy-gate>
@@ -157,6 +181,26 @@ export function createInboxOrgan(opts = {}) {
         </div>
       </div>`;
     }
+    if (customerJoinGateOpen) {
+      return `<div class="gate-sheet-backdrop" data-gate-sheet data-customer-join-gate>
+        <div class="gate-sheet" role="dialog" aria-modal="true" aria-labelledby="gate-sheet-copy">
+          <p id="gate-sheet-copy">${CUSTOMER_JOIN_LOCKED_COPY}</p>
+          <div class="gate-sheet-actions">
+            <button type="button" class="btn-hairline" data-gate-dismiss>Close</button>
+          </div>
+        </div>
+      </div>`;
+    }
+    if (orderLinkGateOpen) {
+      return `<div class="gate-sheet-backdrop" data-gate-sheet data-order-link-gate>
+        <div class="gate-sheet" role="dialog" aria-modal="true" aria-labelledby="gate-sheet-copy">
+          <p id="gate-sheet-copy">${ORDER_LINK_LOCKED_COPY}</p>
+          <div class="gate-sheet-actions">
+            <button type="button" class="btn-hairline" data-gate-dismiss>Close</button>
+          </div>
+        </div>
+      </div>`;
+    }
     if (!writeGateOpen) return "";
     return `<div class="gate-sheet-backdrop" data-gate-sheet>
       <div class="gate-sheet" role="dialog" aria-modal="true" aria-labelledby="gate-sheet-copy">
@@ -168,6 +212,15 @@ export function createInboxOrgan(opts = {}) {
     </div>`;
   }
 
+  function railCollapsedHtml() {
+    return `<div class="pane-inner">
+      <button type="button" class="rail-expand-btn" data-rail-expand aria-label="Expand customer rail" title="Show customer rail">
+        ${RAIL_EXPAND_ICON}
+        <span class="rail-expand-label">Customer</span>
+      </button>
+    </div>`;
+  }
+
   function shell() {
     return `<div class="inbox" data-organ="inbox">
       <a class="skip-link" href="#inbox-thread">Skip to thread.</a>
@@ -176,7 +229,7 @@ export function createInboxOrgan(opts = {}) {
         <div data-slot="thread"></div>
         <div data-slot="composer"></div>
       </section>
-      <aside class="pane pane-rail" data-pane="rail"></aside>
+      <aside class="pane pane-rail${railCollapsed ? " is-collapsed" : ""}" data-pane="rail"></aside>
     </div>
     <div data-gate-host></div>`;
   }
@@ -224,9 +277,12 @@ export function createInboxOrgan(opts = {}) {
 
   async function refreshComposer() {
     const ticket = selectedTicket();
+    const requestTicketId = ticket?.id || null;
     discarded = false;
     summarizeText = "";
-    strip = ticket ? await loadDraft(ticket) : "";
+    const text = ticket ? await loadDraft(ticket) : "";
+    if (selectedId !== requestTicketId) return;
+    strip = text;
   }
 
   async function refreshWriteGate() {
@@ -388,6 +444,7 @@ export function createInboxOrgan(opts = {}) {
       counts,
       selectedViewId: viewId,
       collapsed: listCollapsed,
+      unreadIds: [...unreadIds],
     };
   }
 
@@ -397,18 +454,21 @@ export function createInboxOrgan(opts = {}) {
     const listModel = listTissue.update(listInput());
     const threadModel = threadTissue.update({ ticket });
     const composerModel = composerTissue.update(composerInput(ticket));
+    const railHtml = railCollapsed ? railCollapsedHtml() : rail.render();
     const html = `<div class="inbox" data-organ="inbox">
       <a class="skip-link" href="#inbox-thread">Skip to thread.</a>
       <section class="pane pane-list${listCollapsed ? " is-collapsed" : ""}" data-pane="list">${listTissue.render(listModel)}</section>
       <section class="pane pane-thread" id="inbox-thread" data-pane="thread" tabindex="-1">${threadTissue.render(threadModel)}${composerTissue.render(composerModel)}</section>
-      <aside class="pane pane-rail" data-pane="rail">${rail.render()}</aside>
+      <aside class="pane pane-rail${railCollapsed ? " is-collapsed" : ""}" data-pane="rail">${railHtml}</aside>
     </div>${gateSheetHtml()}`;
     return {
       html,
       panes: { views: false, list: true, thread: true, rail: true },
       listCollapsed,
+      railCollapsed,
       viewId,
       selectedId,
+      unreadIds: [...unreadIds],
       selectedHasInkBar: Boolean(selectedId) && html.includes(`data-ticket="${selectedId}"`) && html.includes("is-selected"),
       sendDisabled: composerTissue.sendDisabled(composerModel),
       hideSendAndClose: composerTissue.hideSendAndClose(composerModel),
@@ -459,11 +519,16 @@ export function createInboxOrgan(opts = {}) {
     const paint = () => {
       const ticket = selectedTicket();
       panes.list?.classList?.toggle?.("is-collapsed", listCollapsed);
+      panes.rail?.classList?.toggle?.("is-collapsed", railCollapsed);
       safeMount(listTissue, panes.list, listInput());
       const threadResult = safeMount(threadTissue, panes.thread, { ticket });
       safeMount(composerTissue, panes.composer, composerInput(ticket));
       try {
-        rail.mount(panes.rail);
+        if (railCollapsed) {
+          panes.rail.innerHTML = railCollapsedHtml();
+        } else {
+          rail.mount(panes.rail);
+        }
       } catch (err) {
         panes.rail.innerHTML = `<div class="tissue-error" data-tissue-error="rail">rail unavailable</div>`;
         mailbox.publish(MAILBOX_TOPICS.TISSUE_ERROR, { tissueId: "rail", message: String(err?.message || err) });
@@ -477,6 +542,10 @@ export function createInboxOrgan(opts = {}) {
 
     mailbox.subscribe(MAILBOX_TOPICS.LIST_COLLAPSED, ({ collapsed }) => {
       listCollapsed = Boolean(collapsed);
+      paint();
+    });
+    mailbox.subscribe(MAILBOX_TOPICS.RAIL_COLLAPSED, ({ collapsed }) => {
+      railCollapsed = Boolean(collapsed);
       paint();
     });
     mailbox.subscribe(MAILBOX_TOPICS.VIEW_SELECTED, ({ viewId: next }) => {
@@ -495,6 +564,7 @@ export function createInboxOrgan(opts = {}) {
     });
     mailbox.subscribe(MAILBOX_TOPICS.LIST_SELECTED, ({ ticketId }) => {
       selectedId = ticketId;
+      markRead(ticketId);
       body = "";
       strip = "";
       summarizeText = "";
@@ -525,9 +595,21 @@ export function createInboxOrgan(opts = {}) {
       discarded = true;
       paint();
     });
+    mailbox.subscribe(MAILBOX_TOPICS.COMPOSER_REGENERATE, () => {
+      discarded = false;
+      const ticket = selectedTicket();
+      const requestTicketId = ticket?.id || null;
+      loadDraft(ticket).then((text) => {
+        if (selectedId !== requestTicketId) return;
+        strip = text;
+        paint();
+      });
+    });
     mailbox.subscribe(MAILBOX_TOPICS.COMPOSER_SUMMARIZE, ({ ticketId }) => {
       const ticket = selectedTicket() || listRows.find((item) => item.id === ticketId) || null;
+      const requestTicketId = ticket?.id || selectedId || null;
       loadSummary(ticket).then((text) => {
+        if (selectedId !== requestTicketId) return;
         summarizeText = text;
         paint();
       });
@@ -537,19 +619,35 @@ export function createInboxOrgan(opts = {}) {
       escalateSelected(reason).then(() => refreshThread()).then(paint);
     });
     mailbox.subscribe(MAILBOX_TOPICS.WRITE_GATE_OPEN, () => {
+      closeAllGates();
       writeGateOpen = true;
-      privacyGateOpen = false;
-      marketingGateOpen = false;
       paint();
     });
     mailbox.subscribe(MAILBOX_TOPICS.WRITE_GATE_CLOSE, () => {
       writeGateOpen = false;
       paint();
     });
+    mailbox.subscribe(MAILBOX_TOPICS.CUSTOMER_JOIN_GATE_OPEN, () => {
+      closeAllGates();
+      customerJoinGateOpen = true;
+      paint();
+    });
+    mailbox.subscribe(MAILBOX_TOPICS.CUSTOMER_JOIN_GATE_CLOSE, () => {
+      customerJoinGateOpen = false;
+      paint();
+    });
+    mailbox.subscribe(MAILBOX_TOPICS.ORDER_LINK_GATE_OPEN, () => {
+      closeAllGates();
+      orderLinkGateOpen = true;
+      paint();
+    });
+    mailbox.subscribe(MAILBOX_TOPICS.ORDER_LINK_GATE_CLOSE, () => {
+      orderLinkGateOpen = false;
+      paint();
+    });
     mailbox.subscribe(MAILBOX_TOPICS.PRIVACY_GATE_OPEN, () => {
+      closeAllGates();
       privacyGateOpen = true;
-      writeGateOpen = false;
-      marketingGateOpen = false;
       paint();
     });
     mailbox.subscribe(MAILBOX_TOPICS.PRIVACY_GATE_CLOSE, () => {
@@ -561,9 +659,8 @@ export function createInboxOrgan(opts = {}) {
       markPrivacyHandled().then(() => refreshRail()).then(paint);
     });
     mailbox.subscribe(MAILBOX_TOPICS.MARKETING_GATE_OPEN, () => {
+      closeAllGates();
       marketingGateOpen = true;
-      writeGateOpen = false;
-      privacyGateOpen = false;
       paint();
     });
     mailbox.subscribe(MAILBOX_TOPICS.MARKETING_GATE_CLOSE, () => {
@@ -579,6 +676,11 @@ export function createInboxOrgan(opts = {}) {
       markBugHandled().then(() => refreshRail()).then(paint);
     });
     root.onclick = (event) => {
+      if (event.target.closest("[data-rail-expand]")) {
+        railCollapsed = false;
+        paint();
+        return;
+      }
       if (event.target.closest("[data-privacy-handled]")) {
         const ticket = selectedTicket();
         mailbox.publish(MAILBOX_TOPICS.PRIVACY_HANDLED, { ticketId: ticket?.id });
@@ -595,9 +697,7 @@ export function createInboxOrgan(opts = {}) {
         return;
       }
       if (event.target.closest("[data-gate-dismiss]") || event.target.closest("[data-gate-sheet]") === event.target) {
-        writeGateOpen = false;
-        privacyGateOpen = false;
-        marketingGateOpen = false;
+        closeAllGates();
         paint();
       }
     };
@@ -648,6 +748,7 @@ export function createInboxOrgan(opts = {}) {
     },
     selectTicket(id) {
       selectedId = id;
+      markRead(id);
       body = "";
       strip = "";
       summarizeText = "";
@@ -658,6 +759,10 @@ export function createInboxOrgan(opts = {}) {
     },
     collapseList(collapsed = true) {
       listCollapsed = Boolean(collapsed);
+      return snapshot();
+    },
+    collapseRail(collapsed = true) {
+      railCollapsed = Boolean(collapsed);
       return snapshot();
     },
     toggleRail(key) {
@@ -678,6 +783,16 @@ export function createInboxOrgan(opts = {}) {
       strip = "";
       discarded = true;
       composerTissue.update(composerInput(selectedTicket()));
+    },
+    async regenerateDraft() {
+      discarded = false;
+      const ticket = selectedTicket();
+      const requestTicketId = ticket?.id || null;
+      const text = await loadDraft(ticket);
+      if (selectedId !== requestTicketId) return snapshot();
+      strip = text;
+      composerTissue.update(composerInput(selectedTicket()));
+      return snapshot();
     },
     openMacros() {
       macrosOpen = true;
@@ -725,19 +840,35 @@ export function createInboxOrgan(opts = {}) {
       return snapshot();
     },
     openWriteGate() {
+      closeAllGates();
       writeGateOpen = true;
-      privacyGateOpen = false;
-      marketingGateOpen = false;
       return snapshot();
     },
     closeWriteGate() {
       writeGateOpen = false;
       return snapshot();
     },
+    openCustomerJoinGate() {
+      closeAllGates();
+      customerJoinGateOpen = true;
+      return snapshot();
+    },
+    closeCustomerJoinGate() {
+      customerJoinGateOpen = false;
+      return snapshot();
+    },
+    openOrderLinkGate() {
+      closeAllGates();
+      orderLinkGateOpen = true;
+      return snapshot();
+    },
+    closeOrderLinkGate() {
+      orderLinkGateOpen = false;
+      return snapshot();
+    },
     openPrivacyGate() {
+      closeAllGates();
       privacyGateOpen = true;
-      writeGateOpen = false;
-      marketingGateOpen = false;
       return snapshot();
     },
     closePrivacyGate() {
@@ -745,9 +876,8 @@ export function createInboxOrgan(opts = {}) {
       return snapshot();
     },
     openMarketingGate() {
+      closeAllGates();
       marketingGateOpen = true;
-      writeGateOpen = false;
-      privacyGateOpen = false;
       return snapshot();
     },
     closeMarketingGate() {
@@ -792,7 +922,10 @@ export function createInboxOrgan(opts = {}) {
       if (typeof shop.ingestEmail !== "function") return null;
       const result = await shop.ingestEmail(args);
       await refreshList();
-      if (result?.id) selectedId = result.id;
+      if (result?.id) {
+        selectedId = result.id;
+        unreadIds.add(result.id);
+      }
       await refreshThread();
       await refreshRail();
       await refreshComposer();
@@ -802,7 +935,10 @@ export function createInboxOrgan(opts = {}) {
       if (typeof shop.ingestChat !== "function") return null;
       const result = await shop.ingestChat(args);
       await refreshList();
-      if (result?.id) selectedId = result.id;
+      if (result?.id) {
+        selectedId = result.id;
+        unreadIds.add(result.id);
+      }
       await refreshThread();
       await refreshRail();
       await refreshComposer();
@@ -813,7 +949,10 @@ export function createInboxOrgan(opts = {}) {
       const result = await shop.pullMailbox(args);
       await refreshList();
       const first = Array.isArray(result?.ingested) ? result.ingested[0] : null;
-      if (first?.id) selectedId = first.id;
+      if (first?.id) {
+        selectedId = first.id;
+        unreadIds.add(first.id);
+      }
       await refreshThread();
       await refreshRail();
       await refreshComposer();

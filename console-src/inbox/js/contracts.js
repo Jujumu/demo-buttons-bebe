@@ -179,15 +179,21 @@
  * `view/selected`        { viewId }
  * `list/selected`        { ticketId }
  * `list/collapsed`       { collapsed: boolean }
+ * `rail/collapsed`       { collapsed: boolean }
  * `composer/body`        { text }
- * `composer/insert`      { text }
- * `composer/discard`
+ * `composer/insert`      { text } — Use draft; never Send
+ * `composer/discard`     {} — Dismiss strip; never Send
+ * `composer/regenerate`  {} — re-call draft_reply; never Send
  * `composer/macros`      { open } — picker only; never Send
  * `composer/send`        { text, close: boolean }
  * `composer/summarize`   { ticketId }
  * `thread/escalate`      { ticketId, reason? } — first-party; never Send
  * `write-gate/open`      {} — This order hairline opens the payments sheet
  * `write-gate/close`     {}
+ * `customer-join-gate/open`  {} — Find customer lock sheet (no live join)
+ * `customer-join-gate/close` {}
+ * `order-link-gate/open`     {} — Link order lock sheet (no live link)
+ * `order-link-gate/close`    {}
  * `privacy-gate/open`    {} — thread-header hairline opens the gated lock sheet
  * `privacy-gate/close`   {}
  * `privacy-gate/handled` { ticketId } — first-party flag only; never Shopify
@@ -203,15 +209,21 @@ export const MAILBOX_TOPICS = Object.freeze({
   VIEW_SELECTED: "view/selected",
   LIST_SELECTED: "list/selected",
   LIST_COLLAPSED: "list/collapsed",
+  RAIL_COLLAPSED: "rail/collapsed",
   COMPOSER_BODY: "composer/body",
   COMPOSER_INSERT: "composer/insert",
   COMPOSER_DISCARD: "composer/discard",
+  COMPOSER_REGENERATE: "composer/regenerate",
   COMPOSER_MACROS: "composer/macros",
   COMPOSER_SEND: "composer/send",
   COMPOSER_SUMMARIZE: "composer/summarize",
   THREAD_ESCALATE: "thread/escalate",
   WRITE_GATE_OPEN: "write-gate/open",
   WRITE_GATE_CLOSE: "write-gate/close",
+  CUSTOMER_JOIN_GATE_OPEN: "customer-join-gate/open",
+  CUSTOMER_JOIN_GATE_CLOSE: "customer-join-gate/close",
+  ORDER_LINK_GATE_OPEN: "order-link-gate/open",
+  ORDER_LINK_GATE_CLOSE: "order-link-gate/close",
   PRIVACY_GATE_OPEN: "privacy-gate/open",
   PRIVACY_GATE_CLOSE: "privacy-gate/close",
   PRIVACY_HANDLED: "privacy-gate/handled",
@@ -234,6 +246,14 @@ export const MARKETING_LOCKED_COPY =
 /** LOCK voice. Hairline + gate sheet. Not a Refund or Cancel control. */
 export const PAYMENTS_LOCKED_COPY =
   "Payments are locked until Syeed names an exact write. Refunds and cancels stay refused.";
+
+/** LOCK voice. Find customer — gated only. No live join tool. */
+export const CUSTOMER_JOIN_LOCKED_COPY =
+  "Customer join stays locked. No live find yet.";
+
+/** LOCK voice. Link order — gated only. No live link tool. */
+export const ORDER_LINK_LOCKED_COPY =
+  "Order link stays locked. No live link yet.";
 
 export const FORBIDDEN_CONTROLS = Object.freeze([
   "gaia",

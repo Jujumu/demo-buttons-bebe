@@ -37,7 +37,7 @@ class ComposerTissueTests(unittest.TestCase):
         self.assertIsInstance(payload["draft"], str)
         self.assertGreater(len(payload["draft"]), 20)
         self.assertIn("Ada", payload["draft"])
-        self.assertIn("#9001", payload["draft"])
+        self.assertIn("#1001", payload["draft"])
         blob = payload["draft"].lower()
         for snippet in FORBIDDEN_DRAFT:
             self.assertNotIn(snippet, blob, snippet)
@@ -196,6 +196,18 @@ class ComposerTissueTests(unittest.TestCase):
                 "t-demo-22-policy",
                 ("Reese", "7 days", "store credit", "Final-sale", "will not process a refund"),
             ),
+            (
+                "t-demo-03-damaged-rattle",
+                ("Sam", "photo", "damage", "order number", "will not refund"),
+            ),
+            (
+                "t-demo-17-plush",
+                ("Jamie", "photo", "damage", "order number", "will not refund"),
+            ),
+            (
+                "t-demo-12-damaged-box",
+                ("Morgan", "#1004", "photo", "damage", "will not refund"),
+            ),
         )
         cancel_forbidden = (
             "i cancelled",
@@ -220,6 +232,13 @@ class ComposerTissueTests(unittest.TestCase):
                     self.assertIn(keyword.lower(), lower, f"{ticket_id}: missing {keyword!r}")
                 for snippet in FORBIDDEN_DRAFT:
                     self.assertNotIn(snippet, lower, f"{ticket_id}: forbidden {snippet!r}")
+                if ticket_id in {"t-demo-03-damaged-rattle", "t-demo-17-plush"}:
+                    self.assertNotIn("destination", lower, ticket_id)
+                    self.assertNotIn("published catalog", lower, ticket_id)
+                if ticket_id == "t-demo-12-damaged-box":
+                    self.assertIn("i looked at #1004", lower, ticket_id)
+                    self.assertNotIn("order number", lower, ticket_id)
+                    self.assertNotIn("reply with your order", lower, ticket_id)
                 if ticket_id == "t-demo-05-cancel":
                     self.assertIn("paid", lower)
                     self.assertIn("unfulfilled", lower)
@@ -390,7 +409,7 @@ class ComposerTissueTests(unittest.TestCase):
     def test_null_request_type_keeps_existing_draft(self) -> None:
         payload = dispatch("helpdesk.draft_reply", {"ticketId": "1001", "shop": SAMPLE_SHOP})
         self.assertTrue(payload["ok"])
-        self.assertIn("#9001", payload["draft"])
+        self.assertIn("#1001", payload["draft"])
         self.assertIn("Ada", payload["draft"])
         self.assertNotIn("bug report", payload["draft"].lower())
         self.assertNotIn("privacy request", payload["draft"].lower())

@@ -42,7 +42,8 @@ test("null customer GID uses the empty-ticket voice, not unavailable", () => {
   assert.equal(model.record, null);
   const html = renderCustomer(model);
   assert.match(html, /<h2>Customer<\/h2>\s*<span class="peek">No customer<\/span>/);
-  assert.match(html, /<p class="tissue-empty">No customer on this ticket<\/p>/);
+  assert.match(html, /<p class="tissue-empty">No customer<\/p>/);
+  assert.match(html, /data-customer-join-gate-open>Find customer</);
   assert.doesNotMatch(html, /Customer unavailable|unavailable/);
 });
 
@@ -226,7 +227,8 @@ test("This order shows a Payments locked hairline", async () => {
 
 test("empty This order hides Payments locked chrome", () => {
   const html = renderOrder(projectOrder(null));
-  assert.match(html, /No order on this ticket/);
+  assert.match(html, /No order/);
+  assert.match(html, /data-order-link-gate-open>Link order</);
   assert.doesNotMatch(html, /data-write-gate-open/);
   assert.doesNotMatch(html, />Payments locked</);
   assert.doesNotMatch(html, /<(button|a)\b[^>]*>[^<]*Refund/i);

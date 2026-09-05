@@ -12,16 +12,35 @@ from typing import Any
 
 from . import tickets
 from .errors import HelpdeskError, bad_request
-from .fixtures_sample import ADA, CASEY, JORDAN, ORDER_ADA, ORDER_CASEY_A
+from .fixtures_sample import (
+    ADA,
+    CASEY,
+    JORDAN,
+    ORDER_ADA,
+    ORDER_CASEY_A,
+    ORDER_CASEY_B,
+    ORDER_PARTIAL,
+)
 from .names import SAMPLE_SHOP
 from .shop import rail_get_customer, rail_get_order, rail_get_returns, rail_list_past_orders
 
 # Sample ticket → rail GIDs so CLI `draft-reply --ticket 1001` can load context.
 SAMPLE_RAIL = {
     "1001": {"customerId": ADA, "orderId": ORDER_ADA},
+    "t-ada-track": {"customerId": ADA, "orderId": ORDER_ADA},
     "1002": {"customerId": CASEY, "orderId": ORDER_CASEY_A},
     "1003": {"customerId": JORDAN, "orderId": None},
 }
+
+_SAMPLE_GIDS = frozenset({
+    ADA,
+    CASEY,
+    JORDAN,
+    ORDER_ADA,
+    ORDER_CASEY_A,
+    ORDER_CASEY_B,
+    ORDER_PARTIAL,
+})
 
 def _ticket_id(args: dict[str, Any]) -> str:
     value = args.get("ticketId") or args.get("ticket") or args.get("ticket_id")
@@ -150,13 +169,23 @@ def _try_rail(loader, shop: str | None, ident: str | None) -> Any | None:
         return None
 
 
+def _shop_for_rail(shop: str | None, customer_id: str | None, order_id: str | None, thread: dict[str, Any]) -> str | None:
+    """Sample/SEED GIDs must load from SAMPLE_SHOP — never Cute Things (not_found → hollow draft)."""
+    ticket_id = str(thread.get("id") or "")
+    if ticket_id in SAMPLE_RAIL:
+        return SAMPLE_SHOP
+    if (customer_id and customer_id in _SAMPLE_GIDS) or (order_id and order_id in _SAMPLE_GIDS):
+        return SAMPLE_SHOP
+    return shop or None
+
+
 def _load_rail(args: dict[str, Any], thread: dict[str, Any]) -> dict[str, Any]:
-    shop = args.get("shop") or (SAMPLE_SHOP if str(thread.get("id") or "") in SAMPLE_RAIL else None)
     customer = _as_record(args.get("customer"))
     order = _as_record(args.get("order"))
     returns = _as_record(args.get("returns"))
     past_orders = args.get("pastOrders") if args.get("pastOrders") is not None else args.get("past_orders")
     customer_id, order_id = _lookup_ids(args, thread)
+    shop = _shop_for_rail(args.get("shop"), customer_id, order_id, thread)
     if customer is None:
         customer = _try_rail(rail_get_customer, shop, customer_id)
     if order is None:
@@ -266,7 +295,50 @@ def _scenario_draft(
             "with an order number if you want us to check a specific item. Let me know if you need "
             "anything else."
         )
+    if ticket_id == "t-demo-12-damaged-box":
+        looked = oid or "#1004"
+        return (
+            f"Hi {name} — I looked at {looked}. Thanks for the photo of the damage. I am sorry it "
+            "arrived that way. I will sort next steps from here. I will not refund from this chat. "
+            "Let me know if you need anything else."
+        )
+    if ticket_id in {"t-demo-03-damaged-rattle", "t-demo-17-plush"}:
+        return (
+            f"Hi {name} — Thanks for the photo of the damage. I am sorry it arrived that way. "
+            "Reply with your order number (like #1001) so I can look this up, and we will sort next "
+            "steps from here. I will not refund from this chat. Let me know if you need anything else."
+        )
+    if ticket_id in {"t-jordan-ship", "t-multi-snoozed"}:
+        return (
+            f"Hi {name} — Yes, we ship the demo catalog to Canada. International rates show at "
+            "checkout; any customs or import duties are the customer’s responsibility. I cannot "
+            "promise a carrier delivery date from this chat. Let me know if you need anything else."
+        )
     return None
+
+
+def _looks_like_damage(asked: str, subject: str = "") -> bool:
+    blob = f"{asked} {subject}".lower()
+    needles = (
+        "torn",
+        "tear",
+        "cracked",
+        "crack",
+        "damaged",
+        "damage",
+        "broke",
+        "broken",
+        "seam",
+        "ripped",
+    )
+    return any(word in blob for word in needles)
+
+
+def _looks_like_canada_ship(asked: str, subject: str = "") -> bool:
+    blob = f"{asked} {subject}".lower()
+    if "canada" not in blob and "montreal" not in blob:
+        return False
+    return any(word in blob for word in ("ship", "shipping", "catalog", "deliver"))
 
 
 def fixture_draft(thread: dict[str, Any], rail: dict[str, Any]) -> str:
@@ -283,6 +355,7 @@ def fixture_draft(thread: dict[str, Any], rail: dict[str, Any]) -> str:
     company, tracking = _tracking(order_rec)
     open_return = _open_return(returns if isinstance(returns, dict) else None)
     asked = _last_customer_body(thread)
+    subject = str(thread.get("subject") or "")
     ticket_id = str(thread.get("id") or "").strip()
 
     typed = draft_for_request_type(_request_type(thread), name)
@@ -292,6 +365,22 @@ def fixture_draft(thread: dict[str, Any], rail: dict[str, Any]) -> str:
     scenario = _scenario_draft(ticket_id, name, order_name, financial, fulfill)
     if scenario is not None:
         return scenario
+
+    if not order_name and _looks_like_damage(asked, subject):
+        photos = _customer_photo_count(thread)
+        photo_bit = "Thanks for the photo of the damage. " if photos else "Thanks for flagging the damage. "
+        return (
+            f"Hi {name} — {photo_bit}I am sorry it arrived that way. "
+            "Reply with your order number (like #1001) so I can look this up, and we will sort next "
+            "steps from here. I will not refund from this chat. Let me know if you need anything else."
+        )
+
+    if not order_name and _looks_like_canada_ship(asked, subject):
+        return (
+            f"Hi {name} — Yes, we ship the demo catalog to Canada. International rates show at "
+            "checkout; any customs or import duties are the customer’s responsibility. I cannot "
+            "promise a carrier delivery date from this chat. Let me know if you need anything else."
+        )
 
     sentences: list[str] = []
     if status == "closed":
@@ -308,7 +397,7 @@ def fixture_draft(thread: dict[str, Any], rail: dict[str, Any]) -> str:
     elif order_name:
         sentences.append(f"{greet} I looked at {order_name}.")
     else:
-        sentences.append(f"{greet} I can confirm the destination once an order is on this ticket.")
+        sentences.append(f"{greet} Happy to help once an order is on this ticket.")
 
     if tracking:
         label = f"{company} {tracking}".strip() if company else tracking

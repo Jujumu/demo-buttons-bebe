@@ -148,7 +148,7 @@ export const liveTickets = [
     customerId: LIVE_IDS.C_MULTI,
     orderId: null,
     updatedAt: "2026-08-26T09:00:00Z",
-    stubDraft: "Hi — I can confirm the destination once an order exists.",
+    stubDraft: "Hi — Yes, we ship the catalog to Canada. International rates show at checkout; customs are the customer’s responsibility. I cannot promise a carrier date from this chat.",
     stubSummary: "Customer asked about shipping to Canada. No order is attached.",
     messages: [
       {
