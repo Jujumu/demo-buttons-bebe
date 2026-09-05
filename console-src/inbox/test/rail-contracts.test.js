@@ -224,6 +224,15 @@ test("This order shows a Payments locked hairline", async () => {
   assert.doesNotMatch(html, /<(button|a)\b[^>]*>[^<]*\bCancel\b/i);
 });
 
+test("empty This order hides Payments locked chrome", () => {
+  const html = renderOrder(projectOrder(null));
+  assert.match(html, /No order on this ticket/);
+  assert.doesNotMatch(html, /data-write-gate-open/);
+  assert.doesNotMatch(html, />Payments locked</);
+  assert.doesNotMatch(html, /<(button|a)\b[^>]*>[^<]*Refund/i);
+  assert.doesNotMatch(html, /<(button|a)\b[^>]*>[^<]*\bCancel\b/i);
+});
+
 test("partial ship shows mixed line status and tracking for the shipped line", async () => {
   const order = await shop.getOrder({ shop: SHOP, orderId: IDS.ORDER_1004 });
   const model = projectOrder(order);

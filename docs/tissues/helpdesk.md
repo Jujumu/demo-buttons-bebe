@@ -79,9 +79,10 @@ data / data request set privacy request and may set subtype Access /
 Delete / Export. Subjects or bodies that match bug / crash (or broken
 paired with iOS / Android / device / app) set `bug` and may set
 `severity` and `device`. Human handles all three out of band.
-`privacyHandled` is a first-party ticket flag only. Do not call
-marketing unsubscribe, Customer privacy / GDPR / data-request, or
-product create / update Admin mutations.
+`privacyHandled`, `unsubscribeHandled`, and `bugHandled` are
+first-party ticket flags only. Do not call marketing unsubscribe,
+Customer privacy / GDPR / data-request, or product create / update
+Admin mutations.
 Composer `--ticket` is the ticket id (sample `1001` aliases `t-ada-track`).
 
 Drafts are merchant replies the human Inserts or Discards. Summaries are a

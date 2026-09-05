@@ -256,9 +256,11 @@ function renderAddress(label, address) {
 
 export function renderOrder(model, { open = true, addressesOpen = false, shipmentOpen, discountsOpen, invoiceOpen, warrantyOpen, etaOpen } = {}) {
   const record = model.record;
-  const gateHairline = `<div class="order-gate">
+  const gateHairline = record
+    ? `<div class="order-gate">
       <button type="button" class="btn-hairline" data-write-gate-open>Payments locked</button>
-    </div>`;
+    </div>`
+    : "";
   if (!model.ok || !record) {
     return `<section class="rail-card" data-tissue="order" data-open="${open ? "true" : "false"}">
       <button type="button" class="rail-toggle" data-toggle="order" aria-expanded="${open ? "true" : "false"}">
@@ -266,7 +268,6 @@ export function renderOrder(model, { open = true, addressesOpen = false, shipmen
       </button>
       <div class="rail-body">
         <p class="tissue-empty">No order on this ticket</p>
-        ${gateHairline}
       </div>
     </section>`;
   }

@@ -139,6 +139,21 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 .thread-head-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .thread-subject { color: var(--mute); font-size: 13px; margin-top: 2px; }
 .thread-request { font-size: 12px; margin-top: 4px; }
+.thread-request-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.thread-request-row .thread-request { margin-top: 0; }
+.thread-request-row .btn-hairline {
+  padding: 3px 8px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.thread-request-subtype,
+.thread-request-handled { font-size: 12px; }
 .status-badge {
   font-size: 11px;
   font-weight: 500;

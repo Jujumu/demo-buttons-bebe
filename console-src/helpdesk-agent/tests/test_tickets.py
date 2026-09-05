@@ -191,15 +191,26 @@ class TicketContractTests(unittest.TestCase):
         self.assertIsNone(casey["requestType"])
         ticket = dispatch("helpdesk.get_ticket", {"ticketId": "t-priya-unsub"})["ticket"]
         self.assertEqual(ticket["requestType"], "marketing_unsubscribe")
+        self.assertFalse(ticket["unsubscribeHandled"])
         self.assertEqual(ticket["status"], "open")
         self.assertFalse(ticket.get("escalated"))
         from helpdesk.queries import CUSTOMER_QUERY, ORDER_QUERY
+        from helpdesk.tickets import mark_unsubscribed
+        from unittest.mock import patch
+
+        handled = mark_unsubscribed("t-priya-unsub")
+        self.assertTrue(handled["unsubscribeHandled"])
+        with patch("helpdesk.client.graphql") as gql:
+            again = mark_unsubscribed("t-priya-unsub")
+            gql.assert_not_called()
+        self.assertTrue(again["unsubscribeHandled"])
 
         self.assertNotIn("emailMarketingConsent", CUSTOMER_QUERY)
         self.assertNotIn("marketingUnsubscribe", CUSTOMER_QUERY + ORDER_QUERY)
         self.assertNotIn("customerEmailMarketingConsentUpdate", CUSTOMER_QUERY)
         self.assertEqual(WRITE_TOOLS, frozenset({"helpdesk.send", "helpdesk.refund", "helpdesk.cancel"}))
         self.assertNotIn("helpdesk.mark_request_type", WRITE_TOOLS)
+        self.assertNotIn("helpdesk.mark_unsubscribed", WRITE_TOOLS)
 
     def test_privacy_fixture_surfaces_request_type(self) -> None:
         rows = dispatch("helpdesk.list_tickets", {"view": "open", "limit": 20})["tickets"]
@@ -268,8 +279,13 @@ class TicketContractTests(unittest.TestCase):
         self.assertEqual(ticket["requestType"], "bug")
         self.assertEqual(ticket["severity"], "high")
         self.assertEqual(ticket["device"], "iOS")
+        self.assertFalse(ticket["bugHandled"])
         self.assertEqual(ticket["status"], "open")
         self.assertFalse(ticket.get("escalated"))
+        from helpdesk.tickets import mark_bug_handled
+
+        handled = mark_bug_handled("t-remy-bug")
+        self.assertTrue(handled["bugHandled"])
         from helpdesk.queries import CUSTOMER_QUERY, ORDER_QUERY
         from unittest.mock import patch
 
@@ -285,6 +301,7 @@ class TicketContractTests(unittest.TestCase):
         self.assertEqual(WRITE_TOOLS, frozenset({"helpdesk.send", "helpdesk.refund", "helpdesk.cancel"}))
         self.assertNotIn("helpdesk.mark_request_type", WRITE_TOOLS)
         self.assertNotIn("helpdesk.bug_report", WRITE_TOOLS)
+        self.assertNotIn("helpdesk.mark_bug_handled", WRITE_TOOLS)
         for tool in ("helpdesk.refund", "helpdesk.cancel"):
             payload = invoke(tool, {"ticketId": "t-remy-bug"})
             self.assertEqual(payload["error"], "forbidden")

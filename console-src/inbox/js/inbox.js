@@ -1,4 +1,4 @@
-import { MAILBOX_TOPICS, PAYMENTS_LOCKED_COPY, PRIVACY_LOCKED_COPY } from "./contracts.js";
+import { MAILBOX_TOPICS, MARKETING_LOCKED_COPY, PAYMENTS_LOCKED_COPY, PRIVACY_LOCKED_COPY } from "./contracts.js";
 import { SHOP, STORE_NAME, macros as fixtureMacros, ticketInView, tickets as fixtureTickets, viewCounts, views } from "./fixtures/demo-inbox.js";
 import { createMailbox } from "./mailbox.js";
 import { createHelpdeskShop } from "./shop/helpdesk-shop.js";
@@ -7,7 +7,7 @@ import { createListTissue } from "./tissues/list.js";
 import { createRailOrgan } from "./tissues/rail.js";
 import { createThreadTissue } from "./tissues/thread.js";
 import { createViewTissue } from "./tissues/view.js";
-import { forbiddenControlHits } from "./util.js";
+import { forbiddenControlHits, GATE_CONFIRM_LABEL } from "./util.js";
 
 function withRecipient(ticket, email) {
   if (!ticket) return null;
@@ -62,6 +62,7 @@ export function createInboxOrgan(opts = {}) {
   };
   let writeGateOpen = false;
   let privacyGateOpen = Boolean(opts.privacyGate);
+  let marketingGateOpen = Boolean(opts.marketingGate);
   let listRows = pinnedCatalog ? pinnedCatalog.filter((ticket) => ticketInView(ticket, viewId)) : [];
   let selected = pinnedCatalog?.find((ticket) => ticket.id === selectedId) || null;
   let counts = pinnedCatalog ? viewCounts(pinnedCatalog) : viewCounts(fixtureTickets);
@@ -139,7 +140,18 @@ export function createInboxOrgan(opts = {}) {
         <div class="gate-sheet" role="dialog" aria-modal="true" aria-labelledby="gate-sheet-copy">
           <p id="gate-sheet-copy">${PRIVACY_LOCKED_COPY}</p>
           <div class="gate-sheet-actions">
-            <button type="button" class="btn-hairline" data-privacy-handled>Mark privacy handled</button>
+            <button type="button" class="btn-ink" data-privacy-handled>${GATE_CONFIRM_LABEL}</button>
+            <button type="button" class="btn-hairline" data-gate-dismiss>Close</button>
+          </div>
+        </div>
+      </div>`;
+    }
+    if (marketingGateOpen) {
+      return `<div class="gate-sheet-backdrop" data-gate-sheet data-marketing-gate>
+        <div class="gate-sheet" role="dialog" aria-modal="true" aria-labelledby="gate-sheet-copy">
+          <p id="gate-sheet-copy">${MARKETING_LOCKED_COPY}</p>
+          <div class="gate-sheet-actions">
+            <button type="button" class="btn-ink" data-unsubscribe-handled>${GATE_CONFIRM_LABEL}</button>
             <button type="button" class="btn-hairline" data-gate-dismiss>Close</button>
           </div>
         </div>
@@ -282,6 +294,58 @@ export function createInboxOrgan(opts = {}) {
     return selected;
   }
 
+  async function markUnsubscribed() {
+    const ticket = selectedTicket();
+    if (!ticket || ticket.requestType !== "marketing_unsubscribe") return ticket;
+    if (typeof shop.markUnsubscribed === "function") {
+      try {
+        const result = await shop.markUnsubscribed({ ticketId: ticket.id });
+        if (result) {
+          selected = result;
+          marketingGateOpen = false;
+          return result;
+        }
+      } catch {
+        // local flag below
+      }
+    }
+    selected = {
+      ...ticket,
+      unsubscribeHandled: true,
+      statusEvents: [
+        ...(ticket.statusEvents || []),
+        { at: new Date().toISOString(), status: ticket.status, note: "unsubscribed" },
+      ],
+    };
+    marketingGateOpen = false;
+    return selected;
+  }
+
+  async function markBugHandled() {
+    const ticket = selectedTicket();
+    if (!ticket || ticket.requestType !== "bug") return ticket;
+    if (typeof shop.markBugHandled === "function") {
+      try {
+        const result = await shop.markBugHandled({ ticketId: ticket.id });
+        if (result) {
+          selected = result;
+          return result;
+        }
+      } catch {
+        // local flag below
+      }
+    }
+    selected = {
+      ...ticket,
+      bugHandled: true,
+      statusEvents: [
+        ...(ticket.statusEvents || []),
+        { at: new Date().toISOString(), status: ticket.status, note: "bug handled" },
+      ],
+    };
+    return selected;
+  }
+
   async function refreshMacros(query = "") {
     macroQuery = query;
     if (typeof shop.searchMacros === "function") {
@@ -367,11 +431,6 @@ export function createInboxOrgan(opts = {}) {
       customerId: ticket?.customerId,
       orderId: ticket?.orderId,
       ticketId: ticket?.id,
-      requestType: ticket?.requestType || "",
-      privacySubtype: ticket?.privacySubtype || "",
-      privacyHandled: Boolean(ticket?.privacyHandled),
-      severity: ticket?.severity || "",
-      device: ticket?.device || "",
     });
     toEmail = rail.snapshot().models.customer?.record?.defaultEmailAddress?.emailAddress || "";
   }
@@ -473,6 +532,7 @@ export function createInboxOrgan(opts = {}) {
     mailbox.subscribe(MAILBOX_TOPICS.WRITE_GATE_OPEN, () => {
       writeGateOpen = true;
       privacyGateOpen = false;
+      marketingGateOpen = false;
       paint();
     });
     mailbox.subscribe(MAILBOX_TOPICS.WRITE_GATE_CLOSE, () => {
@@ -482,6 +542,7 @@ export function createInboxOrgan(opts = {}) {
     mailbox.subscribe(MAILBOX_TOPICS.PRIVACY_GATE_OPEN, () => {
       privacyGateOpen = true;
       writeGateOpen = false;
+      marketingGateOpen = false;
       paint();
     });
     mailbox.subscribe(MAILBOX_TOPICS.PRIVACY_GATE_CLOSE, () => {
@@ -492,15 +553,44 @@ export function createInboxOrgan(opts = {}) {
       if (ticketId && ticketId !== selectedId) selectedId = ticketId;
       markPrivacyHandled().then(() => refreshRail()).then(paint);
     });
+    mailbox.subscribe(MAILBOX_TOPICS.MARKETING_GATE_OPEN, () => {
+      marketingGateOpen = true;
+      writeGateOpen = false;
+      privacyGateOpen = false;
+      paint();
+    });
+    mailbox.subscribe(MAILBOX_TOPICS.MARKETING_GATE_CLOSE, () => {
+      marketingGateOpen = false;
+      paint();
+    });
+    mailbox.subscribe(MAILBOX_TOPICS.MARKETING_HANDLED, ({ ticketId }) => {
+      if (ticketId && ticketId !== selectedId) selectedId = ticketId;
+      markUnsubscribed().then(() => refreshRail()).then(paint);
+    });
+    mailbox.subscribe(MAILBOX_TOPICS.BUG_HANDLED, ({ ticketId }) => {
+      if (ticketId && ticketId !== selectedId) selectedId = ticketId;
+      markBugHandled().then(() => refreshRail()).then(paint);
+    });
     root.onclick = (event) => {
       if (event.target.closest("[data-privacy-handled]")) {
         const ticket = selectedTicket();
         mailbox.publish(MAILBOX_TOPICS.PRIVACY_HANDLED, { ticketId: ticket?.id });
         return;
       }
+      if (event.target.closest("[data-unsubscribe-handled]")) {
+        const ticket = selectedTicket();
+        mailbox.publish(MAILBOX_TOPICS.MARKETING_HANDLED, { ticketId: ticket?.id });
+        return;
+      }
+      if (event.target.closest("[data-bug-handled]")) {
+        const ticket = selectedTicket();
+        mailbox.publish(MAILBOX_TOPICS.BUG_HANDLED, { ticketId: ticket?.id });
+        return;
+      }
       if (event.target.closest("[data-gate-dismiss]") || event.target.closest("[data-gate-sheet]") === event.target) {
         writeGateOpen = false;
         privacyGateOpen = false;
+        marketingGateOpen = false;
         paint();
       }
     };
@@ -621,6 +711,7 @@ export function createInboxOrgan(opts = {}) {
     openWriteGate() {
       writeGateOpen = true;
       privacyGateOpen = false;
+      marketingGateOpen = false;
       return snapshot();
     },
     closeWriteGate() {
@@ -630,14 +721,37 @@ export function createInboxOrgan(opts = {}) {
     openPrivacyGate() {
       privacyGateOpen = true;
       writeGateOpen = false;
+      marketingGateOpen = false;
       return snapshot();
     },
     closePrivacyGate() {
       privacyGateOpen = false;
       return snapshot();
     },
+    openMarketingGate() {
+      marketingGateOpen = true;
+      writeGateOpen = false;
+      privacyGateOpen = false;
+      return snapshot();
+    },
+    closeMarketingGate() {
+      marketingGateOpen = false;
+      return snapshot();
+    },
     async markPrivacyHandled() {
       const ticket = await markPrivacyHandled();
+      if (ticket && !pinnedCatalog) await refreshThread();
+      await refreshRail();
+      return snapshot();
+    },
+    async markUnsubscribed() {
+      const ticket = await markUnsubscribed();
+      if (ticket && !pinnedCatalog) await refreshThread();
+      await refreshRail();
+      return snapshot();
+    },
+    async markBugHandled() {
+      const ticket = await markBugHandled();
       if (ticket && !pinnedCatalog) await refreshThread();
       await refreshRail();
       return snapshot();

@@ -897,6 +897,8 @@ test("escalate_ticket and write_gate_status share the CLI dispatch path", () => 
   assert.equal(escalated.ticket.status, "open");
   assert.equal(escalated.ticket.escalationReason, "pending review");
   assert.ok(!WRITE_TOOLS.includes("helpdesk.escalate_ticket"));
+  assert.ok(!WRITE_TOOLS.includes("helpdesk.mark_privacy_handled"));
+  assert.ok(!WRITE_TOOLS.includes("helpdesk.mark_unsubscribed"));
   const gate = pythonInvoke("helpdesk.write_gate_status", {});
   assert.equal(gate.ok, true);
   assert.equal(gate.mutationsEnabled, false);

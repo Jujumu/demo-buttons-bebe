@@ -137,15 +137,22 @@ export const UNSUBSCRIBE_TITLE = "Marketing unsubscribe";
 export const PRIVACY_TITLE = "Privacy request";
 export const BUG_TITLE = "Bug report";
 export const UNSUBSCRIBE_WRITE_PEEK = "No Shopify write — confirm preference out of band";
+export const MARKETING_LOCK_COPY = "Marketing consent stays locked. No live unsubscribe.";
 export const PRIVACY_LOCK_COPY = "Privacy tools stay locked. No live data erase or export.";
 export const BUG_WRITE_PEEK = "No Shopify write";
+export const UNSUBSCRIBE_HANDLED_LABEL = "Mark unsubscribed";
+export const PRIVACY_HANDLED_LABEL = "Mark privacy handled";
+export const BUG_HANDLED_LABEL = "Mark bug handled";
+export const UNSUBSCRIBE_DONE_LABEL = "Unsubscribed";
+export const PRIVACY_DONE_LABEL = "Privacy handled";
+export const BUG_DONE_LABEL = "Bug handled";
 export const SEVERITY_LABELS = Object.freeze({
   low: "Low",
   medium: "Medium",
   high: "High",
   critical: "Critical",
 });
-export const PRIVACY_HANDLED_LABEL = "Mark privacy handled";
+export const GATE_CONFIRM_LABEL = "Confirm";
 export const PRIVACY_SUBTYPE_LABELS = Object.freeze({
   access: "Access",
   delete: "Delete",
@@ -377,6 +384,49 @@ export function bugMetaPeek(severity, device) {
 
 export function privacySubtypeLabel(value) {
   return PRIVACY_SUBTYPE_LABELS[String(value || "")] || "";
+}
+
+/** Thread-header mute + optional hairline Mark… Never a fifth rail tissue. */
+export function requestTypeChrome(ticket) {
+  const typed = ticket?.requestType;
+  if (isPrivacyRequest(typed)) {
+    return {
+      type: typed,
+      title: PRIVACY_TITLE,
+      subtype: privacySubtypeLabel(ticket.privacySubtype),
+      handled: Boolean(ticket.privacyHandled),
+      markLabel: PRIVACY_HANDLED_LABEL,
+      doneLabel: PRIVACY_DONE_LABEL,
+      gateAttr: "data-privacy-gate-open",
+    };
+  }
+  if (isMarketingUnsubscribe(typed)) {
+    return {
+      type: typed,
+      title: UNSUBSCRIBE_TITLE,
+      subtype: "",
+      handled: Boolean(ticket.unsubscribeHandled),
+      markLabel: UNSUBSCRIBE_HANDLED_LABEL,
+      doneLabel: UNSUBSCRIBE_DONE_LABEL,
+      gateAttr: "data-marketing-gate-open",
+    };
+  }
+  if (isBugRequest(typed)) {
+    const meta = bugMetaPeek(ticket.severity, ticket.device);
+    const severityAttr = ticket.severity ? ` data-severity="${esc(ticket.severity)}"` : "";
+    const deviceAttr = ticket.device ? ` data-device="${esc(ticket.device)}"` : "";
+    return {
+      type: typed,
+      title: BUG_TITLE,
+      subtype: meta,
+      handled: Boolean(ticket.bugHandled),
+      markLabel: BUG_HANDLED_LABEL,
+      doneLabel: BUG_DONE_LABEL,
+      gateAttr: "data-bug-handled",
+      severityAttr: `${severityAttr}${deviceAttr}`,
+    };
+  }
+  return null;
 }
 
 export function forbiddenControlHits(html) {

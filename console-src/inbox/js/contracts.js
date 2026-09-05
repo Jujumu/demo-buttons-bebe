@@ -140,6 +140,8 @@
  * @property {"marketing_unsubscribe" | "privacy_request" | "bug" | null} [requestType]
  * @property {"access" | "delete" | "export" | null} [privacySubtype]
  * @property {boolean} [privacyHandled]
+ * @property {boolean} [unsubscribeHandled]
+ * @property {boolean} [bugHandled]
  * @property {"low" | "medium" | "high" | "critical" | null} [severity]
  * @property {string | null} [device]
  * @property {object[]} messages — each talk message has `from` (`customer`|`agent`),
@@ -184,9 +186,13 @@
  * `thread/escalate`      { ticketId, reason? } — first-party; never Send
  * `write-gate/open`      {} — This order hairline opens the payments sheet
  * `write-gate/close`     {}
- * `privacy-gate/open`    {} — Privacy hairline opens the gated lock sheet
+ * `privacy-gate/open`    {} — thread-header hairline opens the gated lock sheet
  * `privacy-gate/close`   {}
  * `privacy-gate/handled` { ticketId } — first-party flag only; never Shopify
+ * `marketing-gate/open`  {} — thread-header hairline opens the gated lock sheet
+ * `marketing-gate/close` {}
+ * `marketing-gate/handled` { ticketId } — first-party flag only; never Shopify
+ * `bug-handled`          { ticketId } — first-party flag only; never Shopify
  * `history/peek`         { orderId }  — does not replace This order
  * `tissue/error`         { tissueId, message }
  */
@@ -205,6 +211,10 @@ export const MAILBOX_TOPICS = Object.freeze({
   PRIVACY_GATE_OPEN: "privacy-gate/open",
   PRIVACY_GATE_CLOSE: "privacy-gate/close",
   PRIVACY_HANDLED: "privacy-gate/handled",
+  MARKETING_GATE_OPEN: "marketing-gate/open",
+  MARKETING_GATE_CLOSE: "marketing-gate/close",
+  MARKETING_HANDLED: "marketing-gate/handled",
+  BUG_HANDLED: "bug-handled",
   HISTORY_PEEK: "history/peek",
   TISSUE_ERROR: "tissue/error",
 });
@@ -212,6 +222,10 @@ export const MAILBOX_TOPICS = Object.freeze({
 /** LOCK voice. Gated confirm. Not a Customer Privacy write. */
 export const PRIVACY_LOCKED_COPY =
   "Privacy tools stay locked. No live data erase or export.";
+
+/** LOCK voice. Gated confirm. Not a live marketing unsubscribe write. */
+export const MARKETING_LOCKED_COPY =
+  "Marketing consent stays locked. No live unsubscribe.";
 
 /** LOCK voice. Hairline + gate sheet. Not a Refund or Cancel control. */
 export const PAYMENTS_LOCKED_COPY =
