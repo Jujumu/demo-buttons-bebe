@@ -277,9 +277,12 @@ export function createInboxOrgan(opts = {}) {
 
   async function refreshComposer() {
     const ticket = selectedTicket();
+    const requestTicketId = ticket?.id || null;
     discarded = false;
     summarizeText = "";
-    strip = ticket ? await loadDraft(ticket) : "";
+    const text = ticket ? await loadDraft(ticket) : "";
+    if (selectedId !== requestTicketId) return;
+    strip = text;
   }
 
   async function refreshWriteGate() {
@@ -595,14 +598,18 @@ export function createInboxOrgan(opts = {}) {
     mailbox.subscribe(MAILBOX_TOPICS.COMPOSER_REGENERATE, () => {
       discarded = false;
       const ticket = selectedTicket();
+      const requestTicketId = ticket?.id || null;
       loadDraft(ticket).then((text) => {
+        if (selectedId !== requestTicketId) return;
         strip = text;
         paint();
       });
     });
     mailbox.subscribe(MAILBOX_TOPICS.COMPOSER_SUMMARIZE, ({ ticketId }) => {
       const ticket = selectedTicket() || listRows.find((item) => item.id === ticketId) || null;
+      const requestTicketId = ticket?.id || selectedId || null;
       loadSummary(ticket).then((text) => {
+        if (selectedId !== requestTicketId) return;
         summarizeText = text;
         paint();
       });
@@ -779,7 +786,11 @@ export function createInboxOrgan(opts = {}) {
     },
     async regenerateDraft() {
       discarded = false;
-      strip = await loadDraft(selectedTicket());
+      const ticket = selectedTicket();
+      const requestTicketId = ticket?.id || null;
+      const text = await loadDraft(ticket);
+      if (selectedId !== requestTicketId) return snapshot();
+      strip = text;
       composerTissue.update(composerInput(selectedTicket()));
       return snapshot();
     },

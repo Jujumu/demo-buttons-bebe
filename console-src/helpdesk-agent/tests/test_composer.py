@@ -204,6 +204,10 @@ class ComposerTissueTests(unittest.TestCase):
                 "t-demo-17-plush",
                 ("Jamie", "photo", "damage", "order number", "will not refund"),
             ),
+            (
+                "t-demo-12-damaged-box",
+                ("Morgan", "#1004", "photo", "damage", "will not refund"),
+            ),
         )
         cancel_forbidden = (
             "i cancelled",
@@ -231,6 +235,10 @@ class ComposerTissueTests(unittest.TestCase):
                 if ticket_id in {"t-demo-03-damaged-rattle", "t-demo-17-plush"}:
                     self.assertNotIn("destination", lower, ticket_id)
                     self.assertNotIn("published catalog", lower, ticket_id)
+                if ticket_id == "t-demo-12-damaged-box":
+                    self.assertIn("i looked at #1004", lower, ticket_id)
+                    self.assertNotIn("order number", lower, ticket_id)
+                    self.assertNotIn("reply with your order", lower, ticket_id)
                 if ticket_id == "t-demo-05-cancel":
                     self.assertIn("paid", lower)
                     self.assertIn("unfulfilled", lower)

@@ -92,7 +92,11 @@ function scenarioDraft(ticketId, name, orderName, financial, fulfill) {
   if (ticketId === "t-demo-22-policy") {
     return `Hi ${name} — For unused baby apparel with tags still on, our demo return window is 7 days after delivery for refund eligibility — the return needs a carrier scan within that window. After that, eligible returns are usually store credit instead. Final-sale items follow different rules. I will not process a refund from this chat; write back with an order number if you want us to check a specific item. Let me know if you need anything else.`;
   }
-  if (ticketId === "t-demo-03-damaged-rattle" || ticketId === "t-demo-17-plush" || ticketId === "t-demo-12-damaged-box") {
+  if (ticketId === "t-demo-12-damaged-box") {
+    const looked = oid || "#1004";
+    return `Hi ${name} — I looked at ${looked}. Thanks for the photo of the damage. I am sorry it arrived that way. I will sort next steps from here. I will not refund from this chat. Let me know if you need anything else.`;
+  }
+  if (ticketId === "t-demo-03-damaged-rattle" || ticketId === "t-demo-17-plush") {
     return `Hi ${name} — Thanks for the photo of the damage. I am sorry it arrived that way. Reply with your order number (like #1001) so I can look this up, and we will sort next steps from here. I will not refund from this chat. Let me know if you need anything else.`;
   }
   if (ticketId === "t-jordan-ship" || ticketId === "t-multi-snoozed") {

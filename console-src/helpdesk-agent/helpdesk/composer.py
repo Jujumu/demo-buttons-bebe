@@ -295,7 +295,14 @@ def _scenario_draft(
             "with an order number if you want us to check a specific item. Let me know if you need "
             "anything else."
         )
-    if ticket_id in {"t-demo-03-damaged-rattle", "t-demo-17-plush", "t-demo-12-damaged-box"}:
+    if ticket_id == "t-demo-12-damaged-box":
+        looked = oid or "#1004"
+        return (
+            f"Hi {name} — I looked at {looked}. Thanks for the photo of the damage. I am sorry it "
+            "arrived that way. I will sort next steps from here. I will not refund from this chat. "
+            "Let me know if you need anything else."
+        )
+    if ticket_id in {"t-demo-03-damaged-rattle", "t-demo-17-plush"}:
         return (
             f"Hi {name} — Thanks for the photo of the damage. I am sorry it arrived that way. "
             "Reply with your order number (like #1001) so I can look this up, and we will sort next "

@@ -717,6 +717,74 @@ test("Use draft puts the draft in the textarea and does not send", async () => {
   assert.equal(snap.sent.length, 0);
 });
 
+test("regenerate draft ignores stale result after ticket switch", async () => {
+  let releaseSlow;
+  const slow = new Promise((resolve) => {
+    releaseSlow = resolve;
+  });
+  let draftCalls = 0;
+  const base = createFixtureShop();
+  const shop = {
+    ...base,
+    async draftReply(args = {}) {
+      const ticketId = args.ticketId || args.thread?.id;
+      draftCalls += 1;
+      if (ticketId === "t-slow" && draftCalls > 1) {
+        await slow;
+        return { source: "test", draft: "STALE-SLOW-DRAFT" };
+      }
+      if (ticketId === "t-slow") {
+        return { source: "test", draft: "INITIAL-SLOW-DRAFT" };
+      }
+      return { source: "test", draft: "FRESH-FAST-DRAFT" };
+    },
+  };
+  const organ = createInboxOrgan({
+    shop,
+    viewId: "unassigned",
+    ticketId: "t-slow",
+    tickets: [
+      {
+        id: "t-slow",
+        customerName: "Slow",
+        subject: "Slow draft",
+        snippet: "Hold.",
+        status: "open",
+        view: "unassigned",
+        assignee: null,
+        customerId: null,
+        orderId: null,
+        updatedAt: "2026-08-30T14:10:00Z",
+        messages: [{ id: "m1", fromAgent: false, name: "Slow", at: "2026-08-30T14:10:00Z", body: "Hold." }],
+        statusEvents: [],
+      },
+      {
+        id: "t-fast",
+        customerName: "Fast",
+        subject: "Fast draft",
+        snippet: "Go.",
+        status: "open",
+        view: "unassigned",
+        assignee: null,
+        customerId: null,
+        orderId: null,
+        updatedAt: "2026-08-30T14:11:00Z",
+        messages: [{ id: "m2", fromAgent: false, name: "Fast", at: "2026-08-30T14:11:00Z", body: "Go." }],
+        statusEvents: [],
+      },
+    ],
+  });
+  await organ.ready();
+  const pending = organ.regenerateDraft();
+  await organ.selectTicket("t-fast");
+  releaseSlow();
+  await pending;
+  const snap = organ.snapshot();
+  assert.equal(snap.selectedId, "t-fast");
+  assert.match(snap.html, /FRESH-FAST-DRAFT/);
+  assert.doesNotMatch(snap.html, /STALE-SLOW-DRAFT/);
+});
+
 test("Find customer and Link order open gated lock sheets", async () => {
   const organ = createInboxOrgan({
     viewId: "unassigned",
