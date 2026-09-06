@@ -244,7 +244,7 @@ body[data-support-page=login] input { border:1px solid var(--line); border-radiu
 body[data-support-page=login] input:focus { border-color:var(--accent); box-shadow:0 0 0 2px #EEE4DC; }
 body[data-support-page=login] button { border-radius:6px; font-weight:500; }
 @media(max-width:900px) {
- body[data-support-page=console] .side { position:fixed; z-index:50; left:8px; top:8px; height:calc(100dvh - 16px); transform:translateX(calc(-100% - 16px)); transition:transform 160ms ease; }
+ body[data-support-page=console] .side { display:flex; position:fixed; z-index:50; left:8px; top:8px; height:calc(100dvh - 16px); transform:translateX(calc(-100% - 16px)); transition:transform 160ms ease; }
  body[data-support-page=console] .side.open { transform:translateX(0); }
  body[data-support-page=console] .menu-btn { display:grid; place-items:center; width:36px; height:36px; }
  body[data-support-page=console] .nav-scrim.open { display:block; position:fixed; inset:0; z-index:40; border:0; background:rgba(28,25,22,.25); }
@@ -279,6 +279,8 @@ body[data-support-page=console] .t-badge-dot { background:var(--accent); }
  body[data-support-page=console] .live { font-size:11px; padding:5px 7px; }
  body[data-support-page=console] .head-avatar { display:none; }
 }
+
+@media(min-width:601px) and (max-width:1000px) { body[data-support-page=console] .kpis { grid-template-columns:repeat(3,minmax(0,1fr)); } }
 </style>
 </head>
 <body data-support-page="console">
