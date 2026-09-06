@@ -330,7 +330,6 @@ function opsHealthSummary(data,state,now=Date.now()){
  if(data.status==="missing")return {title:"Monitoring has not reported yet",detail:"Ask your operator to check that monitoring is running.",healthy:false,issues:[]};
  if(data.status==="stale"||(Number.isFinite(age)&&age>180))return {title:"The health report is out of date",detail:"Ask your operator to check monitoring before relying on this report.",healthy:false,issues:[]};
  const checks=data.checks&&typeof data.checks==="object"&&!Array.isArray(data.checks)?data.checks:{};
- const healthy=data.status==="ok"&&Number.isFinite(age)&&age>=-30&&age<=180&&Object.keys(checks).length>0&&Object.values(checks).every(value=>value==="ok");
  const groups=[
   ["Ticket processing",["buttonsbebe-webhook","buttonsbebe-processor","processor_progress","webhook_readiness"]],
   ["Inbox history",["helpdesk-inbox","buttonsbebe-inbox-projection_timer","buttonsbebe-inbox-projection_result","inbox_readiness"]],
@@ -338,6 +337,8 @@ function opsHealthSummary(data,state,now=Date.now()){
   ["Support connections",["buttonsbebe-kb-mcp","buttonsbebe-redo-mcp","buttonsbebe-gorgias-mcp","buttonsbebe-whatsapp-connect","buttonsbebe-kb-admin","kb_socket","redo_socket","gorgias_socket","whatsapp_socket","kb_admin_socket"]],
   ["Server storage",["disk_space"]]
  ];
+ const expected=groups.flatMap(([,keys])=>keys);
+ const healthy=data.status==="ok"&&Number.isFinite(age)&&age>=-30&&age<=180&&expected.every(key=>Object.hasOwn(checks,key)&&checks[key]==="ok");
  const issues=groups.filter(([,keys])=>keys.some(key=>Object.hasOwn(checks,key)&&checks[key]!=="ok")).map(([label])=>label);
  return {title:healthy?"Local checks are passing":"System health needs attention",detail:healthy?"The latest server checks passed. This does not confirm message delivery or every connected provider.":"Ask your operator to review the current checks. No automatic repair has been made.",healthy,issues};
 }
@@ -654,7 +655,7 @@ function kbView(){
 function settingsView(){
  const steps=[["Connect Gorgias","Read tickets and accept human-approved replies"],["Connect Shopify","Sync orders & products"],["Import knowledge base","Policies, FAQs, products"],["Set escalation channel","Sensitive tickets to WhatsApp"],["Go live","Agent drafts on new tickets for review"]];
  return `${opsPanel()}<div class="sec-title">Support setup</div>
- <div class="panel"><div class="steps">${steps.map(x=>`<div class="step"><div class="ck">${IC.check}</div><div><b>${x[0]}</b><small>${x[1]}</small></div></div>`).join("")}</div></div>
+ <div class="panel"><div class="steps">${steps.map((x,index)=>`<div class="step"><div class="ic" aria-hidden="true">${index+1}</div><div><b>${x[0]}</b><small>${x[1]}</small></div></div>`).join("")}</div></div>
  <div class="sec-title">Agent settings</div>
  <div class="panel"><div class="act"><div class="r"><div class="ic g">${IC.check}</div><div><b>Human review is always required</b><br><small style="color:var(--ink3)">The agent only prepares drafts in this console. A person must confirm every customer reply or internal note.</small></div><div class="tm">locked</div></div></div></div>
  <div class="sec-title">Always escalate (never auto-reply)</div>
