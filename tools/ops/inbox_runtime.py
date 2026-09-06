@@ -69,6 +69,9 @@ def prepare(source: Path, stage: Path) -> None:
     if stage.parent != RUNTIME.parent or not stage.name.startswith('inbox-stage-') or stage.exists():
         raise ValueError('Use a new /opt/buttonsbebe/inbox-stage-NAME directory')
     stage.mkdir(mode=0o755)
+    # mkdir's mode is masked by the root-only operations umask. The runtime
+    # identity needs traversal of the candidate itself as well as its children.
+    stage.chmod(0o755)
     try:
         for tree in ('inbox', 'helpdesk-agent'):
             shutil.copytree(source / 'console-src' / tree, stage / 'console-src' / tree,
@@ -95,8 +98,15 @@ def prepare(source: Path, stage: Path) -> None:
         raise
 
 
+def require_traversal(path: Path) -> None:
+    for parent in (path, *path.parents):
+        if not parent.stat().st_mode & 0o001:
+            raise ValueError('Runtime account cannot traverse a code parent')
+
+
 def verify_stage(stage: Path) -> None:
     owned_directory(stage)
+    require_traversal(stage)
     if stage.parent != RUNTIME.parent or not stage.name.startswith('inbox-stage-'):
         raise ValueError('Invalid stage location')
     receipt = json.loads((stage / 'prepared.json').read_text())

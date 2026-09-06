@@ -107,7 +107,7 @@ class InboxRuntimeTests(unittest.TestCase):
         (self.state / 'inbox.sqlite3').write_bytes(b'preserve every customer record')
         self.patches = [patch.object(inbox_runtime, name, value) for name,value in
                         [('RUNTIME',self.runtime),('UNIT',self.unit),('BACKUPS',self.backups),('STATE',self.state)]]
-        self.patches.extend([patch.object(inbox_runtime,'owned_directory'),patch.object(inbox_runtime,'ensure_identity')])
+        self.patches.extend([patch.object(inbox_runtime,'owned_directory'),patch.object(inbox_runtime,'ensure_identity'),patch.object(inbox_runtime,'require_traversal')])
         for mock in self.patches: mock.start(); self.addCleanup(mock.stop)
         self.calls = []
         def run(*args):
@@ -147,6 +147,23 @@ class InboxRuntimeTests(unittest.TestCase):
         (self.stage/'console-src/inbox/review_server.py').write_text('unreviewed')
         with self.assertRaises(ValueError): inbox_runtime.verify_stage(self.stage)
         self.assertEqual(self.calls,[])
+
+    def test_prepare_overrides_restrictive_umask_for_runtime_root(self):
+        candidate = self.root / 'inbox-stage-prepared'
+        def preparation_command(*args):
+            if args[1:3] == ('-m','venv'):
+                binary = Path(args[3]) / 'bin/python'
+                binary.parent.mkdir(parents=True)
+                binary.write_text('synthetic prepared interpreter')
+            return ''
+        previous = os.umask(0o077)
+        try:
+            with patch.object(inbox_runtime, 'run', side_effect=preparation_command):
+                inbox_runtime.prepare(self.stage, candidate)
+        finally:
+            os.umask(previous)
+        self.assertEqual(candidate.stat().st_mode & 0o777, 0o755)
+        self.assertTrue((candidate/'console-src/inbox').stat().st_mode & 0o001)
 
     def test_dependency_drift_refuses_before_service_stop(self):
         with patch.object(inbox_runtime, 'run', return_value='unexpected-package==1\n'):
