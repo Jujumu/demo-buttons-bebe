@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import html
+import re
+from datetime import datetime
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -11,6 +13,23 @@ import httpx
 
 from .config import get_settings
 from .logging_utils import get_logger, log_event
+
+
+def _verified_message_id(value):
+    if type(value) is int and 0 < value < 2**63:
+        return value
+    if isinstance(value,str) and re.fullmatch(r"[1-9][0-9]{0,18}",value) and int(value)<2**63:
+        return int(value)
+    return None
+
+
+def _valid_sent_timestamp(value):
+    if not isinstance(value,str) or not value:
+        return False
+    try:
+        return datetime.fromisoformat(value.replace("Z","+00:00")).tzinfo is not None
+    except ValueError:
+        return False
 
 logger = get_logger(__name__)
 
@@ -202,7 +221,7 @@ class GorgiasClient:
                 if resp.status_code == 400 and "body_text" in payload:
                     p2 = dict(payload)
                     txt = p2.pop("body_text")
-                    p2["body_html"] = txt.replace("\n", "<br>")
+                    p2["body_html"] = html.escape(txt).replace("\n", "<br>")
                     resp2 = await client.post(
                         url,
                         auth=self._auth,
@@ -227,7 +246,7 @@ class GorgiasClient:
             "sender": {"email": self.email},
         }
         result = await self._post_message(ticket_id, payload)
-        message_id = (result.get("message") or {}).get("id")
+        message_id = _verified_message_id((result.get("message") or {}).get("id"))
         if result.get("ok") and message_id and on_created is not None:
             await on_created(int(message_id))
         return result
@@ -322,7 +341,7 @@ class GorgiasClient:
         if not result.get("ok"):
             return result
         created = result.get("message") or {}
-        message_id = created.get("id")
+        message_id = _verified_message_id(created.get("id"))
         if not message_id:
             return {"ok": False, "error": "Gorgias did not return a message id"}
         if on_created is not None:
@@ -350,11 +369,15 @@ class GorgiasClient:
                     )
                     if resp.status_code == 200:
                         latest = resp.json()
-                        if latest.get("sent_datetime"):
-                            return {"status": "sent", "message": latest}
+                        if not isinstance(latest,dict) or _verified_message_id(latest.get("id")) != message_id:
+                            return {"status":"unknown","error":"Gorgias message identity did not match the recorded action"}
                         if latest.get("failed_datetime") or latest.get("last_sending_error"):
                             error = latest.get("last_sending_error") or "Gorgias failed to deliver the message"
                             return {"status": "failed", "message": latest, "error": str(error)}
+                        if latest.get("sent_datetime"):
+                            if not _valid_sent_timestamp(latest["sent_datetime"]):
+                                return {"status":"unknown","error":"Gorgias sent timestamp was invalid"}
+                            return {"status": "sent", "message": latest}
                     elif resp.status_code == 429 and attempt < _DELIVERY_POLLS - 1:
                         await asyncio.sleep(_retry_after(resp))
                         continue

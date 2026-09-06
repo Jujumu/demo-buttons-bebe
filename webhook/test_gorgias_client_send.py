@@ -92,6 +92,39 @@ class GorgiasClientSendTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(result["delivery_status"],"not_attempted")
             self.assertFalse(any(call[0]=="POST" for call in _FakeAsyncClient.calls))
 
+    async def test_bad_request_fallback_keeps_literal_html_escaped(self):
+        class RejectText(_FakeAsyncClient):
+            async def post(self,url,**kwargs):
+                self.calls.append(("POST",url,kwargs))
+                code=400 if "body_text" in kwargs["json"] else 201
+                return httpx.Response(code,json={"id":9001},request=httpx.Request("POST",url))
+        RejectText.calls=[]
+        with patch("bb_webhook.gorgias_client.get_settings",return_value=SimpleNamespace(demo_mode=False)),patch("bb_webhook.gorgias_client.httpx.AsyncClient",RejectText):
+            await GorgiasClient(subdomain="test",email="agent@example.com",api_key="test-key",base_url="https://test.gorgias.com").send_public_reply(123,'Literal <img src=x> & text')
+        fallback=[call for call in RejectText.calls if call[0]=="POST"][-1][2]["json"]
+        self.assertEqual(fallback['body_html'],'Literal &lt;img src=x&gt; &amp; text')
+
+    async def test_reconciliation_rejects_wrong_message_and_prioritizes_failure(self):
+        for payload,expected in (({'id':9002,'sent_datetime':'2026-08-26T00:00:01Z'},'unknown'),
+            ({'id':9001,'sent_datetime':'2026-08-26T00:00:01Z','failed_datetime':'2026-08-26T00:00:02Z'},'failed'),
+            ({'id':9001,'sent_datetime':True},'unknown')):
+            class Receipt(_FakeAsyncClient):
+                async def get(self,url,**kwargs):return httpx.Response(200,json=payload,request=httpx.Request('GET',url))
+            with patch("bb_webhook.gorgias_client.get_settings",return_value=SimpleNamespace(demo_mode=False)),patch("bb_webhook.gorgias_client.httpx.AsyncClient",Receipt):
+                result=await GorgiasClient(subdomain='test',email='agent@example.com',api_key='test-key',base_url='https://test.gorgias.com')._wait_for_delivery(123,9001)
+            self.assertEqual(result['status'],expected,payload)
+
+    async def test_malformed_created_id_never_attaches_a_different_message(self):
+        for bad_id in (True,0,-1,'09001','not-an-id'):
+            class BadId(_FakeAsyncClient):
+                async def post(self,url,**kwargs):return httpx.Response(201,json={'id':bad_id},request=httpx.Request('POST',url))
+            attached=[]
+            async def capture(message_id):attached.append(message_id)
+            with patch("bb_webhook.gorgias_client.get_settings",return_value=SimpleNamespace(demo_mode=False)),patch("bb_webhook.gorgias_client.httpx.AsyncClient",BadId):
+                result=await GorgiasClient(subdomain='test',email='agent@example.com',api_key='test-key',base_url='https://test.gorgias.com').send_public_reply(123,'Reply',on_created=capture)
+            self.assertFalse(result['ok'])
+            self.assertEqual(attached,[])
+
     async def test_message_id_is_recorded_before_delivery_read(self):
         _FakeAsyncClient.calls=[]
         async def on_created(message_id):
