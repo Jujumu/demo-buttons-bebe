@@ -291,12 +291,18 @@ class GorgiasClient:
             return {"ok": False, "delivery_status": "not_attempted", "error": f"failed to read ticket: {exc}"}
         if not isinstance(msgs, list):
             msgs = []
-        def _dt(m):
-            return m.get("created_datetime") or m.get("sent_datetime") or ""
-        msgs_sorted = sorted(msgs, key=_dt)
+        # The provider applies created_datetime:desc. Re-sorting strings here
+        # reverses ties and misorders valid timestamps with different offsets.
+        expected_id = _verified_message_id(expected_source_message_id)
+        if expected_source_message_id is not None and expected_id is None:
+            return {"ok": False, "delivery_status": "not_attempted", "error": "invalid_reviewed_source_message_id"}
         base = None
-        for m in reversed(msgs_sorted):
-            if not m.get("from_agent", False):
+        for m in msgs:
+            if (not isinstance(m, dict) or _verified_message_id(m.get("id")) is None
+                    or type(m.get("from_agent")) is not bool
+                    or not _valid_sent_timestamp(m.get("created_datetime"))):
+                return {"ok": False, "delivery_status": "not_attempted", "error": "invalid_provider_message_history"}
+            if m["from_agent"] is False:
                 base = m
                 break
         if base is None:
@@ -314,7 +320,7 @@ class GorgiasClient:
             return {"ok": False, "delivery_status": "not_attempted", "error": "customer message has no recipient address"}
         if expected_recipient is not None and customer_email.strip().lower() != expected_recipient.strip().lower():
             return {"ok": False, "delivery_status": "not_attempted", "error": "recipient_changed_refresh_ticket"}
-        if expected_source_message_id is not None and str(base.get("id")) != str(expected_source_message_id):
+        if expected_id is not None and _verified_message_id(base.get("id")) != expected_id:
             return {"ok": False, "delivery_status": "not_attempted", "error": "new_customer_message_refresh_ticket"}
         source_from = our_to[0] if isinstance(our_to, list) and our_to else {}
         source_from_address = _address(source_from)

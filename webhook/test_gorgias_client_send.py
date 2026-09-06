@@ -32,6 +32,7 @@ class _FakeAsyncClient:
                     "data": [
                         {
                             "id": 44,
+                            "created_datetime": "2026-09-07T08:00:00Z",
                             "from_agent": False,
                             "channel": "email",
                             "source": {
@@ -91,6 +92,63 @@ class GorgiasClientSendTests(unittest.IsolatedAsyncioTestCase):
                     base_url="https://buttons-bebe.gorgias.com").send_public_reply(123,"Reply",**expected)
             self.assertEqual(result["delivery_status"],"not_attempted")
             self.assertFalse(any(call[0]=="POST" for call in _FakeAsyncClient.calls))
+
+    async def test_provider_page_order_prevents_stale_send_across_timezone_offsets(self):
+        class OrderedPage(_FakeAsyncClient):
+            async def get(self,url,**kwargs):
+                if url.endswith('/api/messages'):
+                    self.calls.append(('GET',url,kwargs))
+                    def customer(mid,stamp):
+                        return {'id':mid,'created_datetime':stamp,'from_agent':False,'channel':'email',
+                                'source':{'from':{'address':'customer@example.com'},'to':[{'address':'support@buttonsbebe.com'}]}}
+                    return httpx.Response(200,json={'data':[
+                        customer(45,'2026-09-07T09:30:00Z'),
+                        customer(44,'2026-09-07T10:00:00+02:00')]},request=httpx.Request('GET',url))
+                return await super().get(url,**kwargs)
+        OrderedPage.calls=[]
+        with patch('bb_webhook.gorgias_client.get_settings',return_value=SimpleNamespace(demo_mode=False)),patch('bb_webhook.gorgias_client.httpx.AsyncClient',OrderedPage):
+            result=await GorgiasClient(subdomain='test',email='agent@example.com',api_key='test-key',base_url='https://test.gorgias.com').send_public_reply(
+                123,'Reply reviewed before the latest customer message',expected_source_message_id='44',expected_recipient='customer@example.com')
+        self.assertEqual(result['delivery_status'],'not_attempted')
+        self.assertEqual(result['error'],'new_customer_message_refresh_ticket')
+        self.assertFalse(any(call[0]=='POST' for call in OrderedPage.calls))
+
+    async def test_provider_ties_and_invalid_history_never_fall_back_to_older_review(self):
+        for latest_stamp,latest_id,expected_error in (
+            ('2026-09-07T09:30:00Z',45,'new_customer_message_refresh_ticket'),
+            ('not-a-timestamp',45,'invalid_provider_message_history'),
+            (None,45,'invalid_provider_message_history'),
+            ('2026-09-07',45,'invalid_provider_message_history'),
+            ('2026-09-07T09:30:00Z',True,'invalid_provider_message_history'),
+            ('2026-09-07T09:30:00Z','045','invalid_provider_message_history'),
+            ('2026-09-07T09:30:00Z',float('nan'),'invalid_provider_message_history')):
+            class History(_FakeAsyncClient):
+                async def get(self,url,**kwargs):
+                    if url.endswith('/api/messages'):
+                        self.calls.append(('GET',url,kwargs))
+                        route={'from_agent':False,'channel':'email','source':{'from':{'address':'customer@example.com'},'to':[{'address':'support@buttonsbebe.com'}]}}
+                        # NaN is intentionally returned by a synthetic response
+                        # object rather than serialized as standards-compliant JSON.
+                        response=httpx.Response(200,json={},request=httpx.Request('GET',url))
+                        response.json=lambda: {'data':[{**route,'id':latest_id,'created_datetime':latest_stamp},
+                            {**route,'id':44,'created_datetime':'2026-09-07T09:30:00Z'}]}
+                        return response
+                    return await super().get(url,**kwargs)
+            History.calls=[]
+            with self.subTest(timestamp=latest_stamp,id=latest_id),patch('bb_webhook.gorgias_client.get_settings',return_value=SimpleNamespace(demo_mode=False)),patch('bb_webhook.gorgias_client.httpx.AsyncClient',History):
+                result=await GorgiasClient(subdomain='test',email='agent@example.com',api_key='test-key',base_url='https://test.gorgias.com').send_public_reply(123,'Old reviewed reply',expected_source_message_id='44')
+                self.assertEqual(result['delivery_status'],'not_attempted')
+                self.assertEqual(result['error'],expected_error)
+                self.assertFalse(any(call[0]=='POST' for call in History.calls))
+
+    async def test_invalid_reviewed_source_id_never_posts(self):
+        for source_id in (True,False,0,-1,'044',float('nan'),'not-an-id'):
+            _FakeAsyncClient.calls=[]
+            with self.subTest(source_id=source_id),patch('bb_webhook.gorgias_client.get_settings',return_value=SimpleNamespace(demo_mode=False)),patch('bb_webhook.gorgias_client.httpx.AsyncClient',_FakeAsyncClient):
+                result=await GorgiasClient(subdomain='test',email='agent@example.com',api_key='test-key',base_url='https://test.gorgias.com').send_public_reply(123,'Reply',expected_source_message_id=source_id)
+                self.assertEqual(result['delivery_status'],'not_attempted')
+                self.assertEqual(result['error'],'invalid_reviewed_source_message_id')
+                self.assertFalse(any(call[0]=='POST' for call in _FakeAsyncClient.calls))
 
     async def test_bad_request_fallback_keeps_literal_html_escaped(self):
         class RejectText(_FakeAsyncClient):
