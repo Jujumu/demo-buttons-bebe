@@ -37,7 +37,7 @@ def worker(input_path):
     sys.modules['config'] = config
     sys.modules['bb_webhook.database'] = db
     def audit(event, args):
-        if event in {'socket.connect', 'socket.connect_ex', 'socket.bind', 'socket.getaddrinfo', 'subprocess.Popen', 'os.system', 'sqlite3.connect'}:
+        if event in {'socket.connect', 'socket.connect_ex', 'socket.bind', 'socket.getaddrinfo', 'socket.sendto', 'socket.sendmsg', 'subprocess.Popen', 'os.system', 'os.exec', 'os.posix_spawn', 'os.fork', 'sqlite3.connect'}:
             forbidden()
         if event == 'open':
             path = args[0]
