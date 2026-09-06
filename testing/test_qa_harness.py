@@ -87,6 +87,10 @@ class RuntimeBoundaryTests(unittest.TestCase):
         executable=self.root/"synthetic-hermes"
         executable.write_text('#!'+sys.executable+'''\nimport sys,re,json
 assert '--yolo' not in sys.argv
+import os
+assert os.environ['HERMES_HOME']==os.environ['HOME']+'/.hermes'
+assert os.environ['HERMES_CONFIG']==os.environ['HERMES_HOME']+'/config.yaml'
+assert os.getcwd()==os.environ['HOME']
 assert sys.argv[sys.argv.index('-t')+1]=='buttonsbebe_kb,buttonsbebe_redo,buttonsbebe_gorgias'
 prompt=sys.argv[-1]
 token=re.search(r'RUN TOKEN for this ticket: ([a-f0-9]+)',prompt).group(1)
@@ -101,6 +105,37 @@ print('JSON_RESULT['+token+']: '+json.dumps({'priority':'normal','action':'draft
             self.assertTrue(result["model_called"])
             self.assertIn("Thanks for reaching out",result["result"]["draft_text"])
         finally:harness.close()
+
+    def test_fast_final_output_overflow_is_rejected(self):
+        for stream, size in ((1, 1100000), (2, 140000)):
+            with self.subTest(stream=stream), self.assertRaises(RuntimeError):
+                isolated_run([sys.executable, "-c", f"import os; os.write({stream}, b'x'*{size})"],
+                             timeout=2, env=minimal_environment(self.root), cwd=self.root)
+
+    def test_isolated_helper_cleans_descendants_after_success_nonzero_and_cancel(self):
+        import signal
+        import time
+        for mode in ("success", "nonzero", "cancel"):
+            marker = self.root / ("survivor-" + mode)
+            descendant = f"import signal,time,pathlib; signal.signal(signal.SIGTERM,signal.SIG_IGN); time.sleep(.8); pathlib.Path({str(marker)!r}).write_text('bad')"
+            command = [sys.executable, "-c", f"import subprocess,sys,time; subprocess.Popen([sys.executable,'-c',{descendant!r}],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL); time.sleep(.1); " +
+                       ("time.sleep(20)" if mode == "cancel" else "sys.exit(3)" if mode == "nonzero" else "sys.exit(0)")]
+            if mode == "cancel":
+                def interrupt(*args):
+                    raise KeyboardInterrupt()
+                previous = signal.signal(signal.SIGALRM, interrupt)
+                signal.setitimer(signal.ITIMER_REAL, .25)
+                try:
+                    with self.assertRaises(KeyboardInterrupt):
+                        isolated_run(command, timeout=2, env=minimal_environment(self.root), cwd=self.root)
+                finally:
+                    signal.setitimer(signal.ITIMER_REAL, 0)
+                    signal.signal(signal.SIGALRM, previous)
+            else:
+                outcome = isolated_run(command, timeout=2, env=minimal_environment(self.root), cwd=self.root)
+                self.assertEqual(outcome.returncode, 3 if mode == "nonzero" else 0)
+            time.sleep(.9)
+            self.assertFalse(marker.exists())
 
     def test_timeout_terminates_process_group(self):
         marker=self.root/"should-not-exist"

@@ -69,3 +69,11 @@ or publish the directory wholesale. Share only reviewed results/receipts after
 secret and PII checks. Remove the private HOME once evidence review is complete.
 Historical `results-live.json`, `results-sim.json`, and LIVE-RUN-JUDGMENT.md are
 archived evidence from earlier behavior, not proof of the current release.
+
+
+Offline release gates include QA boundary tests (synthetic executables and
+localhost fixture MCPs only; no model request). Set `QA_PYTHON` to the interpreter
+prepared from `testing/requirements-qa.lock` with `--require-hashes`; CI prepares
+a separate `.qa-venv`. The harness uses the production bounded process helper
+with a private working directory and explicit QA HOME/HERMES_HOME/HERMES_CONFIG.
+It supplies the isolated QA environment instead of using root's profile.

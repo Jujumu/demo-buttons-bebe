@@ -55,19 +55,17 @@ def minimal_environment(home: Path) -> dict:
 
 
 def isolated_run(command, *, timeout, env, cwd, **ignored):
-    """Bound output in private files; kill the full child group on timeout."""
-    import tempfile
-    with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
-        process = subprocess.Popen(command,stdout=stdout,stderr=stderr,env=env,cwd=cwd,start_new_session=True)
-        deadline = time.monotonic() + timeout
-        while process.poll() is None:
-            if time.monotonic() >= deadline or stdout.tell() > 2_000_000 or stderr.tell() > 1_000_000:
-                os.killpg(process.pid,signal.SIGKILL)
-                process.wait()
-                raise subprocess.TimeoutExpired(command[0],timeout)
-            time.sleep(0.05)
-        stdout.seek(0); stderr.seek(0)
-        return subprocess.CompletedProcess(command,process.returncode,stdout.read(2_000_001).decode("utf-8","replace"),stderr.read(1_000_001).decode("utf-8","replace"))
+    """Use the exact production helper without importing credential config.
+
+    Loading this self-contained file directly avoids hermes_runner.__init__ and
+    processor.config import-time dotenv behavior during QA preflight.
+    """
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "qa_production_process", REPO / "processor/hermes_runner/process.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.run_bounded(command, timeout=timeout, env=env, cwd=cwd)
 
 
 def unpack(result):
@@ -221,7 +219,7 @@ class Harness:
             captured["result"]=result
             return result
         started=time.monotonic()
-        with patch.object(runner,"get_settings",return_value=settings),patch.object(runner,"_run_environment",return_value=self.env),patch.object(runner,"_make_run_token",return_value=token),patch.object(runner.subprocess,"run",side_effect=execute):
+        with patch.object(runner,"get_settings",return_value=settings),patch.object(runner,"_run_environment",return_value=self.env),patch.object(runner,"_make_run_token",return_value=token),patch.object(runner,"run_bounded",side_effect=execute):
             result=runner.process_ticket_with_hermes(fixture["ticket"]["id"],scenario["message"],scenario["subject"],scenario["email"],[scenario.get("intent","")])
         self.assert_no_fatal_audit()
         process=captured.get("result")

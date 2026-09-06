@@ -12,7 +12,7 @@ class OutputLimitExceeded(RuntimeError):
     pass
 
 
-def run_bounded(command, *, timeout, env, capture_output=True, text=True):
+def run_bounded(command, *, timeout, env, capture_output=True, text=True, cwd=None):
     """Return a CompletedProcess with bounded output and no surviving group.
 
     Never retain unlimited communicate() output. A fresh session isolates child
@@ -23,7 +23,7 @@ def run_bounded(command, *, timeout, env, capture_output=True, text=True):
     if timeout <= 0:
         raise ValueError("process timeout must be positive")
     child = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                             env=env, start_new_session=True, close_fds=True)
+                             env=env, cwd=cwd, start_new_session=True, close_fds=True)
     selector = selectors.DefaultSelector()
     output = {"stdout": bytearray(), "stderr": bytearray()}
     limits = {"stdout": 1024 * 1024, "stderr": 128 * 1024}

@@ -11,6 +11,7 @@ PYTHON="${PYTHON:-python3}"
 PROCESSOR_PYTHON="${PROCESSOR_PYTHON:-$PYTHON}"
 WEBHOOK_PYTHON="${WEBHOOK_PYTHON:-$PYTHON}"
 INBOX_PYTHON="${INBOX_PYTHON:-$WEBHOOK_PYTHON}"
+QA_PYTHON="${QA_PYTHON:-$PROCESSOR_PYTHON}"
 
 fail() {
   echo "release gate failed: $*" >&2
@@ -43,6 +44,7 @@ for required in \
   "webhook/uv.lock" \
   "kb/requirements.txt" \
   "tools/requirements.txt" \
+  "testing/requirements-qa.lock" \
   "whatsapp-connect/package.json" \
   "whatsapp-connect/package-lock.json"; do
   [[ -f "$required" ]] || fail "missing dependency manifest: $required"
@@ -141,6 +143,7 @@ esac
 # The feedback and KB suites already replace optional network/vector modules in
 # their tests. Keep the requests stub explicit so this gate remains offline.
 "$PYTHON" -c 'import sys,types,unittest; requests=types.ModuleType("requests"); requests.get=lambda *a,**k: None; requests.post=lambda *a,**k: None; sys.modules["requests"]=requests; names=["feedback.tests.test_all","feedback.tests.test_retirement"]; suite=unittest.TestSuite(unittest.defaultTestLoader.loadTestsFromName(n) for n in names); result=unittest.TextTestRunner(verbosity=1).run(suite); raise SystemExit(not result.wasSuccessful())'
+"$QA_PYTHON" -m unittest discover -s testing -p 'test_*.py' -v
 "$PYTHON" -m unittest discover -s kb/tests -v
 "$PYTHON" -m unittest discover -s deploy/tests -v
 "$PYTHON" -m unittest discover -s tools -p 'test_*.py' -v
@@ -161,6 +164,7 @@ done
 ((webhook_count > 0)) || fail "no webhook tests discovered"
 PYTHONPATH="$ROOT_DIR/console-src/helpdesk-agent${PYTHONPATH:+:$PYTHONPATH}" \
   "$INBOX_PYTHON" -m unittest discover -s console-src/helpdesk-agent/tests -v
+"$INBOX_PYTHON" -m unittest discover -s console-src/inbox/tests -p 'test_*.py' -v
 "$PYTHON" tools/build_support_theme.py --check
 "$PYTHON" tools/check_inbox_locks.py
 node --test console-src/inbox/test/*.test.js
