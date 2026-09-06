@@ -26,6 +26,7 @@ for name in ("HELPDESK_STORE_FILE", "HELPDESK_SEEN_FILE"):
 # Legacy files must be migrated explicitly before starting this low-privilege
 # service. It must never try to traverse /root or load the application's .env.
 from fastapi import FastAPI, Request  # noqa: E402
+from starlette.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, JSONResponse  # noqa: E402
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, ValidationError  # noqa: E402
 from helpdesk.http import handle_http  # noqa: E402
@@ -108,11 +109,15 @@ async def health():
     return {"ok": True}
 
 
+def _storage_read_check():
+    with tickets.transaction(write=False):
+        pass
+
+
 @app.get("/ready")
 async def ready():
     try:
-        with tickets.transaction():
-            pass
+        await run_in_threadpool(_storage_read_check)
     except Exception:
         return error(503, "storage_unavailable", "Inbox storage is unavailable.")
     return {"ok": True, "sendAccessEnabled": False}
@@ -133,7 +138,7 @@ async def invoke(request: Request):
         invocation = Invocation.model_validate_json(bytes(raw))
         if invocation.tool == "helpdesk.send_reply":
             # The lock wins even when callers submit extra send arguments.
-            return {"ok": False, "error": SEND_ACCESS_ERROR, "message": ACTIVATE_SEND_MESSAGE, "tool": invocation.tool}
+            return {"ok": False, "error": SEND_ACCESS_ERROR, "message": ACTIVATE_SEND_MESSAGE}
         schema = SCHEMAS.get(invocation.tool)
         if schema is None:
             return error(403, "capability_unavailable", "This action is not available in this inbox.")
@@ -142,7 +147,7 @@ async def invoke(request: Request):
             return {"ok": True, "capabilities": CAPABILITIES}
         # All exposed operations are bounded local state operations; external
         # providers and model execution are absent from SCHEMAS.
-        return handle_http(invocation.tool, args, actor="human")
+        return await run_in_threadpool(handle_http, invocation.tool, args, actor="human")
     except (ValidationError, ValueError, UnicodeError):
         return error(400, "invalid_request", "Expected a valid tool name and arguments object.")
     except TimeoutError:

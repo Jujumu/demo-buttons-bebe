@@ -57,7 +57,7 @@ def invoke(
     actor: str = "agent",
 ) -> dict[str, Any]:
     try:
-        with tickets.transaction():
+        with tickets.transaction(write=tool not in {"helpdesk.list_tickets", "helpdesk.get_ticket", "helpdesk.write_gate_status", "helpdesk.bridge_status"}):
             return dispatch(tool, args, actor=actor)
     except HelpdeskError as exc:
         return exc.as_json()

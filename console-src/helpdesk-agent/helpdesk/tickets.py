@@ -451,6 +451,8 @@ def reset() -> None:
             db = state_store.connect(Path(db_path))
         try:
             state = state_store.read(db)
+            if state is None and getattr(_transaction_local, "readonly", False):
+                raise state_store.StoreUnavailable("Inbox state has not been initialized")
             if state is not None:
                 _store = copy.deepcopy(state["tickets"])
                 _seen_messages = set(state.get("seen", []))
@@ -917,7 +919,7 @@ def mark_bug_handled(ticket_id: str, gid_source: str = "sample") -> dict:
 
 
 @contextmanager
-def transaction():
+def transaction(*, write: bool = True):
     """Reload and commit one complete operation, including intake deduplication.
 
     Nested ticket helpers reuse the dispatch transaction. Failed operations
@@ -926,20 +928,24 @@ def transaction():
     db_path = os.environ.get("HELPDESK_DB_FILE")
     with _store_lock:
         if not db_path or getattr(_transaction_local, "db", None) is not None:
+            if write and getattr(_transaction_local, "readonly", False):
+                raise state_store.StoreUnavailable("Mutation refused in a read-only operation")
             yield
             return
-        db = state_store.connect(Path(db_path))
+        db = state_store.connect(Path(db_path), readonly=not write)
         _transaction_local.db = db
+        _transaction_local.readonly = not write
         try:
-            db.execute("BEGIN IMMEDIATE")
+            db.execute("BEGIN IMMEDIATE" if write else "BEGIN")
             reset()
             yield
-            state_store.write(db, {
-                "tickets": copy.deepcopy(_store),
-                "seen": sorted(_seen_messages),
-                "nextSeq": _next_seq,
-                "dedupe": [{"key": _dedupe_key_to_list(k), "ticketId": v["id"]} for k, v in _by_dedupe.items()],
-            })
+            if write:
+                state_store.write(db, {
+                    "tickets": copy.deepcopy(_store),
+                    "seen": sorted(_seen_messages),
+                    "nextSeq": _next_seq,
+                    "dedupe": [{"key": _dedupe_key_to_list(k), "ticketId": v["id"]} for k, v in _by_dedupe.items()],
+                })
             db.commit()
         except Exception:
             db.rollback()
@@ -947,6 +953,7 @@ def transaction():
             raise
         finally:
             _transaction_local.db = None
+            _transaction_local.readonly = False
             db.close()
 
 

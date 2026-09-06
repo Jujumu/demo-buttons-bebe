@@ -8,7 +8,11 @@ Disabled capabilities are hidden in the interface and refused by the server.
 
 ## Runtime
 
-Python 3.12 or later; install `requirements.txt` into a dedicated virtualenv.
+Python 3.12 or later; install `requirements.lock` with `uv pip sync
+--require-hashes` into a dedicated virtualenv. Top-level input is
+`requirements.txt`; regenerate locks explicitly with `uv pip compile
+--python-version 3.12 --generate-hashes`. Test dependencies have a separate
+`requirements-test.lock` whose runtime pins must exactly match the runtime lock.
 `run-review.sh` accepts `INBOX_PYTHON`, binds only 127.0.0.1, and defaults to port
 8766. It forcibly disables outbound, bridge and Shopify mutations. The server
 never loads `.env` files. Caddy must authenticate **every** inbox path, strip the
@@ -54,7 +58,10 @@ read stale root-owned files after migration.
 
 SQLite stores a versioned whole-inbox snapshot. `BEGIN IMMEDIATE` serializes
 read/modify/write operations across processes, reloads the committed state, and
-commits tickets, deduplication IDs and the sequence together. Failed operations
+commits tickets, deduplication IDs and the sequence together. Ticket reads and
+readiness use a read-only SQLite connection and deferred read transaction; they
+do not serialize state or acquire a writer lock. Their busy wait is bounded to
+200ms, and local storage work runs outside the ASGI event loop. Failed operations
 roll back and refresh the in-memory cache. WAL and FULL synchronization protect
 committed state. Startup/readiness fail visibly on corruption. Existing local
 workflow helpers now persist flags, but they are not exposed as production
@@ -74,7 +81,7 @@ helpers as separate intake API operations.
 ```
 python -m unittest discover -s console-src/helpdesk-agent/tests
 node --test console-src/inbox/test/*.test.js
-# Runtime Python needs httpx for this test, not for production serving.
+# Use requirements-test.lock in a clean CI virtualenv for this test.
 python console-src/inbox/test/test_review_server.py
 ```
 

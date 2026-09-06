@@ -29,8 +29,7 @@ class ServerTests(unittest.TestCase):
 
     def test_send_lock_and_disabled_bridge(self):
         response = self.post({"tool": "helpdesk.send_reply", "arguments": {"ticketId": "t-ada-track", "text": "Hi", "confirmed": True}})
-        self.assertEqual(response.json()["message"], "Activate the send access.")
-        self.assertEqual(response.json()["error"], "send_access_inactive")
+        self.assertEqual(response.json(), {"ok":False,"error":"send_access_inactive","message":"Activate the send access."})
         self.assertEqual(self.client.post("/webhook/gorgias").status_code, 503)
 
     def test_invalid_payloads_are_structured_errors(self):

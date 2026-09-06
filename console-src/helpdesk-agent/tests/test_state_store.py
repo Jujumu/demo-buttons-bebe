@@ -101,3 +101,20 @@ tickets.add_ticket(customer_name='Local test', subject='Test', body='Test', rece
             self.assertEqual(process.returncode, 0, err.decode())
         tickets.reset()
         self.assertEqual({row["id"] for row in tickets.list_tickets("all")}, {"t-in-1", "t-in-2", "t-in-3", "t-in-4"})
+
+    def test_reads_do_not_rewrite_state_or_take_writer_lock(self):
+        from helpdesk.dispatch import invoke
+        self.add()
+        with sqlite3.connect(self.db, isolation_level=None) as writer:
+            writer.execute("BEGIN IMMEDIATE")
+            with patch.object(state_store, "write", side_effect=AssertionError("read must not write")):
+                result = invoke("helpdesk.list_tickets", {"view":"all"})
+                self.assertEqual(len(result["tickets"]),1)
+            writer.rollback()
+
+    def test_read_only_operation_refuses_nested_mutation(self):
+        self.add()
+        with tickets.transaction(write=False):
+            with self.assertRaises(state_store.StoreUnavailable):
+                tickets.escalate_ticket("t-in-1")
+        self.assertFalse(tickets.get_ticket("t-in-1")["escalated"])

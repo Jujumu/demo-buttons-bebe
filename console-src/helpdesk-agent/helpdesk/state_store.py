@@ -44,8 +44,13 @@ def validate(state: dict) -> dict:
     return state
 
 
-def connect(path: Path) -> sqlite3.Connection:
+def connect(path: Path, *, readonly: bool = False) -> sqlite3.Connection:
     try:
+        if readonly:
+            db = sqlite3.connect(path.resolve().as_uri() + "?mode=ro", uri=True, timeout=0.2, isolation_level=None)
+            db.execute("PRAGMA query_only=ON")
+            db.execute("PRAGMA busy_timeout=200")
+            return db
         path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         db = sqlite3.connect(path, timeout=10, isolation_level=None)
         db.execute("PRAGMA busy_timeout=10000")
