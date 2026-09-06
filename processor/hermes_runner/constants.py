@@ -48,8 +48,7 @@ _FALLBACK_RESULT: dict[str, Any] = {
     "note_posted": False,
     "draft_text": (
         "[SENSITIVE — REVIEW CAREFULLY BEFORE SENDING]\n\n"
-        "Hi! Thank you for reaching out. We’re reviewing your request and will "
-        "follow up with the correct information as soon as possible."
+        "Thanks for your message. I don’t have a confirmed answer to share yet."
     ),
 }
 

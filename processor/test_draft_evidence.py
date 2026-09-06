@@ -46,6 +46,15 @@ class EvidenceDraftTests(unittest.TestCase):
         self.assertNotIn('reviewing your request',result.text)
         self.assertFalse(result.no_draft)
 
+    def test_runner_execution_fallback_also_makes_no_work_commitment(self):
+        from hermes_runner.constants import _FALLBACK_RESULT, _TOKEN_FAILURE_RESULT
+        text=_FALLBACK_RESULT['draft_text']
+        self.assertTrue(text.startswith('[SENSITIVE'))
+        self.assertFalse(cleaner._find_action_claim(text))
+        self.assertEqual(cleaner.clean_draft(text).text,text)
+        self.assertTrue(_TOKEN_FAILURE_RESULT['no_draft'])
+        self.assertEqual(_TOKEN_FAILURE_RESULT['draft_text'],'')
+
     def test_prompt_demands_product_evidence_and_exact_observed_order_state(self):
         prompt=_build_prompt(ticket_id=123,message_text='Sizing question',ticket_subject='Question',customer_email='synthetic@example.invalid',intents=[],token='0123456789abcdef')
         for phrase in ('Never map age or weight alone to a size','exact brand/product','measurements required by its chart',"does NOT mean being prepared",'general processing window is policy','not a promised dispatch date','ask only for a genuinely missing detail','Never skip drafting','READ-ONLY','<DRAFT:0123456789abcdef>','JSON_RESULT[0123456789abcdef]'):
