@@ -10,11 +10,11 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 
 from .. import deps, session_store
+from ..password_executor import verify_bounded, PasswordVerifierBusy
 from ..middleware.console_session import resolve_identity, trusted_origin, UNSAFE_METHODS
 from ..console_auth import (
     build_session_token,
     safe_next_path,
-    verify_password,
     session_claims,
 )
 
@@ -95,7 +95,13 @@ async def auth_login(request: Request) -> JSONResponse:
         return JSONResponse(status_code=400, content={"error": "invalid_credentials"})
     if not hmac.compare_digest(username.strip().encode(), settings.console_username.encode()):
         return JSONResponse(status_code=401, content={"error": "invalid_credentials"})
-    if not verify_password(password, settings.console_password_hash):
+    try:
+        verified = await verify_bounded(password, settings.console_password_hash)
+    except PasswordVerifierBusy:
+        return JSONResponse(status_code=429, content={"error": "login_busy"}, headers={"Retry-After": "1"})
+    except Exception:
+        return JSONResponse(status_code=503, content={"error": "authentication_unavailable"})
+    if not verified:
         return JSONResponse(status_code=401, content={"error": "invalid_credentials"})
 
     redirect = safe_next_path(body.get("next"))

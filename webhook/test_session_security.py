@@ -1,5 +1,7 @@
 """Authenticated owner and adversarial proxy tests; no external operations."""
 import base64
+import asyncio
+import threading
 import hashlib
 import hmac
 import json
@@ -12,11 +14,17 @@ from unittest.mock import patch
 
 import httpx
 from fastapi import Request
-from bb_webhook import app as app_module, database, session_store
+from bb_webhook import app as app_module, database, session_store, password_executor
 from bb_webhook.console_auth import build_session_token, hash_password, safe_next_path
 from bb_webhook.routers import auth
 
 ORIGIN = "https://support.buttonsbebe.com"
+
+
+def _slow_password_test(password, encoded):
+    # Runs in an actual isolated process; never consumes a real credential.
+    time.sleep(1.5)
+    return False
 
 
 class SessionSecurityTests(unittest.IsolatedAsyncioTestCase):
@@ -115,6 +123,38 @@ class SessionSecurityTests(unittest.IsolatedAsyncioTestCase):
             result = await self.client.post("/auth/logout",headers={"origin":ORIGIN})
         self.assertEqual(result.status_code,503)
         self.assertNotIn("set-cookie",result.headers)
+
+
+
+    async def test_cancelled_login_cannot_free_a_running_password_slot(self):
+        with patch.object(password_executor,"verify_password",_slow_password_test):
+            first = asyncio.create_task(password_executor.verify_bounded("synthetic", "synthetic"))
+            second = asyncio.create_task(password_executor.verify_bounded("synthetic", "synthetic"))
+            await asyncio.sleep(0.2)
+            first.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await first
+            with self.assertRaises(password_executor.PasswordVerifierBusy):
+                await password_executor.verify_bounded("synthetic", "synthetic")
+            await second
+
+    async def test_password_saturation_does_not_block_webhook_intake(self):
+        payload = {"username":"chaim","password":"synthetic-test-only"}
+        with patch.object(password_executor,"verify_password",_slow_password_test):
+            first = asyncio.create_task(self.client.post("/auth/login",headers={"origin":ORIGIN},json=payload))
+            second = asyncio.create_task(self.client.post("/auth/login",headers={"origin":ORIGIN},json=payload))
+            # Let both request handlers submit CPU jobs without waiting for the
+            # workers to complete. The third request must be refused promptly.
+            await asyncio.sleep(0.1)
+            saturated = await asyncio.wait_for(self.client.post("/auth/login",headers={"origin":ORIGIN},json=payload),timeout=0.75)
+            self.assertEqual(saturated.status_code,429)
+            with patch.object(app_module,"verify_signature",return_value=False):
+                intake = await asyncio.wait_for(self.client.post("/webhook/gorgias/test",content=b"{}"),timeout=0.75)
+            self.assertEqual(intake.status_code,401)
+            self.assertEqual(intake.json()["error"],"invalid_signature")
+            self.assertFalse(first.done())
+            self.assertFalse(second.done())
+            self.assertEqual([response.status_code for response in await asyncio.gather(first,second)],[401,401])
 
     async def test_readiness_checks_real_database_and_schema(self):
         result = await self.client.get("/ready")

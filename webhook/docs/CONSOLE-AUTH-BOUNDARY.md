@@ -90,3 +90,14 @@ sessions, Origin checks, the inbox capability allowlist and CSP reduce risk;
 they do not make two paths into separate origins or eliminate same-origin XSS.
 Do not claim the inbox is authorized to send because it can read an owner
 session or because its service invokes tools with a generic human actor.
+
+Password verification runs in two dedicated spawned process workers. A global
+nonblocking capacity guard refuses additional work with 429 instead of queuing
+waiters or hashing on the webhook event loop. Worker completion releases the
+capacity even if the HTTP caller disconnects; cancellation cannot create an
+unbounded background backlog. Process isolation also covers legacy bcrypt/crypt
+implementations that do not release Python's GIL. The existing per-client rate
+limit and bounded login request size remain in place. Verification exceptions
+return 503 without printing credentials. Production Python 3.12 was checked to
+provide `crypt` and BLOWFISH support without reading credential files; a future
+Python 3.13+ migration must explicitly preserve bcrypt compatibility.
