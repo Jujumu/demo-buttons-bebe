@@ -144,8 +144,14 @@ def apply(kind,pid,ticks,unit_sha,source_sha,header_file=None):
     if kind == 'hermes': run('systemctl','daemon-reload')
     run('systemctl','restart',unit)
     for attempt in range(40):
-        current = service_info(kind)
-        if listener(port,current['pid']): break
+        try:
+            current = service_info(kind)
+            ready = listener(port,current['pid'])
+        except (ValueError, FileNotFoundError, ProcessLookupError):
+            # systemctl restart can return while MainPID is still settling.
+            # Keep the bounded readiness window; never restore the public bind.
+            ready = False
+        if ready: break
         if attempt == 39: raise RuntimeError('Local listener not ready; contained source retained')
         time.sleep(.5)
     if probe(url,header_file) != before or probe(f'http://127.0.0.1:{port}/') != local_before:

@@ -71,6 +71,12 @@ class ListenerContainmentTests(unittest.TestCase):
         self.assertEqual(probe.call_count,4)
         self.assertIn('127.0.0.1',self.source.read_text())
 
+    def test_restart_waits_for_transient_missing_main_pid(self):
+        with patch.object(target,'service_info',side_effect=[self.info,self.info,ValueError('no PID yet'),self.info]),patch.object(target,'probe',return_value=(200,'text/html')),patch.object(target,'run',return_value=''),patch.object(target,'listener',return_value=True),patch.object(target.time,'sleep') as sleep:
+            self.apply()
+        sleep.assert_called_once_with(.5)
+        self.assertIn('127.0.0.1',self.source.read_text())
+
     def test_listener_requires_only_expected_pid_on_only_local_addresses(self):
         for row,expected in [('LISTEN 0 5 127.0.0.1:4100 0.0.0.0:* users:(("node",pid=123,fd=1))',True),('LISTEN 0 5 *:4100 *:* users:(("node",pid=123,fd=1))',False),('LISTEN 0 5 127.0.0.1:4100 *:* users:(("node",pid=456,fd=1))',False)]:
             with patch.object(target,'run',return_value=row):self.assertEqual(target.listener(4100,123),expected)
