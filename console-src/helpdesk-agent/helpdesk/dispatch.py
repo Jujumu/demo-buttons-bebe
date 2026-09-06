@@ -6,6 +6,7 @@ from typing import Any
 import os
 
 from .env import mutations_enabled
+from . import tickets
 from .errors import REFUSED_WRITES, HelpdeskError, bad_request, forbidden_write
 from .names import TOOL_NAMES, TOOL_SEND_REPLY
 from .tissues import HANDLERS
@@ -56,6 +57,7 @@ def invoke(
     actor: str = "agent",
 ) -> dict[str, Any]:
     try:
-        return dispatch(tool, args, actor=actor)
+        with tickets.transaction():
+            return dispatch(tool, args, actor=actor)
     except HelpdeskError as exc:
         return exc.as_json()

@@ -12,6 +12,8 @@ export function createHelpdeskShop(opts = {}) {
   }
   return {
     id: 'shop', shop: '', client,
+    capabilities: Object.fromEntries(['draftReply','summarizeThread','searchMacros','applyMacro','escalateTicket','markPrivacyHandled','markUnsubscribed','markBugHandled','customerDetails','sendReply'].map(key => [key, false])),
+    getCapabilities: async () => (await read('helpdesk.capabilities')).capabilities,
     listTickets: async args => (await read('helpdesk.list_tickets', args)).tickets,
     getTicket: async args => (await read('helpdesk.get_ticket', args)).ticket,
     getCustomer: async args => (await read('helpdesk.get_customer', args)).customer,

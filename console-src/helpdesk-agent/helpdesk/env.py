@@ -23,7 +23,7 @@ def load_shopify_env() -> dict[str, str]:
     found: dict[str, str] = {}
     root = Path(__file__).resolve().parents[3]
     env_path = root / ".env"
-    if env_path.is_file():
+    if os.environ.get("HELPDESK_PRODUCTION") != "1" and env_path.is_file():
         for line in env_path.read_text(encoding="utf-8").splitlines():
             text = line.strip()
             if not text or text.startswith("#") or "=" not in text:

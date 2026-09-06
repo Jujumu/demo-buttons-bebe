@@ -17,7 +17,7 @@ export function createThreadTissue({ mailbox }) {
   let host = null;
 
   function project(input) {
-    return { ticket: input.ticket || null };
+    return { ticket: input.ticket || null, capabilities: input.capabilities || {} };
   }
 
   function renderAttachments(message) {
@@ -109,14 +109,15 @@ export function createThreadTissue({ mailbox }) {
     }
     const count = talkMessages(ticket).length;
     const summarizeLabel = count === 1 ? "Summarize 1 message" : `Summarize ${count} messages`;
-    const escalateControl = ticket.escalated
+    const escalateControl = ticket.escalated || next.capabilities?.escalateTicket === false
       ? ""
       : `<button type="button" class="btn-quiet" data-escalate="${esc(ticket.id)}" title="Flag this ticket for a human lead. Does not email the customer.">Escalate</button>`;
     const chrome = requestTypeChrome(ticket);
     const subtype = chrome?.subtype
       ? `<span class="thread-request-subtype mute">${esc(chrome.subtype)}</span>`
       : "";
-    const mark = !chrome
+    const capability = { privacy_request: "markPrivacyHandled", marketing_unsubscribe: "markUnsubscribed", bug: "markBugHandled" }[ticket.requestType];
+    const mark = !chrome || next.capabilities?.[capability] === false
       ? ""
       : chrome.handled
         ? `<p class="thread-request-handled mute">${esc(chrome.doneLabel)}</p>`
@@ -141,9 +142,9 @@ export function createThreadTissue({ mailbox }) {
         </div>
       </header>
       <div class="thread-scroll">${timeline(ticket)}</div>
-      <div class="summarize-row">
+      ${next.capabilities?.summarizeThread === false ? "" : `<div class="summarize-row">
         <button type="button" class="btn-quiet" data-summarize="${esc(ticket.id)}" title="Show a short mute summary above the reply box">${esc(summarizeLabel)}</button>
-      </div>
+      </div>`}
     </div>${renderLightbox()}`;
   }
 

@@ -43,6 +43,7 @@ function safeMount(tissue, el, input) {
 export function createInboxOrgan(opts = {}) {
   const mailbox = opts.mailbox || createMailbox();
   const shop = opts.shop || createHelpdeskShop({ fail: opts.fail });
+  let capabilities = { ...(shop.capabilities || {}) };
   const shopHost = opts.shopHost || shop.shop || SHOP;
   const pinnedCatalog = opts.tickets || null;
   const listTissue = createListTissue({ mailbox });
@@ -269,6 +270,7 @@ export function createInboxOrgan(opts = {}) {
   }
 
   async function loadDraft(ticket) {
+    if (capabilities.draftReply === false) return "";
     if (!ticket) return "";
     if (typeof shop.draftReply === "function") {
       try {
@@ -293,6 +295,7 @@ export function createInboxOrgan(opts = {}) {
   }
 
   async function loadSummary(ticket) {
+    if (capabilities.summarizeThread === false) return "";
     if (!ticket) return "";
     if (typeof shop.summarizeThread === "function") {
       try {
@@ -353,112 +356,43 @@ export function createInboxOrgan(opts = {}) {
     }, 30000);
   }
 
-  async function escalateSelected(reason) {
+  async function persistAction(method, args, flag) {
     const ticket = selectedTicket();
-    if (!ticket || ticket.escalated) return ticket;
-    if (typeof shop.escalateTicket === "function") {
-      try {
-        const result = await shop.escalateTicket({ ticketId: ticket.id, reason });
-        if (result) {
-          selected = result;
-          return result;
-        }
-      } catch {
-        // local flag below
-      }
+    if (!ticket) return null;
+    if (capabilities[method] === false || typeof shop[method] !== "function") {
+      throw new Error("This action is not available in this inbox.");
     }
-    selected = {
-      ...ticket,
-      escalated: true,
-      escalationReason: reason || "",
-      statusEvents: [
-        ...(ticket.statusEvents || []),
-        { at: new Date().toISOString(), status: ticket.status, note: "escalated" },
-      ],
-    };
-    return selected;
+    const result = await shop[method]({ ticketId: ticket.id, ...args });
+    if (!result || result.id !== ticket.id || !result[flag]) {
+      throw new Error("The action was not confirmed. Please try again.");
+    }
+    // Never turn an error or missing response into a local success marker.
+    if (selectedId === ticket.id) selected = result;
+    return result;
+  }
+
+  async function escalateSelected(reason) {
+    return persistAction("escalateTicket", { reason }, "escalated");
   }
 
   async function markPrivacyHandled() {
-    const ticket = selectedTicket();
-    if (!ticket || ticket.requestType !== "privacy_request") return ticket;
-    if (typeof shop.markPrivacyHandled === "function") {
-      try {
-        const result = await shop.markPrivacyHandled({ ticketId: ticket.id });
-        if (result) {
-          selected = result;
-          privacyGateOpen = false;
-          return result;
-        }
-      } catch {
-        // local flag below
-      }
-    }
-    selected = {
-      ...ticket,
-      privacyHandled: true,
-      statusEvents: [
-        ...(ticket.statusEvents || []),
-        { at: new Date().toISOString(), status: ticket.status, note: "privacy handled" },
-      ],
-    };
+    const result = await persistAction("markPrivacyHandled", {}, "privacyHandled");
     privacyGateOpen = false;
-    return selected;
+    return result;
   }
 
   async function markUnsubscribed() {
-    const ticket = selectedTicket();
-    if (!ticket || ticket.requestType !== "marketing_unsubscribe") return ticket;
-    if (typeof shop.markUnsubscribed === "function") {
-      try {
-        const result = await shop.markUnsubscribed({ ticketId: ticket.id });
-        if (result) {
-          selected = result;
-          marketingGateOpen = false;
-          return result;
-        }
-      } catch {
-        // local flag below
-      }
-    }
-    selected = {
-      ...ticket,
-      unsubscribeHandled: true,
-      statusEvents: [
-        ...(ticket.statusEvents || []),
-        { at: new Date().toISOString(), status: ticket.status, note: "unsubscribed" },
-      ],
-    };
+    const result = await persistAction("markUnsubscribed", {}, "unsubscribeHandled");
     marketingGateOpen = false;
-    return selected;
+    return result;
   }
 
   async function markBugHandled() {
-    const ticket = selectedTicket();
-    if (!ticket || ticket.requestType !== "bug") return ticket;
-    if (typeof shop.markBugHandled === "function") {
-      try {
-        const result = await shop.markBugHandled({ ticketId: ticket.id });
-        if (result) {
-          selected = result;
-          return result;
-        }
-      } catch {
-        // local flag below
-      }
-    }
-    selected = {
-      ...ticket,
-      bugHandled: true,
-      statusEvents: [
-        ...(ticket.statusEvents || []),
-        { at: new Date().toISOString(), status: ticket.status, note: "bug handled" },
-      ],
-    };
-    return selected;
+    return persistAction("markBugHandled", {}, "bugHandled");
   }
 
   async function refreshMacros(query = "") {
+    if (capabilities.searchMacros === false) { macros = []; return; }
     macroQuery = query;
     if (typeof shop.searchMacros === "function") {
       try {
@@ -480,6 +414,7 @@ export function createInboxOrgan(opts = {}) {
 
   function composerInput(ticket) {
     return {
+      capabilities,
       ticket: withRecipient(ticket, toEmail),
       draft: discarded ? "" : strip,
       summarize: summarizeText,
@@ -512,9 +447,9 @@ export function createInboxOrgan(opts = {}) {
     ensureSelection();
     const ticket = selectedTicket();
     const listModel = listTissue.update(listInput());
-    const threadModel = threadTissue.update({ ticket });
+    const threadModel = threadTissue.update({ ticket, capabilities });
     const composerModel = composerTissue.update(composerInput(ticket));
-    const railHtml = !ticket ? emptyRailHtml() : railCollapsed ? railCollapsedHtml() : rail.render();
+    const railHtml = (!ticket || capabilities.customerDetails === false) ? emptyRailHtml() : railCollapsed ? railCollapsedHtml() : rail.render();
     const html = `<div class="inbox" data-organ="inbox">
       <a class="skip-link" href="#inbox-thread">Skip to thread.</a>
       <section class="pane pane-list${listCollapsed ? " is-collapsed" : ""}" data-pane="list">${listTissue.render(listModel)}</section>
@@ -552,11 +487,11 @@ export function createInboxOrgan(opts = {}) {
     };
   }
 
-  function emptyRailHtml() { return `<div class="empty-pane"><strong>Customer details</strong><p>Select a conversation to see customer and order details.</p></div>`; }
+  function emptyRailHtml() { return `<div class="empty-pane"><strong>Customer details</strong><p>${capabilities.customerDetails === false ? "Customer and order lookup is not connected to this inbox." : "Select a conversation to see customer and order details."}</p></div>`; }
 
   async function refreshRail() {
     const ticket = selectedTicket();
-    if (!ticket) { toEmail = ""; return; }
+    if (!ticket || capabilities.customerDetails === false) { toEmail = ticket?.fromEmail || ""; return; }
     await rail.load({
       shop: shopHost,
       customerId: ticket?.customerId,
@@ -564,6 +499,16 @@ export function createInboxOrgan(opts = {}) {
       ticketId: ticket?.id,
     });
     toEmail = rail.snapshot().models.customer?.record?.defaultEmailAddress?.emailAddress || "";
+  }
+
+  async function refreshCapabilities() {
+    if (typeof shop.getCapabilities === "function") {
+      try {
+        const result = await shop.getCapabilities();
+        // Only explicit booleans in the known capability vocabulary count.
+        for (const key of Object.keys(capabilities)) capabilities[key] = result?.[key] === true;
+      } catch { for (const key of Object.keys(capabilities)) capabilities[key] = false; }
+    }
   }
 
   async function mount(root) {
@@ -574,6 +519,7 @@ export function createInboxOrgan(opts = {}) {
       composer: root.querySelector("[data-slot=composer]"),
       rail: root.querySelector('[data-pane="rail"]'),
     };
+    await refreshCapabilities();
     await refreshList();
     ensureSelection();
     await refreshThread();
@@ -589,10 +535,10 @@ export function createInboxOrgan(opts = {}) {
       panes.list?.classList?.toggle?.("is-collapsed", listCollapsed);
       panes.rail?.classList?.toggle?.("is-collapsed", railCollapsed);
       safeMount(listTissue, panes.list, listInput());
-      const threadResult = safeMount(threadTissue, panes.thread, { ticket });
+      const threadResult = safeMount(threadTissue, panes.thread, { ticket, capabilities });
       safeMount(composerTissue, panes.composer, composerInput(ticket));
       try {
-        if (!ticket) {
+        if (!ticket || capabilities.customerDetails === false) {
           panes.rail.innerHTML = emptyRailHtml();
         } else if (railCollapsed) {
           panes.rail.innerHTML = railCollapsedHtml();
@@ -610,6 +556,10 @@ export function createInboxOrgan(opts = {}) {
       if (host) host.innerHTML = gateSheetHtml();
     };
 
+    const showActionError = error => {
+      sendError = String(error?.message || "Action failed. No change was confirmed.");
+      paint();
+    };
     mailbox.subscribe(MAILBOX_TOPICS.LIST_COLLAPSED, ({ collapsed }) => {
       listCollapsed = Boolean(collapsed);
       paint();
@@ -686,7 +636,7 @@ export function createInboxOrgan(opts = {}) {
     });
     mailbox.subscribe(MAILBOX_TOPICS.THREAD_ESCALATE, ({ ticketId, reason }) => {
       if (ticketId && ticketId !== selectedId) selectedId = ticketId;
-      escalateSelected(reason).then(() => refreshThread()).then(paint);
+      escalateSelected(reason).then(() => refreshThread()).then(paint).catch(showActionError);
     });
     mailbox.subscribe(MAILBOX_TOPICS.WRITE_GATE_OPEN, () => {
       closeAllGates();
@@ -726,7 +676,7 @@ export function createInboxOrgan(opts = {}) {
     });
     mailbox.subscribe(MAILBOX_TOPICS.PRIVACY_HANDLED, ({ ticketId }) => {
       if (ticketId && ticketId !== selectedId) selectedId = ticketId;
-      markPrivacyHandled().then(() => refreshRail()).then(paint);
+      markPrivacyHandled().then(() => refreshRail()).then(paint).catch(showActionError);
     });
     mailbox.subscribe(MAILBOX_TOPICS.MARKETING_GATE_OPEN, () => {
       closeAllGates();
@@ -739,11 +689,11 @@ export function createInboxOrgan(opts = {}) {
     });
     mailbox.subscribe(MAILBOX_TOPICS.MARKETING_HANDLED, ({ ticketId }) => {
       if (ticketId && ticketId !== selectedId) selectedId = ticketId;
-      markUnsubscribed().then(() => refreshRail()).then(paint);
+      markUnsubscribed().then(() => refreshRail()).then(paint).catch(showActionError);
     });
     mailbox.subscribe(MAILBOX_TOPICS.BUG_HANDLED, ({ ticketId }) => {
       if (ticketId && ticketId !== selectedId) selectedId = ticketId;
-      markBugHandled().then(() => refreshRail()).then(paint);
+      markBugHandled().then(() => refreshRail()).then(paint).catch(showActionError);
     });
     root.onclick = (event) => {
       if (event.target.closest("[data-rail-expand]")) {
@@ -897,7 +847,7 @@ export function createInboxOrgan(opts = {}) {
       const ticket = await escalateSelected(reason);
       if (ticket && !pinnedCatalog) await refreshThread();
       composerTissue.update(composerInput(selectedTicket()));
-      threadTissue.update({ ticket: selectedTicket() });
+      threadTissue.update({ ticket: selectedTicket(), capabilities });
       return snapshot();
     },
     openWriteGate() {
@@ -970,6 +920,7 @@ export function createInboxOrgan(opts = {}) {
       return afterUi();
     },
     async ready() {
+      await refreshCapabilities();
       await refreshList();
       ensureSelection();
       await refreshThread();

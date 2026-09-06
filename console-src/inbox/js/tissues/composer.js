@@ -45,6 +45,7 @@ export function createComposerTissue({ mailbox }) {
 
   function project(input) {
     return {
+      capabilities: input.capabilities || {},
       ticket: input.ticket || null,
       draft: input.draft || "",
       summarize: input.summarize || "",
@@ -165,7 +166,7 @@ export function createComposerTissue({ mailbox }) {
         <textarea data-body placeholder="Write the reply. The human always sends." title="Type the customer reply here. You still choose Send.">${esc(next.body)}</textarea>
       </div>
       <div class="composer-actions">
-        <button type="button" class="btn-hairline" data-macros aria-expanded="${searchOpen ? "true" : "false"}" title="Open saved reply macros">Macros</button>
+        ${next.capabilities?.searchMacros === false ? "" : `<button type="button" class="btn-hairline" data-macros aria-expanded="${searchOpen ? "true" : "false"}" title="Open saved reply macros">Macros</button>`}
         <div class="composer-send">
           <button type="button" class="btn-ink btn-send${idle ? " is-disabled" : ""}" data-send ${idle ? "disabled" : ""} title="${esc(ACTIVATE_SEND_MESSAGE)}">Send</button>
           ${sendClose}
