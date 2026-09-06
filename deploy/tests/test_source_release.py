@@ -87,7 +87,7 @@ class SourceRecoveryTests(unittest.TestCase):
         outside = self.root / 'customer-data'
         outside.mkdir()
         self.live.mkdir(exist_ok=True)
-        (self.live / 'console-src').symlink_to(outside)
+        (self.live / 'feedback').symlink_to(outside)
         with self.assertRaisesRegex(ValueError, 'symlink'):
             self.prepare()
 
