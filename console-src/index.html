@@ -387,6 +387,7 @@ function render(){
 function view(){return tab==="overview"?overview():tab==="tickets"?ticketsView():tab==="conns"?conns():tab==="kb"?kbView():tab==="notices"?noticesView():tab==="notif"?notificationsView():settingsView();}
 function errorBanner(){return `<div class="error-banner" role="alert"><div><strong>Could not load ${esc(loadErrors.join(", "))} data.</strong><span>Existing values are shown where available. Refresh to try again.</span></div><button class="btn" id="retry-load">Retry</button></div>`;}
 
+function ownerAlertWarning(count){return Number(count)>0?`<div class="warn" role="alert">${Number(count)} owner alert${Number(count)===1?'':'s'} need review. WhatsApp acknowledgement or delivery is uncertain; inspect the affected ticket. No automatic resend was attempted.</div>`:"";}
 function overview(){
  if(loadErrors.includes("stats")||loadErrors.includes("tickets"))return `<div class="panel" role="alert"><h3>Overview metrics are unavailable</h3><div class="ph">Refresh to retry. No missing values are being presented as zero.</div></div>${learnPanel()}`;
  const standardDrafts=stats.drafted||0,sensitiveDrafts=stats.sensitive_draft||0,noKbDrafts=stats.no_kb_match||0,legacyEscalated=stats.escalated||0;
@@ -403,7 +404,7 @@ function overview(){
  ];
  const pr=[["Critical",stats.critical||0,"#f43f5e"],["High",stats.high||0,"#f9a16c"],["Normal",stats.normal||0,"#e7f65e"],["Low",stats.low||0,"#34d399"]];
  const mx=Math.max(1,...pr.map(x=>x[1]));const recent=tickets.slice(0,5);
- return `<section class="attention" aria-labelledby="attention-title"><div class="attention-head"><h2 id="attention-title">Needs your attention</h2><p>Current work that may need a human</p></div><div class="attention-items">
+ return `${ownerAlertWarning(stats.owner_alerts_need_attention)}<section class="attention" aria-labelledby="attention-title"><div class="attention-head"><h2 id="attention-title">Needs your attention</h2><p>Current work that may need a human</p></div><div class="attention-items">
    <button class="attention-btn" data-go-filter="escalated"><strong>${digits(currentEsc)}</strong><span>Recent escalations</span></button>
    <button class="attention-btn" data-go-filter="failed"><strong>${digits(failed)}</strong><span>Failed jobs</span></button>
    <button class="attention-btn" data-go-filter="queue"><strong>${digits(queue)}</strong><span>Waiting or running</span></button>
@@ -461,6 +462,7 @@ function row(t){
    const cm=cleanMessage(t.message_text||"");
    const shown=actShowRaw?((t.message_text||"").trim()||"(empty)"):(cm.main||"(No new text — this looks like an automated or marketing email, nothing to reply to.)");
    detail=`<div class="detail" tabindex="-1"><div class="dwrap">`
+    +(t.owner_alert_status==="uncertain"?`<div class="warn" role="alert">Owner alert needs review. WhatsApp did not confirm acceptance; delivery is unknown. Check WhatsApp directly.</div>`:"")
     +`<div class="lab">Customer message</div>`
     +`<div class="msg">${esc(shown)}</div>`
     +(cm.hasMore?`<button class="linkbtn" id="act-raw">${actShowRaw?"Hide quoted text ▲":"Show full email & quoted text ▾"}</button>`:"");
@@ -475,6 +477,8 @@ function row(t){
        `<button class="btn ghost" id="act-edit" ${actBusy?'disabled':''}>Request edit</button>`+
        `<button class="btn" id="act-note" ${actBusy?'disabled':''}>Draft as internal note</button>`+
        `<button class="btn send" id="act-send" ${actBusy?'disabled':''}>Send reply →</button></div>`+
+       `<label style="display:block;margin-top:12px;font-size:12px"><input id="act-learn" type="checkbox" ${actLearn?'checked':''}> Approve this reply as a learning example after confirmed delivery</label>`+
+       `<button class="btn" id="act-status" style="margin-top:8px" ${actBusy?'disabled':''}>Check last action status</button>`+
        `<div class="sendhint">“Send reply” emails the customer directly — you'll be asked to confirm.</div>`;
    }else{
      detail+=`<div class="lab lab2">Why this needs you</div><div class="draft esc">${esc(t.reason||"Escalated — handled by a human.")}</div>`;
@@ -484,35 +488,82 @@ function row(t){
  return `<div class="row ${open?'open':''}" data-tk="${esc(key)}" role="button" tabindex="0" aria-expanded="${open?'true':'false'}"><div class="who"><b>${esc(nameOf(t))}</b><small>${esc(t.customer_email||"")}</small></div>
   <div class="subj">${esc(t.ticket_subject||"(no subject)")}</div>
   <span class="badge ${e?'sens':'low'}">${e?'Sensitive':'AI draft'}</span>
-  <div class="st">${posted}<br><small>${ago(t)}</small></div></div>${detail}`;
+  <div class="st">${posted}${t.owner_alert_status==="uncertain"?'<br><b>Owner alert needs review</b>':""}<br><small>${ago(t)}</small></div></div>${detail}`;
 }
-function captureAct(){const d=document.getElementById("act-draft");if(d)actDraft=d.value;const i=document.getElementById("act-instr");if(i)actInstr=i.value;}
-function openTicket(mid){const t=tickets.find(x=>keyOf(x)===String(mid));openTk=String(mid);actDraft=cleanDraft(t&&t.draft_text||"");actInstr="";actEditOpen=false;actMsg="";actBusy=false;actShowRaw=false;render();requestAnimationFrame(()=>{const d=document.querySelector(".detail");if(d)d.focus();});}
+let actLearn=false;
+function captureAct(){const l=document.getElementById("act-learn");if(l)actLearn=l.checked;const d=document.getElementById("act-draft");if(d)actDraft=d.value;const i=document.getElementById("act-instr");if(i)actInstr=i.value;}
+function openTicket(mid){const t=tickets.find(x=>keyOf(x)===String(mid));openTk=String(mid);actDraft=cleanDraft(t&&t.draft_text||"");actInstr="";actEditOpen=false;actMsg="";actBusy=false;actShowRaw=false;actLearn=false;render();requestAnimationFrame(()=>{const d=document.querySelector(".detail");if(d)d.focus();});}
 function curTk(){return tickets.find(x=>keyOf(x)===openTk);}
-async function sendReply(){
+function actionStorageKey(t,kind){return "bb-action-v1:"+kind+":"+t.ticket_id+":"+String(t.message_id);}
+async function hashActionText(value){const bytes=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(value));return Array.from(new Uint8Array(bytes),x=>x.toString(16).padStart(2,"0")).join("");}
+async function actionOperation(t,kind,text,approveLearning){
+ const key=actionStorageKey(t,kind);
+ const fingerprint=await hashActionText(JSON.stringify([text.trim(),String(t.message_id),t.draft_text||"",!!approveLearning]));
+ const old=JSON.parse(localStorage.getItem(key)||"null");
+ if(old&&old.fingerprint===fingerprint)return old.operation_id;
+ if(old&&["unknown","pending"].includes(old.delivery_status))throw new Error("The previous action is unresolved. Check its status before sending different text.");
+ const record={operation_id:crypto.randomUUID(),fingerprint,delivery_status:"unknown"};
+ localStorage.setItem(key,JSON.stringify(record));
+ return record.operation_id;
+}
+function rememberAction(t,kind,response){
+ const key=actionStorageKey(t,kind),record=JSON.parse(localStorage.getItem(key)||"null");
+ if(!record)return;
+ if(response.operation_id)record.operation_id=response.operation_id;
+ record.delivery_status=response.delivery_status||"unknown";
+ localStorage.setItem(key,JSON.stringify(record));
+}
+function actionMessage(j){
+ if(j.delivery_status==="sent")return "✅ Sent to the customer";
+ if(j.delivery_status==="recorded")return "✅ Posted as an internal note in Gorgias";
+ if(j.delivery_status==="not_attempted")return "No message was posted. Refresh the ticket: "+(j.error||"");
+ if(j.delivery_status==="failed")return "Gorgias reports delivery failed. Inspect the message in Gorgias.";
+ return j.message||("Delivery is not confirmed. Check action status before sending again."+(j.error?" ("+j.error+")":""));
+}
+async function submitAction(kind){
+ if(actBusy)return;
  captureAct();const t=curTk();if(!t)return;
  if(!actDraft.trim()){actMsg="Nothing to send.";render();return;}
  const warn=isEsc(t)?"This ticket is flagged SENSITIVE.\n\n":"";
- if(!confirm(warn+"Send this reply directly to "+(t.customer_email||"the customer")+"?"))return;
- actBusy=true;actMsg="Sending…";render();
- const meta={text:actDraft,confirmed:true,message_text:t.message_text||"",ai_draft:cleanDraft(t.draft_text||""),customer_name:nameOf(t)};
- try{const r=await fetch(API+"/ticket/"+t.ticket_id+"/send",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(meta)});const j=await r.json();if(r.ok&&j.delivery_status==="sent")actMsg="✅ Sent to the customer";else if(r.status===202)actMsg="⏳ Accepted by Gorgias; delivery is still pending";else actMsg="Send failed: "+(j.error||r.status);}catch(e){actMsg="Send failed.";}
- actBusy=false;render();
+ const confirmation=kind==="send"?"Send this reply directly to "+(t.customer_email||"the customer")+"?":"Post this text as a staff-only internal note in Gorgias?";
+ if(!confirm(warn+confirmation))return;
+ const approvedText=actDraft,serverDraft=t.draft_text||"",learningApproval=kind==="send"&&actLearn,actionTicketKey=keyOf(t);
+ let message="";
+ actBusy=true;actMsg=kind==="send"?"Sending…":"Posting internal note…";render();
+ try{
+  const operation_id=await actionOperation(t,kind,approvedText,learningApproval);
+  const draft_revision=await hashActionText(serverDraft);
+  const meta={text:approvedText,confirmed:true,operation_id,source_message_id:String(t.message_id),draft_revision,approve_learning:learningApproval};
+  const r=await fetch(API+"/ticket/"+t.ticket_id+"/"+kind,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(meta)});
+  const j=await r.json();rememberAction(t,kind,j);message=actionMessage(j);
+ }catch(e){message=e.message||"Delivery could not be confirmed. Check action status before sending again.";}
+ if(curTk()&&keyOf(curTk())===actionTicketKey){actMsg=message;actBusy=false;render();}
 }
-async function noteReply(){
+async function sendReply(){return submitAction("send");}
+async function noteReply(){return submitAction("note");}
+async function checkActionStatus(){
+ if(actBusy)return;
  captureAct();const t=curTk();if(!t)return;
- if(!actDraft.trim()){actMsg="Nothing to post.";render();return;}
- actBusy=true;actMsg="Posting internal note…";render();
- const meta={text:actDraft,message_text:t.message_text||"",ai_draft:cleanDraft(t.draft_text||""),customer_name:nameOf(t)};
- try{const r=await fetch(API+"/ticket/"+t.ticket_id+"/note",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(meta)});const j=await r.json();actMsg=r.ok?"✅ Posted as an internal note in Gorgias":("Failed: "+(j.error||r.status));}catch(e){actMsg="Failed.";}
+ actBusy=true;actMsg="Checking recorded action status…";render();
+ try{
+  const messages=[];
+  for(const kind of ["send","note"]){
+   const record=JSON.parse(localStorage.getItem(actionStorageKey(t,kind))||"null");if(!record)continue;
+   const r=await fetch(API+"/ticket/"+t.ticket_id+"/actions/"+encodeURIComponent(record.operation_id));
+   const j=await r.json();rememberAction(t,kind,j);messages.push((kind==="send"?"Reply: ":"Note: ")+actionMessage(j));
+  }
+  actMsg=messages.join(" · ")||"No action is recorded in this browser for this customer message.";
+ }catch(e){actMsg="Status unavailable. Review the ticket in Gorgias before any further send.";}
  actBusy=false;render();
 }
 async function rewriteDraft(){
+ if(actBusy)return;
  captureAct();const t=curTk();if(!t)return;
+ const rewriteTicketKey=keyOf(t);
  if(!actInstr.trim()){actMsg="Type an instruction first.";render();return;}
  actBusy=true;actMsg="AI is rewriting… (can take up to a minute)";render();
- try{const r=await fetch(API+"/ticket/"+t.ticket_id+"/rewrite",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({draft:actDraft,instruction:actInstr,message_text:t.message_text||"",customer_name:nameOf(t)})});const j=await r.json();if(r.ok&&j.draft){actDraft=j.draft;actEditOpen=false;actInstr="";actMsg="✅ Rewritten — review it, then send.";}else{actMsg="Rewrite failed: "+(j.error||r.status);}}catch(e){actMsg="Rewrite failed.";}
- actBusy=false;render();
+ try{const r=await fetch(API+"/ticket/"+t.ticket_id+"/rewrite",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({draft:actDraft,instruction:actInstr,source_message_id:String(t.message_id)})});const j=await r.json();if(!curTk()||keyOf(curTk())!==rewriteTicketKey)return;if(r.ok&&j.draft){actDraft=j.draft;actEditOpen=false;actInstr="";actMsg="✅ Rewritten — review it, then send.";}else{actMsg="Rewrite failed: "+(j.error||r.status);}}catch(e){if(curTk()&&keyOf(curTk())===rewriteTicketKey)actMsg="Rewrite failed.";}
+ if(curTk()&&keyOf(curTk())===rewriteTicketKey){actBusy=false;render();}
 }
 
 function whatsappConnectionSummary(data){
@@ -797,6 +848,7 @@ function bind(){
  document.querySelectorAll(".row[data-tk]").forEach(r=>{r.onclick=()=>{if(openTk===String(r.dataset.tk)){openTk=null;render();}else{openTicket(r.dataset.tk);}};r.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();r.click();}};});
  const as=document.getElementById("act-send");if(as)as.onclick=sendReply;
  const an=document.getElementById("act-note");if(an)an.onclick=noteReply;
+ const ast=document.getElementById("act-status");if(ast)ast.onclick=checkActionStatus;
  const ae=document.getElementById("act-edit");if(ae)ae.onclick=()=>{captureAct();actEditOpen=!actEditOpen;render();};
  const ar=document.getElementById("act-rewrite");if(ar)ar.onclick=rewriteDraft;
  const acx=document.getElementById("act-canceledit");if(acx)acx.onclick=()=>{captureAct();actEditOpen=false;render();};

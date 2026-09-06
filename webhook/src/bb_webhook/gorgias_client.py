@@ -216,7 +216,7 @@ class GorgiasClient:
         except Exception as exc:
             return {"ok": False, "error": str(exc)}
 
-    async def post_internal_note(self, ticket_id: int, body_text: str) -> dict:
+    async def post_internal_note(self, ticket_id: int, body_text: str, *, on_created=None) -> dict:
         """Post a staff-only internal note (not sent to the customer)."""
         payload = {
             "channel": "internal-note",
@@ -226,9 +226,13 @@ class GorgiasClient:
             "public": False,
             "sender": {"email": self.email},
         }
-        return await self._post_message(ticket_id, payload)
+        result = await self._post_message(ticket_id, payload)
+        message_id = (result.get("message") or {}).get("id")
+        if result.get("ok") and message_id and on_created is not None:
+            await on_created(int(message_id))
+        return result
 
-    async def send_public_reply(self, ticket_id: int, body_text: str) -> dict:
+    async def send_public_reply(self, ticket_id: int, body_text: str, *, expected_recipient=None, expected_source_message_id=None, on_created=None) -> dict:
         """Send a customer-facing reply on the ticket's own channel.
 
         Mirrors the most recent customer message's channel + source (swapping
@@ -236,7 +240,7 @@ class GorgiasClient:
         Leaves ticket status unchanged (stays open).
         """
         if not self._auth:
-            return {"ok": False, "error": "gorgias credentials not configured"}
+            return {"ok": False, "delivery_status": "not_attempted", "error": "gorgias credentials not configured"}
         murl = f"{self.base_url}{_API_VERSION}/messages"
         msgs = []
         try:
@@ -258,13 +262,13 @@ class GorgiasClient:
                     await asyncio.sleep(_retry_after(mr))
                 assert mr is not None
                 if mr.status_code == 404:
-                    return {"ok": False, "error": "ticket not found"}
+                    return {"ok": False, "delivery_status": "not_attempted", "error": "ticket not found"}
                 if mr.status_code != 200:
-                    return {"ok": False, "error": f"gorgias {mr.status_code}: {mr.text[:300]}"}
+                    return {"ok": False, "delivery_status": "not_attempted", "error": f"gorgias {mr.status_code}: {mr.text[:300]}"}
                 jd = mr.json()
                 msgs = jd.get("data", jd) if isinstance(jd, dict) else jd
         except Exception as exc:
-            return {"ok": False, "error": f"failed to read ticket: {exc}"}
+            return {"ok": False, "delivery_status": "not_attempted", "error": f"failed to read ticket: {exc}"}
         if not isinstance(msgs, list):
             msgs = []
         def _dt(m):
@@ -276,10 +280,10 @@ class GorgiasClient:
                 base = m
                 break
         if base is None:
-            return {"ok": False, "error": "no customer message available for reply routing"}
+            return {"ok": False, "delivery_status": "not_attempted", "error": "no customer message available for reply routing"}
         channel = str(base.get("channel") or "").strip()
         if not channel:
-            return {"ok": False, "error": "customer message has no reply channel"}
+            return {"ok": False, "delivery_status": "not_attempted", "error": "customer message has no reply channel"}
         src = base.get("source") or {}
         cust_from = src.get("from") or base.get("sender") or {}
         our_to = src.get("to") or []
@@ -287,11 +291,15 @@ class GorgiasClient:
             our_to = [our_to]
         customer_email = _address(cust_from)
         if not customer_email:
-            return {"ok": False, "error": "customer message has no recipient address"}
+            return {"ok": False, "delivery_status": "not_attempted", "error": "customer message has no recipient address"}
+        if expected_recipient is not None and customer_email.strip().lower() != expected_recipient.strip().lower():
+            return {"ok": False, "delivery_status": "not_attempted", "error": "recipient_changed_refresh_ticket"}
+        if expected_source_message_id is not None and str(base.get("id")) != str(expected_source_message_id):
+            return {"ok": False, "delivery_status": "not_attempted", "error": "new_customer_message_refresh_ticket"}
         source_from = our_to[0] if isinstance(our_to, list) and our_to else {}
         source_from_address = _address(source_from)
         if not source_from_address:
-            return {"ok": False, "error": "customer message has no support mailbox route"}
+            return {"ok": False, "delivery_status": "not_attempted", "error": "customer message has no support mailbox route"}
         new_source = {}
         stype = src.get("type") or channel
         if stype:
@@ -317,6 +325,8 @@ class GorgiasClient:
         message_id = created.get("id")
         if not message_id:
             return {"ok": False, "error": "Gorgias did not return a message id"}
+        if on_created is not None:
+            await on_created(int(message_id))
         delivery = await self._wait_for_delivery(ticket_id, int(message_id))
         return {
             "ok": delivery["status"] != "failed",

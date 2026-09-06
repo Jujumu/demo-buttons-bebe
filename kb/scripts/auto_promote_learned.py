@@ -15,6 +15,7 @@ import pathlib
 import re
 import shutil
 import sys
+import tempfile
 
 import yaml
 
@@ -59,17 +60,29 @@ def _write_idempotent(path: pathlib.Path, content: str) -> bool:
     Returns True only when this call created the file. A different file at the
     deterministic path is treated as corruption rather than silently duplicated.
     """
+    fd, staged = tempfile.mkstemp(prefix=".promote-", dir=path.parent)
     try:
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
-    except FileExistsError:
-        if path.read_text(encoding="utf-8") == content:
-            return False
-        raise FileExistsError(f"conflicting promoted exemplar: {path.name}")
-    with os.fdopen(fd, "w", encoding="utf-8") as handle:
-        handle.write(content)
-        handle.flush()
-        os.fsync(handle.fileno())
-    return True
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(staged, 0o644)
+        try:
+            # Atomic, no-overwrite publication: index readers never see a
+            # partially written status:confirmed exemplar.
+            os.link(staged, path)
+        except FileExistsError:
+            if path.read_text(encoding="utf-8") == content:
+                return False
+            raise FileExistsError(f"conflicting promoted exemplar: {path.name}")
+        directory_fd = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+        return True
+    finally:
+        pathlib.Path(staged).unlink(missing_ok=True)
 
 
 def _archive_without_replacing(path: pathlib.Path) -> pathlib.Path:
@@ -84,16 +97,23 @@ def _archive_without_replacing(path: pathlib.Path) -> pathlib.Path:
 
 def promote_one(path: pathlib.Path) -> bool:
     front, sec = _parse(path)
-    kind = front.get("kind", "sent")
+    # Historical packets were incorrectly marked approved. Fail closed: only
+    # the explicit v2 approval contract is eligible; do not infer legacy consent.
+    kind = front.get("kind")
+    if (kind != "sent" or front.get("review_pending") is not False
+            or front.get("learning_approved") is not True or front.get("delivery_status") != "sent"
+            or not front.get("review_actor") or not front.get("approved_at") or not front.get("operation_id")):
+        return False
     name = front.get("customer_name", "")
     situation = sec.get("Customer situation", "")
-    final = ""
-    for k, v in sec.items():
-        if k.lower().startswith("human final"):
-            final = v
-            break
-    if not (final or "").strip():
+    final = sec.get("Human final (sent)", "")
+    if not final.strip():
         return False
+    # Embedded markdown headings cannot substitute attacker text for the exact
+    # server-captured approved revision or customer situation.
+    for text, key in ((final, "final_text_sha256"), (situation, "customer_message_sha256")):
+        if hashlib.sha256(text.strip().encode()).hexdigest() != front.get(key):
+            return False
     masked_sit = _mask(situation, name)
     masked_reply = _mask(final, name)
     ex_front = {
@@ -133,15 +153,17 @@ def promote_one(path: pathlib.Path) -> bool:
 def main() -> int:
     d = config.LEARNED_DIR
     n = 0
+    failures = 0
     if d.exists():
         for p in sorted(d.glob("lesson-*.md")):
             try:
                 if promote_one(p):
                     n += 1
             except Exception as e:
-                print("skip", p.name, e)
+                failures += 1
+                print("promotion failed", p.name, type(e).__name__, file=sys.stderr)
     print(f"promoted {n} lesson(s) into {config.TICKETS_DIR}")
-    return 0
+    return 1 if failures else 0
 
 
 if __name__ == "__main__":

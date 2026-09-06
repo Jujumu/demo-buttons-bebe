@@ -9,8 +9,10 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from .. import deps
+from ..console_actions import execute_action, action_status, actor
 from ..gorgias_client import GorgiasClient as _GClient
 from ..learning import ledger as _ledger, record_lesson as _record_lesson
+from ..rewrite_runner import run_rewrite, RewriteFailure
 from ..logging_utils import get_logger, log_event
 
 try:
@@ -122,63 +124,8 @@ async def action_send(ticket_id: int, request: Request) -> JSONResponse:
         return JSONResponse(status_code=400, content={"error": "empty reply"})
     if body.get("confirmed") is not True:
         return JSONResponse(status_code=409, content={"error": "confirmation_required"})
-    result = await _app_value("_GClient", _GClient)().send_public_reply(ticket_id, text)
-    if not result.get("ok"):
-        log_event(
-            logger,
-            "ERROR",
-            "Public reply failed",
-            ticket_id=ticket_id,
-            detail=result.get("error"),
-            message_id=result.get("message_id"),
-            delivery_status=result.get("delivery_status"),
-        )
-        return JSONResponse(
-            status_code=502,
-            content={
-                "error": result.get("error", "send failed"),
-                "delivery_status": result.get("delivery_status", "failed"),
-                **({"message_id": result["message_id"]} if result.get("message_id") else {}),
-            },
-        )
-    delivery_status = result.get("delivery_status", "unknown")
-    if delivery_status == "sent":
-        log_event(
-            logger,
-            "INFO",
-            "Public reply sent from dashboard",
-            ticket_id=ticket_id,
-            message_id=result.get("message_id"),
-            delivery_status=delivery_status,
-        )
-    else:
-        log_event(
-            logger,
-            "WARNING",
-            "Public reply accepted by Gorgias; delivery is not confirmed",
-            ticket_id=ticket_id,
-            message_id=result.get("message_id"),
-            delivery_status=delivery_status,
-        )
-    try:
-        _app_value("_record_lesson", _record_lesson)(
-            "sent",
-            ticket_id,
-            str(body.get("message_text", "")),
-            str(body.get("ai_draft", "")),
-            text,
-            customer_name=str(body.get("customer_name", "")),
-        )
-    except Exception:
-        pass
-    return JSONResponse(
-        status_code=200 if delivery_status == "sent" else 202,
-        content={
-            "ok": True,
-            "delivery_status": delivery_status,
-            **({"message_id": result["message_id"]} if result.get("message_id") else {}),
-        },
-    )
+    return await execute_action('send', ticket_id, request, body, text,
+                                _app_value("_GClient", _GClient), _app_value("_record_lesson", _record_lesson))
 
 
 @router.post("/ticket/{ticket_id}/note")
@@ -198,32 +145,14 @@ async def action_note(ticket_id: int, request: Request) -> JSONResponse:
     text = raw_text.strip()
     if not text or len(text) > 50_000:
         return JSONResponse(status_code=400, content={"error": "empty note"})
-    result = await _app_value("_GClient", _GClient)().post_internal_note(ticket_id, text)
-    if not result.get("ok"):
-        log_event(
-            logger,
-            "ERROR",
-            "Internal note failed",
-            ticket_id=ticket_id,
-            detail=result.get("error"),
-        )
-        return JSONResponse(
-            status_code=502,
-            content={"error": result.get("error", "note failed")},
-        )
-    log_event(logger, "INFO", "Internal note posted from dashboard", ticket_id=ticket_id)
-    try:
-        _app_value("_record_lesson", _record_lesson)(
-            "note",
-            ticket_id,
-            str(body.get("message_text", "")),
-            str(body.get("ai_draft", "")),
-            text,
-            customer_name=str(body.get("customer_name", "")),
-        )
-    except Exception:
-        pass
-    return JSONResponse(content={"ok": True})
+    return await execute_action('note', ticket_id, request, body, text,
+                                _app_value("_GClient", _GClient), _app_value("_record_lesson", _record_lesson))
+
+
+@router.get("/ticket/{ticket_id}/actions/{operation_id}")
+async def get_action_status(ticket_id: int, operation_id: str, request: Request) -> JSONResponse:
+    return await action_status(ticket_id, operation_id, request,
+                               _app_value("_GClient", _GClient), _app_value("_record_lesson", _record_lesson))
 
 
 @router.post("/ticket/{ticket_id}/rewrite")
@@ -248,71 +177,43 @@ async def action_rewrite(ticket_id: int, request: Request) -> JSONResponse:
     if max(len(draft), len(instruction), len(customer_msg)) > 50_000:
         return JSONResponse(status_code=413, content={"error": "rewrite_input_too_large"})
 
-    store_name = _app_value("_SUPPORT_STORE_NAME", _SUPPORT_STORE_NAME)
-    prompt = (
-        f"You are rewriting a customer-support reply for {store_name}. "
-        "Output ONLY the final customer-facing reply "
-        "text - no preamble, no quotes, no commentary, no sign-off notes.\n\n"
-        "CUSTOMER MESSAGE:\n" + customer_msg + "\n\n"
-        "CURRENT DRAFT REPLY:\n" + draft + "\n\n"
-        "REWRITE INSTRUCTION FROM THE HUMAN AGENT:\n" + instruction + "\n\n"
-        f"Rewrite the reply to follow the instruction. Stay accurate to "
-        f"{store_name} policy; do not invent facts, prices, or promises."
-    )
-    asyncio_module = _app_value("_asyncio", _asyncio)
+    if not actor(request):
+        return JSONResponse(status_code=401, content={"error": "not_authenticated"})
+    # Customer context is loaded from the console's database. Browser text is
+    # not authoritative knowledge and cannot become a learned fact.
+    source_id = body.get("source_message_id")
+    from ..db import Database
+    rows = await Database(deps.get_db()).fetch(
+        "SELECT message_text FROM parsed_messages WHERE ticket_id=? AND message_id=? AND is_customer_message=1",
+        (ticket_id, str(source_id or "")), operation="rewrite_context")
+    if not rows:
+        return JSONResponse(status_code=404, content={"error": "source_message_not_in_console"})
+    customer_msg = rows[0]["message_text"] or ""
+    command = [_app_value("_HERMES_BIN", _HERMES_BIN)]
+    profile = _app_value("_HERMES_PROFILE", _HERMES_PROFILE)
+    if profile:
+        command.extend(["-p", profile])
+    if _app_value("_HERMES_IGNORE_RULES", _HERMES_IGNORE_RULES):
+        command.append("--ignore-rules")
+    toolsets = _app_value("_HERMES_REWRITE_TOOLSETS", _HERMES_REWRITE_TOOLSETS)
+    if toolsets:
+        command.extend(["-t", toolsets])
+    # Model provider credentials may be needed, but shared customer-system
+    # credentials are not passed into this draft-only subprocess.
+    env = {key: value for key, value in _os.environ.items() if key in {
+        "PATH", "LANG", "LC_ALL", "TERM", "OLLAMA_API_KEY", "OPENAI_API_KEY"}}
+    env["HOME"] = _app_value("_HERMES_HOME", _HERMES_HOME)
     try:
-        env = dict(_os.environ)
-        env["HOME"] = _app_value("_HERMES_HOME", _HERMES_HOME)
-        command = [_app_value("_HERMES_BIN", _HERMES_BIN)]
-        profile = _app_value("_HERMES_PROFILE", _HERMES_PROFILE)
-        if profile:
-            command.extend(["-p", profile])
-        if _app_value("_HERMES_IGNORE_RULES", _HERMES_IGNORE_RULES):
-            command.append("--ignore-rules")
-        toolsets = _app_value("_HERMES_REWRITE_TOOLSETS", _HERMES_REWRITE_TOOLSETS)
-        if toolsets:
-            command.extend(["-t", toolsets])
-        command.extend(["-z", prompt])
-        process = await asyncio_module.create_subprocess_exec(
-            *command,
-            stdout=asyncio_module.subprocess.PIPE,
-            stderr=asyncio_module.subprocess.PIPE,
-            env=env,
-        )
-        output, _error = await asyncio_module.wait_for(process.communicate(), timeout=150)
-    except asyncio_module.TimeoutError:
-        return JSONResponse(status_code=504, content={"error": "rewrite timed out"})
+        reply = await run_rewrite(command, env,
+            store_name=_app_value("_SUPPORT_STORE_NAME", _SUPPORT_STORE_NAME),
+            customer_message=customer_msg, draft=draft, instruction=instruction)
+    except RewriteFailure as exc:
+        return JSONResponse(status_code=exc.status, content={"error": exc.error})
     except Exception as exc:
-        return JSONResponse(status_code=500, content={"error": str(exc)})
-
-    reply = (output or b"").decode("utf-8", "ignore").strip()
-    if not reply:
-        return JSONResponse(status_code=502, content={"error": "empty rewrite"})
-    for marker in [
-        "\nThe response above",
-        "\nThe previous response",
-        "\nThe reply above",
-        "\nNote:",
-        "\nNote that",
-        "\nI have rewritten",
-        "\n(Note",
-        "\nLet me know",
-    ]:
-        marker_index = reply.find(marker)
-        if marker_index != -1:
-            reply = reply[:marker_index].strip()
-    try:
-        _app_value("_record_lesson", _record_lesson)(
-            "rewrite",
-            ticket_id,
-            customer_msg,
-            draft,
-            reply,
-            instruction=instruction,
-            customer_name=str(body.get("customer_name", "")),
-        )
-    except Exception:
-        pass
+        log_event(logger, "ERROR", "Rewrite failed", ticket_id=ticket_id, error_type=type(exc).__name__)
+        return JSONResponse(status_code=502, content={"error": "rewrite_unavailable"})
+    # Generated output is a candidate only. It is neither delivered nor approved
+    # for knowledge promotion; an explicit later owner action supplies approval.
     return JSONResponse(content={"ok": True, "draft": reply})
 
 

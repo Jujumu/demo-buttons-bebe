@@ -83,6 +83,25 @@ class GorgiasClientSendTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["sender"], {"email": "agent@buttonsbebe.com"})
         self.assertEqual(payload["source"]["from"]["address"], "support@buttonsbebe.com")
 
+    async def test_recipient_or_source_change_fails_before_post(self):
+        for expected in ({"expected_recipient": "different@example.com"}, {"expected_source_message_id": "45"}):
+            _FakeAsyncClient.calls=[]
+            with patch("bb_webhook.gorgias_client.get_settings", return_value=SimpleNamespace(demo_mode=False)), patch("bb_webhook.gorgias_client.httpx.AsyncClient", _FakeAsyncClient):
+                result=await GorgiasClient(subdomain="buttons-bebe", email="agent@example.com", api_key="test-key",
+                    base_url="https://buttons-bebe.gorgias.com").send_public_reply(123,"Reply",**expected)
+            self.assertEqual(result["delivery_status"],"not_attempted")
+            self.assertFalse(any(call[0]=="POST" for call in _FakeAsyncClient.calls))
+
+    async def test_message_id_is_recorded_before_delivery_read(self):
+        _FakeAsyncClient.calls=[]
+        async def on_created(message_id):
+            self.assertEqual(message_id,9001)
+            self.assertEqual(_FakeAsyncClient.calls[-1][0],"POST")
+        with patch("bb_webhook.gorgias_client.get_settings", return_value=SimpleNamespace(demo_mode=False)), patch("bb_webhook.gorgias_client.httpx.AsyncClient", _FakeAsyncClient):
+            await GorgiasClient(subdomain="buttons-bebe",email="agent@example.com",api_key="test-key",
+                base_url="https://buttons-bebe.gorgias.com").send_public_reply(123,"Reply",expected_recipient="customer@example.com",
+                expected_source_message_id="44",on_created=on_created)
+
 
 if __name__ == "__main__":
     unittest.main()
