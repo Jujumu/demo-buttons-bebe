@@ -42,3 +42,20 @@ python3 tools/ops/recovery_restore.py --ciphertext /private/path/recovery.cms \
 Validation checks the trusted ciphertext hash and certificate fingerprint, decrypts into private temporary space, rejects unsupported tar extensions/traversal/links/duplicates/oversized members, requires the exact approved plan and payload set, checks every hash and SQLite integrity, and publishes only validated neutral payload filenames mode0600 plus the private manifest. It never extracts original absolute paths, applies recorded ownership, creates symlinks, calls providers, or starts services. Invalid plaintext intermediates are removed by the CLI. Success proves file/SQLite restoration, not provider credential validity, deployability, source provenance, global consistency, or delivery reconciliation.
 
 Before any later service restoration, inspect accepted-event gaps and pending/uncertain send operations, validate source/dependency receipts, rebuild KB search in isolation, verify routing/authentication and provider access, and decide separately when to start processing. Never replay an ambiguous send automatically. Off-host availability, full restore time, and a complete controlled restore drill remain separate proofs.
+
+
+## Reviewed root-user Hermes gateway unit
+
+The exact `/root/.config/systemd/user/hermes-gateway.service` file is included in the example plan and is the only allowed root-user unit. Its verified fragment and working directory point to `/root/.hermes`, whose SOUL identifies Buttons Bebe. This does not prove every configured gateway channel belongs to Buttons Bebe. No gateway history, session database, pending jobs, or general root-user unit directory has been added to the scope.
+
+On a host where this optional gateway component is genuinely absent, document that absence in the private recovery receipt and remove that exact example entry before packing. The tool never silently skips a missing file. Additional user-unit drop-ins or aliases require a separate exact-scope review.
+
+A later operator may reconstruct the recorded user-unit file and permissions while all processing remains stopped. First reconcile ambiguous sends, accepted-event gaps, and pending gateway work; inspect the restored gateway's channel identities and credential validity and approve the intended channels separately. Only after that review, use the root user's existing systemd user manager (not the system manager) to reload and explicitly enable/start the single unit:
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable hermes-gateway.service
+systemctl --user start hermes-gateway.service
+```
+
+These are manual root-user recovery steps, not commands run by the pack or validator. Do not enable lingering, start a missing user manager, replay queued work, or activate other channels as an inferred part of restoration. Confirm the existing user-manager context before those commands and verify the intended gateway afterward.

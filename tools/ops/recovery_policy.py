@@ -14,6 +14,7 @@ MAX_MANIFEST = 8 * 1024 * 1024
 APP = '/root/Buttonsbebe Agent'
 EXACT = {
     APP+'/.env', APP+'/.buttonsbebe-release.json',
+    '/root/.config/systemd/user/hermes-gateway.service',
     '/root/.hermes/config.yaml', '/root/.hermes/auth.json', '/root/.hermes/.env', '/root/.hermes/SOUL.md',
     '/etc/buttonsbebe-deploy-approved-config.sha256', '/etc/buttonsbebe-backup-recipient.pem',
     '/var/lib/buttonsbebe-deploy/source-manifest.json',

@@ -147,6 +147,18 @@ class RecoveryTests(unittest.TestCase):
         os.chmod(output,0o755)
         with self.assertRaises(ValueError):policy.private_directory(output)
 
+    def test_only_exact_reviewed_user_gateway_unit_is_allowed(self):
+        self.assertTrue(policy.allowed('/root/.config/systemd/user/hermes-gateway.service','file'))
+        for path,kind in (
+            ('/root/.config/systemd/user/other.service','file'),
+            ('/root/.config/systemd/user/hermes-gateway.timer','file'),
+            ('/root/.config/systemd/user/hermes-gateway.service.d/override.conf','file'),
+            ('/root/.config/systemd/user','tree'),
+            ('/root/.config/systemd/user/hermes-gateway.service','symlink'),
+            ('/root/.hermes/state.db','sqlite'),
+            ('/root/.hermes/history','tree')):
+            with self.subTest(path=path,kind=kind):self.assertFalse(policy.allowed(path,kind))
+
     def test_cms_roundtrip_and_wrong_digest_leave_no_plaintext(self):
         key=self.root/'key.pem';cert=self.root/'cert.pem'
         subprocess.run(['openssl','req','-x509','-newkey','rsa:2048','-nodes','-keyout',str(key),'-out',str(cert),'-days','2','-subj','/CN=Synthetic recovery test'],check=True,capture_output=True)

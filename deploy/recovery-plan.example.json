@@ -10,6 +10,7 @@
     {"path": "/root/.hermes/auth.json", "kind": "file"},
     {"path": "/root/.hermes/.env", "kind": "file"},
     {"path": "/root/.hermes/SOUL.md", "kind": "file"},
+    {"path": "/root/.config/systemd/user/hermes-gateway.service", "kind": "file"},
     {"path": "/root/.hermes/skills/buttonsbebe", "kind": "tree"},
     {"path": "/etc/caddy/Caddyfile", "kind": "file"},
     {"path": "/etc/buttonsbebe-deploy-approved-config.sha256", "kind": "file"},
