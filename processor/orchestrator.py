@@ -41,6 +41,9 @@ if str(_webhook_src) not in sys.path:
 
 from bb_webhook.database import (  # noqa: E402
     claim_job,
+    claim_owner_alert,
+    finish_owner_alert,
+    get_job_result,
     complete_job,
     fail_job,
     get_next_pending_job,
@@ -69,7 +72,9 @@ def _save_result_to_webhook(
 ) -> None:
     """POST the Hermes result to the webhook API so the dashboard can show it.
 
-    Fail-soft: logs a warning on error but never raises.
+    Fail closed on transport or acknowledgement errors. Queue completion also
+    verifies the committed row through the shared database, since even a valid
+    HTTP acknowledgement is not proof of the exact job's persisted result.
     """
     import urllib.request
 
@@ -88,7 +93,7 @@ def _save_result_to_webhook(
             "Demo result persistence blocked: destination is not the local demo webhook",
             ticket_id=ticket_id,
         )
-        return
+        raise RuntimeError("Demo result persistence destination is blocked")
     payload = json.dumps({
         "ticket_id": ticket_id,
         "message_id": str(message_id),
@@ -104,22 +109,17 @@ def _save_result_to_webhook(
         "draft_text": draft_text,
     }).encode("utf-8")
 
-    try:
-        req = urllib.request.Request(
-            url, data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            if 200 <= resp.status < 300:
-                log_event(logger, "DEBUG", "Result saved to dashboard API",
-                          ticket_id=ticket_id, status=resp.status)
-            else:
-                log_event(logger, "WARNING", "Dashboard API returned non-2xx",
-                          ticket_id=ticket_id, status=resp.status)
-    except Exception as exc:
-        log_event(logger, "WARNING", f"Failed to save result to dashboard API: {exc}",
-                  ticket_id=ticket_id)
+    req = urllib.request.Request(
+        url, data=payload,
+        headers={"Content-Type": "application/json"}, method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        if not 200 <= resp.status < 300:
+            raise RuntimeError(f"Result persistence HTTP status {resp.status}")
+        acknowledgement = json.loads(resp.read(4097))
+        if not isinstance(acknowledgement, dict) or acknowledgement.get("status") != "ok":
+            raise RuntimeError("Result persistence acknowledgement missing")
+    log_event(logger, "DEBUG", "Result acknowledged by dashboard API", ticket_id=ticket_id)
 
 
 # ── Globals ────────────────────────────────────────────────
@@ -176,9 +176,8 @@ async def process_customer_message(job: dict[str, Any]) -> dict[str, Any]:
     6. Return the draft for the console Ticket feed; perform no Gorgias write
     7. Return JSON_RESULT
 
-    The processor then:
-    - If CRITICAL or HIGH → sends WhatsApp notification to owner
-    - Marks the job as done
+    This function persists the draft. The job wrapper verifies that committed
+    result, attempts any required owner alert once, and then completes the job.
     """
     payload = json.loads(job["payload"])
     ticket_id = payload.get("ticket_id")
@@ -308,7 +307,7 @@ async def process_customer_message(job: dict[str, Any]) -> dict[str, Any]:
     # gorgias_priority_set and note_posted are always false here: the processor
     # and Hermes are strictly read-only. Human console actions are separate.
 
-    # Save result to the dashboard API (fail-soft)
+    # Save result before any alert or queue completion; failures must propagate.
     # Never substitute the customer's message for a failed AI draft. An empty
     # draft makes the console show a human-action-required state with no send or
     # internal-note buttons, while the high-priority fallback reason remains.
@@ -321,20 +320,6 @@ async def process_customer_message(job: dict[str, Any]) -> dict[str, Any]:
         hermes_result=hermes_result,
         draft_text=draft_text,
     )
-
-    # Send WhatsApp notification if CRITICAL or HIGH
-    if notify_owner:
-        send_whatsapp(
-            ticket_id=ticket_id,
-            subject=ticket_subject,
-            customer_email=customer_email,
-            message_summary=message_text[:300],
-            reason=hermes_result.get("reason", "Priority notification"),
-        )
-        log_event(logger, "INFO", "Owner notification sent",
-                  ticket_id=ticket_id,
-                  priority=result["priority"],
-                  reason=hermes_result.get("reason"))
 
     log_event(logger, "INFO", "Customer message processed",
               job_id=job_id,
@@ -413,9 +398,11 @@ async def run_processor() -> int:
     await init_db(settings.db_path_absolute)
 
     # 3. Recover stale jobs
-    stale_count = await requeue_stale_jobs(settings.stale_job_minutes, settings.db_path_absolute)
+    stale_count = await requeue_stale_jobs(
+        settings.stale_job_minutes, settings.db_path_absolute, max_retries=settings.max_retries,
+    )
     if stale_count > 0:
-        log_event(logger, "INFO", "Recovered stale jobs",
+        log_event(logger, "INFO", "Resolved abandoned claims; exhausted retries marked failed",
                   count=stale_count,
                   max_age_minutes=settings.stale_job_minutes)
 
@@ -440,10 +427,11 @@ async def run_processor() -> int:
             if time.monotonic() - last_recovery >= recovery_interval:
                 recovered = await requeue_stale_jobs(
                     settings.stale_job_minutes, settings.db_path_absolute,
+                    max_retries=settings.max_retries,
                 )
                 last_recovery = time.monotonic()
                 if recovered:
-                    log_event(logger, "WARNING", "Recovered abandoned jobs",
+                    log_event(logger, "WARNING", "Resolved abandoned claims; exhausted retries marked failed",
                               count=recovered,
                               max_age_minutes=settings.stale_job_minutes)
             # One query per pass, with customer messages ordered ahead of
@@ -495,6 +483,34 @@ async def run_processor() -> int:
     return 0
 
 
+async def _notify_owner_once(job: dict, saved: dict, db_path: Path) -> None:
+    """Avoid repeat transport after a crash or unknown acknowledgement.
+
+    An uncertain attempt remains operator-visible in dashboard data/stats.
+    It is not automatically retried: the bridge has no end-to-end idempotency
+    guarantee, so the system cannot prove a timed-out message was not sent.
+    """
+    if not await claim_owner_alert(job["id"], db_path):
+        log_event(logger, "WARNING", "Owner alert already attempted; inspect delivery state",
+                  job_id=job["id"], ticket_id=job["ticket_id"])
+        return
+    payload = json.loads(job["payload"])
+    delivered = False
+    try:
+        delivered = send_whatsapp(
+            ticket_id=job["ticket_id"], subject=payload.get("ticket_subject", ""),
+            customer_email=payload.get("customer_email", ""),
+            message_summary=str(payload.get("message_text") or "")[:300],
+            reason=saved.get("reason", "Priority notification"),
+            max_retries=0,
+        ) is True
+    finally:
+        await finish_owner_alert(job["id"], delivered, db_path)
+    log_event(logger, "INFO" if delivered else "ERROR",
+              "Owner alert delivered" if delivered else "Owner alert uncertain; operator review required",
+              job_id=job["id"], ticket_id=job["ticket_id"])
+
+
 async def _process_one_job(
     job: dict[str, Any],
     is_customer: bool,
@@ -516,20 +532,33 @@ async def _process_one_job(
               retry_count=retry_count)
 
     try:
-        if is_customer:
+        saved = await get_job_result(job_id, settings.db_path_absolute) if is_customer else None
+        if saved is not None:
+            # A prior attempt may have committed successfully before losing its
+            # HTTP response or crashing. Keep that reviewed draft and do not run
+            # Hermes again or create another owner-alert attempt.
+            result = saved
+        elif is_customer:
             result = await _run_with_timeout(
-                process_customer_message(job),
-                timeout=settings.job_timeout,
-                job_id=job_id,
+                process_customer_message(job), timeout=settings.job_timeout, job_id=job_id,
             )
         else:
             result = await _run_with_timeout(
-                process_agent_message(job),
-                timeout=settings.job_timeout,
-                job_id=job_id,
+                process_agent_message(job), timeout=settings.job_timeout, job_id=job_id,
             )
 
-        await complete_job(job_id, db_path=settings.db_path_absolute)
+        if is_customer:
+            saved = await get_job_result(job_id, settings.db_path_absolute)
+            if saved is None:
+                raise RuntimeError("No committed result for this job; completion refused")
+            if saved.get("notify_owner"):
+                await _notify_owner_once(job, saved, settings.db_path_absolute)
+
+        completed = await complete_job(
+            job_id, db_path=settings.db_path_absolute, require_result=is_customer,
+        )
+        if not completed:
+            raise RuntimeError("Job completion rejected: claim or durable result missing")
         log_event(logger, "INFO", "Job completed",
                   job_id=job_id,
                   action=result.get("action"),
@@ -543,7 +572,7 @@ async def _process_one_job(
 
         if retry_count < settings.max_retries:
             from bb_webhook.database import requeue_failed_job
-            await requeue_failed_job(job_id, settings.db_path_absolute)
+            await requeue_failed_job(job_id, settings.db_path_absolute, max_retries=settings.max_retries)
             log_event(logger, "INFO", "Job requeued for retry",
                       job_id=job_id, retry_count=retry_count + 1)
 
@@ -557,7 +586,7 @@ async def _process_one_job(
 
         if retry_count < settings.max_retries:
             from bb_webhook.database import requeue_failed_job
-            await requeue_failed_job(job_id, settings.db_path_absolute)
+            await requeue_failed_job(job_id, settings.db_path_absolute, max_retries=settings.max_retries)
             log_event(logger, "INFO", "Job requeued for retry",
                       job_id=job_id, retry_count=retry_count + 1)
 

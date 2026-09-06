@@ -96,6 +96,15 @@ CREATE INDEX IF NOT EXISTS idx_parsed_customer ON parsed_messages(is_customer_me
 CREATE INDEX IF NOT EXISTS idx_results_ticket ON ticket_results(ticket_id);
 CREATE INDEX IF NOT EXISTS idx_results_message ON ticket_results(message_id);
 
+-- One durable owner-alert attempt per processing job. A claimed attempt with
+-- no recorded success is uncertain and must never be automatically resent.
+CREATE TABLE IF NOT EXISTS owner_alert_attempts (
+    job_id INTEGER PRIMARY KEY,
+    status TEXT NOT NULL CHECK(status IN ('attempting', 'delivered', 'uncertain')),
+    attempted_at TEXT NOT NULL,
+    finished_at TEXT
+);
+
 -- Key-value settings store (dashboard toggles, etc.)
 CREATE TABLE IF NOT EXISTS app_settings (
     key   TEXT PRIMARY KEY,
@@ -385,17 +394,26 @@ async def complete_job(
     job_id: int,
     result_data: dict | None = None,
     db_path: Path | None = None,
-) -> None:
-    """Mark a job as done with optional result metadata."""
+    *,
+    require_result: bool = False,
+) -> bool:
+    """Complete a claim, optionally requiring this exact job's durable result."""
     db = Database(db_path)
     now = datetime.now(timezone.utc).isoformat()
-    await db.execute(
+    affected = await db.execute(
         """UPDATE job_queue
            SET status = 'done', finished_at = ?, error = NULL
-           WHERE id = ?""",
-        (now, job_id),
+           WHERE id = ? AND status = 'processing'
+             AND (? = 0 OR EXISTS (
+                 SELECT 1 FROM ticket_results r WHERE r.job_id = job_queue.id
+                 AND r.ticket_id = job_queue.ticket_id
+                 AND r.message_id = job_queue.message_id
+             ))""",
+        (now, job_id, int(require_result)),
         operation="complete_job",
+        return_rowcount=True,
     )
+    return affected == 1
 
 
 async def fail_job(
@@ -418,6 +436,8 @@ async def fail_job(
 async def requeue_stale_jobs(
     max_age_minutes: int = 10,
     db_path: Path | None = None,
+    *,
+    max_retries: int = 3,
 ) -> int:
     """Reclaim up to 100 abandoned claims per singleton-loop sweep.
 
@@ -425,32 +445,43 @@ async def requeue_stale_jobs(
     is not a multi-worker lease implementation. SQLite compares timestamps
     (including legacy Z offsets) and changes status in one atomic statement.
     Missing/invalid claim timestamps are also abandoned, rather than silently
-    remaining processing forever.
+    remaining processing forever. Exhausted claims become failed with an
+    operator-visible reason. The return count includes both retry and failure.
     """
-    if max_age_minutes < 0:
-        raise ValueError("max_age_minutes must be nonnegative")
+    if max_age_minutes < 0 or max_retries < 0:
+        raise ValueError("Recovery age and retry limit must be nonnegative")
     db = Database(db_path)
     cutoff = (datetime.now(timezone.utc) - timedelta(minutes=max_age_minutes)).isoformat()
     affected = await db.execute(
         """UPDATE job_queue
-           SET status = 'pending', started_at = NULL,
-               finished_at = NULL, retry_count = retry_count + 1
+           SET status = CASE WHEN retry_count < ? THEN 'pending' ELSE 'failed' END,
+               started_at = NULL,
+               finished_at = CASE WHEN retry_count < ? THEN NULL ELSE ? END,
+               error = CASE WHEN retry_count < ? THEN NULL
+                       ELSE 'Abandoned job exhausted recovery retries; operator review required' END,
+               retry_count = CASE WHEN retry_count < ? THEN retry_count + 1 ELSE retry_count END
            WHERE id IN (
                SELECT id FROM job_queue WHERE status = 'processing'
                  AND (julianday(started_at) IS NULL OR
                       julianday(started_at) < julianday(?))
                ORDER BY id LIMIT 100
            ) AND status = 'processing'""",
-        (cutoff,),
+        (max_retries, max_retries, datetime.now(timezone.utc).isoformat(),
+         max_retries, max_retries, cutoff),
         operation="requeue_stale_jobs",
         return_rowcount=True,
     )
+    if affected:
+        logger.warning("Resolved %d abandoned claims (retry limit %d); exhausted claims are failed",
+                       affected, max_retries)
     return int(affected or 0)
 
 
 async def requeue_failed_job(
     job_id: int,
     db_path: Path | None = None,
+    *,
+    max_retries: int = 3,
 ) -> None:
     """Requeue a failed job for retry (up to max retries)."""
     db = Database(db_path)
@@ -458,8 +489,8 @@ async def requeue_failed_job(
         """UPDATE job_queue
            SET status = 'pending', started_at = NULL, finished_at = NULL,
                error = NULL, retry_count = retry_count + 1
-           WHERE id = ? AND retry_count < 3""",
-        (job_id,),
+           WHERE id = ? AND status = 'failed' AND retry_count < ?""",
+        (job_id, max(0, max_retries)),
         operation="requeue_failed_job",
     )
 
@@ -545,18 +576,53 @@ async def record_ticket_result(
     draft_text: str | None = None,
     db_path: Path | None = None,
 ) -> None:
-    """Store the Hermes processing result for a ticket message."""
+    """Store the first committed result; replay cannot replace a reviewed draft."""
     db = Database(db_path)
     now = datetime.now(timezone.utc).isoformat()
     await db.execute(
-        """INSERT OR REPLACE INTO ticket_results
+        """INSERT INTO ticket_results
            (ticket_id, message_id, job_id, priority, action, reason,
             notify_owner, gorgias_priority_set, note_posted, draft_text, processed_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(ticket_id, message_id) DO NOTHING""",
         (ticket_id, message_id, job_id, priority, action, reason,
          int(notify_owner), int(gorgias_priority_set), int(note_posted),
          draft_text, now),
         operation="record_ticket_result",
+    )
+
+
+async def get_job_result(job_id: int, db_path: Path | None = None) -> dict | None:
+    """Return only a durable result matching the claimed job's full identity."""
+    rows = await Database(db_path).fetch(
+        """SELECT r.* FROM ticket_results r JOIN job_queue j
+           ON r.job_id=j.id AND r.ticket_id=j.ticket_id AND r.message_id=j.message_id
+           WHERE j.id=?""", (job_id,), operation="get_job_result",
+    )
+    return dict(rows[0]) if rows else None
+
+
+async def claim_owner_alert(job_id: int, db_path: Path | None = None) -> bool:
+    """Persist one attempt before transport; interrupted attempts are uncertain."""
+    affected = await Database(db_path).execute(
+        """INSERT INTO owner_alert_attempts(job_id, status, attempted_at)
+           SELECT ?, 'attempting', ? WHERE EXISTS (
+               SELECT 1 FROM ticket_results r JOIN job_queue j ON r.job_id=j.id
+               AND r.ticket_id=j.ticket_id AND r.message_id=j.message_id
+               WHERE j.id=? AND r.notify_owner=1)
+           ON CONFLICT(job_id) DO NOTHING""",
+        (job_id, datetime.now(timezone.utc).isoformat(), job_id),
+        operation="claim_owner_alert", return_rowcount=True,
+    )
+    return affected == 1
+
+
+async def finish_owner_alert(job_id: int, delivered: bool, db_path: Path | None = None) -> None:
+    await Database(db_path).execute(
+        """UPDATE owner_alert_attempts SET status=?, finished_at=?
+           WHERE job_id=? AND status='attempting'""",
+        ("delivered" if delivered else "uncertain", datetime.now(timezone.utc).isoformat(), job_id),
+        operation="finish_owner_alert",
     )
 
 
@@ -609,10 +675,13 @@ async def get_dashboard_tickets(
         tr.gorgias_priority_set,
         tr.note_posted,
         tr.draft_text,
-        tr.processed_at
+        tr.processed_at,
+        CASE WHEN oa.status = 'attempting' THEN 'uncertain'
+             ELSE oa.status END AS owner_alert_status
     FROM parsed_messages pm
     LEFT JOIN job_queue j ON pm.message_id = j.message_id
     LEFT JOIN ticket_results tr ON pm.message_id = tr.message_id
+    LEFT JOIN owner_alert_attempts oa ON oa.job_id = j.id
     WHERE pm.is_customer_message = 1
     ORDER BY pm.received_at DESC
     LIMIT ? OFFSET ?"""
@@ -687,7 +756,12 @@ async def get_result_stats(db_path: Path | None = None) -> dict:
         result_stats = {"total": 0, "drafted": 0, "escalated": 0, "sensitive_draft": 0,
                         "no_kb_match": 0, "critical": 0, "high": 0, "normal": 0, "low": 0}
 
-    return {**job_stats, **result_stats}
+    alert_rows = await db.fetch(
+        "SELECT COUNT(*) AS count FROM owner_alert_attempts WHERE status != 'delivered'",
+        operation="owner_alert_attention_count",
+    )
+    return {**job_stats, **result_stats,
+            "owner_alerts_need_attention": alert_rows[0]["count"]}
 
 
 async def get_setting(key: str, default: str = "", db_path: Path | None = None) -> str:
