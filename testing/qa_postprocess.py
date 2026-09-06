@@ -35,6 +35,7 @@ def worker(input_path):
     db = types.ModuleType('bb_webhook.database')
     for name in DATABASE_FUNCTIONS: setattr(db, name, forbidden)
     sys.modules['config'] = config
+    sys.modules['bb_webhook.config'] = config
     sys.modules['bb_webhook.database'] = db
     def audit(event, args):
         if event in {'socket.connect', 'socket.connect_ex', 'socket.bind', 'socket.getaddrinfo', 'socket.sendto', 'socket.sendmsg', 'subprocess.Popen', 'os.system', 'os.exec', 'os.posix_spawn', 'os.fork', 'sqlite3.connect'}:
