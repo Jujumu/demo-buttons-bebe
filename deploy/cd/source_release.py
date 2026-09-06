@@ -16,7 +16,7 @@ import tempfile
 COMPONENTS = {
     'feedback': ('feedback', ['buttonsbebe-webhook', 'buttonsbebe-processor', 'buttonsbebe-kb-mcp']),
     'webhook': ('webhook', ['buttonsbebe-webhook', 'buttonsbebe-processor']),
-    'processor': ('processor', ['buttonsbebe-processor']),
+    'processor': ('processor', ['buttonsbebe-webhook', 'buttonsbebe-processor']),
     'tools': ('tools', ['buttonsbebe-gorgias-mcp', 'buttonsbebe-redo-mcp', 'buttonsbebe-processor']),
     'kb': ('KB', ['buttonsbebe-kb-mcp', 'buttonsbebe-processor']),
     'kb-admin': ('kb-admin', ['buttonsbebe-kb-admin']),
