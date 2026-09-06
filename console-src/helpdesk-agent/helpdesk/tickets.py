@@ -11,8 +11,10 @@ import copy
 import json
 import os
 import re
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from .errors import bad_request, not_found
 from .speakers import project_customer_name, project_message
@@ -293,10 +295,18 @@ _intake: list[dict] = []
 _by_dedupe: dict[tuple, dict] = {}
 _seen_messages: set[str] = set()
 _next_seq = 1
+_store_lock = threading.Lock()
+
+INTAKE_SOURCES = frozenset({"agentmail", "gorgias", "chat", "seed"})
 
 
 def _seen_file() -> Path | None:
     raw = os.environ.get("HELPDESK_SEEN_FILE", "").strip()
+    return Path(raw) if raw else None
+
+
+def _store_file() -> Path | None:
+    raw = os.environ.get("HELPDESK_STORE_FILE", "").strip()
     return Path(raw) if raw else None
 
 
@@ -322,31 +332,165 @@ def _persist_seen(message_id: str) -> None:
     path.write_text(json.dumps(sorted(_seen_messages)), encoding="utf-8")
 
 
+def _dedupe_key_to_list(key: tuple) -> list:
+    return [list(part) if isinstance(part, tuple) else part for part in key]
+
+
+def _dedupe_key_from_list(raw: list | None) -> tuple | None:
+    if not isinstance(raw, list) or not raw:
+        return None
+    return tuple(tuple(part) if isinstance(part, list) else part for part in raw)
+
+
+def _intake_tickets() -> list[dict]:
+    return [ticket for ticket in _store if str(ticket.get("id", "")).startswith("t-in-")]
+
+
+def _persist_store() -> None:
+    path = _store_file()
+    if not path:
+        return
+    with _store_lock:
+        payload = {
+            "nextSeq": _next_seq,
+            "tickets": [copy.deepcopy(ticket) for ticket in _intake_tickets()],
+            "dedupe": [
+                {
+                    "key": _dedupe_key_to_list(key),
+                    "ticketId": ticket.get("id"),
+                }
+                for key, ticket in _by_dedupe.items()
+                if str(ticket.get("id", "")).startswith("t-in-")
+            ],
+        }
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+
+
+def _load_persisted_store() -> None:
+    global _next_seq
+    path = _store_file()
+    if not path or not path.is_file():
+        return
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        return
+    if not isinstance(data, dict):
+        return
+    tickets = data.get("tickets")
+    if not isinstance(tickets, list):
+        return
+    by_id: dict[str, dict] = {}
+    for raw in tickets:
+        if not isinstance(raw, dict):
+            continue
+        ticket_id = str(raw.get("id") or "")
+        if not ticket_id.startswith("t-in-"):
+            continue
+        ticket = copy.deepcopy(raw)
+        ticket.setdefault("joined", True)
+        ticket.setdefault("source", "agentmail")
+        _store.insert(0, ticket)
+        by_id[ticket_id] = ticket
+        try:
+            seq = int(ticket_id.rsplit("-", 1)[-1])
+            _next_seq = max(_next_seq, seq + 1)
+        except (TypeError, ValueError):
+            pass
+    for entry in data.get("dedupe") or []:
+        if not isinstance(entry, dict):
+            continue
+        key = _dedupe_key_from_list(entry.get("key"))
+        ticket = by_id.get(str(entry.get("ticketId") or ""))
+        if key and ticket is not None:
+            _by_dedupe[key] = ticket
+    try:
+        next_seq = int(data.get("nextSeq") or _next_seq)
+        _next_seq = max(_next_seq, next_seq)
+    except (TypeError, ValueError):
+        pass
+
+
 def seed_catalog_loaded() -> bool:
     return len(_store) >= len(SEED_TICKETS)
+
+
+def is_seed_ticket(ticket_id: str | None) -> bool:
+    """True for fixture / demo seeds. Intake tickets are t-in-*."""
+    canonical = _resolve_id(str(ticket_id or ""))
+    if not canonical:
+        return True
+    if canonical.startswith("t-in-"):
+        return False
+    return any(row["id"] == canonical for row in SEED_TICKETS) or canonical in ALIASES
 
 
 def reset() -> None:
     global _store, _intake, _by_dedupe, _seen_messages, _next_seq
     _store = [copy.deepcopy(row) for row in SEED_TICKETS]
+    for ticket in _store:
+        ticket.setdefault("source", "seed")
     _intake = []
     _by_dedupe = {}
     _seen_messages = set()
     _next_seq = 1
     _load_persisted_seen()
+    _load_persisted_store()
 
 
 def remember_intake(record: dict) -> None:
     _intake.append(dict(record))
     message_id = record.get("messageId")
     if message_id:
-        mid = str(message_id)
+        source = str(record.get("source") or "agentmail").strip().lower() or "agentmail"
+        mid = f"{source}:{message_id}"
         _seen_messages.add(mid)
+        # Keep bare id for older seen files / AgentMail pull path.
+        _seen_messages.add(str(message_id))
         _persist_seen(mid)
 
 
-def seen_message_id(message_id: str | None) -> bool:
-    return bool(message_id) and str(message_id) in _seen_messages
+def seen_message_id(message_id: str | None, *, source: str | None = None) -> bool:
+    if not message_id:
+        return False
+    mid = str(message_id)
+    if source:
+        if f"{source}:{mid}" in _seen_messages:
+            return True
+        # Legacy flat ids only count as seen for the same pull path (agentmail).
+        if source == "agentmail" and mid in _seen_messages and f"gorgias:{mid}" not in _seen_messages:
+            return True
+        return False
+    return mid in _seen_messages or any(item.endswith(f":{mid}") for item in _seen_messages)
+
+
+def normalize_external(raw: Any) -> dict[str, Any] | None:
+    if not isinstance(raw, dict):
+        return None
+    system = str(raw.get("system") or "").strip().lower()
+    if system not in {"gorgias", "agentmail"}:
+        return None
+    out: dict[str, Any] = {"system": system}
+    for key, dest in (
+        ("ticketId", "ticketId"),
+        ("messageId", "messageId"),
+        ("customerEmail", "customerEmail"),
+    ):
+        value = raw.get(key) if key in raw else raw.get(
+            {"ticketId": "ticket_id", "messageId": "message_id", "customerEmail": "customer_email"}.get(key, key)
+        )
+        if value is not None and str(value).strip():
+            out[dest] = str(value).strip()
+    return out if out.get("ticketId") or out.get("messageId") else out
+
+
+def find_ticket(ticket_id: str) -> dict | None:
+    canonical = _resolve_id(str(ticket_id or ""))
+    for ticket in _store:
+        if ticket["id"] == canonical:
+            return ticket
+    return None
 
 
 reset()
@@ -446,6 +590,8 @@ def add_ticket(
     from_email: str | None,
     dedupe_key: tuple,
     request_type: str | None = None,
+    source: str = "agentmail",
+    external: dict[str, Any] | None = None,
 ) -> dict:
     existing = _by_dedupe.get(dedupe_key)
     if existing:
@@ -457,6 +603,10 @@ def add_ticket(
     subtype = infer_privacy_subtype(subject, body) if typed == "privacy_request" else None
     severity = infer_severity(subject, body) if typed == "bug" else None
     device = infer_device(subject, body) if typed == "bug" else None
+    source_name = str(source or "agentmail").strip().lower() or "agentmail"
+    if source_name not in INTAKE_SOURCES:
+        source_name = "agentmail"
+    ext = normalize_external(external)
     ticket = {
         "id": ticket_id,
         "customerName": customer_name,
@@ -470,6 +620,8 @@ def add_ticket(
         "orderId": order_id,
         "channel": channel,
         "fromEmail": from_email,
+        "source": source_name,
+        "external": ext,
         "requestType": typed,
         "privacySubtype": subtype,
         "privacyHandled": False,
@@ -494,9 +646,58 @@ def add_ticket(
     }
     if from_email:
         ticket["messages"][0]["fromEmail"] = from_email
+    if ext and ext.get("messageId"):
+        ticket["messages"][0]["externalMessageId"] = ext["messageId"]
     _store.insert(0, ticket)
     _by_dedupe[dedupe_key] = ticket
+    _persist_store()
     return _row(ticket, gid_source="joined")
+
+
+def append_agent_message(
+    ticket_id: str,
+    body: str,
+    *,
+    via: str | None = None,
+    external_message_id: str | None = None,
+    delivery_status: str | None = None,
+    close: bool = False,
+    gid_source: str = "sample",
+) -> dict:
+    """Append a human-sent agent reply. Persists intake tickets."""
+    text = str(body or "").strip()
+    if not text:
+        raise bad_request("text is required", field="text")
+    ticket = find_ticket(ticket_id)
+    if ticket is None:
+        raise not_found("ticket", str(ticket_id))
+    now = _now_iso()
+    message: dict[str, Any] = {
+        "id": f"m-{ticket['id']}-out-{len(ticket.get('messages') or []) + 1}",
+        "from": "agent",
+        "fromAgent": True,
+        "name": STORE_NAME,
+        "fromName": STORE_NAME,
+        "body": text,
+        "at": now,
+    }
+    if via:
+        message["via"] = str(via)
+    if external_message_id:
+        message["externalMessageId"] = str(external_message_id)
+    if delivery_status:
+        message["deliveryStatus"] = str(delivery_status)
+    ticket.setdefault("messages", []).append(message)
+    ticket["snippet"] = _snippet(text)
+    ticket["updatedAt"] = now
+    if close:
+        ticket["status"] = "closed"
+        ticket.setdefault("statusEvents", []).append(
+            {"at": now, "status": "closed", "note": "sent"}
+        )
+    if str(ticket.get("id", "")).startswith("t-in-"):
+        _persist_store()
+    return get_ticket(ticket["id"], gid_source)
 
 
 def _resolve_id(ticket_id: str) -> str:
@@ -575,6 +776,11 @@ def get_ticket(ticket_id: str, gid_source: str = "sample") -> dict:
                 row["escalationReason"] = str(reason)
             if ticket.get("fromEmail"):
                 row["fromEmail"] = ticket.get("fromEmail")
+            source = str(ticket.get("source") or ("seed" if not ticket.get("joined") else "agentmail"))
+            row["source"] = source
+            ext = normalize_external(ticket.get("external"))
+            if ext:
+                row["external"] = ext
             subtype = ticket.get("privacySubtype") if row.get("requestType") == "privacy_request" else None
             row["privacySubtype"] = subtype if subtype in PRIVACY_SUBTYPES else None
             row["privacyHandled"] = bool(ticket.get("privacyHandled"))

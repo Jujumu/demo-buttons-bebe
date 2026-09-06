@@ -76,14 +76,28 @@ class DemoGorgiasState:
         if ticket_id not in self.tickets:
             raise LookupError("ticket not found")
         with self._lock:
+            message_id = 900_000 + len(self.actions) + 1
+            message = {
+                "id": message_id,
+                "from_agent": True,
+                "public": kind == "send",
+                "channel": body.get("channel") or ("internal-note" if kind == "note" else "email"),
+                "body_text": text,
+                "sent_datetime": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "created_datetime": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "source": body.get("source") or {},
+                "sender": body.get("sender") or {},
+            }
+            ticket = self.tickets[ticket_id]
+            ticket.setdefault("messages", []).append(copy.deepcopy(message))
             action = {
-                "id": f"demo-gorgias-action-{len(self.actions) + 1:03d}",
+                "id": message_id,
                 "kind": kind,
                 "ticket_id": ticket_id,
                 "text": text,
                 "public": kind == "send",
                 "simulated": True,
-                "delivered": False,
+                "delivered": True,
                 "delivery": "captured_locally",
                 "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 "metadata": {
@@ -98,6 +112,13 @@ class DemoGorgiasState:
                 with self.action_log.open("a", encoding="utf-8") as stream:
                     stream.write(json.dumps(action, ensure_ascii=False) + "\n")
             return copy.deepcopy(action)
+
+    def set_status(self, ticket_id: int, status: str) -> dict[str, Any]:
+        if ticket_id not in self.tickets:
+            raise LookupError("ticket not found")
+        with self._lock:
+            self.tickets[ticket_id]["status"] = status
+            return copy.deepcopy(self.tickets[ticket_id])
 
 
 def create_server(
@@ -154,6 +175,19 @@ def create_server(
                     HTTPStatus.OK,
                     {"data": copy.deepcopy(ticket.get("messages", []))},
                 )
+            if len(parts) == 5 and parts[:2] == ["api", "tickets"] and parts[3] == "messages":
+                try:
+                    ticket_id = int(parts[2])
+                    message_id = int(parts[4])
+                except ValueError:
+                    return self._send(HTTPStatus.BAD_REQUEST, {"error": "invalid id"})
+                ticket = self.demo_state.tickets.get(ticket_id)
+                if ticket is None:
+                    return self._send(HTTPStatus.NOT_FOUND, {"error": "ticket not found"})
+                for message in ticket.get("messages") or []:
+                    if int(message.get("id") or 0) == message_id:
+                        return self._send(HTTPStatus.OK, copy.deepcopy(message))
+                return self._send(HTTPStatus.NOT_FOUND, {"error": "message not found"})
             if len(parts) == 3 and parts[:2] == ["api", "tickets"]:
                 try:
                     ticket_id = int(parts[2])
@@ -168,6 +202,21 @@ def create_server(
             if path == "/api/tickets":
                 tickets = [copy.deepcopy(ticket) for ticket in self.demo_state.tickets.values()]
                 return self._send(HTTPStatus.OK, {"data": tickets})
+            return self._send(HTTPStatus.NOT_FOUND, {"error": "not found"})
+
+        def do_PUT(self) -> None:  # noqa: N802
+            path = urlsplit(self.path).path
+            parts = path.strip("/").split("/")
+            if len(parts) == 3 and parts[:2] == ["api", "tickets"]:
+                try:
+                    ticket_id = int(parts[2])
+                    body = _read_json(self)
+                    ticket = self.demo_state.set_status(ticket_id, str(body.get("status") or "closed"))
+                except LookupError as exc:
+                    return self._send(HTTPStatus.NOT_FOUND, {"error": str(exc)})
+                except (ValueError, json.JSONDecodeError) as exc:
+                    return self._send(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+                return self._send(HTTPStatus.OK, ticket)
             return self._send(HTTPStatus.NOT_FOUND, {"error": "not found"})
 
         def do_POST(self) -> None:  # noqa: N802

@@ -1,4 +1,4 @@
-/** Locked v1 tool names. Same fifteen as MCP/CLI. No send/refund/cancel. */
+/** Locked live tool names. Same as MCP/CLI. No send/refund/cancel. */
 export const TOOL_NAMES = Object.freeze([
   "helpdesk.list_tickets",
   "helpdesk.get_ticket",
@@ -15,12 +15,18 @@ export const TOOL_NAMES = Object.freeze([
   "helpdesk.pull_mailbox",
   "helpdesk.escalate_ticket",
   "helpdesk.write_gate_status",
+  "helpdesk.bridge_status",
+  "helpdesk.send_reply",
 ]);
 
 export const WRITE_TOOLS = Object.freeze([
   "helpdesk.send",
   "helpdesk.refund",
   "helpdesk.cancel",
+]);
+
+export const HUMAN_ONLY_TOOLS = Object.freeze([
+  "helpdesk.send_reply",
 ]);
 
 export const RAIL_TOOLS = Object.freeze({
@@ -35,6 +41,7 @@ export const COMPOSER_TOOLS = Object.freeze({
   summarize: "helpdesk.summarize_thread",
   searchMacros: "helpdesk.search_macros",
   applyMacro: "helpdesk.apply_macro",
+  sendReply: "helpdesk.send_reply",
 });
 
 export const INBOX_TOOLS = Object.freeze({
@@ -51,4 +58,5 @@ export const INTAKE_TOOLS = Object.freeze({
 export const TICKET_TOOLS = Object.freeze({
   escalate: "helpdesk.escalate_ticket",
   writeGate: "helpdesk.write_gate_status",
+  bridgeStatus: "helpdesk.bridge_status",
 });

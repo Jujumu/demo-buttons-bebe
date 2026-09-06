@@ -38,6 +38,8 @@ export function createComposerTissue({ mailbox }) {
     selectedMacroId: "",
     searchOpen: false,
     writeGate: null,
+    bridgeStatus: null,
+    sendError: "",
   };
 
   function project(input) {
@@ -52,7 +54,20 @@ export function createComposerTissue({ mailbox }) {
       selectedMacroId: input.selectedMacroId || "",
       searchOpen: input.searchOpen === true,
       writeGate: input.writeGate || null,
+      bridgeStatus: input.bridgeStatus || null,
+      sendError: input.sendError || "",
     };
+  }
+
+  function routeHint(next = model) {
+    const ticket = next.ticket;
+    const email = ticket?.fromEmail || ticket?.toEmail || "";
+    const bridge = next.bridgeStatus || {};
+    if (!bridge.outboundEnabled) return "Demo: stays local";
+    if (bridge.gorgiasEnabled && ticket?.source === "gorgias") {
+      return email ? `Sends via Gorgias to ${email}` : "Sends via Gorgias";
+    }
+    return email ? `Sends by email to ${email}` : "Sends by email";
   }
 
   function sendDisabled(next = model) {
@@ -74,9 +89,19 @@ export function createComposerTissue({ mailbox }) {
 
   function recipient(ticket) {
     if (!ticket) return { name: "", email: "" };
+    const candidates = [ticket.fromEmail, ticket.toEmail];
+    let email = "";
+    for (const candidate of candidates) {
+      const addr = String(candidate || "").trim().toLowerCase();
+      if (!addr || !addr.includes("@")) continue;
+      // Never show the shop/AgentMail login as the customer To line.
+      if (addr.endsWith("@agentmail.to")) continue;
+      email = String(candidate).trim();
+      break;
+    }
     return {
       name: listCustomerName(ticket) || ticket.messages?.[0]?.fromName || ticket.messages?.[0]?.name || "",
-      email: ticket.toEmail || "",
+      email,
     };
   }
 
@@ -132,6 +157,10 @@ export function createComposerTissue({ mailbox }) {
           <button type="button" class="btn-quiet" data-macro-append ${macroLocked} title="Add this macro after the current reply">Append</button>
         </div>`
       : "";
+    const routeLine = `<p class="composer-route mute" data-send-route>${esc(routeHint(next))}</p>`;
+    const err = next.sendError
+      ? `<p class="composer-send-error" data-send-error>${esc(next.sendError)}</p>`
+      : "";
     return `<section class="composer" data-composer>
       ${peek}
       <div class="composer-to"><span>To</span> <strong>${esc(to.name)}</strong> <span class="mute">${esc(to.email)}</span></div>
@@ -148,6 +177,8 @@ export function createComposerTissue({ mailbox }) {
           ${sendClose}
         </div>
       </div>
+      ${routeLine}
+      ${err}
     </section>`;
   }
 

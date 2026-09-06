@@ -7,6 +7,7 @@ import json
 import os
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 import sys
 
 INBOX = Path(__file__).resolve().parent
@@ -36,8 +37,16 @@ os.environ.setdefault(
     "HELPDESK_SEEN_FILE",
     str(REPO / "console-src" / "inbox" / "data" / "seen_messages.json"),
 )
+os.environ.setdefault(
+    "HELPDESK_STORE_FILE",
+    str(REPO / "console-src" / "inbox" / "data" / "intake_tickets.json"),
+)
 
 from helpdesk.http import handle_http  # noqa: E402
+from helpdesk.dispatch import invoke  # noqa: E402
+from bridge.gorgias_inbound import accept, verify_secret  # noqa: E402
+
+_MAX_BODY = 1 * 1024 * 1024
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -50,23 +59,48 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_header("Cache-Control", "no-store")
         super().end_headers()
 
-    def do_POST(self):
-        if self.path.split("?", 1)[0] != "/console/api/helpdesk":
-            self.send_error(404)
-            return
-        length = int(self.headers.get("Content-Length") or 0)
-        raw = self.rfile.read(length) if length else b"{}"
-        try:
-            body = json.loads(raw.decode("utf-8") or "{}")
-        except json.JSONDecodeError:
-            body = {}
-        payload = handle_http(body.get("tool"), body.get("arguments") or {})
+    def _json(self, status: int, payload: dict) -> None:
         encoded = json.dumps(payload).encode("utf-8")
-        self.send_response(200)
+        self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(encoded)))
         self.end_headers()
         self.wfile.write(encoded)
+
+    def do_POST(self):
+        parsed = urlparse(self.path)
+        path = parsed.path
+        length = int(self.headers.get("Content-Length") or 0)
+        if length > _MAX_BODY:
+            self._json(413, {"ok": False, "status": "body_too_large"})
+            return
+        raw = self.rfile.read(length) if length else b"{}"
+
+        if path == "/webhook/gorgias":
+            query = parse_qs(parsed.query)
+            secret_q = (query.get("secret") or [None])[0]
+            headers = {k: v for k, v in self.headers.items()}
+            if not verify_secret(headers, secret_q):
+                self._json(401, {"ok": False, "status": "unauthorized"})
+                return
+            try:
+                body = json.loads(raw.decode("utf-8") or "{}")
+            except json.JSONDecodeError:
+                self._json(400, {"ok": False, "status": "invalid_json"})
+                return
+            result = accept(body if isinstance(body, dict) else {}, invoke=invoke)
+            self._json(int(result.get("http") or 200), result)
+            return
+
+        if path != "/console/api/helpdesk":
+            self.send_error(404)
+            return
+        try:
+            body = json.loads(raw.decode("utf-8") or "{}")
+        except json.JSONDecodeError:
+            body = {}
+        payload = handle_http(body.get("tool"), body.get("arguments") or {}, actor="human")
+        self._json(200, payload)
 
     def log_message(self, format, *args):
         sys.stderr.write("%s - %s\n" % (self.address_string(), format % args))

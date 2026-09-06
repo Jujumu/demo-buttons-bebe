@@ -73,6 +73,12 @@ function pythonInvoke(tool, args) {
     if (args.reason) argv.push("--reason", String(args.reason));
   } else if (tool === "helpdesk.write_gate_status") {
     argv.push("write-gate-status");
+  } else if (tool === "helpdesk.bridge_status") {
+    argv.push("bridge-status");
+  } else if (tool === "helpdesk.send_reply") {
+    argv.push("send-reply", "--ticket-id", String(args.ticketId), "--text", String(args.text));
+    if (args.confirmed) argv.push("--confirmed");
+    if (args.close) argv.push("--close");
   } else {
     throw new Error(`unknown tool ${tool}`);
   }
@@ -99,10 +105,10 @@ function clientFromPython(source = "sample") {
   });
 }
 
-test("client exposes exactly the fifteen helpdesk tools", () => {
+test("client exposes exactly the seventeen helpdesk tools", () => {
   const client = createHelpdeskClient({ invoke: async () => ({ ok: true }) });
   assert.deepEqual(client.tools, TOOL_NAMES);
-  assert.equal(TOOL_NAMES.length, 15);
+  assert.equal(TOOL_NAMES.length, 17);
   assert.ok(TOOL_NAMES.includes("helpdesk.list_tickets"));
   assert.ok(TOOL_NAMES.includes("helpdesk.get_ticket"));
   assert.ok(TOOL_NAMES.includes("helpdesk.draft_reply"));
@@ -114,6 +120,8 @@ test("client exposes exactly the fifteen helpdesk tools", () => {
   assert.ok(TOOL_NAMES.includes("helpdesk.pull_mailbox"));
   assert.ok(TOOL_NAMES.includes("helpdesk.escalate_ticket"));
   assert.ok(TOOL_NAMES.includes("helpdesk.write_gate_status"));
+  assert.ok(TOOL_NAMES.includes("helpdesk.bridge_status"));
+  assert.ok(TOOL_NAMES.includes("helpdesk.send_reply"));
   assert.deepEqual([...WRITE_TOOLS], ["helpdesk.send", "helpdesk.refund", "helpdesk.cancel"]);
   for (const name of WRITE_TOOLS) {
     assert.ok(!TOOL_NAMES.includes(name));
@@ -413,7 +421,7 @@ test("CLI payloads match the JS shop adapter for sample rail tools", async () =>
   assert.equal(projectOrderHistory(history).rows[0].fulfillmentStatus, history[0].displayFulfillmentStatus);
 });
 
-test("all fifteen CLI tools return ok on the same handler path", () => {
+test("all live CLI tools return ok on the same handler path", () => {
   const cases = [
     ["helpdesk.list_tickets", { view: "open", limit: 5 }],
     ["helpdesk.get_ticket", { ticketId: "1001" }],
@@ -439,12 +447,20 @@ test("all fifteen CLI tools return ok on the same handler path", () => {
     ["helpdesk.pull_mailbox", { limit: 5 }],
     ["helpdesk.escalate_ticket", { ticketId: "t-ada-track" }],
     ["helpdesk.write_gate_status", {}],
+    ["helpdesk.bridge_status", {}],
   ];
   for (const [tool, args] of cases) {
     const payload = pythonInvoke(tool, args);
     assert.equal(payload.ok, true, tool);
     assert.equal(payload.tool, tool);
   }
+  const humanOnly = pythonInvoke("helpdesk.send_reply", {
+    ticketId: "t-ada-track",
+    text: "Hi",
+    confirmed: true,
+  });
+  assert.equal(humanOnly.ok, false);
+  assert.equal(humanOnly.error, "human_only");
 });
 
 test("live-holes returns stay empty and never inherit Ada OPEN", async () => {

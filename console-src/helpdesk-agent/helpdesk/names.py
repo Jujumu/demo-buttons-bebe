@@ -17,6 +17,8 @@ TOOL_INGEST_CHAT = "helpdesk.ingest_chat"
 TOOL_PULL_MAILBOX = "helpdesk.pull_mailbox"
 TOOL_ESCALATE_TICKET = "helpdesk.escalate_ticket"
 TOOL_WRITE_GATE_STATUS = "helpdesk.write_gate_status"
+TOOL_BRIDGE_STATUS = "helpdesk.bridge_status"
+TOOL_SEND_REPLY = "helpdesk.send_reply"
 
 TOOL_NAMES = (
     TOOL_LIST_TICKETS,
@@ -34,6 +36,8 @@ TOOL_NAMES = (
     TOOL_PULL_MAILBOX,
     TOOL_ESCALATE_TICKET,
     TOOL_WRITE_GATE_STATUS,
+    TOOL_BRIDGE_STATUS,
+    TOOL_SEND_REPLY,
 )
 
 CLI_COMMANDS = {
@@ -52,6 +56,8 @@ CLI_COMMANDS = {
     TOOL_PULL_MAILBOX: "pull-mailbox",
     TOOL_ESCALATE_TICKET: "escalate-ticket",
     TOOL_WRITE_GATE_STATUS: "write-gate-status",
+    TOOL_BRIDGE_STATUS: "bridge-status",
+    TOOL_SEND_REPLY: "send-reply",
 }
 
 SAMPLE_SHOP = "demo-helpdesk.example"

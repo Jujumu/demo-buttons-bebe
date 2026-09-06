@@ -507,6 +507,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 .composer-to { font-size: 12px; margin-bottom: 8px; }
 .composer-to .mute, .mute { color: var(--mute); }
 .write-gate { color: var(--mute); font-size: 12px; margin: 0 0 8px; }
+.composer-route { font-size: 12px; margin: 8px 0 0; }
+.composer-send-error { color: var(--danger, #b42318); font-size: 12px; margin: 6px 0 0; }
+.message-via { margin-left: 6px; font-size: 12px; }
 .composer-box {
   border: 1px solid var(--line);
   background: var(--ground);

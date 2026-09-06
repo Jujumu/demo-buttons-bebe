@@ -1,0 +1,28 @@
+# helpdesk.teddyonfriday.com — example Caddyfile fragment
+
+# Gorgias webhook is public but secret-gated in the app.
+# Console API stays behind the same session cookie as the support console.
+
+helpdesk.teddyonfriday.com {
+	encode gzip
+
+	# Detachable Gorgias inbound door (secret checked in review_server / app).
+	@gorgiasWebhook path /webhook/gorgias
+	handle @gorgiasWebhook {
+		reverse_proxy 127.0.0.1:8766
+	}
+
+	# Inbox UI + helpdesk door — require console session.
+	@console path /console/* /index.html /js/* /css/* /
+	handle @console {
+		forward_auth 127.0.0.1:8000 {
+			uri /auth/check
+			copy_headers Cookie
+		}
+		reverse_proxy 127.0.0.1:8766
+	}
+
+	handle {
+		respond 404
+	}
+}

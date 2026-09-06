@@ -34,9 +34,10 @@ Speak only when something moved: a PR opened, shots landed, a sign-off, or a blo
 - **Repo:** `Jujumu/demo-buttons-bebe` only. Never push to `TeddyJubu/buttons-bebe`.
 - **Architecture:** every tissue is a black box with a contract **and** an MCP tool or CLI on the same code path. UI is one client, not the product.
 - **Shop:** Cute Things / `yznyc1-ez.myshopify.com` is **read-only**. No refunds, cancels, `customerCreate`, or other Admin writes unless the human named that action. `SHOPIFY_MUTATIONS_ENABLED=0`. `WRITE_TOOLS` refuse send / refund / cancel.
-- **Human Send only.** Suggest-reply strip may Use draft / Regenerate / Dismiss. Never Send from the strip. Never auto-send.
+- **Human Send only.** Suggest-reply strip may Use draft / Regenerate / Dismiss. Never Send from the strip. Never auto-send. `helpdesk.send_reply` is human-only (inbox HTTP door after confirm); MCP/CLI/WebMCP refuse it.
 - **Design:** `LOCK.md` + `TOKENS.md`. Inbox chrome is list / thread / rail (views live in the list toolbar; ~24% / 54% / 22%). Selected list row is a **narrow accent edge + pale accent wash**. IBM Plex. No Gorgias chrome, purple, Gaia, fifth AI column, Customer Edit, Refund, Cancel.
-- **Ticket row (Clerk):** `id`, `customerName`, `subject`, `snippet`, `status`, `updatedAt`, `customerId`, `orderId`, `requestType`. `customerName` is intake From, never `Customer.displayName`. Ticket `status` is helpdesk `open` / `closed` / `snoozed`, not `Return.status`. `requestType` is first-party (`marketing_unsubscribe` / `privacy_request` / `bug` or `null`), not a Shopify consent, Customer Privacy, or product write. Bug tickets may add first-party `severity` and `device`.
+- **Gorgias bridge:** detachable sidecar under `console-src/helpdesk-agent/bridge/` behind `GORGIAS_BRIDGE_ENABLED`. Not a Gorgias UI wrap. When ON, Gorgias webhooks feed `ingest_email` and human Send posts through Gorgias; when OFF, webhooks 503 and Send uses AgentMail email (or stays local if `HELPDESK_OUTBOUND_ENABLED=0`).
+- **Ticket row (Clerk):** `id`, `customerName`, `subject`, `snippet`, `status`, `updatedAt`, `customerId`, `orderId`, `requestType`. `get_ticket` may also expose first-party `source` / `external` (Gorgias or AgentMail ids). `customerName` is intake From, never `Customer.displayName`. Ticket `status` is helpdesk `open` / `closed` / `snoozed`, not `Return.status`. `requestType` is first-party (`marketing_unsubscribe` / `privacy_request` / `bug` or `null`), not a Shopify consent, Customer Privacy, or product write. Bug tickets may add first-party `severity` and `device`.
 - **Join (INTAKE.md):** look-only. Parse `Order.name` (`#1001`) first, else `customers(query: email:…)` against `defaultEmailAddress.emailAddress` (never deprecated `Customer.email`). Miss → GIDs null. No `customerCreate`.
 - **Spam:** prize / lottery / unsubscribe-farm → `{ spam: true, ticketId: null }`. Never appears in `list_tickets`.
 - **Empty rail copy:** body “No customer” / “No order.” Peek “No customer.” / “No order.” Find customer / Link order = gated lock sheets only.
@@ -57,7 +58,7 @@ The human can send demo mail to `helpdesk-support@agentmail.to` (display: Demo S
 - Priya return, Jordan wrong item
 - One prize/lottery spam → must not become a ticket
 
-Do not send, reply, or forward from that inbox unless the human names sender, recipient, and intent.
+Do not send, reply, or forward from that inbox unless the human names sender, recipient, and intent — except human-confirmed `helpdesk.send_reply` (composer Send), which may reply/send via AgentMail when the Gorgias switch is OFF and outbound is enabled.
 
 ## How to @ people (copy this shape)
 
@@ -86,7 +87,7 @@ When signed, tell the human: Ready for review, then squash-merge. Do not nag the
 - Second cloud agent / second PR on the same slice
 - Upstream `TeddyJubu/buttons-bebe`
 - Live shop writes, refunds, cancels, auto-send
-- Gorgias wrap, purple, Gaia, fifth AI column
+- Gorgias UI wrap / chrome (purple, Gaia, fifth AI column). Detachable Gorgias sidecar behind `GORGIAS_BRIDGE_ENABLED` is allowed; it is not a wrap.
 - Tokens in git or chat
 - Rebuilding a merged tissue “to be safe”
 
@@ -111,6 +112,7 @@ When signed, tell the human: Ready for review, then squash-merge. Do not nag the
 - Cross-boot AgentMail dedupe persists seen message ids in `console-src/inbox/data/seen_messages.json`.
 - Inbox WebMCP (`console-src/inbox/js/webmcp.js`): registers `document.modelContext` UI verbs (`select_view`, `select_ticket`, `use_draft`, `regenerate_draft`, `dismiss_draft`, plus summarize/macros); omits Send; server `helpdesk.*` MCP/CLI stays for data/AI.
 - `helpdesk/composer.py` `fixture_draft()` supplies Caduceus scenario language for demo ticket ids; draft-by-type covers privacy/unsubscribe asks; still no refund/cancel/send promises.
-- Organ/tissue architecture: Excalidraw at `docs/tissues/organ-tissue.excalidraw`; click-to-enter 3D sim at `docs/tissues/architecture-3d-sim.html` (world in `architecture-world.js`): LEGO-house organs, inside-Inbox list/thread/rail wireframe, info card off by default; mail → helpdesk intake, Shopify look-only, Send stays on the local thread.
-- This demo’s look-up path is Shopify Admin GraphQL only (`get_customer` / `get_order` / `get_returns` / `list_past_orders`); Redo and KB belong to production Hermes, not this repo’s helpdesk tissues.
+- Organ/tissue architecture: Excalidraw at `docs/tissues/organ-tissue.excalidraw`; click-to-enter 3D sim at `docs/tissues/architecture-3d-sim.html` (world in `architecture-world.js`): LEGO-house organs, inside-Inbox list/thread/rail wireframe, info card off by default; mail → helpdesk intake, Shopify look-only; Send is human-only (`helpdesk.send_reply` when outbound is on, else local thread).
+- This demo’s look-up path is Shopify Admin GraphQL only (`get_customer` / `get_order` / `get_returns` / `list_past_orders`); Redo and KB belong to production Hermes. Gorgias is an optional detachable bridge sidecar, not a peer organ.
+- Detachable Gorgias bridge: `console-src/helpdesk-agent/bridge/`, setup in `deploy/GORGIAS-BRIDGE-SETUP.md`. Intake tickets persist in `HELPDESK_STORE_FILE` (`console-src/inbox/data/intake_tickets.json`).
 - Surge CLI is installed globally on this VPS (`surge` on PATH); publish a folder that contains `index.html`.

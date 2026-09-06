@@ -9,6 +9,7 @@ from typing import Any
 from .dispatch import WRITE_TOOLS, invoke, list_tools
 from .names import (
     TOOL_APPLY_MACRO,
+    TOOL_BRIDGE_STATUS,
     TOOL_DRAFT_REPLY,
     TOOL_ESCALATE_TICKET,
     TOOL_GET_CUSTOMER,
@@ -21,6 +22,7 @@ from .names import (
     TOOL_LIST_PAST_ORDERS,
     TOOL_LIST_TICKETS,
     TOOL_SEARCH_MACROS,
+    TOOL_SEND_REPLY,
     TOOL_SUMMARIZE_THREAD,
     TOOL_WRITE_GATE_STATUS,
 )
@@ -90,6 +92,13 @@ SCHEMAS = {
         "reason": {"type": "string", "description": "optional first-party note; never a Shopify mutation"},
     },
     TOOL_WRITE_GATE_STATUS: {},
+    TOOL_BRIDGE_STATUS: {},
+    TOOL_SEND_REPLY: {
+        "ticketId": {"type": "string"},
+        "text": {"type": "string"},
+        "confirmed": {"type": "boolean", "description": "must be true after human confirms"},
+        "close": {"type": "boolean"},
+    },
 }
 
 
@@ -104,6 +113,16 @@ def _description(name: str) -> str:
             "Payment write-gate. Out: mutationsEnabled and refused "
             "(send, refund, cancel). Cute Things stays read-only. "
             "WRITE_TOOLS refuse those tools even if the env flag is on."
+        )
+    if name == TOOL_BRIDGE_STATUS:
+        return (
+            "Detachable Gorgias bridge status. Out: gorgiasEnabled, gorgiasConfigured, "
+            "outboundEnabled, emailConfigured. Never returns secrets."
+        )
+    if name == TOOL_SEND_REPLY:
+        return (
+            "HUMAN-ONLY. Sends a customer reply via Gorgias or email after confirmation. "
+            "MCP and CLI refuse this tool. Use the inbox Send button."
         )
     return f"Helpdesk tissue {name}"
 

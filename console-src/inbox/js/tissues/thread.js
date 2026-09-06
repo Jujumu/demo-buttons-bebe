@@ -53,11 +53,23 @@ export function createThreadTissue({ mailbox }) {
     const email = speaker.email
       ? `<span class="from-email">${esc(speaker.email)}</span>`
       : "";
+    let via = "";
+    if (speaker.role === "agent" && message.via) {
+      const label = message.via === "gorgias"
+        ? "via Gorgias"
+        : message.via === "email"
+          ? "by email"
+          : message.via === "local"
+            ? "local only"
+            : "";
+      if (label) via = `<span class="mute message-via">${esc(label)}</span>`;
+    }
     return `<article class="bubble ${speaker.role}">
       <div class="bubble-meta">
         <span class="avatar">${esc(initials(speaker.name))}</span>
         <strong>From ${esc(speaker.name)}</strong>
         ${email}
+        ${via}
         <time>${esc(formatWhen(message.at))}</time>
       </div>
       <p>${esc(message.body)}</p>

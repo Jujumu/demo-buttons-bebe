@@ -18,7 +18,9 @@ inbound mail onto `ingest_email`. Live reads target Cute Things
 Mint/Admin failure falls back to `demo-inbox.example` fixtures.
 `SHOPIFY_MUTATIONS_ENABLED` stays `0`. No live store writes. The Ada OPEN
 return is invented fixture-only and is never injected onto a live shop query.
-No `helpdesk.send`.
+No `helpdesk.send` (refused stub). Real Send uses `helpdesk.send_reply`
+when `HELPDESK_OUTBOUND_ENABLED=1` (confirm + allowlist); otherwise the
+composer appends locally. Route line shows Gorgias / email / local.
 
 Demo names only (Ada Demo, Casey Sandbox, Jordan Preview). No customer PII.
 

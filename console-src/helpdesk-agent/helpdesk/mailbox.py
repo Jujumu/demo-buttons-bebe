@@ -305,7 +305,7 @@ def handle_pull_mailbox(args: dict[str, Any]) -> dict[str, Any]:
     skipped = 0
     for message in messages:
         mid = message.get("message_id")
-        if tickets.seen_message_id(mid):
+        if tickets.seen_message_id(mid, source="agentmail"):
             skipped += 1
             continue
         if (

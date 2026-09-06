@@ -3,18 +3,20 @@
 Agent-native organ. The UI is a client. Every tissue is a black box
 (`In → Out`) exposed as an MCP tool and a CLI command on the **same handler**.
 
-This organ does **not** wrap Gorgias. Ticket tissues are first-party.
+This organ does **not** wrap Gorgias UI. Ticket tissues are first-party.
+An optional detachable Gorgias **bridge** lives in the sibling `bridge/`
+package behind `GORGIAS_BRIDGE_ENABLED` (inbound webhook + human Send route).
 Shopify rail tissues speak Admin GraphQL **2026-07** field names only.
 
-## Tools (v1, fifteen)
+## Tools (live)
 
 Six rail/inbox reads, two Caduceus composer tools, two macro tools, two
-intake tools, one AgentMail pull, first-party `escalate_ticket`, and
-`write_gate_status`. Composer and macro tools return text.
-They never send, refund, or cancel. Intake writes a first-party ticket (or
-drops spam). It never creates a Shopify customer. `pull_mailbox` reads the
-AgentMail inbox and calls `ingest_email`. It never sends, replies, forwards,
-deletes, or creates an inbox. `escalate_ticket` is first-party helpdesk
+intake tools, one AgentMail pull, first-party `escalate_ticket`,
+`write_gate_status`, `bridge_status`, and human-only `send_reply`.
+Composer and macro tools return text. They never send, refund, or cancel.
+Intake writes a first-party ticket (or drops spam). It never creates a
+Shopify customer. `pull_mailbox` reads the AgentMail inbox and calls
+`ingest_email`. It never sends. `escalate_ticket` is first-party helpdesk
 state (escalated/pending). It is not a Shopify mutation.
 
 | Tool | Tissue | CLI | In | Out |
@@ -34,6 +36,8 @@ state (escalated/pending). It is not a Shopify mutation.
 | `helpdesk.pull_mailbox` | mailbox | `helpdesk pull-mailbox` | `{ limit? }` | `{ ingested: [ticket rows], spam: [{ from, subject }], skipped: n }` |
 | `helpdesk.escalate_ticket` | thread escalate | `helpdesk escalate-ticket` | `{ ticketId, reason? }` | ticket + `escalated: true` (status stays open/closed/snoozed) |
 | `helpdesk.write_gate_status` | write gate | `helpdesk write-gate-status` | `{}` | `{ mutationsEnabled, refused: ["send","refund","cancel"], tools }` |
+| `helpdesk.bridge_status` | bridge status | `helpdesk bridge-status` | `{}` | `{ gorgiasEnabled, gorgiasConfigured, outboundEnabled, emailConfigured }` (no secrets) |
+| `helpdesk.send_reply` | human Send | `helpdesk send-reply` (CLI refused) | `{ ticketId, text, confirmed, close? }` | ticket + `via` + `deliveryStatus`. Human-only; MCP/CLI get `human_only`. |
 
 **Macro contract.** `search_macros` always returns the fixture body so a client
 can insert without a second call. `apply_macro` is the insert path: `replace`
@@ -42,7 +46,8 @@ The human still hits Send. Fixtures (offline): Shipping delay, Return how-to,
 Order status.
 
 No `helpdesk.send`, `helpdesk.refund`, or `helpdesk.cancel`. Those stay in
-`WRITE_TOOLS` and are refused. `SHOPIFY_MUTATIONS_ENABLED` stays `0`.
+`WRITE_TOOLS` and are refused. Real outbound uses `helpdesk.send_reply`
+(different name, human-only, confirm required). `SHOPIFY_MUTATIONS_ENABLED` stays `0`.
 MCP `tools/list` documents the refused write tools with a `REFUSED`
 description. Agents can also call `helpdesk.write_gate_status` or invoke a
 write tool and read `{ ok: false, error: "forbidden", details: { refused, mutationsEnabled } }`.
@@ -59,10 +64,13 @@ email, so order-name only. Miss → GID null. Never `customerCreate`. Never
 deprecated `Customer.email`. `customerName` is the intake From name, never
 `Customer.displayName`. Ticket status is helpdesk `open`.
 
-The inbox is a client of these fifteen tools. MCP, CLI, and
+The inbox is a client of these live tools. MCP, CLI, and
 `POST /console/api/helpdesk` (`{ tool, arguments }`) share `invoke()`.
+`helpdesk.send_reply` is the documented parity exception: MCP/CLI pass
+`actor=agent` and get `human_only`; the HTTP door passes `actor=human`.
 The UI must not open a second GraphQL client. After `pull_mailbox`,
-`list_tickets` shows the new rows. There is no second ingest path.
+`list_tickets` shows the new rows. Gorgias webhooks are a second door into
+the same `ingest_email`.
 
 Rail IDs are Shopify GIDs (`gid://shopify/Customer/…`, `gid://shopify/Order/…`),
 not bare ticket numbers. `list_tickets` / `get_ticket` attach those GIDs so the
