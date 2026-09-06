@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -19,7 +19,8 @@ import { projectOrderHistory } from "../js/tissues/order-history.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const helpdeskRoot = join(here, "../../helpdesk-agent");
-const python = process.env.PYTHON || "python3";
+const selectedPython = process.env.INBOX_PYTHON || process.env.PYTHON || "python3";
+const python = selectedPython.includes("/") ? resolve(process.cwd(), selectedPython) : selectedPython;
 
 const SAMPLE_SHOP = "demo-helpdesk.example";
 const SAMPLE_ADA = "gid://shopify/Customer/9001";

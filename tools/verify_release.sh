@@ -18,6 +18,23 @@ fail() {
   exit 1
 }
 
+# Resolve relative executable paths once, before nested suites change cwd.
+# Do not realpath Python: resolving a venv symlink loses its environment.
+absolute_interpreter() {
+  case "$1" in
+    /*) printf '%s\n' "$1" ;;
+    */*) printf '%s/%s\n' "$ROOT_DIR" "$1" ;;
+    *) command -v "$1" ;;
+  esac
+}
+PYTHON="$(absolute_interpreter "$PYTHON")"
+PROCESSOR_PYTHON="$(absolute_interpreter "$PROCESSOR_PYTHON")"
+WEBHOOK_PYTHON="$(absolute_interpreter "$WEBHOOK_PYTHON")"
+INBOX_PYTHON="$(absolute_interpreter "$INBOX_PYTHON")"
+QA_PYTHON="$(absolute_interpreter "$QA_PYTHON")"
+HERMES_VERIFY_PYTHON="$(absolute_interpreter "${HERMES_VERIFY_PYTHON:-$PYTHON}")"
+export PYTHON PROCESSOR_PYTHON WEBHOOK_PYTHON INBOX_PYTHON QA_PYTHON HERMES_VERIFY_PYTHON
+
 cd "$ROOT_DIR"
 
 demo_mode="${DEMO_MODE:-}"
