@@ -187,7 +187,7 @@ Review the SHA of the effective `/etc/caddy/sites/support.caddy` target first.
 The installed layout uses a `sites` directory symlink; the helper resolves the
 exact target and requires the supported four-import entrypoint plus unique site
 and console-API anchors. Both support and srv hostnames share that site block.
-The gate matches only `/console/api/ticket/<digits>/rewrite` and its trailing
+The gate matches only `/console/api/ticket/<one-path-segment>/rewrite` and its trailing
 slash form, returning 503 with Retry-After. Public `/dashboard` remains governed
 by its existing deny routes; there is no new alias or authentication bypass.
 

@@ -88,6 +88,8 @@ class LinuxRouteTests(unittest.TestCase):
             try:
                 for host in ('support.buttonsbebe.com','srv1766050.hstgr.cloud'):
                     for path, expected in [('/console/api/ticket/123/rewrite',503),('/console/api/ticket/123/rewrite/',503),
+                            ('/console/api/ticket/+123/rewrite',503),('/console/api/ticket/%2B123/rewrite',503),
+                            ('/console/api/ticket/-123/rewrite',503),('/console/api/ticket/%20123/rewrite',503),
                             ('/console/api/ticket/123/send',200),('/console/api/auth/session',200),
                             ('/console/login',200),('/console/',200),('/webhook/gorgias/synthetic',200),
                             ('/console/api/ticket/123/rewrite-extra',200)]:

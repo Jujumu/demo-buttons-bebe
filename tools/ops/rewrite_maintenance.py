@@ -12,7 +12,7 @@ import tempfile
 
 ANCHOR = 'srv1766050.hstgr.cloud, support.buttonsbebe.com {\n'
 BLOCK = '''\t# BEGIN BB REWRITE MAINTENANCE
-\t@bb_rewrite_maintenance path_regexp bb_rewrite_maintenance ^/console/api/ticket/[0-9]+/rewrite/?$
+\t@bb_rewrite_maintenance path_regexp bb_rewrite_maintenance ^/console/api/ticket/[^/]+/rewrite/?$
 \thandle @bb_rewrite_maintenance {
 \t\theader Retry-After 120
 \t\trespond "Draft editing is temporarily unavailable. Please try again shortly." 503
