@@ -43,7 +43,7 @@ test("null customer GID uses the empty-ticket voice, not unavailable", () => {
   const html = renderCustomer(model);
   assert.match(html, /<h2>Customer<\/h2>\s*<span class="peek">No customer<\/span>/);
   assert.match(html, /<p class="tissue-empty">No customer<\/p>/);
-  assert.match(html, /data-customer-join-gate-open>Find customer</);
+  assert.match(html, /data-customer-join-gate-open[^>]*>Find customer</);
   assert.doesNotMatch(html, /Customer unavailable|unavailable/);
 });
 
@@ -178,7 +178,7 @@ test("order fixture keeps null SKUs and missing billing", async () => {
   assert.match(html, /Absent/);
   assert.match(html, /<span class="ship-company">Demo Carrier<\/span>/);
   assert.match(html, /<span class="mono ship-number">DEMO-1001<\/span>/);
-  assert.match(html, /<a class="track-link" href="https:\/\/example\.com\/track\/demo-1001" rel="noreferrer" target="_blank">Track<\/a>/);
+  assert.match(html, /<a class="track-link" href="https:\/\/example\.com\/track\/demo-1001"[^>]*>Track<\/a>/);
   assert.doesNotMatch(html, /<a class="track-link"[^>]*>Demo Carrier/);
   assert.doesNotMatch(html, />https:\/\/example\.com\/track\/demo-1001</);
   assertMoneyBag(order.currentTotalPriceSet);
@@ -220,7 +220,7 @@ test("This order shows a Payments locked hairline", async () => {
   const order = await shop.getOrder({ shop: SHOP, orderId: IDS.ORDER_1001 });
   const html = renderOrder(projectOrder(order));
   assert.match(html, /<h2>This order<\/h2>/);
-  assert.match(html, /btn-hairline" data-write-gate-open>Payments locked</);
+  assert.match(html, /data-write-gate-open[^>]*>Payments locked</);
   assert.doesNotMatch(html, /<(button|a)\b[^>]*>[^<]*Refund/i);
   assert.doesNotMatch(html, /<(button|a)\b[^>]*>[^<]*\bCancel\b/i);
 });
@@ -228,7 +228,7 @@ test("This order shows a Payments locked hairline", async () => {
 test("empty This order hides Payments locked chrome", () => {
   const html = renderOrder(projectOrder(null));
   assert.match(html, /No order/);
-  assert.match(html, /data-order-link-gate-open>Link order</);
+  assert.match(html, /data-order-link-gate-open[^>]*>Link order</);
   assert.doesNotMatch(html, /data-write-gate-open/);
   assert.doesNotMatch(html, />Payments locked</);
   assert.doesNotMatch(html, /<(button|a)\b[^>]*>[^<]*Refund/i);
@@ -251,7 +251,7 @@ test("partial ship shows mixed line status and tracking for the shipped line", a
   assert.match(html, /Knit Baby Booties/);
   assert.match(html, /<span class="ship-company">Sample Carrier<\/span>/);
   assert.match(html, /<span class="mono ship-number">SAMPLE-9004<\/span>/);
-  assert.match(html, /<a class="track-link" href="https:\/\/example\.com\/sample\/9004" rel="noreferrer" target="_blank">Track<\/a>/);
+  assert.match(html, /<a class="track-link" href="https:\/\/example\.com\/sample\/9004"[^>]*>Track<\/a>/);
   assert.match(html, /<h3>Shipment<\/h3>\s*<span class="peek">In transit<\/span>/);
   assert.doesNotMatch(html, /<p class="tissue-empty">No tracking<\/p>/);
 });

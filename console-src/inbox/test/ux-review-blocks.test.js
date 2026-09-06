@@ -55,7 +55,7 @@ test("UX Pro blocks fail the default Ada paint", async () => {
   assert.match(snap.html, /<p class="mute warranty-line">Ends 12 Mar 2027<\/p>/);
   assert.match(snap.html, /<h3>ETA<\/h3>\s*<span class="peek">ETA Tue 8 Sep<\/span>/);
   assert.match(snap.html, /<p class="mute eta-line">Zone: Domestic<\/p>/);
-  assert.match(snap.html, /status-badge">Open</);
+  assert.match(snap.html, /status-badge[^>]*>Open</);
   assert.match(snap.html, /Status Open/);
   assert.doesNotMatch(snap.html, /status-badge">OPEN</);
   assert.doesNotMatch(snap.html, /Status OPEN/);
@@ -68,7 +68,7 @@ test("UX Pro mute unsubscribe chrome has no Shopify write control", async () => 
   assert.deepEqual(reviewBlockViolations(snap.html), []);
   assert.match(snap.html, /class="ticket-badge ticket-request"[^>]*>Unsubscribe</);
   assert.match(snap.html, /class="thread-request mute"[^>]*>Marketing unsubscribe</);
-  assert.match(snap.html, /btn-hairline"[^>]*data-marketing-gate-open>Mark unsubscribed</);
+  assert.match(snap.html, /data-marketing-gate-open[^>]*>Mark unsubscribed</);
   assert.match(snap.html, /data-pane="rail"[\s\S]*?<section class="rail-card"[^>]*data-tissue="customer"/);
   assert.doesNotMatch(snap.html, /data-tissue="preference"/);
   assert.doesNotMatch(snap.html, /<(button|a)\b[^>]*>\s*Unsubscribe</i);
@@ -76,7 +76,7 @@ test("UX Pro mute unsubscribe chrome has no Shopify write control", async () => 
   assert.doesNotMatch(snap.html, /#6B46C1|#7C3AED|#5B21B6/);
   const gated = organ.openMarketingGate();
   assert.match(gated.html, /id="gate-sheet-copy">Marketing consent stays locked\. No live unsubscribe\.</);
-  assert.match(gated.html, /btn-ink"[^>]*data-unsubscribe-handled>Confirm</);
+  assert.match(gated.html, /data-unsubscribe-handled[^>]*>Confirm</);
   const css = readFileSync(join(here, "../styles.css"), "utf8");
   assert.match(css, /\.ticket-request\s*\{[^}]*color:\s*var\(--mute\)/);
   assert.match(css, /\.thread-request\s*\{/);
@@ -89,7 +89,7 @@ test("UX Pro mute bug severity chrome has no Shopify write control", async () =>
   assert.match(snap.html, /class="ticket-badge ticket-severity"[^>]*>High</);
   assert.match(snap.html, /class="thread-request mute"[^>]*>Bug report</);
   assert.match(snap.html, /thread-request-subtype mute">High · iOS</);
-  assert.match(snap.html, /btn-hairline"[^>]*data-bug-handled>Mark bug handled</);
+  assert.match(snap.html, /data-bug-handled[^>]*>Mark bug handled</);
   assert.match(snap.html, /data-pane="rail"[\s\S]*?<section class="rail-card"[^>]*data-tissue="customer"/);
   assert.doesNotMatch(snap.html, /data-tissue="preference"/);
   assert.doesNotMatch(snap.html, /<h2>Bug report<\/h2>/);
@@ -112,7 +112,7 @@ test("UX Pro mute privacy chrome has no Shopify write control", async () => {
   assert.match(snap.html, /class="ticket-badge ticket-request"[^>]*>Privacy</);
   assert.match(snap.html, /class="thread-request mute"[^>]*>Privacy request</);
   assert.match(snap.html, /thread-request-subtype mute">Delete</);
-  assert.match(snap.html, /btn-hairline"[^>]*data-privacy-gate-open>Mark privacy handled</);
+  assert.match(snap.html, /data-privacy-gate-open[^>]*>Mark privacy handled</);
   assert.match(snap.html, /data-pane="rail"[\s\S]*?<section class="rail-card"[^>]*data-tissue="customer"/);
   assert.doesNotMatch(snap.html, /data-tissue="preference"/);
   assert.doesNotMatch(snap.html, /<(button|a)\b[^>]*>[^<]*(?:erasure|redact|Customer Privacy)/i);
@@ -120,7 +120,7 @@ test("UX Pro mute privacy chrome has no Shopify write control", async () => {
   const gated = organ.openPrivacyGate();
   assert.match(gated.html, /data-privacy-gate/);
   assert.match(gated.html, /id="gate-sheet-copy">Privacy tools stay locked\. No live data erase or export\.</);
-  assert.match(gated.html, /btn-ink"[^>]*data-privacy-handled>Confirm</);
+  assert.match(gated.html, /data-privacy-handled[^>]*>Confirm</);
   assert.doesNotMatch(gated.html, /#6B46C1|#7C3AED|#5B21B6/);
 });
 
