@@ -1,6 +1,7 @@
 import { createInboxOrgan } from "./inbox.js";
 import { createHelpdeskClient } from "./shop/helpdesk-client.js";
 import { createHelpdeskShop, resolveLiveInbox } from "./shop/helpdesk-shop.js";
+import { registerInboxWebMcp } from "./webmcp.js";
 
 const root = document.getElementById("inbox-root");
 const client = createHelpdeskClient();
@@ -23,3 +24,13 @@ if (params.get("pull") === "1") {
   await organ.pullMailbox(pullArgs);
 }
 organ.mount(root);
+
+// Demo/review: expose organ for WebMCP verify + headless shots (not a product API).
+globalThis.__inboxOrgan = organ;
+
+// WebMCP: register Document-scoped chrome tools after mount. No-op without
+// modelContext (chrome://flags/#enable-webmcp-testing). Abort on page hide.
+const webmcp = registerInboxWebMcp(organ);
+await webmcp.ready;
+globalThis.__inboxWebMcp = webmcp;
+window.addEventListener("pagehide", () => webmcp.dispose(), { once: true });

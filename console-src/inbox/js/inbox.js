@@ -77,9 +77,16 @@ export function createInboxOrgan(opts = {}) {
   let listRows = pinnedCatalog ? pinnedCatalog.filter((ticket) => ticketInView(ticket, viewId)) : [];
   let selected = pinnedCatalog?.find((ticket) => ticket.id === selectedId) || null;
   let counts = pinnedCatalog ? viewCounts(pinnedCatalog) : viewCounts(fixtureTickets);
+  /** Set by mount(); programmatic organ APIs remount chrome when present. */
+  let paintMounted = null;
 
   function markRead(ticketId) {
     if (ticketId) unreadIds.delete(ticketId);
+  }
+
+  function afterUi() {
+    paintMounted?.();
+    return snapshot();
   }
 
   function visibleTickets() {
@@ -480,9 +487,11 @@ export function createInboxOrgan(opts = {}) {
           .map(([tissueId, model]) => ({ tissueId, message: model.error })),
       ),
       sent,
+      body,
       strip: composerModel.strip,
       summarize: summarizeText,
       macros: composerModel.macros,
+      macrosOpen,
       query: composerModel.query,
       selectedMacroId: composerModel.selectedMacroId,
       searchOpen: composerModel.searchOpen,
@@ -723,6 +732,7 @@ export function createInboxOrgan(opts = {}) {
       paint();
     });
 
+    paintMounted = paint;
     paint();
     return snapshot();
   }
@@ -744,7 +754,7 @@ export function createInboxOrgan(opts = {}) {
       return refreshList().then(() => {
         ensureSelection();
         return refreshThread();
-      }).then(refreshRail).then(refreshComposer).then(() => refreshMacros(macroQuery));
+      }).then(refreshRail).then(refreshComposer).then(() => refreshMacros(macroQuery)).then(afterUi);
     },
     selectTicket(id) {
       selectedId = id;
@@ -755,15 +765,15 @@ export function createInboxOrgan(opts = {}) {
       discarded = false;
       selectedMacroId = "";
       macrosOpen = false;
-      return refreshThread().then(refreshRail).then(refreshComposer).then(() => refreshMacros(macroQuery));
+      return refreshThread().then(refreshRail).then(refreshComposer).then(() => refreshMacros(macroQuery)).then(afterUi);
     },
     collapseList(collapsed = true) {
       listCollapsed = Boolean(collapsed);
-      return snapshot();
+      return afterUi();
     },
     collapseRail(collapsed = true) {
       railCollapsed = Boolean(collapsed);
-      return snapshot();
+      return afterUi();
     },
     toggleRail(key) {
       return rail.toggle(key);
@@ -771,11 +781,13 @@ export function createInboxOrgan(opts = {}) {
     setBody(text) {
       body = text;
       composerTissue.update(composerInput(selectedTicket()));
+      afterUi();
     },
     discardStrip() {
       discarded = true;
       strip = "";
       composerTissue.update(composerInput(selectedTicket()));
+      return afterUi();
     },
     insertDraft() {
       const text = discarded ? "" : strip;
@@ -783,27 +795,28 @@ export function createInboxOrgan(opts = {}) {
       strip = "";
       discarded = true;
       composerTissue.update(composerInput(selectedTicket()));
+      return afterUi();
     },
     async regenerateDraft() {
       discarded = false;
       const ticket = selectedTicket();
       const requestTicketId = ticket?.id || null;
       const text = await loadDraft(ticket);
-      if (selectedId !== requestTicketId) return snapshot();
+      if (selectedId !== requestTicketId) return afterUi();
       strip = text;
       composerTissue.update(composerInput(selectedTicket()));
-      return snapshot();
+      return afterUi();
     },
     openMacros() {
       macrosOpen = true;
       composerTissue.update(composerInput(selectedTicket()));
-      return snapshot();
+      return afterUi();
     },
     async searchMacros(query = "") {
       macrosOpen = true;
       await refreshMacros(query);
       composerTissue.update(composerInput(selectedTicket()));
-      return snapshot();
+      return afterUi();
     },
     async applyMacro(macroId, mode = "replace") {
       selectedMacroId = macroId;
@@ -830,7 +843,7 @@ export function createInboxOrgan(opts = {}) {
       }
       if (text) body = text;
       composerTissue.update(composerInput(selectedTicket()));
-      return snapshot();
+      return afterUi();
     },
     async escalate(reason) {
       const ticket = await escalateSelected(reason);
@@ -906,7 +919,7 @@ export function createInboxOrgan(opts = {}) {
       const ticket = selectedTicket();
       summarizeText = await loadSummary(ticket);
       composerTissue.update(composerInput(ticket));
-      return snapshot();
+      return afterUi();
     },
     async ready() {
       await refreshList();

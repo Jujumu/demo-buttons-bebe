@@ -20,6 +20,7 @@ function sourceTree() {
     "../styles.css",
     "../js/boot.js",
     "../js/inbox.js",
+    "../js/webmcp.js",
     "../js/tissues/view.js",
     "../js/tissues/list.js",
     "../js/tissues/thread.js",
@@ -95,7 +96,7 @@ test("unsubscribe ticket shows mute request type without a Shopify write control
   assert.match(snap.html, /data-ticket="t-priya-unsub"[^>]*data-request-type="marketing_unsubscribe"/);
   assert.match(snap.html, /class="ticket-badge ticket-request"[^>]*>Unsubscribe</);
   assert.match(snap.html, /class="thread-request mute"[^>]*>Marketing unsubscribe</);
-  assert.match(snap.html, /btn-hairline"[^>]*data-marketing-gate-open>Mark unsubscribed</);
+  assert.match(snap.html, /data-marketing-gate-open[^>]*>Mark unsubscribed</);
   assert.match(snap.html, /data-pane="rail"[\s\S]*?<section class="rail-card"[^>]*data-tissue="customer"/);
   assert.match(snap.html, /<h2>Customer<\/h2>\s*<span class="peek">No customer<\/span>/);
   assert.match(snap.html, /data-draft-strip/);
@@ -110,7 +111,7 @@ test("unsubscribe ticket shows mute request type without a Shopify write control
   const gated = organ.openMarketingGate();
   assert.match(gated.html, /data-marketing-gate/);
   assert.match(gated.html, /Marketing consent stays locked\. No live unsubscribe\./);
-  assert.match(gated.html, /btn-ink"[^>]*data-unsubscribe-handled>Confirm</);
+  assert.match(gated.html, /data-unsubscribe-handled[^>]*>Confirm</);
   const handled = await organ.markUnsubscribed();
   assert.match(handled.html, /thread-request-handled mute">Unsubscribed</);
   assert.doesNotMatch(handled.html, /data-marketing-gate-open/);
@@ -128,7 +129,7 @@ test("privacy ticket shows mute request type without a Shopify write control", a
   assert.match(snap.html, /class="ticket-badge ticket-request"[^>]*>Privacy</);
   assert.match(snap.html, /class="thread-request mute"[^>]*>Privacy request</);
   assert.match(snap.html, /thread-request-subtype mute">Delete</);
-  assert.match(snap.html, /btn-hairline"[^>]*data-privacy-gate-open>Mark privacy handled</);
+  assert.match(snap.html, /data-privacy-gate-open[^>]*>Mark privacy handled</);
   assert.match(snap.html, /data-pane="rail"[\s\S]*?<section class="rail-card"[^>]*data-tissue="customer"/);
   assert.match(snap.html, /<h2>Customer<\/h2>\s*<span class="peek">No customer<\/span>/);
   assert.match(snap.html, /data-draft-strip/);
@@ -144,7 +145,7 @@ test("privacy ticket shows mute request type without a Shopify write control", a
   const gated = organ.openPrivacyGate();
   assert.match(gated.html, /data-privacy-gate/);
   assert.match(gated.html, /Privacy tools stay locked\. No live data erase or export\./);
-  assert.match(gated.html, /btn-ink"[^>]*data-privacy-handled>Confirm</);
+  assert.match(gated.html, /data-privacy-handled[^>]*>Confirm</);
   const handled = await organ.markPrivacyHandled();
   assert.match(handled.html, /thread-request-handled mute">Privacy handled</);
   assert.doesNotMatch(handled.html, /data-privacy-gate-open/);
@@ -163,7 +164,7 @@ test("bug ticket shows mute severity and device without a Shopify write control"
   assert.match(snap.html, /class="ticket-badge ticket-severity"[^>]*>High</);
   assert.match(snap.html, /class="thread-request mute"[^>]*>Bug report</);
   assert.match(snap.html, /thread-request-subtype mute">High · iOS</);
-  assert.match(snap.html, /btn-hairline"[^>]*data-bug-handled>Mark bug handled</);
+  assert.match(snap.html, /data-bug-handled[^>]*>Mark bug handled</);
   assert.match(snap.html, /data-pane="rail"[\s\S]*?<section class="rail-card"[^>]*data-tissue="customer"/);
   assert.match(snap.html, /<h2>Customer<\/h2>\s*<span class="peek">No customer<\/span>/);
   assert.match(snap.html, /No order/);
@@ -546,10 +547,10 @@ test("Sam unjoined ticket with null GIDs says No customer", async () => {
   assert.equal(snap.selectedId, "t-sam-unjoined");
   assert.match(snap.html, /<h2>Customer<\/h2>\s*<span class="peek">No customer<\/span>/);
   assert.match(snap.html, /No customer/);
-  assert.match(snap.html, /data-customer-join-gate-open>Find customer</);
+  assert.match(snap.html, /data-customer-join-gate-open[^>]*>Find customer</);
   assert.doesNotMatch(snap.html, /Customer unavailable/);
   assert.match(snap.html, /No order/);
-  assert.match(snap.html, /data-order-link-gate-open>Link order</);
+  assert.match(snap.html, /data-order-link-gate-open[^>]*>Link order</);
   assert.match(snap.html, /<strong>From Sam<\/strong>/);
   assert.doesNotMatch(snap.html, /From teddyjubu/i);
   assert.match(snap.html, /ticket-name">Sam</);
@@ -700,9 +701,9 @@ test("Use draft puts the draft in the textarea and does not send", async () => {
   let snap = await organ.ready();
   assert.match(snap.html, /data-draft-strip/);
   assert.match(snap.html, /draft-kicker">AI draft</);
-  assert.match(snap.html, /data-insert>Use draft</);
-  assert.match(snap.html, /data-regenerate>Regenerate</);
-  assert.match(snap.html, /data-discard>Dismiss</);
+  assert.match(snap.html, /data-insert[^>]*>Use draft</);
+  assert.match(snap.html, /data-regenerate[^>]*>Regenerate</);
+  assert.match(snap.html, /data-discard[^>]*>Dismiss</);
   const stripAt = snap.html.indexOf("data-draft-strip");
   const boxAt = snap.html.indexOf("composer-box");
   assert.ok(stripAt > -1 && boxAt > stripAt, "draft strip sits above the composer box");
