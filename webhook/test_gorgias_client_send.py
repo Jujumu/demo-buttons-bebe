@@ -107,7 +107,9 @@ class GorgiasClientSendTests(unittest.IsolatedAsyncioTestCase):
     async def test_reconciliation_rejects_wrong_message_and_prioritizes_failure(self):
         for payload,expected in (({'id':9002,'sent_datetime':'2026-08-26T00:00:01Z'},'unknown'),
             ({'id':9001,'sent_datetime':'2026-08-26T00:00:01Z','failed_datetime':'2026-08-26T00:00:02Z'},'failed'),
-            ({'id':9001,'sent_datetime':True},'unknown')):
+            ({'id':9001,'sent_datetime':True},'unknown'),
+            ({'id':9001,'sent_datetime':'2026-08-26T00:00:01.123456'},'sent'),
+            ({'id':9001,'sent_datetime':'2026-08-26'},'unknown')):
             class Receipt(_FakeAsyncClient):
                 async def get(self,url,**kwargs):return httpx.Response(200,json=payload,request=httpx.Request('GET',url))
             with patch("bb_webhook.gorgias_client.get_settings",return_value=SimpleNamespace(demo_mode=False)),patch("bb_webhook.gorgias_client.httpx.AsyncClient",Receipt):

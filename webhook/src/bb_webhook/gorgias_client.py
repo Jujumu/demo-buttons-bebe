@@ -24,10 +24,11 @@ def _verified_message_id(value):
 
 
 def _valid_sent_timestamp(value):
-    if not isinstance(value,str) or not value:
+    if not isinstance(value,str) or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})?",value):
         return False
     try:
-        return datetime.fromisoformat(value.replace("Z","+00:00")).tzinfo is not None
+        datetime.fromisoformat(value.replace("Z","+00:00"))
+        return True
     except ValueError:
         return False
 
