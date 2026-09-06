@@ -83,7 +83,9 @@ class ReceivingProxyTests(unittest.TestCase):
                 self.assertEqual(request('/api/synthetic-action','POST',False,ORIGIN)[0],401)
                 status,body,_=request('/api/synthetic-action','POST',True,ORIGIN)
                 self.assertEqual(status,200);self.assertEqual(json.loads(body),{'path':'/api/synthetic-action','method':'POST'})
-                self.assertEqual(request('/api/reconciliation','GET',True)[0],403)
+                for path in ('/api/reconciliation','/api/reconciliation/','/API/RECONCILIATION','/api/reconciliation?filter=synthetic'):
+                    self.assertEqual(request(path,'GET',True)[0],403)
+                    self.assertEqual(request(path,'HEAD',True)[0],403)
                 self.assertEqual(request('/webhooks/redo','POST')[0],403)
                 status,body,headers=request('/','GET',True)
                 self.assertEqual(status,200)

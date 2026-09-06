@@ -8,7 +8,7 @@ https://support.buttonsbebe.com:8443 {
 	}
 	@stateful_get {
 		method GET HEAD
-		path /api/reconciliation
+		path_regexp receiving_stateful (?i)^/api/reconciliation/?$
 	}
 	@receiving_api path /api/* /webhooks/*
 
