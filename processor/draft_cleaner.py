@@ -184,6 +184,23 @@ _REVIEW_COMMITMENT_RE = re.compile(
     r"(?:review|check|investigate|look into|get back|follow up|update you|send (?:you )?an update|make it right)\b",
     re.IGNORECASE,
 )
+# Observed Spanish first-person work claims only; this is not a language-wide
+# safety detector. Do not replace these with an English customer-facing fallback.
+_SPANISH_REVIEW_COMMITMENT_RE = re.compile(
+    r"\b(?:estamos|estoy)\s+(?:actualmente\s+)?"
+    r"(?:revisando|comprobando|investigando)\b"
+    r"|\b(?:revisaremos|comprobaremos|investigaremos)\b",
+    re.IGNORECASE,
+)
+# Confirmed return-packing guidance describes why the customer identifies each
+# item/order. It does not promise an individual return or financial outcome.
+_RETURN_IDENTIFICATION_INSTRUCTION_RE = re.compile(
+    r"\s*please\s+include\s+a\s+note\s+(?:inside\s+)?(?:the|your)\s+package\s+"
+    r"identifying\s+each\s+item\s+and\s+its\s+order\s+number\s+"
+    r"so\s+the\s+warehouse\s+can\s+process\s+each\s+return\s+correctly[.!]?\s*",
+    re.IGNORECASE,
+)
+
 _SAFE_REVIEW_BODY = "Thanks for your message. I don’t have a confirmed answer to share yet."
 _COMPACT_SAFE_REVIEW_BODY = "Thanks for your message."
 _SHORT_SAFE_REVIEW_BODY = "Thank you."
@@ -381,6 +398,12 @@ def _find_action_claim(text: str) -> str:
             text.rfind("?", 0, match.start()),
             text.rfind("\n", 0, match.start()),
         ) + 1
+        endings = [pos for char in ".!?\n" if (pos := text.find(char, match.end())) >= 0]
+        sentence_end = min(endings) + 1 if endings else len(text)
+        full_sentence = text[sentence_start:sentence_end]
+        if (len(full_sentence) <= 250
+                and _RETURN_IDENTIFICATION_INSTRUCTION_RE.fullmatch(full_sentence)):
+            continue
         sentence = text[sentence_start:match.end()]
         pending_action = _PENDING_ACTION_RE.search(sentence)
         if pending_action and pending_action.end() == match.end() - sentence_start:
@@ -433,6 +456,12 @@ def clean_draft(text: str) -> CleanResult:
         return CleanResult(
             text="", no_draft=True,
             reasons=reasons + ["nothing left after cleaning"],
+            removed_note=note,
+        )
+    if _SPANISH_REVIEW_COMMITMENT_RE.search(out):
+        return CleanResult(
+            text="", no_draft=True,
+            reasons=reasons + ["unsupported Spanish review commitment requires a human draft"],
             removed_note=note,
         )
     shortened, removed_tail = _shorten_to_sentence_limit(out)
