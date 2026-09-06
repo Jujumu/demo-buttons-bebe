@@ -30,6 +30,11 @@ def active(name):
     return 'ok' if code==0 and output.strip()=='active' else 'unavailable'
 
 
+def last_result(name):
+    code,output=command('systemctl','show',name+'.service','-p','Result','--value')
+    return 'ok' if code==0 and output.strip()=='success' else 'unavailable'
+
+
 def progress():
     # Read only known loop-completion markers, never treat arbitrary error logs
     # or startup messages as evidence that work is being completed.
@@ -95,6 +100,7 @@ def collect(now=None):
     now=now or datetime.now(timezone.utc)
     checks={name:lambda name=name:active(name+'.service') for name in SERVICES}
     checks.update({name+'_timer':lambda name=name:active(name+'.timer') for name in TIMERS})
+    checks.update({name+'_result':lambda name=name:last_result(name) for name in TIMERS})
     checks.update({name:lambda port=port:tcp(port) for name,port in PORTS.items()})
     checks.update(processor_progress=progress,webhook_readiness=lambda:readiness(8000),
                   inbox_readiness=lambda:readiness(8766),backup_freshness=lambda:backup(now),disk_space=disk)

@@ -29,6 +29,12 @@ class MonitorTests(unittest.TestCase):
         target.BACKUP.write_text('corrupt')
         self.assertEqual(target.safe(lambda:target.backup(self.now)),'unavailable')
 
+    def test_latest_failed_backup_job_is_not_hidden_by_active_timer(self):
+        with patch.object(target,'command',return_value=(0,'exit-code')):
+            self.assertEqual(target.last_result('buttonsbebe-backup'),'unavailable')
+        with patch.object(target,'command',return_value=(0,'success')):
+            self.assertEqual(target.last_result('buttonsbebe-backup'),'ok')
+
     def test_progress_requires_completion_markers_not_any_journal_activity(self):
         with patch.object(target,'command',return_value=(0,'')) as command:
             self.assertEqual(target.progress(),'stale')
@@ -59,13 +65,13 @@ class MonitorTests(unittest.TestCase):
             self.assertEqual(target.readiness(8000),'attention')
 
     def test_component_failure_cannot_be_hidden_by_other_healthy_services(self):
-        with patch.object(target,'active',return_value='ok'),patch.object(target,'tcp',return_value='ok'),patch.object(target,'readiness',return_value='ok'),patch.object(target,'backup',return_value='ok'),patch.object(target,'disk',return_value='ok'),patch.object(target,'progress',return_value='stale'):
+        with patch.object(target,'active',return_value='ok'),patch.object(target,'last_result',return_value='ok'),patch.object(target,'tcp',return_value='ok'),patch.object(target,'readiness',return_value='ok'),patch.object(target,'backup',return_value='ok'),patch.object(target,'disk',return_value='ok'),patch.object(target,'progress',return_value='stale'):
             result=target.collect(self.now)
         self.assertEqual(result['status'],'attention');self.assertEqual(result['checks']['processor_progress'],'stale')
         self.assertEqual(result['notification_transport'],'local_only')
 
     def test_failure_details_are_not_written_to_status(self):
-        with patch.object(target,'active',side_effect=RuntimeError('synthetic-secret')),patch.object(target,'tcp',return_value='ok'),patch.object(target,'readiness',return_value='ok'),patch.object(target,'backup',return_value='ok'),patch.object(target,'disk',return_value='ok'),patch.object(target,'progress',return_value='ok'):
+        with patch.object(target,'active',side_effect=RuntimeError('synthetic-secret')),patch.object(target,'last_result',return_value='ok'),patch.object(target,'tcp',return_value='ok'),patch.object(target,'readiness',return_value='ok'),patch.object(target,'backup',return_value='ok'),patch.object(target,'disk',return_value='ok'),patch.object(target,'progress',return_value='ok'):
             result=target.collect(self.now);target.write(result)
         text=target.STATUS.read_text();self.assertNotIn('synthetic-secret',text)
         self.assertEqual(json.loads(text)['status'],'attention')
