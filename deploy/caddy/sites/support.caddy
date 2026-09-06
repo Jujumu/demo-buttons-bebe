@@ -62,7 +62,10 @@ srv1766050.hstgr.cloud, support.buttonsbebe.com {
 				uri /auth/page-check
 			}
 			uri strip_prefix /inbox
-			reverse_proxy 127.0.0.1:8766
+			reverse_proxy 127.0.0.1:8766 {
+				header_up -Cookie
+				header_up -Authorization
+			}
 		}
 	}
 

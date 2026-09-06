@@ -45,7 +45,7 @@ class InboxCaddyContractTests(unittest.TestCase):
         class Auth(BaseHTTPRequestHandler):
             def do_GET(self):
                 record = {name: self.headers.get(name) for name in
-                          ('X-Forwarded-Uri', 'X-Forwarded-Method', 'Origin')}
+                          ('X-Forwarded-Uri', 'X-Forwarded-Method', 'Origin', 'Cookie', 'Authorization')}
                 auth_requests.append(record)
                 if self.headers.get('Cookie') != 'session=synthetic':
                     self.send_response(302)
@@ -57,7 +57,7 @@ class InboxCaddyContractTests(unittest.TestCase):
         class Upstream(BaseHTTPRequestHandler):
             def do_GET(self):
                 self.send_response(200); self.end_headers()
-                self.wfile.write(json.dumps({'path': self.path, 'method': self.command}).encode())
+                self.wfile.write(json.dumps({'path': self.path, 'method': self.command, 'cookie': self.headers.get('Cookie'), 'authorization': self.headers.get('Authorization')}).encode())
             do_POST = do_GET
             def log_message(self, *_args): pass
         auth = ThreadingHTTPServer(('127.0.0.1', 0), Auth)
@@ -99,11 +99,11 @@ class InboxCaddyContractTests(unittest.TestCase):
                         if attempt == 59: raise
                         time.sleep(0.05)
                 request = urllib.request.Request(url + '/inbox/console/api/helpdesk', data=b'{}', headers={
-                    'Cookie': 'session=synthetic', 'Origin': 'https://support.buttonsbebe.com', 'Content-Type': 'application/json'})
+                    'Cookie': 'session=synthetic', 'Authorization': 'Bearer synthetic', 'Origin': 'https://support.buttonsbebe.com', 'Content-Type': 'application/json'})
                 with opener.open(request, timeout=3) as response:
-                    self.assertEqual(json.load(response), {'path': '/console/api/helpdesk', 'method': 'POST'})
+                    self.assertEqual(json.load(response), {'path': '/console/api/helpdesk', 'method': 'POST', 'cookie': None, 'authorization': None})
                 self.assertEqual(auth_requests[-1], {'X-Forwarded-Uri': '/inbox/console/api/helpdesk',
-                    'X-Forwarded-Method': 'POST', 'Origin': 'https://support.buttonsbebe.com'})
+                    'X-Forwarded-Method': 'POST', 'Origin': 'https://support.buttonsbebe.com', 'Cookie': 'session=synthetic', 'Authorization': 'Bearer synthetic'})
                 with self.assertRaises(urllib.error.HTTPError) as caught: opener.open(url + '/console/api/helpdesk', timeout=3)
                 self.assertEqual(caught.exception.code, 418)
             finally:
