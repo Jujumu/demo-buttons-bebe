@@ -4,13 +4,14 @@ from qa_postprocess import replay
 
 class PostprocessTests(unittest.TestCase):
     def record(self, message='Please cancel order #10361 before shipping.'):
-        return {'id':'QA-1','scenario':{'id':'QA-1','subject':'Order request','message':message,'email':'qa@example.com'},
+        return {'id':'QA-1','scenario':{'id':'QA-1','subject':'Order request','message':message,'email':'qa@example.com','intent':'cancel'},
                 'result':{'priority':'normal','action':'drafted','notify_owner':False,'draft_text':'Your cancellation request needs staff approval.','gorgias_priority_set':False,'note_posted':False}}
 
     def test_real_classifier_escalates_and_console_prefixes_without_mutating_raw(self):
         record=self.record(); original=copy.deepcopy(record)
         output=replay([record]); final=output['records'][0]
         self.assertEqual(record,original)
+        self.assertEqual(final['payload_scope']['intent_names'],['cancel'])
         self.assertEqual(final['console_result']['action'],'sensitive_draft')
         self.assertIn(final['console_result']['priority'],{'high','critical'})
         self.assertTrue(final['console_result']['notify_owner'])
@@ -43,3 +44,9 @@ print('guards-ok')
             result=subprocess.run([sys.executable,'-I','-c',code,str(Path(__file__).parent),str(source)],env=minimal_environment(root),cwd=root,capture_output=True,text=True,timeout=10)
             self.assertEqual(result.returncode,0,result.stderr)
             self.assertEqual(result.stdout.strip(),'guards-ok')
+
+    def test_absent_intent_replays_same_empty_name_as_runner(self):
+        record=self.record(); del record['scenario']['intent']
+        final=replay([record])['records'][0]
+        self.assertEqual(final['payload_scope']['intent_names'],[''])
+        self.assertEqual(final['console_result']['action'],'sensitive_draft')

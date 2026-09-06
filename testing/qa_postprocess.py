@@ -57,7 +57,7 @@ def worker(input_path):
         captured = copy.deepcopy(record['result'])
         payload = {'ticket_id': 900000000+index, 'message_id': 'qa-message-'+record['id'],
                    'message_text': scenario['message'], 'ticket_subject': scenario['subject'],
-                   'customer_email': scenario['email'], 'intents': []}
+                   'customer_email': scenario['email'], 'intents': [{'name': scenario.get('intent', '')}]}
         save = Mock()
         with patch.object(orchestrator, 'process_ticket_with_hermes', return_value=captured) as model, \
              patch.object(orchestrator, '_save_result_to_webhook', save), \
@@ -67,7 +67,8 @@ def worker(input_path):
         saved = save.call_args.kwargs
         output.append({'id':record['id'], 'console_result':saved['hermes_result'],
                        'console_draft':saved['draft_text'], 'summary':summary,
-                       'captured_persistence_calls':1})
+                       'captured_persistence_calls':1,
+                       'payload_scope':{'synthetic':True, 'intent_names':[scenario.get('intent','')]}})
     modules = [m for m in sys.modules.values() if getattr(m, '__file__', None)]
     hashes = {}
     for module in modules:
