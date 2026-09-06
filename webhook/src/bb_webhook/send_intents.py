@@ -10,6 +10,8 @@ import hashlib
 import json
 import re
 import uuid
+
+import aiosqlite
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -25,6 +27,13 @@ _SCHEMA = '''CREATE TABLE IF NOT EXISTS console_action_intents (
  response_status INTEGER NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
  learning_recorded INTEGER NOT NULL DEFAULT 0
 )'''
+
+
+_SOURCE_CONTEXT_SQL = """SELECT pm.customer_email, pm.message_text, tr.draft_text,
+    pm.channel, pm.created_at, pm.received_at
+    FROM parsed_messages pm LEFT JOIN ticket_results tr
+    ON tr.ticket_id=pm.ticket_id AND tr.message_id=pm.message_id
+    WHERE pm.ticket_id=? AND pm.message_id=? AND pm.is_customer_message=1"""
 
 
 def _hash(value: str) -> str:
@@ -51,6 +60,46 @@ class ActionConflict(Exception):
 class IntentStore:
     def __init__(self, path: Path | str):
         self.db = Database(path)
+
+    async def review_context(self, *, ticket_id: int, source_message_id: str, actor_id: str,
+                             expected_revision: str | None = None, expected_recipient: str | None = None) -> dict:
+        """Consistent read-only preparation; never creates or reserves an action."""
+        uri=self.db.path.resolve().as_uri()+"?mode=ro"
+        async with aiosqlite.connect(uri,uri=True,timeout=0.2) as conn:
+            conn.row_factory=aiosqlite.Row
+            await conn.execute("PRAGMA query_only=ON")
+            await conn.execute("BEGIN")
+            async with conn.execute(_SOURCE_CONTEXT_SQL,(ticket_id,source_message_id)) as cursor:
+                source=await cursor.fetchone()
+            if not source:raise ActionConflict('source_message_not_in_console',404)
+            async with conn.execute("SELECT message_id FROM parsed_messages WHERE ticket_id=? AND is_customer_message=1 ORDER BY COALESCE(NULLIF(created_at,''),received_at) DESC,received_at DESC,message_id DESC LIMIT 1",(ticket_id,)) as cursor:
+                latest=await cursor.fetchone()
+            if latest['message_id']!=source_message_id:raise ActionConflict('new_customer_message_refresh_ticket')
+            draft=source['draft_text'] or ''
+            revision=_hash(draft)
+            recipient=(source['customer_email'] or '').strip().lower()
+            channel=source['channel'] or ''
+            if expected_revision is not None and expected_revision!=revision:raise ActionConflict('draft_changed_refresh_ticket')
+            if expected_recipient is not None and expected_recipient.strip().lower()!=recipient:raise ActionConflict('recipient_changed_refresh_ticket')
+            pending=[]
+            async with conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='console_action_intents'") as cursor:
+                has_intents=await cursor.fetchone()
+            if has_intents:
+                async with conn.execute("SELECT operation_id,actor_id,kind,state,source_message_id,draft_hash FROM console_action_intents WHERE ticket_id=? AND state IN ('pending','uncertain') ORDER BY created_at,operation_id LIMIT 100",(ticket_id,)) as cursor:
+                    pending=[dict(row) for row in await cursor.fetchall()]
+            unresolved=[{'kind':row['kind'],'state':row['state'],'ownedByCurrentActor':row['actor_id']==actor_id,
+                         **({'operationId':row['operation_id'],'sourceMessageId':row['source_message_id'],'draftRevision':row['draft_hash']} if row['actor_id']==actor_id else {})} for row in pending]
+            source_text=source["message_text"] or ""
+            source_revision=_hash(source_text)
+            identity=[ticket_id,source_message_id,source_revision,revision,recipient,channel]
+            return {'inboxTicketId':f'gorgias:{ticket_id}','ticketId':str(ticket_id),'sourceMessageId':source_message_id,
+                    'sourceMessageAt':source['created_at'] or source['received_at'],'sourceRevision':source_revision,
+                    'sourceMessageText':source_text[:20000],'sourceMessageTruncated':len(source_text)>20000,'draftRevision':revision,
+                    'recipient':recipient,'channel':channel,'draftText':draft,
+                    'contextId':_hash(json.dumps(identity,separators=(',',':'))),'unresolvedActions':unresolved,
+                    'reviewable':bool(draft and recipient and channel and not unresolved and len(source_text)<=20000),
+                    'providerIdentityVerified':False,'sendEnabled':False,'sendAndCloseEnabled':False,
+                    'message':'Activate the send access.'}
 
     async def reserve(self, *, operation_id: str, actor_id: str, kind: str,
                       ticket_id: int, source_message_id: str, text: str, draft_revision: str,
@@ -79,10 +128,7 @@ class IntentStore:
                     if row[name] != value:
                         raise ActionConflict('operation_id_conflict')
                 return row, False
-            cursor = await conn.execute('''SELECT pm.customer_email, pm.message_text, tr.draft_text
-                FROM parsed_messages pm LEFT JOIN ticket_results tr ON tr.ticket_id=pm.ticket_id AND tr.message_id=pm.message_id
-                WHERE pm.ticket_id=? AND pm.message_id=? AND pm.is_customer_message=1''',
-                (ticket_id, source_message_id))
+            cursor = await conn.execute(_SOURCE_CONTEXT_SQL,(ticket_id, source_message_id))
             context = await cursor.fetchone()
             await cursor.close()
             if not context:

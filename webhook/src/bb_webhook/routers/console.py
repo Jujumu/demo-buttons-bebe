@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio as _asyncio
 import os as _os
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Query
 from fastapi.responses import JSONResponse
 
 from .. import deps
@@ -111,6 +111,30 @@ async def review_reindex() -> JSONResponse:
     if _review is None:
         return _review_unavailable()
     return JSONResponse(content=_review.reindex())
+
+
+@router.get("/inbox/review-context/{inbox_ticket_id}")
+async def inbox_review_context(inbox_ticket_id: str, request: Request,
+                               source_message_id: str = Query(min_length=1,max_length=200),
+                               draft_revision: str | None = Query(default=None,pattern="^[0-9a-f]{64}$"),
+                               expected_recipient: str | None = Query(default=None,max_length=320)) -> JSONResponse:
+    """Dormant inbox preparation only. This route cannot authorize delivery."""
+    import re
+    from ..send_intents import IntentStore, ActionConflict
+    reviewer=actor(request)
+    if not reviewer:return JSONResponse(status_code=401,content={"error":"not_authenticated"})
+    if not re.fullmatch(r"gorgias:[1-9][0-9]{0,17}",inbox_ticket_id):
+        return JSONResponse(status_code=400,content={"error":"invalid_inbox_ticket_id"})
+    try:
+        context=await IntentStore(deps.get_db()).review_context(ticket_id=int(inbox_ticket_id[8:]),
+            source_message_id=source_message_id,actor_id=reviewer,
+            expected_revision=draft_revision,expected_recipient=expected_recipient)
+        return JSONResponse(content={"ok":True,"context":context})
+    except ActionConflict as exc:
+        return JSONResponse(status_code=exc.status,content={"ok":False,"error":exc.error})
+    except Exception as exc:
+        log_event(logger,"ERROR","Inbox review context unavailable",error_type=type(exc).__name__)
+        return JSONResponse(status_code=503,content={"ok":False,"error":"review_context_unavailable"})
 
 
 @router.post("/ticket/{ticket_id}/send")
