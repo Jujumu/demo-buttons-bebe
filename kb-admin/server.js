@@ -29,7 +29,12 @@ function safePath(p) {
   const [folder, name] = parts;
   if (!FOLDERS.includes(folder)) return null;
   if (!/^[A-Za-z0-9._-]+\.md$/.test(name)) return null;
-  return path.join(KB, folder, name);
+  const parent = path.join(KB, folder), candidate = path.join(parent, name);
+  try {
+    if (fs.lstatSync(parent).isSymbolicLink() || fs.realpathSync(parent) !== path.join(fs.realpathSync(KB), folder)) return null;
+    if (fs.existsSync(candidate) && (!fs.lstatSync(candidate).isFile() || fs.lstatSync(candidate).isSymbolicLink())) return null;
+  } catch (_) { return null; }
+  return candidate;
 }
 function frontTitle(txt) {
   const m = txt.match(/^title:\s*(.+)$/m);
@@ -39,17 +44,27 @@ function send(res, code, obj) {
   res.writeHead(code, { "content-type": "application/json" });
   res.end(JSON.stringify(obj));
 }
-function readBody(req, cb) {
-  let b = "";
-  req.on("data", (c) => (b += c));
-  req.on("end", () => { try { cb(JSON.parse(b || "{}")); } catch (e) { cb({}); } });
+function readBody(req, res, cb) {
+  const chunks=[]; let size=0,done=false;
+  const timer=setTimeout(()=>fail(408,"request body timed out"),10000);
+  const fail=(code,message)=>{if(done)return;done=true;clearTimeout(timer);send(res,code,{error:message});req.resume();};
+  req.on("data",chunk=>{if(done)return;size+=chunk.length;if(size>1024*1024)return fail(413,"request body too large");chunks.push(chunk);});
+  req.on("error",()=>fail(400,"invalid request body"));
+  req.on("end",()=>{
+    if(done)return;
+    let body;
+    try { body=JSON.parse(Buffer.concat(chunks).toString("utf8")); }
+    catch (_) { return fail(400,"invalid JSON"); }
+    if(!body || typeof body!=="object" || Array.isArray(body))return fail(400,"JSON object required");
+    done=true;clearTimeout(timer);cb(body);
+  });
 }
 
 function contentFiles(folder) {
   const dir = path.join(KB, folder);
   try {
     return fs.readdirSync(dir)
-      .filter((n) => n.endsWith(".md") && !n.startsWith("_") && n.toLowerCase() !== "readme.md")
+      .filter((n) => (folder === "products" || safePath(folder + "/" + n)) && n.endsWith(".md") && !n.startsWith("_") && n.toLowerCase() !== "readme.md")
       .sort();
   } catch (e) {
     return null;
@@ -191,7 +206,7 @@ const server = http.createServer((req, res) => {
   }
 
   if (req.method === "POST" && (p === "/save" || p === "/new")) {
-    return readBody(req, (d) => {
+    return readBody(req, res, (d) => {
       let rel = d.path;
       if (p === "/new") {
         if (!FOLDERS.includes(d.folder) || !d.filename) return send(res, 400, { error: "folder + filename required" });
@@ -205,7 +220,9 @@ const server = http.createServer((req, res) => {
       if (p === "/new" && fs.existsSync(fp)) return send(res, 409, { error: "file already exists" });
       try {
         if (fs.existsSync(fp)) fs.copyFileSync(fp, fp + ".bak-" + Date.now());
-        fs.writeFileSync(fp, d.content != null ? String(d.content) : "", "utf8");
+        if (d.content != null && typeof d.content !== "string") return send(res,400,{error:"content must be text"});
+        const fd=fs.openSync(fp,fs.constants.O_WRONLY|fs.constants.O_CREAT|fs.constants.O_NOFOLLOW);
+        try { fs.ftruncateSync(fd,0);fs.writeFileSync(fd,d.content || "","utf8"); } finally { fs.closeSync(fd); }
         return send(res, 200, { ok: true, path: rel });
       } catch (e) { return send(res, 500, { error: String(e) }); }
     });
@@ -233,7 +250,7 @@ const server = http.createServer((req, res) => {
   }
 
   if (req.method === "POST" && p === "/notices") {
-    return readBody(req, (d) => {
+    return readBody(req, res, (d) => {
       const text = (d && d.text ? String(d.text) : "").trim();
       if (!text) return send(res, 400, { error: "text required" });
       if (text.length > NOTICE_TEXT_MAX) return send(res, 400, { error: `text must be ${NOTICE_TEXT_MAX} characters or fewer` });
@@ -261,7 +278,7 @@ const server = http.createServer((req, res) => {
   }
 
   if (req.method === "POST" && p === "/notices/delete") {
-    return readBody(req, (d) => {
+    return readBody(req, res, (d) => {
       const id = d && d.id ? String(d.id) : "";
       try {
         const removed = withNoticeLock(() => {

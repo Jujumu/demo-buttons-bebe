@@ -187,3 +187,23 @@ test("console binds only KB item buttons and disables saving after a load error"
   assert.match(legacyDashboard, /noKbDrafts=stats\.no_kb_match\|\|0/);
   assert.match(legacyDashboard, /Raw lessons stay out of search with restricted file permissions/);
 });
+
+test("invalid and oversized JSON do not alter KB content", async(t)=>{
+ const {baseUrl,kb}=await startServer(t);
+ const before=fs.readFileSync(path.join(kb,"intents","shipping.md"),"utf8");
+ for(const body of ['null','[]','{',JSON.stringify({path:'intents/shipping.md',content:'x'.repeat(1024*1024)})]){
+  const response=await fetch(baseUrl+'/save',{method:'POST',headers:{'content-type':'application/json'},body});
+  assert.ok([400,413].includes(response.status));
+ }
+ assert.equal(fs.readFileSync(path.join(kb,"intents","shipping.md"),"utf8"),before);
+});
+test("KB file and folder symlinks cannot expose or overwrite outside files",async(t)=>{
+ const {baseUrl,kb}=await startServer(t);
+ const privateFile=path.join(kb,'private.txt');fs.writeFileSync(privateFile,'PRIVATE TEST VALUE');
+ fs.symlinkSync(privateFile,path.join(kb,'faq','linked.md'));
+ assert.equal((await fetch(baseUrl+'/file?path=faq/linked.md')).status,400);
+ assert.equal((await fetch(baseUrl+'/save',{method:'POST',body:JSON.stringify({path:'faq/linked.md',content:'bad'})})).status,400);
+ assert.equal(fs.readFileSync(privateFile,'utf8'),'PRIVATE TEST VALUE');
+ fs.rmdirSync(path.join(kb,'tickets'));fs.symlinkSync(kb,path.join(kb,'tickets'));
+ assert.equal((await fetch(baseUrl+'/file?path=tickets/private.md')).status,400);
+});
