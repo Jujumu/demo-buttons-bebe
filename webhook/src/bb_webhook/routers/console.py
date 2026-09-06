@@ -78,17 +78,25 @@ async def review_packet(ticket_id: str) -> JSONResponse:
 async def review_approve(ticket_id: str, request: Request) -> JSONResponse:
     if _review is None:
         return _review_unavailable()
+    reviewer = actor(request)
+    if not reviewer:
+        return JSONResponse(status_code=401, content={"error":"not_authenticated"})
     try:
         body = await request.json()
     except Exception:
-        body = {}
-    result = _review.approve(
-        ticket_id,
-        pii_cleared=bool(body.get("pii_cleared")),
-        note=str(body.get("note", "")),
-        why=str(body.get("why", "")),
-    )
-    return JSONResponse(content=result, status_code=200 if result.get("ok") else 400)
+        return JSONResponse(status_code=400, content={"error":"invalid_json"})
+    if not isinstance(body,dict) or set(body)-{"pii_cleared","note","why"}:
+        return JSONResponse(status_code=400, content={"error":"invalid_review_object"})
+    if type(body.get("pii_cleared")) is not bool:
+        return JSONResponse(status_code=400, content={"error":"invalid_pii_confirmation"})
+    if any(not isinstance(body.get(key,""),str) or len(body.get(key,""))>5000 for key in ("note","why")):
+        return JSONResponse(status_code=400, content={"error":"invalid_review_text"})
+    log_event(logger,"INFO","Legacy PII review requested",actor_id=reviewer,ticket_id=ticket_id)
+    result = _review.approve(ticket_id,pii_cleared=body["pii_cleared"],
+                             note=body.get("note",""),why=body.get("why",""),review_actor=reviewer)
+    log_event(logger,"INFO","Legacy PII review completed",actor_id=reviewer,ticket_id=ticket_id,approved=result.get("ok") is True)
+    return JSONResponse(content=result,status_code=200 if result.get("ok") else 400)
+
 
 
 @router.post("/review/reject/{ticket_id}")
