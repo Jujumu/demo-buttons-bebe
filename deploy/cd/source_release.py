@@ -28,8 +28,8 @@ REQUIRED_FILES = {
     'webhook': ('src/bb_webhook/app.py', 'pyproject.toml', 'uv.lock'),
     'processor': ('orchestrator.py', 'hermes_runner/process.py', 'pyproject.toml', 'uv.lock'),
     'feedback': ('__init__.py', 'pii.py'),
-    'tools': ('run-gorgias.sh', 'run-redo.sh', 'requirements.txt'),
-    'kb': ('scripts/index_kb.py', 'sync-products.sh', 'requirements.txt'),
+    'tools': ('run-gorgias.sh', 'run-redo.sh', 'requirements.txt', 'requirements.lock', 'runtime-constraints.txt'),
+    'kb': ('scripts/index_kb.py', 'sync-products.sh', 'requirements.txt', 'requirements.lock', 'runtime-constraints.txt'),
     'kb-admin': ('server.js',),  # Node builtins only; no package manifest exists.
     'whatsapp-connect': ('server.js', 'package.json', 'package-lock.json'),
     'console-src/inbox': ('run-review.sh', 'index.html', 'requirements.txt', 'requirements.lock', 'projection.py', 'export_projection.py'),
@@ -40,7 +40,7 @@ EXCLUDED = {'.venv', 'venv', 'node_modules', '__pycache__', 'data', 'logs', 'aut
             '.wwebjs_auth', '.wwebjs_cache', '.git', '.pytest_cache', 'lancedb',
             'products', 'learned', 'notices', 'archive', '_archive_learned'}
 KB_CONTENT = {'intents', 'faq', 'policies', 'tickets', 'shopify'}
-DEPENDENCIES = {'pyproject.toml', 'uv.lock', 'requirements.txt', 'package.json', 'package-lock.json', 'requirements.lock'}
+DEPENDENCIES = {'pyproject.toml', 'uv.lock', 'requirements.txt', 'package.json', 'package-lock.json', 'requirements.lock', 'runtime-constraints.txt'}
 
 
 def digest(path):

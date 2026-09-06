@@ -60,7 +60,11 @@ for required in \
   "webhook/pyproject.toml" \
   "webhook/uv.lock" \
   "kb/requirements.txt" \
+  "kb/requirements.lock" \
+  "kb/runtime-constraints.txt" \
   "tools/requirements.txt" \
+  "tools/requirements.lock" \
+  "tools/runtime-constraints.txt" \
   "testing/requirements-qa.lock" \
   "whatsapp-connect/package.json" \
   "whatsapp-connect/package-lock.json"; do

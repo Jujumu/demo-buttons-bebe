@@ -35,7 +35,15 @@ jobs:
           uv venv .qa-venv --python 3.12
           uv pip sync --python .qa-venv/bin/python --require-hashes testing/requirements-qa.lock
           uv venv .gate-venv --python 3.12
-          uv pip install --python .gate-venv/bin/python -r kb/requirements.txt -r tools/requirements.txt
+          uv pip sync --python .gate-venv/bin/python --require-hashes kb/requirements.lock
+          uv venv .tools-venv --python 3.12
+          uv pip sync --python .tools-venv/bin/python --require-hashes tools/requirements.lock
+      - name: Verify installed runtime receipts and MCP parity
+        run: |
+          .gate-venv/bin/python tools/verify_runtime_lock.py kb/requirements.lock
+          .tools-venv/bin/python tools/verify_runtime_lock.py tools/requirements.lock
+          PYTHONPATH=testing .gate-venv/bin/python -m unittest testing/test_production_mcp_metadata.py -v
+          PYTHONPATH=testing .tools-venv/bin/python -m unittest testing/test_production_mcp_metadata.py -v
       - name: Install ripgrep (required by the release gate)
         run: sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep
       - name: Run offline release gate

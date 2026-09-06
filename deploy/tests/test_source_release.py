@@ -58,6 +58,16 @@ class SourceRecoveryTests(unittest.TestCase):
         self.assertEqual((self.live / 'webhook/app.py').read_text(), 'old code')
         self.assertFalse((self.live / 'console-src/inbox/app.py').exists())
 
+    def test_missing_runtime_hashlock_fails_before_source_mutation(self):
+        for component in ('tools', 'kb'):
+            path = self.staged / component / 'requirements.lock'
+            original = path.read_text()
+            path.unlink()
+            with self.subTest(component=component), self.assertRaises(Exception):
+                self.prepare()
+            self.assertEqual((self.live / 'webhook/app.py').read_text(), 'old code')
+            path.write_text(original)
+
     def test_projection_process_code_ships_but_qa_and_runtime_data_do_not(self):
         for path in ('testing/requirements-qa.lock', 'testing/qa_harness.py',
                      'console-src/inbox/data/projection.sqlite3',
