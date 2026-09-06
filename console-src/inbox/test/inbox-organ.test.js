@@ -5,7 +5,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { IDS, tickets as fixtureTickets } from "../js/fixtures/demo-inbox.js";
-import { createInboxOrgan } from "../js/inbox.js";
+import { createInboxOrgan as createProductionInbox } from "../js/inbox.js";
 import { createMailbox } from "../js/mailbox.js";
 import { createFixtureShop } from "../js/shop/fixture-shop.js";
 import { createComposerTissue } from "../js/tissues/composer.js";
@@ -506,9 +506,9 @@ test("no Edit, Refund, Cancel controls and no Gaia", async () => {
   assert.doesNotMatch(tree, /\bdata-edit\b/);
 });
 
-test("boot only pulls mailbox when ?pull=1", () => {
+test("production boot does not pull a demo mailbox", () => {
   const boot = readFileSync(join(here, "../js/boot.js"), "utf8");
-  assert.match(boot, /params\.get\("pull"\)\s*===\s*"1"/);
+  assert.doesNotMatch(boot, /organ\.pullMailbox|resolveLiveInbox/);
   assert.doesNotMatch(boot, /await organ\.pullMailbox\(\{ limit:[^}]+\}\);\s*organ\.mount/);
 });
 
@@ -1016,3 +1016,5 @@ test("history peek does not swap the open order", async () => {
   assert.equal(snap.rail.models.order.record.name, "#1002");
   assert.deepEqual(snap.rail.models.history.rows.map((row) => row.name), ["#1003", "#1002"]);
 });
+
+function createInboxOrgan(opts = {}) { return createProductionInbox({shop: createFixtureShop(), ...opts}); }

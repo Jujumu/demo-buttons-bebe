@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+import os
 
 from . import fixtures_live_holes as live_holes
 from . import fixtures_sample as sample
@@ -100,6 +101,10 @@ LIVE_HOLES = CatalogShop(live_holes, "sample")
 def resolve_shop(shop: str | None, env: dict[str, str] | None = None):
     host = require_shop(shop)
     env = env if env is not None else load_shopify_env()
+    if os.environ.get("HELPDESK_PRODUCTION") == "1":
+        # The preview catalog is pinned to a different test store. Do not
+        # fall back to it or silently connect production to that store.
+        raise HelpdeskError("integration_inactive", "Order lookup is not connected to this inbox yet.")
     forced = (env.get("HELPDESK_SOURCE") or "").strip().lower()
     if host == SAMPLE_SHOP or forced == "sample":
         return SAMPLE, host

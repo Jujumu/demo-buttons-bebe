@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import os
 from pathlib import Path
 from typing import Any
 
@@ -54,14 +55,14 @@ def handle_list_tickets(args: dict[str, Any]) -> dict[str, Any]:
     view = str(args.get("view") or "open")
     limit = args.get("limit", 20)
     gid_source = _ticket_gid_source()
-    return {"source": "sample", "tickets": tickets.list_tickets(view, limit, gid_source)}
+    return {"source": "inbox" if os.environ.get("HELPDESK_PRODUCTION") == "1" else "sample", "tickets": tickets.list_tickets(view, limit, gid_source)}
 
 
 def handle_get_ticket(args: dict[str, Any]) -> dict[str, Any]:
     ticket_id = args.get("ticketId") or args.get("ticket_id")
     gid_source = _ticket_gid_source()
     return {
-        "source": "sample",
+        "source": "inbox" if os.environ.get("HELPDESK_PRODUCTION") == "1" else "sample",
         "ticket": tickets.get_ticket(str(ticket_id) if ticket_id is not None else "", gid_source),
     }
 
@@ -71,7 +72,7 @@ def handle_escalate_ticket(args: dict[str, Any]) -> dict[str, Any]:
     reason = args.get("reason")
     gid_source = _ticket_gid_source()
     return {
-        "source": "sample",
+        "source": "inbox" if os.environ.get("HELPDESK_PRODUCTION") == "1" else "sample",
         "ticket": tickets.escalate_ticket(
             str(ticket_id) if ticket_id is not None else "",
             None if reason is None else str(reason),

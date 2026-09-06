@@ -1,8 +1,11 @@
 import { MAILBOX_TOPICS, MARKETING_LOCKED_COPY, PAYMENTS_LOCKED_COPY, PRIVACY_LOCKED_COPY, CUSTOMER_JOIN_LOCKED_COPY, ORDER_LINK_LOCKED_COPY } from "./contracts.js";
 import { ACTIVATE_SEND_MESSAGE } from "./send-access.js";
-import { SHOP, macros as fixtureMacros, ticketInView, tickets as fixtureTickets, viewCounts, views } from "./fixtures/demo-inbox.js";
+import { ticketInView, viewCounts, views } from "./view-model.js";
+const SHOP = "";
+const fixtureTickets = [];
+const fixtureMacros = [];
 import { createMailbox } from "./mailbox.js";
-import { createHelpdeskShop } from "./shop/helpdesk-shop.js";
+import { createHelpdeskShop } from "./shop/production-shop.js";
 import { createComposerTissue } from "./tissues/composer.js";
 import { createListTissue } from "./tissues/list.js";
 import { createRailOrgan } from "./tissues/rail.js";
@@ -65,6 +68,7 @@ export function createInboxOrgan(opts = {}) {
   const unreadIds = new Set(
     (pinnedCatalog || fixtureTickets).map((ticket) => ticket.id).filter(Boolean),
   );
+  const knownTicketIds = new Set(unreadIds);
   let writeGate = {
     mutationsEnabled: false,
     refused: ["send", "refund", "cancel"],
@@ -84,6 +88,7 @@ export function createInboxOrgan(opts = {}) {
   let orderLinkGateOpen = false;
   let privacyGateOpen = Boolean(opts.privacyGate);
   let marketingGateOpen = Boolean(opts.marketingGate);
+  let listError = "";
   let listRows = pinnedCatalog ? pinnedCatalog.filter((ticket) => ticketInView(ticket, viewId)) : [];
   let selected = pinnedCatalog?.find((ticket) => ticket.id === selectedId) || null;
   let counts = pinnedCatalog ? viewCounts(pinnedCatalog) : viewCounts(fixtureTickets);
@@ -121,6 +126,7 @@ export function createInboxOrgan(opts = {}) {
   }
 
   async function refreshList() {
+    listError = "";
     if (pinnedCatalog) {
       listRows = pinnedCatalog.filter((ticket) => ticketInView(ticket, viewId));
       counts = viewCounts(pinnedCatalog);
@@ -132,14 +138,20 @@ export function createInboxOrgan(opts = {}) {
           shop.listTickets({ view: viewId, limit: 50 }),
           ...views.map((view) => shop.listTickets({ view: view.id, limit: 100 })),
         ]);
-        if (Array.isArray(rows)) listRows = rows;
+        if (Array.isArray(rows)) {
+          listRows = rows;
+          for (const row of rows) {
+            if (!knownTicketIds.has(row.id)) unreadIds.add(row.id);
+            knownTicketIds.add(row.id);
+          }
+        }
         counts = Object.fromEntries(views.map((view, index) => [
           view.id,
           Array.isArray(viewRows[index]) ? viewRows[index].length : 0,
         ]));
         return;
       } catch {
-        // fixture fallback below
+        listError = "Could not load tickets. Refresh to try again.";
       }
     }
     listRows = fixtureTickets.filter((ticket) => ticketInView(ticket, viewId));
@@ -486,6 +498,7 @@ export function createInboxOrgan(opts = {}) {
   function listInput() {
     return {
       tickets: visibleTickets(),
+      error: listError,
       selectedTicketId: selectedId,
       views,
       counts,
@@ -501,7 +514,7 @@ export function createInboxOrgan(opts = {}) {
     const listModel = listTissue.update(listInput());
     const threadModel = threadTissue.update({ ticket });
     const composerModel = composerTissue.update(composerInput(ticket));
-    const railHtml = railCollapsed ? railCollapsedHtml() : rail.render();
+    const railHtml = !ticket ? emptyRailHtml() : railCollapsed ? railCollapsedHtml() : rail.render();
     const html = `<div class="inbox" data-organ="inbox">
       <a class="skip-link" href="#inbox-thread">Skip to thread.</a>
       <section class="pane pane-list${listCollapsed ? " is-collapsed" : ""}" data-pane="list">${listTissue.render(listModel)}</section>
@@ -539,8 +552,11 @@ export function createInboxOrgan(opts = {}) {
     };
   }
 
+  function emptyRailHtml() { return `<div class="empty-pane"><strong>Customer details</strong><p>Select a conversation to see customer and order details.</p></div>`; }
+
   async function refreshRail() {
     const ticket = selectedTicket();
+    if (!ticket) { toEmail = ""; return; }
     await rail.load({
       shop: shopHost,
       customerId: ticket?.customerId,
@@ -576,7 +592,9 @@ export function createInboxOrgan(opts = {}) {
       const threadResult = safeMount(threadTissue, panes.thread, { ticket });
       safeMount(composerTissue, panes.composer, composerInput(ticket));
       try {
-        if (railCollapsed) {
+        if (!ticket) {
+          panes.rail.innerHTML = emptyRailHtml();
+        } else if (railCollapsed) {
           panes.rail.innerHTML = railCollapsedHtml();
         } else {
           rail.mount(panes.rail);

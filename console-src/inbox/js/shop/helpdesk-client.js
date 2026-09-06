@@ -1,6 +1,6 @@
 import { TOOL_NAMES } from "./helpdesk-tools.js";
 
-export const HELPDESK_HTTP_PATH = "/console/api/helpdesk";
+export const HELPDESK_HTTP_PATH = import.meta.url.startsWith("http") ? new URL("../../console/api/helpdesk", import.meta.url).pathname : "/console/api/helpdesk";
 
 /**
  * Browser/Node client for the live helpdesk.* tools.

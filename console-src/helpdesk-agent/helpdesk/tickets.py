@@ -428,7 +428,7 @@ def is_seed_ticket(ticket_id: str | None) -> bool:
 
 def reset() -> None:
     global _store, _intake, _by_dedupe, _seen_messages, _next_seq
-    _store = [copy.deepcopy(row) for row in SEED_TICKETS]
+    _store = [] if os.environ.get("HELPDESK_PRODUCTION") == "1" else [copy.deepcopy(row) for row in SEED_TICKETS]
     for ticket in _store:
         ticket.setdefault("source", "seed")
     _intake = []

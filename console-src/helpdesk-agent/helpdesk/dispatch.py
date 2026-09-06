@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+import os
 
 from .env import mutations_enabled
 from .errors import REFUSED_WRITES, HelpdeskError, bad_request, forbidden_write
@@ -38,6 +39,9 @@ def dispatch(
         raise forbidden_write(tool=tool, mutations_enabled=mutations_enabled())
     if tool in HUMAN_ONLY_TOOLS and actor != "human":
         raise human_only(tool=tool)
+    if os.environ.get("HELPDESK_PRODUCTION") == "1":
+        if tool in {"helpdesk.pull_mailbox", "helpdesk.draft_reply", "helpdesk.summarize_thread", "helpdesk.search_macros", "helpdesk.apply_macro"}:
+            raise HelpdeskError("integration_inactive", "This inbox connection is not active yet.")
     handler = HANDLERS.get(tool)
     if handler is None:
         raise bad_request("unknown tool", tool=tool)

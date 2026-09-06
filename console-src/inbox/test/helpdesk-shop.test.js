@@ -9,7 +9,7 @@ import { createHelpdeskClient } from "../js/shop/helpdesk-client.js";
 import { createHelpdeskShop, resolveLiveInbox } from "../js/shop/helpdesk-shop.js";
 import { TOOL_NAMES, WRITE_TOOLS } from "../js/shop/helpdesk-tools.js";
 import { LIVE_IDS, LIVE_SHOP, liveTickets } from "../js/shop/live-catalog.js";
-import { createInboxOrgan } from "../js/inbox.js";
+import { createInboxOrgan as createProductionInbox } from "../js/inbox.js";
 import { createFixtureShop, draftForRequestType, fixtureDraftFromThread } from "../js/shop/fixture-shop.js";
 import { createMailbox } from "../js/mailbox.js";
 import { createRailOrgan } from "../js/tissues/rail.js";
@@ -1062,3 +1062,5 @@ test("null SKU and missing billing stay hidden on a live-hole order", async () =
   assert.doesNotMatch(html, />\s*null\s*</);
   assert.match(html, /No billing/);
 });
+
+function createInboxOrgan(opts = {}) { return createProductionInbox({shop: createFixtureShop(), ...opts}); }

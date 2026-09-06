@@ -52,6 +52,7 @@ export function createListTissue({ mailbox }) {
   function project(input) {
     return {
       tickets: input.tickets || [],
+      error: input.error || "",
       selectedTicketId: input.selectedTicketId || null,
       views: input.views || [],
       counts: input.counts || {},
@@ -89,7 +90,7 @@ export function createListTissue({ mailbox }) {
 
   function renderToolbar(next = model) {
     return `<header class="pane-head list-toolbar">
-      <a class="console-link" href="../index.html">Console</a>
+      <a class="console-link" href="/console/">Console</a>
       <div class="list-toolbar-row">
         <div class="list-scope">
           <button type="button" class="list-scope-btn" data-list-inbox aria-label="Inbox" title="Open the views menu">
@@ -158,7 +159,7 @@ export function createListTissue({ mailbox }) {
     const unreadIds = next.unreadIds || [];
     const rows = tickets.length
       ? tickets.map((ticket) => renderRow(ticket, next.selectedTicketId, unreadIds)).join("")
-      : `<p class="empty-pane">No tickets in this view.</p>`;
+      : `<div class="empty-pane" role="status"><strong>${next.error ? "Tickets unavailable" : "No tickets yet"}</strong><p>${esc(next.error || "This inbox has no conversations in this view. Customer support continues in the support console.")}</p><a href="/console/">Open support console</a></div>`;
     return `<div class="pane-inner">
       ${renderToolbar(next)}
       <div class="ticket-list" role="list">${rows}</div>

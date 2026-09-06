@@ -7,7 +7,8 @@ import json
 import os
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlparse, unquote
+import posixpath
 import sys
 
 INBOX = Path(__file__).resolve().parent
@@ -36,6 +37,7 @@ _load_dotenv(REPO / ".env")
 os.environ["SHOPIFY_MUTATIONS_ENABLED"] = "0"
 os.environ["HELPDESK_OUTBOUND_ENABLED"] = "0"
 os.environ["GORGIAS_BRIDGE_ENABLED"] = "0"
+os.environ["HELPDESK_PRODUCTION"] = "1"
 os.environ.setdefault(
     "HELPDESK_SEEN_FILE",
     str(REPO / "console-src" / "inbox" / "data" / "seen_messages.json"),
@@ -54,6 +56,13 @@ _MAX_BODY = 1 * 1024 * 1024
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(INBOX), **kwargs)
+
+    def send_head(self):
+        path = posixpath.normpath(unquote(urlparse(self.path).path))
+        if any(part in path.split("/") for part in ("fixtures", "test", "data")) or path.endswith(("fixture-shop.js", "live-catalog.js", "helpdesk-shop.js", ".py", ".sh")):
+            self.send_error(404)
+            return
+        return super().send_head()
 
     def end_headers(self):
         # Inbox is ES modules; avoid stale JS after deploys.

@@ -1,10 +1,11 @@
+import { createFixtureShop } from "../js/shop/fixture-shop.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { createInboxOrgan } from "../js/inbox.js";
+import { createInboxOrgan as createProductionInbox } from "../js/inbox.js";
 import { formatWhen } from "../js/util.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -62,3 +63,5 @@ test("list source uses the one formatter in relative mode", () => {
   assert.match(thread, /formatWhen\(message\.at\)/);
   assert.doesNotMatch(thread, /relative:\s*true/);
 });
+
+function createInboxOrgan(opts = {}) { return createProductionInbox({shop: createFixtureShop(), ...opts}); }
