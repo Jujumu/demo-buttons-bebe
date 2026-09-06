@@ -23,6 +23,12 @@ class SourceRecoveryTests(unittest.TestCase):
             (self.staged / component).mkdir(parents=True)
             self.write(self.staged / component / 'app.py', 'new code')
         self.write(self.staged / '.buttonsbebe-release.json', json.dumps({'generation': 10, 'commit': 'a' * 40}))
+        for component, required in release.REQUIRED_FILES.items():
+            for filename in required:
+                self.write(self.staged / component / filename, 'required source')
+                if Path(filename).name in release.DEPENDENCIES:
+                    target = release.COMPONENTS[component][0]
+                    self.write(self.live / target / filename, 'required source')
         for name in ('index.html', 'login.html'):
             self.write(self.staged / 'console-src' / name, 'new html')
         self.write(self.live / 'webhook/app.py', 'old code')
@@ -103,6 +109,23 @@ class SourceRecoveryTests(unittest.TestCase):
         self.write(self.live / 'webhook/app.py', 'unreviewed live drift')
         with self.assertRaisesRegex(ValueError, 'live code drift'):
             release.prepare(self.staged, self.live, self.web, self.root / 'next-journal', self.state)
+
+    def test_incomplete_artifact_fails_before_a_journal_exists(self):
+        (self.staged / 'webhook/src/bb_webhook/app.py').unlink()
+        with self.assertRaisesRegex(ValueError, 'missing required release file'):
+            self.prepare()
+        self.assertFalse(self.journal.exists())
+
+    def test_restrictive_umask_does_not_hide_new_code_from_runtime_user(self):
+        import os
+        self.prepare()
+        previous = os.umask(0o077)
+        try:
+            release.apply(self.journal)
+        finally:
+            os.umask(previous)
+        self.assertEqual((self.live / 'console-src/inbox').stat().st_mode & 0o777, 0o755)
+        self.assertEqual(self.journal.stat().st_mode & 0o777, 0o700)
 
     def test_shell_entrypoint_execute_permission_is_restored(self):
         self.write(self.staged / 'kb/sync-products.sh', '#!/bin/bash\nexit 0\n')

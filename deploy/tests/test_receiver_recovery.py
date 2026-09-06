@@ -92,6 +92,17 @@ sys.exit(22 if (root/'live/webhook/app.py').read_text()=='new code' else 0)
         self.archive = io.BytesIO()
         components = ['feedback', 'webhook', 'processor', 'tools', 'kb', 'kb-admin', 'whatsapp-connect', 'console-src/inbox', 'console-src/helpdesk-agent']
         files = {c + '/app.py': b'new code' for c in components}
+        # Include the production manifest's complete required-file contract.
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('harness_source_policy', ROOT / 'deploy/cd/source_release.py')
+        policy = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(policy)
+        for component, required in policy.REQUIRED_FILES.items():
+            for filename in required:
+                files[component + '/' + filename] = b'required source'
+                if Path(filename).name in policy.DEPENDENCIES:
+                    target_root = self.root / 'inbox' if component.startswith('console-src/') else self.live
+                    self.write(target_root / policy.COMPONENTS[component][0] / filename, 'required source')
         files.update({'console-src/index.html': b'html', 'console-src/login.html': b'login',
             'deploy/caddy/approved.txt': b'config', 'deploy/systemd/approved.txt': b'config',
             '.buttonsbebe-release.json': json.dumps({'commit': self.sha, 'generation': 1}).encode()})
@@ -119,6 +130,32 @@ sys.exit(22 if (root/'live/webhook/app.py').read_text()=='new code' else 0)
         self.assertEqual(json.loads((self.root / 'active.json').read_text()), ['buttonsbebe-webhook'])
         self.assertNotIn('buttonsbebe-processor', (self.root / 'calls').read_text())
         self.assertFalse((self.root / 'manifest.json').exists())
+
+    def test_success_records_exact_installed_baseline_and_temporary_roots(self):
+        self.write(self.bin / 'curl', '#!/bin/sh\nexit 0\n')
+        result = self.run_receiver()
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        manifest = json.loads((self.root / 'manifest.json').read_text())
+        self.assertEqual(manifest['generation'], 1)
+        self.assertEqual(manifest['commit'], self.sha)
+        for key, entry in manifest['files'].items():
+            prefix, relative = key.split('/', 1)
+            target = {'app': self.live, 'web': self.web, 'inbox': self.root / 'inbox'}[prefix] / relative
+            self.assertEqual(hashlib.sha256(target.read_bytes()).hexdigest(), entry['sha256'])
+            self.assertTrue(target.resolve().is_relative_to(self.root.resolve()))
+        self.assertNotIn('app/webhook/data/webhook.db', manifest['files'])
+        journal = next((self.root / 'backups').glob('*/journal.json'))
+        journal_data = json.loads(journal.read_text())
+        for key in ('live', 'web', 'inbox', 'release'):
+            self.assertTrue(Path(journal_data[key]).resolve().is_relative_to(self.root.resolve()))
+
+    def test_poison_guard_refuses_an_accidentally_unpatched_production_root(self):
+        result = subprocess.run(['python3', str(self.root / 'helper.py'), 'prepare',
+                                 '--journal', str(self.root / 'test-journal'),
+                                 '--live', '/root/Buttonsbebe Agent'],
+                                env=self.env, capture_output=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(b'HARNESS refused non-temporary', result.stderr)
 
     def test_second_deployment_exits_before_receiving_or_stopping_services(self):
         import fcntl

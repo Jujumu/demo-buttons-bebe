@@ -8,6 +8,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import tempfile
@@ -23,6 +24,18 @@ COMPONENTS = {
     'console-src/inbox': ('console-src/inbox', ['helpdesk-inbox']),
     'console-src/helpdesk-agent': ('console-src/helpdesk-agent', ['helpdesk-inbox']),
 }
+REQUIRED_FILES = {
+    'webhook': ('src/bb_webhook/app.py', 'pyproject.toml', 'uv.lock'),
+    'processor': ('orchestrator.py', 'pyproject.toml', 'uv.lock'),
+    'feedback': ('__init__.py', 'pii.py'),
+    'tools': ('run-gorgias.sh', 'run-redo.sh', 'requirements.txt'),
+    'kb': ('scripts/index_kb.py', 'sync-products.sh', 'requirements.txt'),
+    'kb-admin': ('server.js', 'package.json'),
+    'whatsapp-connect': ('server.js', 'package.json', 'package-lock.json'),
+    'console-src/inbox': ('run-review.sh', 'index.html'),
+    'console-src/helpdesk-agent': ('helpdesk/dispatch.py', 'helpdesk/send_access.py'),
+}
+
 EXCLUDED = {'.venv', 'venv', 'node_modules', '__pycache__', 'data', 'logs', 'auth',
             '.wwebjs_auth', '.wwebjs_cache', '.git', '.pytest_cache', 'lancedb',
             'products', 'learned', 'notices', 'archive', '_archive_learned'}
@@ -49,8 +62,18 @@ def safe_path(root, relative):
     return path
 
 
-def atomic_copy(source, destination, mode=None):
-    destination.parent.mkdir(parents=True, exist_ok=True)
+def atomic_copy(source, destination, mode=None, directory_mode=0o755):
+    # Deployment may run with umask077. Newly created public code directories
+    # still need traversal by the dedicated runtime account; never chmod an
+    # existing directory, and keep recovery/state directories private.
+    missing = []
+    parent = destination.parent
+    while not parent.exists():
+        missing.append(parent)
+        parent = parent.parent
+    for directory in reversed(missing):
+        directory.mkdir(mode=directory_mode)
+        directory.chmod(directory_mode)
     fd, temporary = tempfile.mkstemp(prefix='.deploy-', dir=destination.parent)
     try:
         with os.fdopen(fd, 'wb') as output, source.open('rb') as incoming:
@@ -73,7 +96,7 @@ def atomic_json(value, destination):
     with tempfile.TemporaryDirectory() as temporary:
         source = Path(temporary) / 'state.json'
         source.write_text(json.dumps(value, sort_keys=True, indent=2) + '\n')
-        atomic_copy(source, destination, 0o600)
+        atomic_copy(source, destination, 0o600, directory_mode=0o700)
 
 
 def inventory(release):
@@ -82,6 +105,9 @@ def inventory(release):
         directory = release / component
         if not directory.is_dir():
             raise ValueError(f'missing required release component: {component}')
+        for required in REQUIRED_FILES[component]:
+            if not (directory / required).is_file():
+                raise ValueError(f'missing required release file: {component}/{required}')
         for path in directory.rglob('*'):
             relative = path.relative_to(directory)
             if EXCLUDED.intersection(relative.parts) or any(p.startswith('.env') for p in relative.parts):
@@ -116,8 +142,10 @@ def target_path(key, live, web, inbox=None):
 def prepare(release, live, web, journal_dir, state, inbox=None):
     new = inventory(release)
     metadata = json.loads((release / '.buttonsbebe-release.json').read_text())
-    if not isinstance(metadata.get('generation'), int) or metadata['generation'] < 1:
+    if type(metadata.get('generation')) is not int or metadata['generation'] < 1:
         raise ValueError('invalid verified workflow generation')
+    if not re.fullmatch('[0-9a-f]{40}', metadata.get('commit', '')):
+        raise ValueError('invalid verified commit')
     old = json.loads(state.read_text()) if state.exists() else {'files': {}}
     if metadata['generation'] < old.get('generation', 0):
         raise ValueError('stale release generation')
@@ -145,7 +173,7 @@ def prepare(release, live, web, journal_dir, state, inbox=None):
     journal_dir.mkdir(parents=True, exist_ok=False, mode=0o700)
     for change in changes:
         if change['before'] is not None:
-            atomic_copy(target_path(change['key'], live, web, inbox), journal_dir / 'files' / change['key'])
+            atomic_copy(target_path(change['key'], live, web, inbox), journal_dir / 'files' / change['key'], directory_mode=0o700)
     result = {'files': new, 'changes': changes, 'release': str(release), 'live': str(live), 'web': str(web), 'inbox': str(inbox or live), 'generation': metadata['generation'], 'commit': metadata['commit']}
     atomic_json(result, journal_dir / 'journal.json')
     return result
@@ -195,6 +223,10 @@ def main():
         if args.action == 'services':
             print('\n'.join(sorted({s for c in journal['changes'] for s in c['entry']['services']})))
         else:
+            for key, entry in journal['files'].items():
+                target = target_path(key, Path(journal['live']), Path(journal['web']), Path(journal['inbox']))
+                if digest(target) != entry['sha256']:
+                    raise ValueError(f'installed source changed before commit: {key}')
             atomic_json({'files': journal['files'], 'release': journal['release'], 'generation': journal['generation'], 'commit': journal['commit']}, args.state)
 
 
