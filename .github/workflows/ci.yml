@@ -41,6 +41,7 @@ jobs:
       - name: Run offline release gate
         env:
           PYTHON: .gate-venv/bin/python
+          HERMES_VERIFY_PYTHON: .gate-venv/bin/python
           WEBHOOK_PYTHON: webhook/.venv/bin/python
           PROCESSOR_PYTHON: processor/.venv/bin/python
           INBOX_PYTHON: .inbox-venv/bin/python

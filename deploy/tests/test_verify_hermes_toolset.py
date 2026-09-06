@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 import tempfile
 import textwrap
 import unittest
@@ -53,6 +54,7 @@ class VerifyToolsetScriptTests(unittest.TestCase):
                    smoke_status: int = 0, config: str | None = None,
                    toolsets: str | None = None) -> subprocess.CompletedProcess:
         env = dict(os.environ)
+        env["HERMES_VERIFY_PYTHON"] = sys.executable
         env["PATH"] = f"{self.bin}:{env.get('PATH', '')}"
         env["FAKE_MCP_LIST"] = mcp_list
         env["FAKE_MCP_STATUS"] = str(mcp_status)
@@ -74,6 +76,14 @@ class VerifyToolsetScriptTests(unittest.TestCase):
         proc = self.run_script(config="platform_toolsets:\n  cli: []\n")
         self.assertEqual(proc.returncode, 0, proc.stdout)
         self.assertIn("All checks passed", proc.stdout)
+
+    def test_prepared_interpreter_is_used_instead_of_path_python3(self):
+        shadow=self.bin / "python3"
+        shadow.write_text("#!/bin/sh\necho 'wrong interpreter' >&2\nexit 91\n")
+        shadow.chmod(0o755)
+        proc=self.run_script(config="platform_toolsets:\n  cli: []\n")
+        self.assertEqual(proc.returncode,0,proc.stdout+proc.stderr)
+        self.assertNotIn("wrong interpreter",proc.stdout+proc.stderr)
 
     # ── failures that used to read as a pass ────────────────────────────
     def test_a_hermes_connection_error_is_not_a_pass(self):
