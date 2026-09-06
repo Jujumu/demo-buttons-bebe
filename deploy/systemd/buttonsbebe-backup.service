@@ -1,0 +1,26 @@
+[Unit]
+Description=Consistent encrypted Buttons Bebe SQLite snapshots
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 "/root/Buttonsbebe Agent/tools/ops/scheduled_backup.py"
+TimeoutStartSec=5min
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/opt/buttonsbebe/backups
+StateDirectory=buttonsbebe
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_DAC_OVERRIDE
+# SQLite mode=ro may open existing WAL/SHM files; permit existing application
+# directories while snapshotting. It never opens source databases read/write.
+ReadWritePaths="/root/Buttonsbebe Agent/webhook/data" -/var/lib/buttonsbebe-inbox
+IPAddressDeny=any
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=bb-backup

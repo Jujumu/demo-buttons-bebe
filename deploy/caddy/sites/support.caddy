@@ -45,9 +45,25 @@ srv1766050.hstgr.cloud, support.buttonsbebe.com {
 		reverse_proxy 127.0.0.1:8085
 	}
 
-	handle_path /qa/* {
-		root * /var/www/qa
-		file_server
+	# Historical QA reports stay on disk, but are not a public production route.
+	@retiredqa path /qa /qa/*
+	handle @retiredqa {
+		respond "Not found" 404
+	}
+
+	# Dedicated inbox prefix; strip it only inside this handler. Its own
+	# /console/api/helpdesk must never hit the live dashboard's /console/api.
+	redir /inbox /inbox/ 308
+	handle /inbox/* {
+		# Keep the original prefix for auth's API/page and return-path checks.
+		# Explicit route ordering prevents Caddy sorting strip_prefix first.
+		route {
+			forward_auth 127.0.0.1:8000 {
+				uri /auth/page-check
+			}
+			uri strip_prefix /inbox
+			reverse_proxy 127.0.0.1:8766
+		}
 	}
 
 	@consoleauth path /console/api/auth/*
