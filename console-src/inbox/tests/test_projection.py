@@ -56,6 +56,24 @@ class ProjectionTests(unittest.TestCase):
         self.assertEqual(len(ticket['messages']),100);self.assertTrue(ticket['truncated'])
         self.assertEqual(ticket['observedMessageCount'],103)
 
+    def test_draft_lineage_withholds_superseded_customer_reply(self):
+        with sqlite3.connect(self.source) as db:
+            db.execute("INSERT INTO parsed_messages VALUES(1,'newer','customer','','','Followup','email','2099-03-01','2099-03-01',1,'New question')")
+        export(self.source,self.dest,now=self.now)
+        ticket=query('helpdesk.get_ticket',{'ticketId':'gorgias:1'},self.dest)['ticket']
+        self.assertEqual(ticket['readonlyDraft'],'')
+        self.assertTrue(ticket['draftSuperseded'])
+        self.assertEqual(ticket['draftSourceMessageId'],'m1')
+        self.assertEqual(ticket['draftReason'],'Review')
+        with sqlite3.connect(self.source) as db:
+            db.execute("INSERT INTO ticket_results VALUES(1,'newer','Current reply','high','sensitive_draft','Current reason','2099-03-02')")
+        export(self.source,self.dest,now=self.now)
+        ticket=query('helpdesk.get_ticket',{'ticketId':'gorgias:1'},self.dest)['ticket']
+        self.assertFalse(ticket['draftSuperseded'])
+        self.assertEqual(ticket['readonlyDraft'],'Current reply')
+        self.assertEqual(ticket['draftSourceMessageId'],'newer')
+        self.assertEqual(ticket['draftSourceMessageAt'],'2099-03-01')
+
     def test_stale_schema_and_pagination(self):
         export(self.source,self.dest,now=self.now-181)
         self.assertTrue(query('helpdesk.projection_status',{},self.dest)['projection']['stale'])

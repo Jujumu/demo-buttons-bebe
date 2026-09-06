@@ -61,13 +61,17 @@ def build(rows):
               'body':body,'at':r['created_at'] or r['received_at'],'truncated':cut,'via':'gorgias'})
         draft_rows=[r for r in items if r['draft_text']]
         draft=max(draft_rows,key=lambda r:r['processed_at'] or '') if draft_rows else None
-        draft_text,cut=text(draft['draft_text'] if draft else '');truncated|=cut
+        latest_customer=next((r for r in reversed(items) if r['is_customer_message']),None)
+        superseded=bool(draft and (not latest_customer or draft['message_id']!=latest_customer['message_id']))
+        draft_text,cut=text(draft['draft_text'] if draft and not superseded else '');truncated|=cut
+        reason,reason_cut=text(draft['reason'] if draft else '');truncated|=reason_cut
         subject,subject_cut=text(latest['ticket_subject']);truncated|=subject_cut
         ticket={'id':f'gorgias:{ticket_id}','subject':subject,'customerName':latest['customer_email'] or 'Customer',
           'fromEmail':latest['customer_email'] or '', 'status':'unknown','assignee':None,'updatedAt':latest['received_at'],
           'snippet':messages[-1]['body'][:240], 'messages':messages,'statusEvents':[], 'projectionSource':True,
           'historyIncomplete':True,'truncated':bool(truncated),'observedMessageCount':latest['observed_count'],
-          'readonlyDraft':draft_text,'draftProcessedAt':draft['processed_at'] if draft else None,
+          'readonlyDraft':draft_text,'draftReason':reason,'draftSuperseded':superseded,
+          'draftSourceMessageId':draft['message_id'] if draft else None,'draftSourceMessageAt':(draft['created_at'] or draft['received_at']) if draft else None,'draftProcessedAt':draft['processed_at'] if draft else None,
           'priority':draft['priority'] if draft else None,'draftAction':draft['action'] if draft else None}
         tickets.append(ticket)
     return tickets

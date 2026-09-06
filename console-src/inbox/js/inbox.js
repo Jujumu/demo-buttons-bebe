@@ -139,8 +139,12 @@ export function createInboxOrgan(opts = {}) {
       try {
         if (shop.observedHistory) {
           const rows = [];
+          let generation;
           for (let offset = 0; offset < 500; offset += 100) {
             const page = await shop.listTickets({view:"all",limit:100,offset});
+            const nextGeneration=shop.projection?.generatedAt;
+            if (offset && generation!==nextGeneration) throw new Error("Projection refreshed during pagination; retry.");
+            generation=nextGeneration;
             rows.push(...page);
             if (page.length < 100) break;
           }
