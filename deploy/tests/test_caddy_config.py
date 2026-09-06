@@ -96,6 +96,16 @@ class CaddyConfigTests(unittest.TestCase):
         self.assertIn("reverse_proxy 127.0.0.1:9119", text)
         self.assertIn("output file /var/log/bb-webhook/caddy-hermes.log", text)
 
+    def test_support_logs_never_store_bearer_uris(self) -> None:
+        text = self.fragments["support"]
+        # Full URI removal also covers path credentials and alternate query
+        # spellings; it does not rewrite the upstream request itself.
+        self.assertEqual(text.count("format filter {"), 2)
+        self.assertEqual(text.count("request>uri delete"), 2)
+        self.assertEqual(text.count("request>headers>Referer delete"), 2)
+        self.assertEqual(text.count("wrap json"), 2)
+        self.assertNotIn("format json", text)
+
     def test_warehouse_bypasses_auth_only_for_webhook_path(self) -> None:
         text = self.fragments["warehouse"]
         self.assertIn("@protected not path /api/shopify/webhook/*", text)

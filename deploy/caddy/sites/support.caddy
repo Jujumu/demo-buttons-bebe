@@ -27,7 +27,15 @@ hermes.buttonsbebe.com {
 	encode gzip zstd
 	log {
 		output file /var/log/bb-webhook/caddy-hermes.log
-		format json
+		# Drop the complete URI: both query secrets and WhatsApp path tokens
+		# are credentials. Header redaction also prevents a Referer echo.
+		format filter {
+			wrap json
+			fields {
+				request>uri delete
+				request>headers>Referer delete
+			}
+		}
 	}
 }
 
@@ -147,6 +155,14 @@ srv1766050.hstgr.cloud, support.buttonsbebe.com {
 	encode gzip zstd
 	log {
 		output file /var/log/bb-webhook/caddy.log
-		format json
+		# Drop the complete URI: both query secrets and WhatsApp path tokens
+		# are credentials. Header redaction also prevents a Referer echo.
+		format filter {
+			wrap json
+			fields {
+				request>uri delete
+				request>headers>Referer delete
+			}
+		}
 	}
 }
