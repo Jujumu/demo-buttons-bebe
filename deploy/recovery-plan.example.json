@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "release_commit": "0000000000000000000000000000000000000000",
+  "recipient_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "entries": [
+    {"path": "/root/Buttonsbebe Agent/.env", "kind": "file"},
+    {"path": "/root/Buttonsbebe Agent/webhook/data/webhook.db", "kind": "sqlite"},
+    {"path": "/var/lib/buttonsbebe-inbox/inbox.sqlite3", "kind": "sqlite"},
+    {"path": "/root/.hermes/config.yaml", "kind": "file"},
+    {"path": "/root/.hermes/auth.json", "kind": "file"},
+    {"path": "/root/.hermes/.env", "kind": "file"},
+    {"path": "/root/.hermes/SOUL.md", "kind": "file"},
+    {"path": "/root/.hermes/skills/buttonsbebe", "kind": "tree"},
+    {"path": "/etc/caddy/Caddyfile", "kind": "file"},
+    {"path": "/etc/buttonsbebe-deploy-approved-config.sha256", "kind": "file"},
+    {"path": "/etc/buttonsbebe-backup-recipient.pem", "kind": "file"},
+    {"path": "/var/lib/buttonsbebe-deploy/source-manifest.json", "kind": "file"},
+    {"path": "/etc/systemd/system/buttonsbebe-webhook.service", "kind": "file"},
+    {"path": "/etc/systemd/system/buttonsbebe-processor.service", "kind": "file"},
+    {"path": "/etc/systemd/system/helpdesk-inbox.service", "kind": "file"},
+    {"path": "/root/Buttonsbebe Agent/KB/policies", "kind": "tree"},
+    {"path": "/root/Buttonsbebe Agent/KB/faq", "kind": "tree"},
+    {"path": "/root/Buttonsbebe Agent/KB/intents", "kind": "tree"},
+    {"path": "/root/Buttonsbebe Agent/KB/products", "kind": "tree"},
+    {"path": "/root/Buttonsbebe Agent/KB/tickets", "kind": "tree"},
+    {"path": "/root/Buttonsbebe Agent/KB/learned", "kind": "tree"},
+    {"path": "/root/Buttonsbebe Agent/KB/_archive_learned", "kind": "tree"},
+    {"path": "/root/Buttonsbebe Agent/KB/notices", "kind": "tree"},
+    {"path": "/root/Buttonsbebe Agent/KB/shopify", "kind": "tree"},
+    {"path": "/root/Buttonsbebe Agent/whatsapp-connect/auth", "kind": "tree"},
+    {"path": "/opt/buttonsbebe/backups/recovery-input", "kind": "tree"}
+  ]
+}
