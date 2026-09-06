@@ -18,7 +18,33 @@ class ResultAuthTests(unittest.TestCase):
             orchestrator._save_result_to_webhook(123,'synthetic',1,{})
         request=opener.open.call_args.args[0]
         self.assertEqual(request.get_header('Authorization'),'Bearer '+SECRET)
-        self.assertIsNone(builder.call_args.args[0].redirect_request(None,None,None,None,None,None))
+        self.assertEqual(builder.call_args.args[0].proxies,{})
+        self.assertIsNone(builder.call_args.args[1].redirect_request(None,None,None,None,None,None))
+
+    def test_ambient_proxy_cannot_intercept_synthetic_loopback_request(self):
+        import urllib.request
+        import threading
+        from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
+        received=[]
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                received.append(self.headers.get('Authorization'))
+                self.send_response(200);self.end_headers();self.wfile.write(b'{"status":"ok"}')
+            def log_message(self,*args):pass
+        server=ThreadingHTTPServer(('127.0.0.1',0),Handler)
+        threading.Thread(target=server.serve_forever,daemon=True).start()
+        self.addCleanup(server.server_close);self.addCleanup(server.shutdown)
+        actual_builder=urllib.request.build_opener
+        response=Mock(status=200);response.read.return_value=b'{"status":"ok"}'
+        response.__enter__=Mock(return_value=response);response.__exit__=Mock(return_value=False)
+        mocked=Mock();mocked.open.return_value=response
+        with patch.object(orchestrator,'get_settings',return_value=SimpleNamespace(processor_result_secret=SECRET)),patch('urllib.request.build_opener',return_value=mocked) as builder,patch.dict(os.environ,{'DASHBOARD_RESULT_URL':'http://127.0.0.1:8000/dashboard/api/results'}):
+            orchestrator._save_result_to_webhook(123,'synthetic',1,{})
+        with patch.dict(os.environ,{'http_proxy':'http://127.0.0.1:1','HTTP_PROXY':'http://127.0.0.1:1','no_proxy':'','NO_PROXY':''}):
+            opener=actual_builder(*builder.call_args.args)
+            request=urllib.request.Request(f'http://127.0.0.1:{server.server_port}/dashboard/api/results',data=b'{}',headers={'Authorization':'Bearer '+SECRET})
+            with opener.open(request,timeout=2) as result:self.assertEqual(result.status,200)
+        self.assertEqual(received,['Bearer '+SECRET])
 
     def test_missing_or_invalid_secret_fails_before_network(self):
         for value in ('','short','x'*32+'\n'):

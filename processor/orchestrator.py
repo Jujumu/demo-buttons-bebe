@@ -128,7 +128,7 @@ def _save_result_to_webhook(
         def redirect_request(self, *args, **kwargs):
             return None
 
-    with urllib.request.build_opener(NoRedirect()).open(req, timeout=10) as resp:
+    with urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect()).open(req, timeout=10) as resp:
         if not 200 <= resp.status < 300:
             raise RuntimeError(f"Result persistence HTTP status {resp.status}")
         acknowledgement = json.loads(resp.read(4097))
