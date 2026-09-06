@@ -46,3 +46,9 @@ test('missing or failed capability response leaves unsupported controls hidden',
   await assert.rejects(organ.escalate(),/not available/);
   assert.equal(organ.attemptSend().sendError,'Activate the send access.');
 });
+
+test('query-requested privacy dialog cannot reveal an unavailable workflow', async () => {
+ const shop=createHelpdeskShop({client:{invoke:async () => ({ok:true,source:'inbox',tickets:[]})}});
+ const result=await createInboxOrgan({shop,viewId:'all',privacyGate:true}).ready();
+ assert.doesNotMatch(result.html,/data-privacy-handled|data-privacy-gate/);
+});

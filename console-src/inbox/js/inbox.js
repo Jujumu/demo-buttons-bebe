@@ -194,7 +194,7 @@ export function createInboxOrgan(opts = {}) {
   }
 
   function gateSheetHtml() {
-    if (privacyGateOpen) {
+    if (privacyGateOpen && capabilities.markPrivacyHandled !== false) {
       return `<div class="gate-sheet-backdrop" data-gate-sheet data-privacy-gate>
         <div class="gate-sheet" role="dialog" aria-modal="true" aria-labelledby="gate-sheet-copy">
           <p id="gate-sheet-copy">${PRIVACY_LOCKED_COPY}</p>
@@ -205,7 +205,7 @@ export function createInboxOrgan(opts = {}) {
         </div>
       </div>`;
     }
-    if (marketingGateOpen) {
+    if (marketingGateOpen && capabilities.markUnsubscribed !== false) {
       return `<div class="gate-sheet-backdrop" data-gate-sheet data-marketing-gate>
         <div class="gate-sheet" role="dialog" aria-modal="true" aria-labelledby="gate-sheet-copy">
           <p id="gate-sheet-copy">${MARKETING_LOCKED_COPY}</p>
