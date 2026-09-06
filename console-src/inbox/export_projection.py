@@ -1,0 +1,125 @@
+#!/usr/bin/env python3
+"""Operator-only local snapshot export. No environment, provider or network access."""
+from __future__ import annotations
+import argparse
+from contextlib import closing
+from datetime import datetime, timezone, timedelta
+import grp
+import json
+import os
+from pathlib import Path
+import sqlite3
+import tempfile
+import time
+from projection import connect, VERSION, DEFAULT_PATH
+
+
+def text(value):
+    value=value if isinstance(value,str) else ''
+    return value[:20000],len(value)>20000
+
+
+def extract(source, now):
+    cutoff=(datetime.fromtimestamp(now,timezone.utc)-timedelta(days=90)).isoformat()
+    with closing(connect(source)) as db:
+        deadline=time.monotonic()+5
+        db.set_progress_handler(lambda:int(time.monotonic()>deadline),10000)
+        db.execute('BEGIN')
+        ids=[r[0] for r in db.execute('SELECT ticket_id FROM parsed_messages WHERE received_at>=? GROUP BY ticket_id ORDER BY MAX(received_at) DESC,ticket_id LIMIT 501',(cutoff,))]
+        truncated=len(ids)>500;ids=ids[:500]
+        if not ids:return [],truncated
+        marks=','.join('?' for _ in ids)
+        cursor=db.execute(f'''WITH ranked AS (
+            SELECT *,ROW_NUMBER() OVER(PARTITION BY ticket_id ORDER BY received_at DESC,message_id DESC) n,
+            COUNT(*) OVER(PARTITION BY ticket_id) observed_count
+            FROM parsed_messages WHERE ticket_id IN ({marks}) AND received_at>=?)
+            SELECT p.ticket_id,p.message_id,p.author_type,p.author_email,p.customer_email,p.ticket_subject,
+            p.channel,p.created_at,p.received_at,p.is_customer_message,p.observed_count,
+            substr(p.message_text,1,20001) message_text, substr(r.draft_text,1,20001) draft_text,
+            r.priority,r.action,substr(r.reason,1,20001) reason,r.processed_at
+            FROM ranked p LEFT JOIN ticket_results r ON r.ticket_id=p.ticket_id AND r.message_id=p.message_id
+            WHERE p.n<=100 ORDER BY p.ticket_id,p.received_at,p.message_id''',(*ids,cutoff))
+        rows=[];size=0
+        for row in cursor:
+            record=dict(row);size+=sum(len(v.encode('utf-8')) for v in record.values() if isinstance(v,str))
+            if size>32_000_000:raise ValueError('Projection exceeds bounded snapshot size')
+            rows.append(record)
+        return rows,truncated
+
+
+def build(rows):
+    grouped={}
+    for row in rows:grouped.setdefault(row['ticket_id'],[]).append(row)
+    tickets=[]
+    for ticket_id,items in grouped.items():
+        latest=items[-1];messages=[];truncated=latest['observed_count']>100
+        for r in items:
+            body,cut=text(r['message_text']);truncated|=cut
+            agent=not bool(r['is_customer_message'])
+            messages.append({'id':r['message_id'],'from':'agent' if agent else 'customer','fromAgent':agent,
+              'fromName':r['author_email'] or ('Observed agent' if agent else 'Customer'),'fromEmail':r['author_email'] or '',
+              'body':body,'at':r['created_at'] or r['received_at'],'truncated':cut,'via':'gorgias'})
+        draft_rows=[r for r in items if r['draft_text']]
+        draft=max(draft_rows,key=lambda r:r['processed_at'] or '') if draft_rows else None
+        draft_text,cut=text(draft['draft_text'] if draft else '');truncated|=cut
+        subject,subject_cut=text(latest['ticket_subject']);truncated|=subject_cut
+        ticket={'id':f'gorgias:{ticket_id}','subject':subject,'customerName':latest['customer_email'] or 'Customer',
+          'fromEmail':latest['customer_email'] or '', 'status':'unknown','assignee':None,'updatedAt':latest['received_at'],
+          'snippet':messages[-1]['body'][:240], 'messages':messages,'statusEvents':[], 'projectionSource':True,
+          'historyIncomplete':True,'truncated':bool(truncated),'observedMessageCount':latest['observed_count'],
+          'readonlyDraft':draft_text,'draftProcessedAt':draft['processed_at'] if draft else None,
+          'priority':draft['priority'] if draft else None,'draftAction':draft['action'] if draft else None}
+        tickets.append(ticket)
+    return tickets
+
+
+def export(source, destination, *, now=None, group=None):
+    now=time.time() if now is None else now
+    destination=Path(destination);directory=destination.parent
+    if not directory.is_dir() or directory.is_symlink():raise ValueError('Projection directory must exist')
+    temporary=None
+    try:
+        rows,truncated=extract(source,now);tickets=build(rows)
+        fd,name=tempfile.mkstemp(prefix='.projection-',suffix='.sqlite3',dir=directory);os.close(fd);temporary=Path(name)
+        with closing(sqlite3.connect(temporary)) as db:
+            db.execute('PRAGMA journal_mode=DELETE');db.execute('PRAGMA synchronous=FULL')
+            db.execute('CREATE TABLE metadata(id INTEGER PRIMARY KEY,payload TEXT NOT NULL)')
+            db.execute('CREATE TABLE tickets(id TEXT PRIMARY KEY,observed_at TEXT NOT NULL,summary TEXT NOT NULL,detail TEXT NOT NULL)')
+            db.execute('CREATE INDEX ticket_order ON tickets(observed_at DESC,id)')
+            metadata={'version':VERSION,'generatedAtEpoch':now,'generatedAt':datetime.fromtimestamp(now,timezone.utc).isoformat(),
+                      'ticketCount':len(tickets),'windowDays':90,'ticketLimit':500,'messageLimit':100,'truncated':truncated,'historyIncomplete':True,
+                      'sourceWatermark':max((t['updatedAt'] for t in tickets),default=None)}
+            db.execute('INSERT INTO metadata VALUES(1,?)',(json.dumps(metadata),))
+            for ticket in tickets:
+                summary={k:v for k,v in ticket.items() if k not in ('messages','readonlyDraft')}
+                db.execute('INSERT INTO tickets VALUES(?,?,?,?)',(ticket['id'],ticket['updatedAt'],json.dumps(summary),json.dumps(ticket)))
+            db.commit()
+            if db.execute('PRAGMA integrity_check').fetchone()[0]!='ok':raise ValueError('Invalid projection')
+        os.chmod(temporary,0o640)
+        if group is not None:os.chown(temporary,0,grp.getgrnam(group).gr_gid)
+        with temporary.open('rb') as handle:os.fsync(handle.fileno())
+        os.replace(temporary,destination);temporary=None
+        destination.with_suffix('.error').unlink(missing_ok=True)
+        fd=os.open(directory,os.O_RDONLY|os.O_DIRECTORY)
+        try:os.fsync(fd)
+        finally:os.close(fd)
+        return metadata
+    except Exception:
+        # No exception text/customer fields in the error marker.
+        marker=destination.with_suffix('.error');marker.touch(mode=0o640,exist_ok=True)
+        if group is not None:os.chown(marker,0,grp.getgrnam(group).gr_gid)
+        raise
+    finally:
+        if temporary is not None:temporary.unlink(missing_ok=True)
+
+
+if __name__=='__main__':
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--source',required=True);parser.add_argument('--destination',default=DEFAULT_PATH)
+    parser.add_argument('--group',default='bb-inbox');args=parser.parse_args()
+    try:
+        result=export(args.source,args.destination,group=args.group)
+        print(json.dumps({'ok':True,'ticketCount':result['ticketCount'],'truncated':result['truncated']}))
+    except Exception:
+        print('{"ok":false,"error":"projection_export_failed"}')
+        raise SystemExit(1)

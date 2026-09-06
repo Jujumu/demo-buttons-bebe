@@ -51,7 +51,8 @@ export function createInboxOrgan(opts = {}) {
   const composerTissue = createComposerTissue({ mailbox });
   const rail = createRailOrgan({ shop, mailbox });
 
-  let viewId = opts.viewId || "mine";
+  let viewId = shop.observedHistory ? "all" : (opts.viewId || "mine");
+  const availableViews = shop.observedHistory ? [{id:"all",label:"Observed history"}] : views;
   let selectedId = opts.ticketId || null;
   let body = "";
   let strip = "";
@@ -90,6 +91,7 @@ export function createInboxOrgan(opts = {}) {
   let privacyGateOpen = Boolean(opts.privacyGate);
   let marketingGateOpen = Boolean(opts.marketingGate);
   let listError = "";
+  let projectionNotice = "";
   let listRows = pinnedCatalog ? pinnedCatalog.filter((ticket) => ticketInView(ticket, viewId)) : [];
   let selected = pinnedCatalog?.find((ticket) => ticket.id === selectedId) || null;
   let counts = pinnedCatalog ? viewCounts(pinnedCatalog) : viewCounts(fixtureTickets);
@@ -135,9 +137,21 @@ export function createInboxOrgan(opts = {}) {
     }
     if (typeof shop.listTickets === "function") {
       try {
+        if (shop.observedHistory) {
+          const rows = [];
+          for (let offset = 0; offset < 500; offset += 100) {
+            const page = await shop.listTickets({view:"all",limit:100,offset});
+            rows.push(...page);
+            if (page.length < 100) break;
+          }
+          listRows = rows;
+          counts = {all:rows.length};
+          projectionNotice = shop.projection?.stale ? "Observed history is stale; refresh is delayed." : "Observed history · last 90 days · up to 500 tickets. Status and assignment are unknown.";
+          return;
+        }
         const [rows, ...viewRows] = await Promise.all([
           shop.listTickets({ view: viewId, limit: 50 }),
-          ...views.map((view) => shop.listTickets({ view: view.id, limit: 100 })),
+          ...availableViews.map((view) => shop.listTickets({ view: view.id, limit: 100 })),
         ]);
         if (Array.isArray(rows)) {
           listRows = rows;
@@ -146,7 +160,7 @@ export function createInboxOrgan(opts = {}) {
             knownTicketIds.add(row.id);
           }
         }
-        counts = Object.fromEntries(views.map((view, index) => [
+        counts = Object.fromEntries(availableViews.map((view, index) => [
           view.id,
           Array.isArray(viewRows[index]) ? viewRows[index].length : 0,
         ]));
@@ -348,12 +362,16 @@ export function createInboxOrgan(opts = {}) {
       clearInterval(bridgePollTimer);
       bridgePollTimer = null;
     }
-    if (!bridgeStatus.gorgiasEnabled || pinnedCatalog) return;
+    if ((!bridgeStatus.gorgiasEnabled && !shop.observedHistory) || pinnedCatalog) return;
     bridgePollTimer = setInterval(() => {
-      refreshList().then(() => {
+      refreshList().then(async () => {
+        if (shop.observedHistory && selectedId) {
+          try { selected = await shop.getTicket({ticketId:selectedId}); } catch { /* List notice reports unavailable history. */ }
+        }
         paintMounted?.();
       }).catch(() => {});
     }, 30000);
+    bridgePollTimer.unref?.();
   }
 
   async function persistAction(method, args, flag) {
@@ -434,8 +452,9 @@ export function createInboxOrgan(opts = {}) {
     return {
       tickets: visibleTickets(),
       error: listError,
+      notice: projectionNotice,
       selectedTicketId: selectedId,
-      views,
+      views: availableViews,
       counts,
       selectedViewId: viewId,
       collapsed: listCollapsed,

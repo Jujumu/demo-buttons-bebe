@@ -57,8 +57,8 @@ class ServerTests(unittest.TestCase):
         self.assertFalse(caps["escalateTicket"])
         for tool in ("helpdesk.pull_mailbox", "helpdesk.escalate_ticket", "helpdesk.draft_reply", "helpdesk.get_customer"):
             self.assertEqual(self.post({"tool": tool}).status_code, 403)
-        self.assertEqual(self.post({"tool": "helpdesk.list_tickets"}).json()["tickets"], [])
-        self.assertEqual(self.client.get("/ready").status_code, 200)
+        self.assertEqual(self.post({"tool": "helpdesk.list_tickets"}).status_code, 503)
+        self.assertEqual(self.client.get("/ready").status_code, 503)
 
 
     def test_symlink_and_path_traversal_cannot_serve_private_file(self):

@@ -53,6 +53,7 @@ export function createListTissue({ mailbox }) {
     return {
       tickets: input.tickets || [],
       error: input.error || "",
+      notice: input.notice || "",
       selectedTicketId: input.selectedTicketId || null,
       views: input.views || [],
       counts: input.counts || {},
@@ -162,6 +163,7 @@ export function createListTissue({ mailbox }) {
       : `<div class="empty-pane" role="status"><strong>${next.error ? "Tickets unavailable" : "No tickets yet"}</strong><p>${esc(next.error || "This inbox has no conversations in this view. Customer support continues in the support console.")}</p><a href="/console/">Open support console</a></div>`;
     return `<div class="pane-inner">
       ${renderToolbar(next)}
+      ${next.notice ? `<p class="mute" role="status">${esc(next.notice)}</p>` : ""}
       <div class="ticket-list" role="list">${rows}</div>
     </div>`;
   }

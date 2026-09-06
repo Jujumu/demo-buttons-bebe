@@ -10,11 +10,15 @@ export function createHelpdeskShop(opts = {}) {
     if (['sample', 'fixture'].includes(result.source)) throw new Error('Preview data is not available in this inbox.');
     return result;
   }
-  return {
-    id: 'shop', shop: '', client,
+  const shop = {
+    id: 'shop', shop: '', client, observedHistory: true,
     capabilities: Object.fromEntries(['draftReply','summarizeThread','searchMacros','applyMacro','escalateTicket','markPrivacyHandled','markUnsubscribed','markBugHandled','customerDetails','sendReply'].map(key => [key, false])),
     getCapabilities: async () => (await read('helpdesk.capabilities')).capabilities,
-    listTickets: async args => (await read('helpdesk.list_tickets', args)).tickets,
+    listTickets: async args => {
+      const result = await read('helpdesk.list_tickets', args);
+      shop.projection = result.projection;
+      return result.tickets;
+    },
     getTicket: async args => (await read('helpdesk.get_ticket', args)).ticket,
     getCustomer: async args => (await read('helpdesk.get_customer', args)).customer,
     getOrder: async args => (await read('helpdesk.get_order', args)).order,
@@ -29,4 +33,5 @@ export function createHelpdeskShop(opts = {}) {
     bridgeStatus: async args => await read('helpdesk.bridge_status', args),
     sendReply: async () => ({ok: false, error: SEND_ACCESS_ERROR, message: ACTIVATE_SEND_MESSAGE}),
   };
+  return shop;
 }

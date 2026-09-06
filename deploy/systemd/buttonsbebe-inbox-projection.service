@@ -1,0 +1,20 @@
+[Unit]
+Description=Export read-only canonical inbox projection
+After=buttonsbebe-webhook.service
+
+[Service]
+Type=oneshot
+User=root
+Group=bb-inbox
+UMask=0027
+ExecStart=/opt/buttonsbebe/inbox/venv/bin/python /opt/buttonsbebe/inbox/console-src/inbox/export_projection.py --source "/root/Buttonsbebe Agent/webhook/data/webhook.db"
+TimeoutStartSec=20
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/buttonsbebe-inbox-projection
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any
+
+MemoryMax=256M
+TasksMax=16

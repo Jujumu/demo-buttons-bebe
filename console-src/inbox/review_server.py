@@ -15,6 +15,7 @@ from pathlib import Path
 import sys
 
 INBOX = Path(__file__).resolve().parent
+sys.path.insert(0, str(INBOX))
 sys.path.insert(0, str(INBOX.parent / "helpdesk-agent"))
 for name in ("SHOPIFY_MUTATIONS_ENABLED", "HELPDESK_OUTBOUND_ENABLED", "GORGIAS_BRIDGE_ENABLED"):
     os.environ[name] = "0"
@@ -32,6 +33,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, Validat
 from helpdesk.http import handle_http  # noqa: E402
 from helpdesk import tickets  # noqa: E402
 from helpdesk.send_access import ACTIVATE_SEND_MESSAGE, SEND_ACCESS_ERROR  # noqa: E402
+from projection import query as projection_query, ProjectionUnavailable
 from helpdesk.state_store import StoreUnavailable  # noqa: E402
 
 MAX_BODY = 1024 * 1024
@@ -58,6 +60,7 @@ class Arguments(BaseModel):
 class ListArguments(Arguments):
     view: StrictStr = Field(default="open", max_length=30)
     limit: StrictInt = Field(default=20, ge=1, le=100)
+    offset: StrictInt = Field(default=0, ge=0, le=500)
 
 
 class TicketArguments(Arguments):
@@ -68,6 +71,7 @@ SCHEMAS = {
     "helpdesk.list_tickets": ListArguments,
     "helpdesk.get_ticket": TicketArguments,
     "helpdesk.capabilities": Arguments,
+    "helpdesk.projection_status": Arguments,
     "helpdesk.write_gate_status": Arguments,
     "helpdesk.bridge_status": Arguments,
 }
@@ -118,6 +122,9 @@ def _storage_read_check():
 async def ready():
     try:
         await run_in_threadpool(_storage_read_check)
+        projection = await run_in_threadpool(projection_query, "helpdesk.projection_status", {})
+        if projection["projection"]["stale"]:
+            return error(503, "projection_stale", "Observed ticket history is stale.")
     except Exception:
         return error(503, "storage_unavailable", "Inbox storage is unavailable.")
     return {"ok": True, "sendAccessEnabled": False}
@@ -145,6 +152,8 @@ async def invoke(request: Request):
         args = schema.model_validate(invocation.arguments).model_dump()
         if invocation.tool == "helpdesk.capabilities":
             return {"ok": True, "capabilities": CAPABILITIES}
+        if invocation.tool in {"helpdesk.list_tickets", "helpdesk.get_ticket", "helpdesk.projection_status"}:
+            return await run_in_threadpool(projection_query, invocation.tool, args)
         # All exposed operations are bounded local state operations; external
         # providers and model execution are absent from SCHEMAS.
         return await run_in_threadpool(handle_http, invocation.tool, args, actor="human")
@@ -152,6 +161,8 @@ async def invoke(request: Request):
         return error(400, "invalid_request", "Expected a valid tool name and arguments object.")
     except TimeoutError:
         return error(408, "request_timeout", "Request body timed out.")
+    except ProjectionUnavailable:
+        return error(503, "projection_unavailable", "Observed ticket history is unavailable. Existing records have not been reset.")
     except StoreUnavailable:
         return error(503, "storage_unavailable", "Inbox storage is unavailable. Existing data has not been reset.")
     except Exception:

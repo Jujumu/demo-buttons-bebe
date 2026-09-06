@@ -90,3 +90,30 @@ legacy/corrupt state, malformed JSON types, oversized bodies, static traversal
 and symlinks, unsupported capabilities, UI failure behavior, and the Send lock.
 The HTTP Send response must retain `send_access_inactive` and exactly
 `Activate the send access.`. Inbox `/webhook/gorgias` must return 503.
+
+## Canonical observed history projection
+
+The inbox now reads a separate root-owned snapshot at
+`/var/lib/buttonsbebe-inbox-projection/projection.sqlite3`. The existing writable
+inbox store is preserved and never overwritten or merged into canonical records.
+The operator must create the projection directory mode0750 root:bb-inbox before
+starting the supplied projection service/timer. Published files are0640
+root:bb-inbox. The inbox account must have read-only access to this directory;
+do not put it inside its writable StateDirectory.
+
+The root exporter opens the canonical webhook database read-only/query_only and
+runs no network/provider calls. A consistent snapshot includes at most500 recent
+tickets from90days,100 observed messages each,20000characters per text field.
+Source SQL is interrupted after5seconds rather than holding a long read snapshot.
+A temporary SQLite database is validated and fsynced before atomic replacement;
+readers already using the old inode complete normally. Failure retains previous
+data and creates a content-free error marker. Timer refresh is60seconds;
+older-than180seconds or any failed export appears stale. Successful export clears
+that marker. The service never receives owner cookies or credentials.
+
+Messages are only the webhook history already observed by the canonical system,
+not complete Gorgias history. Assignment/status/order context remain unknown.
+The latest stored processor draft is displayed read-only and explicitly not sent.
+All workflow mutations and Send remain disabled. No intake route is changed.
+After staging these files, the operator must manually apply the units, inspect
+export counts, verify permissions as bb-inbox, and update approved config hashes.
