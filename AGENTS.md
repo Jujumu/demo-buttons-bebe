@@ -201,3 +201,30 @@ not in the repo" claims are outdated) → `PORTFROMFABLETASKLIST.md`,
 `IMPROVEMENT-PLAN.md`, `TESTING-READINESS.md` (context). **Superseded — do not
 implement from:** `INCONSISTENCIES.md`, `DEV-ISSUES.md`. **Stale layout:**
 root `README.md` (describes the retired `gorgias-webhook/` + `teddy/` design).
+
+## Learned User Preferences
+
+- Prefers verifying visual work in the browser (inbox UI or hosted pages), not CLI-only reports; when hosting, wants a public link plus a screenshot that it actually renders.
+- Explicit Shopify catalog/seed requests count as naming a write; still no refunds, cancels, or `customerCreate` unless named.
+- Prefers kid-simple architecture explanations using the organ/tissue analogy; use Excalidraw or the click-to-enter 3D sim; keep organs and wires accurate to this demo, not production Hermes (no Gorgias, Redo, or KB as peer organs).
+- Prefers Surge (`*.surge.sh`) for quick public static hosting; do not use Cloudflare tunnels for that.
+- Prefers inbox chrome in the live preview (browser element select + screenshots) over design canvases; folds view filters into the ticket list (no separate views column); list and rail both collapse to thin strips with a clear expand control.
+- Prefers the conversation pane to keep the reply box visible: bottom-anchored composer, compact expandable attachment thumbs, and a full-width AI draft strip with Use draft / Regenerate / Dismiss under the text.
+- Prefers AI drafts that answer the ticket’s actual ask or request type; mismatched draft content undermines trust.
+- Wants the detachable Gorgias bridge left off until credentials are added and they explicitly activate it.
+- When contributing to the original/upstream repo, omit credentials and demo data; keep Shopify read-only; keep Send disconnected so a click shows “Activate the send access.”
+
+## Learned Workspace Facts
+
+- Inbox preview: local `console-src/inbox/run-review.sh` → `http://127.0.0.1:8766/` (`INBOX_PORT`); interim VPS serves `https://helpdesk.teddyonfriday.com/` (systemd `helpdesk-inbox` → `:8766`).
+- Final client host is a Hostinger VPS; treat cutover as fresh install + DNS/proxy + webhook URL change, not a lift-and-shift of this box.
+- `helpdesk.pull_mailbox` needs Python package `agentmail` plus `AGENTMAIL_API_KEY`; if the package is missing it can fall back to fixtures and never ingest live mail.
+- Live tickets use the real intake From display name as `customerName` (e.g. the human’s Gmail), not the Ada/Sam scenario labels.
+- Demo ticket messages may include image attachments; the thread shows small expandable thumbs and keeps the composer bottom-anchored (PR 37 / `helpdesk-design/LOCK.md`). Order rail line items show 48×48 product thumbnails from Shopify `lineItems.image.url` (PR 13).
+- Demo inbox baseline is 35 seed tickets; normal boot does not auto-pull mail — use `?pull=1` (optional `force=1` for fixtures).
+- Cross-boot AgentMail dedupe persists seen message ids in `console-src/inbox/data/seen_messages.json`.
+- Inbox WebMCP (`console-src/inbox/js/webmcp.js`): registers `document.modelContext` UI verbs (`select_view`, `select_ticket`, `use_draft`, `regenerate_draft`, `dismiss_draft`, plus summarize/macros); omits Send; isolated preview Send is fail-closed (`SEND_ACCESS_ENABLED=false` in `helpdesk/send_access.py`, click shows “Activate the send access.”); server `helpdesk.*` MCP/CLI stays for data/AI.
+- `helpdesk/composer.py` `fixture_draft()` supplies Caduceus scenario language for demo ticket ids; draft-by-type covers privacy/unsubscribe asks; still no refund/cancel/send promises.
+- Organ/tissue architecture: Excalidraw at `docs/tissues/organ-tissue.excalidraw`; click-to-enter 3D sim at `docs/tissues/architecture-3d-sim.html` (world in `architecture-world.js`): LEGO-house organs, inside-Inbox list/thread/rail wireframe, info card off by default; mail → helpdesk intake, Shopify look-only; Send is human-only and fail-closed on the isolated preview until send access is activated.
+- This demo’s look-up path is Shopify Admin GraphQL only (`get_customer` / `get_order` / `get_returns` / `list_past_orders`); Redo and KB belong to production Hermes. Gorgias is an optional detachable bridge sidecar (`console-src/helpdesk-agent/bridge/`, `deploy/GORGIAS-BRIDGE-SETUP.md`), not a peer organ; defaults `GORGIAS_BRIDGE_ENABLED=0` / `HELPDESK_OUTBOUND_ENABLED=0`; intake tickets persist in `HELPDESK_STORE_FILE` (`console-src/inbox/data/intake_tickets.json`).
+- Surge CLI is installed globally on this VPS (`surge` on PATH); publish a folder that contains `index.html`.
