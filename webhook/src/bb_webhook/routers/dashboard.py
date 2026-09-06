@@ -116,3 +116,10 @@ async def record_result_api(request: Request) -> JSONResponse:
         draft_text=draft_text,
     )
     return JSONResponse(content={"status": "ok"})
+
+
+@router.get("/ops")
+async def dashboard_ops() -> JSONResponse:
+    """Monitor summary; dashboard session middleware protects this route."""
+    from ..ops_status import summary
+    return JSONResponse(content=summary(), headers={"Cache-Control": "no-store"})

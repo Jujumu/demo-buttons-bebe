@@ -1,0 +1,23 @@
+[Unit]
+Description=Local read-only Buttons Bebe operational health checks
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 "/root/Buttonsbebe Agent/tools/ops/monitor.py"
+TimeoutStartSec=40
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+StateDirectory=buttonsbebe
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+IPAddressDeny=any
+IPAddressAllow=localhost
+StandardOutput=journal
+StandardError=journal
