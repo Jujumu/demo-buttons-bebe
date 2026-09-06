@@ -144,7 +144,10 @@ esac
 "$PYTHON" -m unittest discover -s kb/tests -v
 "$PYTHON" -m unittest discover -s deploy/tests -v
 "$PYTHON" -m unittest discover -s tools -p 'test_*.py' -v
-"$PYTHON" -m unittest discover -s shopify -p 'test_*.py' -v
+for _test in shopify/test_*.py; do
+  [[ -f "$_test" ]] || fail "no Shopify tests discovered"
+  "$PYTHON" -m unittest "shopify.$(basename "$_test" .py)" -v
+done
 # Fresh process per module prevents one suite's fake optional modules leaking
 # into another suite. Live diagnostics require an explicit opt-out marker.
 webhook_count=0
