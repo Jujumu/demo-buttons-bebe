@@ -27,3 +27,12 @@ QA independently compares the MCP endpoint schemas and read-only declarations
 with the actual Hermes registry, then repeats the comparison in a fresh process
 to exercise its cache. Any difference blocks model calls. Isolated QA can use a
 private source overlay before any installed dependency is changed.
+
+`invalidate_hermes_mcp_cache.py CACHE` previews only digest changes and removed
+server names. `--apply --expected-sha256 REVIEWED_HASH --backup NEW_PRIVATE_FILE`
+requires the exact current raw-file digest and saves its exact bytes first. It
+removes only top-level `buttonsbebe_kb`, `buttonsbebe_redo`, and
+`buttonsbebe_gorgias` keys, retaining every other entry. The tool checks for
+concurrent file drift before replacement, but this is not a substitute for
+stopping Hermes producers: a writer can race after any check. No cache contents,
+credentials, endpoints, or model configuration are printed.
