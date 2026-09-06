@@ -206,3 +206,34 @@ any QA run; drain already-running webhook rewrite children before modifying
 Hermes. Keep webhook intake and owner console pages running. Restore only the
 previously active producers and remove the gate after compatibility checks.
 The helper deliberately does none of these service operations automatically.
+
+### Production Hermes discovery proof during maintenance
+
+`verify_live_mcp.py --profile-sha256 REVIEWED_SHA` is a manual root-only proof
+for the installed `/usr/local/lib/hermes-agent`, lexical
+`/usr/local/lib/hermes-agent/venv/bin/python`, and actual `/root/.hermes` profile.
+Run only after the coordinated producer pause, reviewed MCP adapter patch,
+three-entry cache invalidation, and local MCP service update. This helper does
+not pause, patch, invalidate, change trust, or call a model. Discovery itself
+rebuilds Hermes' normal schema cache; do not run against the live cache before
+that maintenance boundary. Read the profile hash privately immediately before
+running; its contents are never printed.
+
+Prerequisites are fail-closed hashes embedded in the helper: patched
+`tools/mcp_tool.py`, installed `model_tools.py`, installed `mcp_schema_cache.py`,
+and the repository's reviewed bounded process helper. Source/profile hashes are
+rechecked after every subprocess. The actual profile must have exactly the
+three Buttons Bebe MCP groups at `127.0.0.1:8077/8078/8079/mcp`, no commands or
+disabled groups. No test profile or QA fixture module is imported.
+
+Three separate processes (each at most 90 seconds plus bounded cleanup) list
+actual endpoint metadata, discover through installed Hermes, then prove a fresh
+process registers all three groups through Hermes' cache-registration function.
+Every phase requires exactly ten tools, true readonly hints and nonempty object
+schemas. Schema comparison permits only the reviewed string/null-union to
+`nullable: true` normalization; all other fields remain exact. Socket audit and
+HTTP guards permit only local MCP initialization/listing, never `tools/call`,
+model requests, or subprocess execution within discovery children. No model or
+commerce credential is inherited. Raw child output remains private in bounded
+memory; public output is counts, booleans and fingerprints only. Failed proof
+means keep producers paused for review, not weaken the schema or trust checks.
