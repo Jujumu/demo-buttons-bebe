@@ -66,6 +66,8 @@ export function createComposerTissue({ mailbox }) {
   }
 
   function sendDisabled(next = model) {
+    // In production this control explains the permanent lock, not delivery.
+    if (next.capabilities?.sendReply === false) return false;
     return !String(next.body || "").trim();
   }
 
@@ -154,7 +156,7 @@ export function createComposerTissue({ mailbox }) {
       : "";
     const routeLine = `<p class="composer-route mute" data-send-route>${esc(routeHint(next))}</p>`;
     const err = next.sendError
-      ? `<p class="composer-send-error" data-send-error>${esc(next.sendError)}</p>`
+      ? `<p class="composer-send-error" data-send-error role="alert">${esc(next.sendError)}</p>`
       : "";
     return `<section class="composer" data-composer>
       ${peek}
