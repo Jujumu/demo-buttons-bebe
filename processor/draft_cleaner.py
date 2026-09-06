@@ -110,8 +110,8 @@ _OPERATION_OBJECTS = (
 _UPDATE_OPERATION = r"update(?!\s+(?:you|yourself|us|the\s+customer)\b)"
 
 # Hermes is read-only. These patterns target first-person operational claims,
-# while deliberately allowing safe language such as "we're reviewing" and
-# "we'll get back to you". A match fails closed so the customer never sees a
+# including unsupported review/follow-up commitments. A match fails closed so
+# the customer never sees a
 # claim that the store has performed or committed to an external action.
 _ACTION_CLAIM_RE = re.compile(
     r"(?:"
@@ -175,12 +175,19 @@ _PENDING_ACTION_RE = re.compile(
     re.IGNORECASE,
 )
 
-_SAFE_REVIEW_BODY = (
-    "Hi! We’re reviewing this for you and will follow up with the correct "
-    "information as soon as possible."
+# No tool evidence is available to the cleaner. First-person work commitments
+# cannot be authenticated here; preserve factual policy and customer questions.
+_REVIEW_COMMITMENT_RE = re.compile(
+    r"\b(?:we|i|our team|the team)\s*(?:['\u2019](?:re|m)|are|am|is)\s+"
+    r"(?:currently\s+)?(?:reviewing|checking|investigating|looking into|working on)\b"
+    r"|\b(?:we|i|our team|the team)\s*(?:['\u2019]ll|will)\s+"
+    r"(?:review|check|investigate|look into|get back|follow up|update you|send (?:you )?an update|make it right)\b",
+    re.IGNORECASE,
 )
-_COMPACT_SAFE_REVIEW_BODY = "Hi! We’re reviewing this."
-_SHORT_SAFE_REVIEW_BODY = "Reviewing."
+_SAFE_REVIEW_BODY = "Thanks for your message. I don’t have a confirmed answer to share yet."
+_COMPACT_SAFE_REVIEW_BODY = "Thanks for your message."
+_SHORT_SAFE_REVIEW_BODY = "Thank you."
+
 
 
 @dataclass
@@ -364,6 +371,9 @@ def _exceeds_sentence_limit(text: str) -> bool:
 def _find_action_claim(text: str) -> str:
     """Return the first unsupported operational claim, if any."""
 
+    commitment = _REVIEW_COMMITMENT_RE.search(text)
+    if commitment:
+        return " ".join(commitment.group(0).split())[:240]
     for match in _ACTION_CLAIM_RE.finditer(text):
         sentence_start = max(
             text.rfind(".", 0, match.start()),
@@ -432,7 +442,7 @@ def clean_draft(text: str) -> CleanResult:
             reasons=reasons + [
                 "replaced unsupported operational promise with review-only fallback"
             ],
-            removed_note=action_claim,
+            removed_note="\n".join(part for part in (note, action_claim) if part),
         )
     return CleanResult(text=out, no_draft=False, reasons=reasons,
                        removed_note=note)

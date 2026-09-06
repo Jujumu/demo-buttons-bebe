@@ -254,7 +254,7 @@ class NoFalsePositiveTests(unittest.TestCase):
         # The console strips the [SENSITIVE ...] banner itself; the cleaner must
         # not treat the banner line as self-talk and throw the draft away.
         draft = ("[SENSITIVE — REVIEW CAREFULLY BEFORE SENDING]\n\n"
-                 "Hi! We are looking into your refund request and will follow up shortly.")
+                 "Hi! Thanks for explaining the problem. Please share a photo of the item with its tag.")
         res = dc.clean_draft(draft)
         self.assertEqual(res.text, draft)
         self.assertEqual(res.reasons, [])
@@ -282,26 +282,26 @@ class QualityGuardTests(unittest.TestCase):
         ):
             with self.subTest(label=label):
                 result = dc.clean_draft(
-                    f"Hi! We're reviewing this for you.\n\n{label}\n"
+                    f"Hi! Thanks for your message.\n\n{label}\n"
                     "Ask the warehouse to send a replacement."
                 )
                 self.assertFalse(result.no_draft)
                 self.assertEqual(
                     result.text,
-                    "Hi! We're reviewing this for you.",
+                    "Hi! Thanks for your message.",
                 )
                 self.assertIn("Ask the warehouse", result.removed_note)
 
     def test_internal_note_after_customer_text_is_removed(self):
         result = dc.clean_draft(
-            "Hi! We're reviewing this for you and will get back shortly.\n\n"
+            "Hi! Thanks for your message. I don't have a confirmed answer to share yet.\n\n"
             "[SUGGESTED CUSTOMER-FACING REPLY]\n"
             "Ask the warehouse to send a replacement."
         )
         self.assertFalse(result.no_draft)
         self.assertEqual(
             result.text,
-            "Hi! We're reviewing this for you and will get back shortly.",
+            "Hi! Thanks for your message. I don't have a confirmed answer to share yet.",
         )
         self.assertIn("Ask the warehouse", result.removed_note)
 
@@ -321,9 +321,9 @@ class QualityGuardTests(unittest.TestCase):
 
     def test_sensitive_draft_allows_five_sentences_and_shortens_six(self):
         body = " ".join([
-            "Hi, we're reviewing this for you.",
+            "Hi, thanks for your message.",
             "We want to make sure everything is correct.",
-            "We'll get back to you shortly.",
+            "Please share the item name.",
             "Thank you for your patience.",
             "We appreciate your understanding.",
         ])
@@ -372,21 +372,21 @@ class QualityGuardTests(unittest.TestCase):
         draft = (
             "Hi! U.S. orders usually ship in 2–3 days. "
             "International delivery varies by destination. "
-            "We'll get back to you shortly."
+            "Please share the item name."
         )
         result = dc.clean_draft(draft)
         self.assertFalse(result.no_draft)
         self.assertEqual(result.text, draft)
         self.assertEqual(result.reasons, [])
 
-    def test_safe_review_language_is_not_blocked(self):
+    def test_factual_uncertainty_and_customer_questions_are_not_blocked(self):
         for draft in [
-            "Hi! We're reviewing this for you and will get back shortly.",
-            "Hi! We're reviewing whether we can update the order before it ships.",
+            "Hi! Thanks for your message. I don't have a confirmed answer to share yet.",
+            "Hi! Please share the order number.",
             "Hi! We can help with that once we confirm the order details.",
-            "Hi! We'll update you shortly.",
+            "Hi! I don't have a confirmed dispatch date.",
             "Hi! We can provide product details and care instructions.",
-            "Hi! We'll make it right after our team reviews the photos.",
+            "Hi! Could you share a photo of the item with its tag?",
         ]:
             with self.subTest(draft=draft):
                 result = dc.clean_draft(draft)
@@ -398,7 +398,7 @@ class QualityGuardTests(unittest.TestCase):
             "Hi! We're reviewing whether we can update the order, and we'll switch it right away."
         )
         self.assertFalse(result.no_draft)
-        self.assertEqual(result.text, dc._COMPACT_SAFE_REVIEW_BODY)
+        self.assertEqual(result.text, dc._SAFE_REVIEW_BODY)
         self.assertIn("review-only fallback", " ".join(result.reasons))
 
     def test_short_unsafe_draft_gets_a_short_safe_fallback(self):
@@ -621,7 +621,7 @@ class SafetyNoteSurvivesTests(unittest.TestCase):
     The veto is now on the CONTENT of the line, not its opening phrase.
     """
 
-    GOOD = "Hi Sarah, we're reviewing this for you and will get back shortly."
+    GOOD = "Hi Sarah, thanks for your message. I don't have a confirmed answer to share yet."
 
     WARNINGS = [
         "The above draft should NOT be sent as-is — this customer was already "
@@ -909,7 +909,7 @@ class ShouldDraftTests(unittest.TestCase):
     def test_the_reviewer_note_reaches_the_reviewer_but_not_the_customer(self):
         """It carries a safety warning, so it must survive - but on `reason`,
         not in the text a human clicks Send on."""
-        reply = "Hi Sarah, we're reviewing this for you."
+        reply = "Hi Sarah, thanks for your message."
         warning = ("Note to the reviewer: do NOT send this, the customer was "
                    "already refunded twice and this may be fraud.")
         result = dc.clean_draft(f"{reply}\n\n{warning}")

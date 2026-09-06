@@ -1,0 +1,63 @@
+"""Draft statements must distinguish confirmed facts from work not yet performed."""
+import time
+import unittest
+import draft_cleaner as cleaner
+from hermes_runner.prompt import _build_prompt
+
+
+class EvidenceDraftTests(unittest.TestCase):
+    def test_first_person_work_and_followup_promises_are_not_safe_acknowledgments(self):
+        for text in (
+            "We're reviewing this for you and will get back shortly.",
+            "We are currently checking the stock.",
+            "I'm looking into your request.",
+            "Our team is investigating this.",
+            "We'll follow up when the measurements are available.",
+            "We will send you an update shortly.",
+            "We'll review the gift note request.",
+            "I'll check the measurements.",
+            "We'll make it right.",
+        ):
+            with self.subTest(text=text):
+                result=cleaner.clean_draft(text)
+                self.assertFalse(result.no_draft)
+                self.assertTrue(result.reasons)
+                self.assertNotEqual(result.text,text)
+                self.assertFalse(cleaner._find_action_claim(result.text))
+                self.assertLessEqual(len(result.text),len(text))
+
+    def test_policy_facts_and_needed_customer_questions_are_preserved(self):
+        for text in (
+            "Processing time is separate from carrier delivery time.",
+            "The order is marked unfulfilled. I don't have a confirmed dispatch date.",
+            "Fit varies by brand. Which item or brand/style is this for?",
+            "Could you share a photo of the item with its tag?",
+            "Are you checking the product's care label?",
+            "The policy allows a refund when its eligibility conditions are met.",
+            "A review is required before a decision can be confirmed.",
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(cleaner.clean_draft(text).text,text)
+
+    def test_fallback_preserves_sensitive_header_and_removed_reviewer_warning(self):
+        result=cleaner.clean_draft('[SENSITIVE — REVIEW CAREFULLY BEFORE SENDING]\n\nWe are reviewing your request.\n\nAGENT NOTE: Verify identity before responding.')
+        self.assertTrue(result.text.startswith('[SENSITIVE — REVIEW CAREFULLY BEFORE SENDING]'))
+        self.assertIn('Verify identity',result.removed_note)
+        self.assertNotIn('reviewing your request',result.text)
+        self.assertFalse(result.no_draft)
+
+    def test_prompt_demands_product_evidence_and_exact_observed_order_state(self):
+        prompt=_build_prompt(ticket_id=123,message_text='Sizing question',ticket_subject='Question',customer_email='synthetic@example.invalid',intents=[],token='0123456789abcdef')
+        for phrase in ('Never map age or weight alone to a size','exact brand/product','measurements required by its chart',"does NOT mean being prepared",'general processing window is policy','not a promised dispatch date','ask only for a genuinely missing detail','Never skip drafting','READ-ONLY','<DRAFT:0123456789abcdef>','JSON_RESULT[0123456789abcdef]'):
+            self.assertIn(phrase,prompt)
+        self.assertNotIn("write 'We're checking on that for you and will follow up shortly.'",prompt)
+        self.assertNotIn("say that it is being reviewed",prompt)
+
+    def test_review_commitment_detector_has_bounded_cpu_on_adversarial_near_matches(self):
+        samples=('we '+' '*100000+'are not checking',('we will follow '+'x'*100+' ')*1000,('our team is '+ 'currently '*20)*1000)
+        start=time.process_time()
+        for sample in samples:cleaner._REVIEW_COMMITMENT_RE.search(sample)
+        self.assertLess(time.process_time()-start,0.5)
+
+
+if __name__=='__main__':unittest.main()

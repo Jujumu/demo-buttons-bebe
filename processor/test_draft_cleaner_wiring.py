@@ -393,7 +393,7 @@ class CleanDraftWiringTests(unittest.TestCase):
         )
         result = _call(message_text="My item arrived damaged.")
         self.assertFalse(result.get("no_draft", False))
-        self.assertEqual(draft_for_console(result), dc._COMPACT_SAFE_REVIEW_BODY)
+        self.assertEqual(draft_for_console(result), dc._SAFE_REVIEW_BODY)
         self.assertTrue(any(
             "review-only fallback" in reason
             for reason in result["clean_reasons"]
