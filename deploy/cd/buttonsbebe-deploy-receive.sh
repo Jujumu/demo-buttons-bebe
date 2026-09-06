@@ -177,6 +177,30 @@ wait_ready() {
   done
   return 1
 }
+start_active_services() {
+  local service attempt api_ready
+  for service in "${active_services[@]}"; do
+    if [[ "$service" == "buttonsbebe-processor" ]]; then
+      api_ready=0
+      for ((attempt=1; attempt<=readiness_attempts; attempt++)); do
+        if curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8000/ready >/dev/null; then
+          api_ready=1; break
+        fi
+        if ((attempt < readiness_attempts)); then sleep "$readiness_delay_seconds"; fi
+      done
+      ((api_ready)) || return 1
+    fi
+    systemctl start "$service" || return 1
+  done
+}
+stop_active_services() {
+  local index failed=0
+  # Stop the worker before its result API; startup takes the opposite order.
+  for ((index=${#active_services[@]}-1; index>=0; index--)); do
+    systemctl stop "${active_services[index]}" || failed=1
+  done
+  ((failed == 0))
+}
 restore_timers() {
   local timer
   for timer in "${active_timers[@]}"; do systemctl start "$timer" || return 1; done
@@ -186,9 +210,9 @@ rollback() {
   trap - ERR INT TERM
   if ((rollback_needed)); then
     echo "Deployment failed; restoring only journaled source files." >&2
-    for service in "${active_services[@]}"; do systemctl stop "$service" || failed=1; done
+    stop_active_services || failed=1
     if ((failed == 0)) && python3 "$source_helper" rollback --journal "$backup_root"; then
-      for service in "${active_services[@]}"; do systemctl start "$service" || failed=1; done
+      start_active_services || failed=1
       wait_ready || failed=1
     else
       failed=1
@@ -220,9 +244,9 @@ if [[ " ${services[*]} " == *" buttonsbebe-kb-mcp "* ]]; then
   done
 fi
 rollback_needed=1
-for service in "${active_services[@]}"; do systemctl stop "$service"; done
+stop_active_services
 python3 "$source_helper" apply --journal "$backup_root"
-for service in "${active_services[@]}"; do systemctl start "$service"; done
+start_active_services
 wait_ready
 restore_timers
 python3 "$source_helper" commit --journal "$backup_root" --state "$state_file"

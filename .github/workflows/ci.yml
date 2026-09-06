@@ -30,6 +30,8 @@ jobs:
         run: |
           uv sync --project webhook --locked
           uv sync --project processor --locked
+          uv venv .inbox-venv --python 3.12
+          uv pip install --python .inbox-venv/bin/python --require-hashes -r console-src/inbox/requirements.lock
           uv venv .gate-venv --python 3.12
           uv pip install --python .gate-venv/bin/python -r kb/requirements.txt -r tools/requirements.txt
       - name: Install ripgrep (required by the release gate)
@@ -39,7 +41,7 @@ jobs:
           PYTHON: .gate-venv/bin/python
           WEBHOOK_PYTHON: webhook/.venv/bin/python
           PROCESSOR_PYTHON: processor/.venv/bin/python
-          INBOX_PYTHON: webhook/.venv/bin/python
+          INBOX_PYTHON: .inbox-venv/bin/python
         run: bash tools/verify_release.sh
 
   whatsapp:

@@ -32,7 +32,7 @@ REQUIRED_FILES = {
     'kb': ('scripts/index_kb.py', 'sync-products.sh', 'requirements.txt'),
     'kb-admin': ('server.js', 'package.json'),
     'whatsapp-connect': ('server.js', 'package.json', 'package-lock.json'),
-    'console-src/inbox': ('run-review.sh', 'index.html'),
+    'console-src/inbox': ('run-review.sh', 'index.html', 'requirements.txt', 'requirements.lock'),
     'console-src/helpdesk-agent': ('helpdesk/dispatch.py', 'helpdesk/send_access.py'),
 }
 
@@ -40,7 +40,7 @@ EXCLUDED = {'.venv', 'venv', 'node_modules', '__pycache__', 'data', 'logs', 'aut
             '.wwebjs_auth', '.wwebjs_cache', '.git', '.pytest_cache', 'lancedb',
             'products', 'learned', 'notices', 'archive', '_archive_learned'}
 KB_CONTENT = {'intents', 'faq', 'policies', 'tickets', 'shopify'}
-DEPENDENCIES = {'pyproject.toml', 'uv.lock', 'requirements.txt', 'package.json', 'package-lock.json'}
+DEPENDENCIES = {'pyproject.toml', 'uv.lock', 'requirements.txt', 'package.json', 'package-lock.json', 'requirements.lock'}
 
 
 def digest(path):
@@ -221,7 +221,9 @@ def main():
     else:
         journal = json.loads((args.journal / 'journal.json').read_text())
         if args.action == 'services':
-            print('\n'.join(sorted({s for c in journal['changes'] for s in c['entry']['services']})))
+            affected = {s for c in journal['changes'] for s in c['entry']['services']}
+            priority = {'buttonsbebe-webhook': 0, 'buttonsbebe-processor': 99}
+            print('\n'.join(sorted(affected, key=lambda service: (priority.get(service, 50), service))))
         else:
             for key, entry in journal['files'].items():
                 target = target_path(key, Path(journal['live']), Path(journal['web']), Path(journal['inbox']))
