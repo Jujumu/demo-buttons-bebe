@@ -71,6 +71,15 @@ class BackupTests(unittest.TestCase):
             self.assertEqual(record['error_type'], 'FileNotFoundError')
             self.assertNotIn('missing.pem', status.read_text())
 
+    def test_corrupt_prior_status_is_replaced_with_observable_failure(self):
+        with tempfile.TemporaryDirectory() as temp:
+            status = Path(temp) / 'backup-status.json'; status.write_text('not json')
+            with patch.object(scheduled_backup, 'STATUS', status):
+                with self.assertRaises(RuntimeError): scheduled_backup.snapshot()
+            record = json.loads(status.read_text())
+            self.assertEqual(record['status'], 'failed')
+            self.assertEqual(record['error_type'], 'JSONDecodeError')
+
 
 class InboxRuntimeTests(unittest.TestCase):
     def setUp(self):
@@ -89,7 +98,8 @@ class InboxRuntimeTests(unittest.TestCase):
         for name, content in files.items(): (self.stage / name).write_text(content)
         (self.stage / 'venv/bin').mkdir(parents=True)
         (self.stage / 'venv/bin/python').write_text('synthetic prepared binary')
-        (self.stage / 'prepared.json').write_text(json.dumps({'source_files':{name:inbox_runtime.digest(self.stage/name) for name in files}}))
+        (self.stage / 'prepared.json').write_text(json.dumps({'source_files':{name:inbox_runtime.digest(self.stage/name) for name in files},
+            'requirements':inbox_runtime.digest(self.stage/'console-src/inbox/requirements.lock'),'dependencies':[]}))
         self.unit = self.root / 'installed.service'; self.unit.write_text('original unit')
         self.newunit = self.root / 'helpdesk-inbox.service'; self.newunit.write_text('User=bb-inbox\nProtectHome=true\n')
         self.backups = self.root / 'backups'
@@ -131,12 +141,17 @@ class InboxRuntimeTests(unittest.TestCase):
     def test_concurrent_unit_change_and_unverified_state_refuse_before_stop(self):
         for expected,state in [('bad-sha',True),(inbox_runtime.digest(self.unit),False)]:
             with self.assertRaises(ValueError): inbox_runtime.apply(self.stage,self.newunit,expected,state)
-        self.assertEqual(self.calls,[])
+        self.assertFalse(any(call[:2] == ('systemctl','stop') for call in self.calls))
 
     def test_modified_prepared_source_is_not_applied(self):
         (self.stage/'console-src/inbox/review_server.py').write_text('unreviewed')
         with self.assertRaises(ValueError): inbox_runtime.verify_stage(self.stage)
         self.assertEqual(self.calls,[])
+
+    def test_dependency_drift_refuses_before_service_stop(self):
+        with patch.object(inbox_runtime, 'run', return_value='unexpected-package==1\n'):
+            with self.assertRaises(ValueError): inbox_runtime.verify_stage(self.stage)
+        self.assertFalse(any(call[:2] == ('systemctl','stop') for call in self.calls))
 
 
 if __name__ == '__main__': unittest.main()

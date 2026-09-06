@@ -64,10 +64,10 @@ def prune(directory: Path, now: datetime, retention_days: int = 14):
 def snapshot():
     now = datetime.now(timezone.utc)
     state = {'last_attempt': now.isoformat(), 'status': 'failed'}
-    if STATUS.is_file() and not STATUS.is_symlink():
-        prior = json.loads(STATUS.read_text())
-        state['last_success'] = prior.get('last_success')
     try:
+        if STATUS.is_file() and not STATUS.is_symlink():
+            prior = json.loads(STATUS.read_text())
+            state['last_success'] = prior.get('last_success')
         if CERT.is_symlink() or CERT.stat().st_uid != 0 or CERT.stat().st_mode & 0o022:
             raise ValueError('Recipient must be root-owned and protected against replacement')
         command('openssl', 'x509', '-in', str(CERT), '-noout', '-checkend', '86400')
@@ -84,19 +84,24 @@ def snapshot():
                 if name == 'inbox.sqlite3' and not source.exists(): continue
                 manifest[name] = backup(source, root / name)
             (root / 'manifest.json').write_text(json.dumps(manifest))
-            archive = root / 'snapshot.tar'
-            with tarfile.open(archive, 'w') as tar:
+            archive = root / 'snapshot.tar.gz'
+            with tarfile.open(archive, 'w:gz') as tar:
                 for name in [*manifest, 'manifest.json']:
                     tar.add(root / name, arcname=name, recursive=False)
             encrypted = root / 'snapshot.cms'
-            command('openssl', 'cms', '-encrypt', '-binary', '-aes256', '-outform', 'DER',
+            command('openssl', 'cms', '-encrypt', '-binary', '-aes-256-gcm', '-outform', 'DER',
                     '-in', str(archive), '-out', str(encrypted), str(CERT))
             if encrypted.stat().st_size == 0: raise RuntimeError('Empty ciphertext')
             metadata = {'created_at': now.isoformat(), 'databases': len(manifest),
                         'ciphertext_sha256': hashlib.sha256(encrypted.read_bytes()).hexdigest()}
             with encrypted.open('rb') as stream: os.fsync(stream.fileno())
             encrypted.rename(target)
-            target.with_suffix('.json').write_text(json.dumps(metadata) + '\n')
+            with target.with_suffix('.json').open('x') as stream:
+                stream.write(json.dumps(metadata) + '\n')
+                stream.flush(); os.fsync(stream.fileno())
+            directory = os.open(DESTINATION, os.O_RDONLY | os.O_DIRECTORY)
+            try: os.fsync(directory)
+            finally: os.close(directory)
         state.update(status='ok', last_success=now.isoformat(), encrypted_snapshots=len(manifest))
         write_status(state)
         prune(DESTINATION, now)

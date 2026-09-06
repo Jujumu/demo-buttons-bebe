@@ -108,14 +108,21 @@ def verify_stage(stage: Path) -> None:
         if not path.resolve().is_relative_to(stage.resolve()) or path.is_symlink() or digest(path) != expected:
             raise ValueError('Prepared source receipt mismatch')
     validate_source(stage)
-    if not (stage / 'venv/bin/python').is_file():
+    python = stage / 'venv/bin/python'
+    if not python.is_file():
         raise ValueError('Prepared Python runtime missing')
+    if receipt['requirements'] != digest(stage / 'console-src/inbox/requirements.lock'):
+        raise ValueError('Dependency lock receipt mismatch')
+    installed = run(str(python), '-m', 'pip', 'freeze').splitlines()
+    if sorted(installed) != sorted(receipt['dependencies']):
+        raise ValueError('Prepared installed dependencies changed')
+    run(str(python), '-m', 'pip', 'check')
 
 
 def ensure_identity() -> None:
     try:
         account = pwd.getpwnam('bb-inbox')
-        if account.pw_dir != '/nonexistent' or account.pw_shell not in ('/usr/sbin/nologin', '/sbin/nologin'):
+        if account.pw_dir not in ('/nonexistent', str(STATE)) or account.pw_shell not in ('/usr/sbin/nologin', '/sbin/nologin'):
             raise ValueError('Existing bb-inbox identity does not match the reviewed account')
     except KeyError:
         run('useradd', '--system', '--user-group', '--home-dir', '/nonexistent',
@@ -133,7 +140,12 @@ def ensure_identity() -> None:
         path.chmod(0o700 if path == STATE else 0o600)
 
 
-def probe() -> None:
+def probe(*, require_ready: bool = True) -> None:
+    if require_ready:
+        with urllib.request.urlopen('http://127.0.0.1:8766/ready', timeout=5) as response:
+            status = json.load(response)
+        if status.get('ok') is not True or status.get('sendAccessEnabled') is not False:
+            raise RuntimeError('Inbox storage readiness failed')
     data = json.dumps({'tool': 'helpdesk.send_reply', 'arguments': {
         'ticketId': 't-ada-track', 'text': 'Hi', 'confirmed': True}}).encode()
     req = urllib.request.Request('http://127.0.0.1:8766/console/api/helpdesk', data=data,
@@ -151,10 +163,10 @@ def probe() -> None:
     raise RuntimeError('Inbox webhook is not locked')
 
 
-def wait_probe() -> None:
+def wait_probe(*, require_ready: bool = True) -> None:
     for attempt in range(15):
         try:
-            probe()
+            probe(require_ready=require_ready)
             return
         except (OSError, ValueError):
             if attempt == 14:
@@ -231,7 +243,9 @@ def rollback(backup: Path, *, require_current: bool = True) -> None:
     run('systemctl', 'daemon-reload')
     if metadata['was_active']:
         run('systemctl', 'start', 'helpdesk-inbox.service')
-        wait_probe()
+        # The pre-hardening legacy server had no /ready endpoint. Its original
+        # Send/bridge contract is still required when restoring that version.
+        wait_probe(require_ready='User=bb-inbox' in UNIT.read_text())
     (backup / 'rollback-complete').write_text('completed\n')
     print('Rolled back inbox code/unit; persistent data preserved')
 

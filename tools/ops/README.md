@@ -26,7 +26,7 @@ startup failures before changing limits; do not remove restrictions blindly.
    `--unit REVIEWED_ROOT/deploy/systemd/helpdesk-inbox.service`,
    `--expected-unit-sha256 REVIEWED_SHA`, and `--state-verified`.
    The script validates Linux unit syntax, installs the identity, stops only the
-   inbox, switches code/unit, probes Send and bridge locks, and restores the old
+   inbox, switches code/unit, probes storage readiness, Send and bridge locks, and restores the old
    code/unit on failure. It prints a protected backup directory for rollback.
 5. Independently verify account, listening address, authenticated browser/API
    routing, assets, and read-only state. The script's two safety probes are not
@@ -37,7 +37,10 @@ startup failures before changing limits; do not remove restrictions blindly.
    Repeated completed rollback is a no-op. Retain the restricted account/state.
 
 The deployment receiver manages later inbox source updates at this isolated
-path. The venv is a separate prepared dependency artifact; do not move a venv
+path. The venv is a separate prepared dependency artifact; the helper verifies its
+installed package receipt and runs `python -m pip check`. Relocated package
+entrypoint shebangs may retain their staging path: always use the final absolute
+Python with `-m pip`/`-m uvicorn`, not a relocated `pip` or `uvicorn` script. do not move a venv
 out of `/root` or run the new account against credentials in the main app tree.
 The CLI takes the receiver deployment lock before apply or rollback and refuses
 a concurrent release. A later code release requires
@@ -77,7 +80,7 @@ are applied. The CD receiver does not install these units or Caddy fragments.
 The backup service reads the existing public recipient certificate
 `/etc/buttonsbebe-backup-recipient.pem`; **no private decryption key belongs on
 this VPS**. It uses the SQLite backup API, validates each snapshot, encrypts the
-archive with OpenSSL CMS AES-256, and removes temporary plaintext on normal
+archive with OpenSSL CMS AES-256-GCM after gzip compression, and removes temporary plaintext on normal
 completion. The six-hour timer writes only its own encrypted files in
 `/opt/buttonsbebe/backups/scheduled`; 14-day retention preserves at least three
 verified snapshots and never prunes manually created backups.
