@@ -17,6 +17,7 @@ from unittest.mock import patch
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 from qa_safety import GROUPS, TOOLS, policy_files, redact, scenario_fixture
+from qa_metadata import prove_metadata
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent
@@ -79,7 +80,7 @@ def unpack(result):
     return json.loads(blocks[0])
 
 
-async def endpoint_preflight(ports, fixture):
+async def endpoint_preflight(ports, fixture, schemas=None):
     receipt = {}
     for group in GROUPS:
         async with streamablehttp_client(f"http://127.0.0.1:{ports[group]}/mcp",timeout=5,sse_read_timeout=30) as (read,write,_):
@@ -88,6 +89,8 @@ async def endpoint_preflight(ports, fixture):
                 listing = await session.list_tools()
                 if {tool.name for tool in listing.tools} != TOOLS[group] or any(not tool.annotations or tool.annotations.readOnlyHint is not True for tool in listing.tools):
                     raise ValueError("QA MCP tool contract mismatch")
+                if schemas is not None:
+                    schemas.update({f"mcp__{group}__{tool.name}": tool.inputSchema for tool in listing.tools})
                 if group == "buttonsbebe_gorgias":
                     result = unpack(await session.call_tool("get_ticket",{"ticket_id":fixture["ticket"]["id"]}))
                     if result.get("id") != fixture["ticket"]["id"] or result.get("qa_fixture") is not True:
@@ -191,17 +194,19 @@ class Harness:
         for group,port in self.ports.items():
             command=[sys.executable,str(HERE/"qa_mcp_server.py"),"--group",group,"--port",str(port),"--fixture",str(self.fixture_path),"--audit",str(self.audit_path),"--allowlist",str(self.allowlist),"--kb-mode",self.kb_mode]
             self.children.append(subprocess.Popen(command,env=self.env,cwd=self.output,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,start_new_session=True))
+        schemas={}
         deadline=time.monotonic()+20
         while True:
             try:
-                receipt=asyncio.run(endpoint_preflight(self.ports,first_fixture))
+                receipt=asyncio.run(endpoint_preflight(self.ports,first_fixture,schemas))
                 break
             except Exception:
                 if time.monotonic()>=deadline or any(child.poll() is not None for child in self.children):
                     raise ValueError("QA MCP preflight failed") from None
                 time.sleep(0.2)
+        metadata=prove_metadata(self.hermes_python,self.hermes_source,self.env,self.home,schemas,GROUPS,isolated_run)
         bindings=prove_hermes_bindings(self.hermes_python,self.hermes_source,self.env,self.home,90)
-        receipt={"endpoints":receipt,"hermes_bindings":bindings,"kb_mode":self.kb_mode,
+        receipt={"endpoints":receipt,"hermes_bindings":bindings,"hermes_metadata":metadata,"kb_mode":self.kb_mode,
                  "production_prompt_sha256":hashlib.sha256((REPO/"processor/hermes_runner/prompt.py").read_bytes()).hexdigest(),
                  "production_extract_sha256":hashlib.sha256((REPO/"processor/hermes_runner/extract.py").read_bytes()).hexdigest(),
                  "profile_sha256":hashlib.sha256(json.dumps(self.config,sort_keys=True).encode()).hexdigest(),
