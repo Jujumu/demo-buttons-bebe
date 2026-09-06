@@ -162,6 +162,7 @@ done
 PYTHONPATH="$ROOT_DIR/console-src/helpdesk-agent${PYTHONPATH:+:$PYTHONPATH}" \
   "$INBOX_PYTHON" -m unittest discover -s console-src/helpdesk-agent/tests -v
 "$PYTHON" tools/build_support_theme.py --check
+"$PYTHON" tools/check_inbox_locks.py
 node --test console-src/inbox/test/*.test.js
 # Every processor/test_*.py runs, discovered rather than listed, so a new test
 # file cannot be added without CI picking it up - and so each task in the Fable
