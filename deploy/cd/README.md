@@ -91,3 +91,13 @@ No journals/releases are automatically deleted until off-host retention and
 restore coverage exist. Monitor disk usage. Workflow generation is scoped to the
 current verify workflow: resetting/replacing its numbering needs an explicit
 reviewed manifest-state migration. Forced downgrade is not exposed to CD.
+
+
+Projection deployment: the approved applied-file list must also include
+`/etc/systemd/system/buttonsbebe-inbox-projection.service` and its `.timer`.
+For inbox or webhook changes the receiver pauses an active projection timer,
+refuses to interrupt an active export, and restores the timer on success or
+rollback. Projection SQLite snapshots remain runtime data outside the source
+manifest. The exporter and reader ship to the separate `/opt` inbox tree;
+`processor/hermes_runner/process.py` ships with processor source. QA lockfiles
+and harness files under `testing/` are CI-only and never replace a live venv.

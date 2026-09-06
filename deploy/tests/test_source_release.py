@@ -58,6 +58,23 @@ class SourceRecoveryTests(unittest.TestCase):
         self.assertEqual((self.live / 'webhook/app.py').read_text(), 'old code')
         self.assertFalse((self.live / 'console-src/inbox/app.py').exists())
 
+    def test_projection_process_code_ships_but_qa_and_runtime_data_do_not(self):
+        for path in ('testing/requirements-qa.lock', 'testing/qa_harness.py',
+                     'console-src/inbox/data/projection.sqlite3',
+                     'console-src/inbox/data/inbox.sqlite3', 'kb/lancedb/index'):
+            self.write(self.staged / path, 'never replace runtime')
+        journal = self.prepare()
+        expected = {
+            'inbox/console-src/inbox/projection.py',
+            'inbox/console-src/inbox/export_projection.py',
+            'app/processor/hermes_runner/process.py',
+        }
+        self.assertTrue(expected.issubset(journal['files']))
+        self.assertFalse(any('testing/' in key or '/data/' in key or '/lancedb/' in key
+                             for key in journal['files']))
+        self.assertEqual(journal['files']['app/processor/hermes_runner/process.py']['services'],
+                         ['buttonsbebe-webhook', 'buttonsbebe-processor'])
+
     def test_partial_apply_recovers_and_repeated_rollback_is_safe(self):
         journal = self.prepare()
         first = journal['changes'][0]

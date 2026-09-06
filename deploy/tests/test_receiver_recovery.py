@@ -60,6 +60,8 @@ class ReceiverRecoveryTests(unittest.TestCase):
             '/etc/buttonsbebe-deploy-approved-config.sha256': str(self.root / 'approved'),
             '/etc/caddy/sites/support.caddy': str(self.root / 'applied-config'),
             '/etc/systemd/system/helpdesk-inbox.service': str(self.root / 'applied-config'),
+            '/etc/systemd/system/buttonsbebe-inbox-projection.service': str(self.root / 'applied-config'),
+            '/etc/systemd/system/buttonsbebe-inbox-projection.timer': str(self.root / 'applied-config'),
             '/usr/local/lib/buttonsbebe-deploy/source_release.py': str(self.root / 'helper.py'),
             '/run/lock/buttonsbebe-deploy.lock': str(self.root / 'deploy.lock'),
             '/var/tmp/buttonsbebe-release': str(self.root / 'archive'),
@@ -148,6 +150,29 @@ sys.exit(22 if (root/'live/webhook/app.py').read_text()=='new code' else 0)
         journal_data = json.loads(journal.read_text())
         for key in ('live', 'web', 'inbox', 'release'):
             self.assertTrue(Path(journal_data[key]).resolve().is_relative_to(self.root.resolve()))
+
+    def test_projection_timer_is_restored_on_rollback(self):
+        self.write(self.root / 'active.json', json.dumps([
+            'buttonsbebe-webhook', 'buttonsbebe-inbox-projection.timer']))
+        result = self.run_receiver()  # synthetic readiness fails -> rollback
+        self.assertNotEqual(result.returncode, 0)
+        calls = (self.root / 'calls').read_text()
+        self.assertIn('stop buttonsbebe-inbox-projection.timer', calls)
+        self.assertIn('start buttonsbebe-inbox-projection.timer', calls)
+        self.assertIn('buttonsbebe-inbox-projection.timer', json.loads((self.root / 'active.json').read_text()))
+
+    def test_active_projection_aborts_without_stopping_export_or_app(self):
+        self.write(self.root / 'active.json', json.dumps([
+            'buttonsbebe-webhook', 'buttonsbebe-inbox-projection.timer',
+            'buttonsbebe-inbox-projection.service']))
+        result = self.run_receiver()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(b'Inbox projection active', result.stderr)
+        calls = (self.root / 'calls').read_text()
+        self.assertNotIn('stop buttonsbebe-webhook', calls)
+        self.assertNotIn('stop buttonsbebe-inbox-projection.service', calls)
+        self.assertIn('start buttonsbebe-inbox-projection.timer', calls)
+        self.assertEqual((self.live / 'webhook/app.py').read_text(), 'old code')
 
     def test_poison_guard_refuses_an_accidentally_unpatched_production_root(self):
         result = subprocess.run(['python3', str(self.root / 'helper.py'), 'prepare',

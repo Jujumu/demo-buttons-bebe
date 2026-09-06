@@ -131,9 +131,11 @@ for line in pathlib.Path(sys.argv[1]).read_text().splitlines():
         if actual != expected:
             raise SystemExit('Applied configuration drift: ' + path)
         entries.append(path)
-required = {'/etc/caddy/sites/support.caddy', '/etc/systemd/system/helpdesk-inbox.service'}
+required = {'/etc/caddy/sites/support.caddy', '/etc/systemd/system/helpdesk-inbox.service',
+            '/etc/systemd/system/buttonsbebe-inbox-projection.service',
+            '/etc/systemd/system/buttonsbebe-inbox-projection.timer'}
 if not required.issubset(entries):
-    raise SystemExit('Support Caddy and inbox unit applied fingerprints are required')
+    raise SystemExit('Support Caddy, inbox and projection unit applied fingerprints are required')
 PYCONFIG
 # A root-approved helper owns the exclusions; an incoming archive cannot weaken
 # rollback data protection. Dependency changes fail here, before service stops.
@@ -242,6 +244,19 @@ if [[ " ${services[*]} " == *" buttonsbebe-kb-mcp "* ]]; then
       false
     fi
   done
+fi
+# The projection exporter reads the same /opt Python tree as the inbox. Pause
+# its scheduler before swapping files; never interrupt an in-flight snapshot.
+# Also cover webhook-only changes because exporter reads its canonical schema.
+if [[ " ${services[*]} " == *" helpdesk-inbox "* || " ${services[*]} " == *" buttonsbebe-webhook "* ]]; then
+  if systemctl is-active --quiet buttonsbebe-inbox-projection.timer; then
+    active_timers+=("buttonsbebe-inbox-projection.timer")
+    systemctl stop buttonsbebe-inbox-projection.timer
+  fi
+  if systemctl is-active --quiet buttonsbebe-inbox-projection.service; then
+    echo "Inbox projection active; retry deployment after it finishes." >&2
+    false
+  fi
 fi
 rollback_needed=1
 stop_active_services
