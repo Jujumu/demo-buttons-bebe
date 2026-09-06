@@ -176,7 +176,9 @@ def apply(plan,live=LIVE,candidate=CANDIDATE,backups=BACKUPS,lock=LOCK,service=s
         originals={name:(live/name).read_bytes() for name in FILES}
         modes={name:stat.S_IMODE((live/name).stat().st_mode) for name in FILES}
         for name in FILES:atomic_file(private/name,originals[name],0o600)
-        receipt={'schema':1,'phase':'prepared','approved':plan,'original_modes':modes,'auth_state_touched':False}
+        receipt={'schema':1,'phase':'prepared','approved':plan,'original_modes':modes,'auth_state_touched':False,
+                 'rollback_server_variant':'original-with-reviewed-startup-log-redaction',
+                 'rollback_server_sha256':plan['patched_server_sha256']}
         journal(private/'switch.json',receipt)
         stop_attempted=False;old_moved=False;new_moved=False;source_changed=False
         try:
@@ -200,8 +202,12 @@ def apply(plan,live=LIVE,candidate=CANDIDATE,backups=BACKUPS,lock=LOCK,service=s
                 if stop_attempted:service('stop')
                 if new_moved:os.rename(live/'node_modules',private/'failed-node_modules')
                 if old_moved:os.rename(private/'node_modules',live/'node_modules')
-                if source_changed:
-                    for name in FILES:atomic_file(live/name,originals[name],modes[name])
+                if stop_attempted:
+                    # Never reintroduce the secret-bearing startup log when
+                    # restarting the original dependency set after failure.
+                    atomic_file(live/'server.js',patched_server(originals['server.js']),modes['server.js'])
+                    for name in ('package.json','package-lock.json'):
+                        atomic_file(live/name,originals[name],modes[name])
                 sync_directories(live,candidate,private)
                 if stop_attempted:service('start');ready(service,state)
                 receipt['phase']='rolled-back';journal(private/'switch.json',receipt)
