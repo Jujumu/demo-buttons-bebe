@@ -80,7 +80,7 @@ class IntentStore:
                         raise ActionConflict('operation_id_conflict')
                 return row, False
             cursor = await conn.execute('''SELECT pm.customer_email, pm.message_text, tr.draft_text
-                FROM parsed_messages pm LEFT JOIN ticket_results tr ON tr.message_id=pm.message_id
+                FROM parsed_messages pm LEFT JOIN ticket_results tr ON tr.ticket_id=pm.ticket_id AND tr.message_id=pm.message_id
                 WHERE pm.ticket_id=? AND pm.message_id=? AND pm.is_customer_message=1''',
                 (ticket_id, source_message_id))
             context = await cursor.fetchone()
@@ -99,6 +99,8 @@ class IntentStore:
             previous = await cursor.fetchone()
             await cursor.close()
             if previous:
+                if previous['actor_id'] != actor_id:
+                    raise ActionConflict('action_owned_by_another_actor', 403)
                 if previous['approve_learning'] != int(approve_learning):
                     raise ActionConflict('learning_approval_is_fixed_for_existing_action', operation_id=previous['operation_id'])
                 return dict(previous), False  # New browser tab/key, same reviewed message.

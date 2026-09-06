@@ -40,6 +40,13 @@ class ActionIntentTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaisesRegex(ActionConflict, 'operation_id_conflict'):
                 await self.reserve(**changes)
 
+    async def test_another_actor_cannot_adopt_semantic_action_or_read_status(self):
+        await self.reserve(actor_id='owner:other')
+        with self.assertRaisesRegex(ActionConflict, 'action_owned_by_another_actor'):
+            await self.reserve(operation_id=str(uuid.uuid4()))
+        response=await self.client.get(f'/dashboard/api/ticket/1/actions/{self.operation}')
+        self.assertEqual(response.status_code,404)
+
     async def test_interrupted_intent_survives_new_store_without_resend_permission(self):
         await self.reserve()
         fresh_store = IntentStore(self.path)

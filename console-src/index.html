@@ -292,6 +292,7 @@ let stats={},tickets=[],learn={},tab="overview",openTk=null,filter="all";
 let kbData=null,kbHealth=null,kbHealthError="",kbSel=null,kbBuf="",kbMsg="",kbReindexing=false,kbLoaded=false,kbLoadError="";
 let waData=null,waMsg="",waMode=null,waNumber=null,waPoll=null;
 const WAAPI="/console/waapi";
+let actSourceDraft="",actEditorKey=null,actGeneration=0;
 let actDraft="",actInstr="",actEditOpen=false,actMsg="",actBusy=false,actShowRaw=false;
 const NOTICE_TEXT_MAX=1200;
 let noticesData=null,noticesError="",noticeText="",noticeDeadline=defaultNoticeDeadline(),noticeNoExpiry=false,noticeMsg="",noticeError="",noticeErrorField="",noticeBusy=false,noticeReview=false,noticeRemoveId=null,noticeDeletingId=null;
@@ -340,7 +341,7 @@ async function boot(){
  render();
 }
 
-function goTickets(nextFilter="all",ticketKey=null){filter=nextFilter;tab="tickets";openTk=ticketKey==null?null:String(ticketKey);render();if(openTk)requestAnimationFrame(()=>{const d=document.querySelector(".detail");if(d)d.focus();});}
+function goTickets(nextFilter="all",ticketKey=null){filter=nextFilter;tab="tickets";if(ticketKey!=null){openTicket(ticketKey);return;}openTk=null;render();}
 
 function render(){
  const pages={overview:"Overview",tickets:"Ticket feed",conns:"Connections",kb:"Knowledge base",notices:"Notice Board",notif:"Notifications",settings:"Settings"};
@@ -492,7 +493,7 @@ function row(t){
 }
 let actLearn=false;
 function captureAct(){const l=document.getElementById("act-learn");if(l)actLearn=l.checked;const d=document.getElementById("act-draft");if(d)actDraft=d.value;const i=document.getElementById("act-instr");if(i)actInstr=i.value;}
-function openTicket(mid){const t=tickets.find(x=>keyOf(x)===String(mid));openTk=String(mid);actDraft=cleanDraft(t&&t.draft_text||"");actInstr="";actEditOpen=false;actMsg="";actBusy=false;actShowRaw=false;actLearn=false;render();requestAnimationFrame(()=>{const d=document.querySelector(".detail");if(d)d.focus();});}
+function openTicket(mid){const t=tickets.find(x=>keyOf(x)===String(mid));openTk=String(mid);actGeneration++;actEditorKey=t?keyOf(t):null;actSourceDraft=t?.draft_text||"";actDraft=cleanDraft(actSourceDraft);actInstr="";actEditOpen=false;actMsg="";actBusy=false;actShowRaw=false;actLearn=false;render();requestAnimationFrame(()=>{const d=document.querySelector(".detail");if(d)d.focus();});}
 function curTk(){return tickets.find(x=>keyOf(x)===openTk);}
 function actionStorageKey(t,kind){return "bb-action-v1:"+kind+":"+t.ticket_id+":"+String(t.message_id);}
 async function hashActionText(value){const bytes=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(value));return Array.from(new Uint8Array(bytes),x=>x.toString(16).padStart(2,"0")).join("");}
@@ -523,27 +524,30 @@ function actionMessage(j){
 async function submitAction(kind){
  if(actBusy)return;
  captureAct();const t=curTk();if(!t)return;
+ if(actEditorKey!==keyOf(t)||actSourceDraft!==(t.draft_text||"")){actMsg="The source draft changed. Reopen this ticket and review the current draft before sending.";render();return;}
  if(!actDraft.trim()){actMsg="Nothing to send.";render();return;}
  const warn=isEsc(t)?"This ticket is flagged SENSITIVE.\n\n":"";
  const confirmation=kind==="send"?"Send this reply directly to "+(t.customer_email||"the customer")+"?":"Post this text as a staff-only internal note in Gorgias?";
  if(!confirm(warn+confirmation))return;
- const approvedText=actDraft,serverDraft=t.draft_text||"",learningApproval=kind==="send"&&actLearn,actionTicketKey=keyOf(t);
+ const approvedText=actDraft,serverDraft=actSourceDraft,learningApproval=kind==="send"&&actLearn,actionTicketKey=keyOf(t),actionGeneration=actGeneration;
  let message="";
  actBusy=true;actMsg=kind==="send"?"Sending…":"Posting internal note…";render();
  try{
-  const operation_id=await actionOperation(t,kind,approvedText,learningApproval);
+  const operation_id=await actionOperation({...t,draft_text:serverDraft},kind,approvedText,learningApproval);
   const draft_revision=await hashActionText(serverDraft);
   const meta={text:approvedText,confirmed:true,operation_id,source_message_id:String(t.message_id),draft_revision,approve_learning:learningApproval};
   const r=await fetch(API+"/ticket/"+t.ticket_id+"/"+kind,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(meta)});
   const j=await r.json();rememberAction(t,kind,j);message=actionMessage(j);
  }catch(e){message=e.message||"Delivery could not be confirmed. Check action status before sending again.";}
- if(curTk()&&keyOf(curTk())===actionTicketKey){actMsg=message;actBusy=false;render();}
+ if(actGeneration===actionGeneration&&curTk()&&keyOf(curTk())===actionTicketKey){actMsg=message;actBusy=false;render();}
 }
 async function sendReply(){return submitAction("send");}
 async function noteReply(){return submitAction("note");}
 async function checkActionStatus(){
  if(actBusy)return;
  captureAct();const t=curTk();if(!t)return;
+ const statusGeneration=actGeneration,statusTicketKey=keyOf(t);
+ let statusMessage="";
  actBusy=true;actMsg="Checking recorded action status…";render();
  try{
   const messages=[];
@@ -552,18 +556,18 @@ async function checkActionStatus(){
    const r=await fetch(API+"/ticket/"+t.ticket_id+"/actions/"+encodeURIComponent(record.operation_id));
    const j=await r.json();rememberAction(t,kind,j);messages.push((kind==="send"?"Reply: ":"Note: ")+actionMessage(j));
   }
-  actMsg=messages.join(" · ")||"No action is recorded in this browser for this customer message.";
- }catch(e){actMsg="Status unavailable. Review the ticket in Gorgias before any further send.";}
- actBusy=false;render();
+  statusMessage=messages.join(" · ")||"No action is recorded in this browser for this customer message.";
+ }catch(e){statusMessage="Status unavailable. Review the ticket in Gorgias before any further send.";}
+ if(actGeneration===statusGeneration&&curTk()&&keyOf(curTk())===statusTicketKey){actMsg=statusMessage;actBusy=false;render();}
 }
 async function rewriteDraft(){
  if(actBusy)return;
  captureAct();const t=curTk();if(!t)return;
- const rewriteTicketKey=keyOf(t);
+ const rewriteTicketKey=keyOf(t),rewriteGeneration=actGeneration;
  if(!actInstr.trim()){actMsg="Type an instruction first.";render();return;}
  actBusy=true;actMsg="AI is rewriting… (can take up to a minute)";render();
- try{const r=await fetch(API+"/ticket/"+t.ticket_id+"/rewrite",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({draft:actDraft,instruction:actInstr,source_message_id:String(t.message_id)})});const j=await r.json();if(!curTk()||keyOf(curTk())!==rewriteTicketKey)return;if(r.ok&&j.draft){actDraft=j.draft;actEditOpen=false;actInstr="";actMsg="✅ Rewritten — review it, then send.";}else{actMsg="Rewrite failed: "+(j.error||r.status);}}catch(e){if(curTk()&&keyOf(curTk())===rewriteTicketKey)actMsg="Rewrite failed.";}
- if(curTk()&&keyOf(curTk())===rewriteTicketKey){actBusy=false;render();}
+ try{const r=await fetch(API+"/ticket/"+t.ticket_id+"/rewrite",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({draft:actDraft,instruction:actInstr,source_message_id:String(t.message_id)})});const j=await r.json();if(actGeneration!==rewriteGeneration||!curTk()||keyOf(curTk())!==rewriteTicketKey)return;if(r.ok&&j.draft){actDraft=j.draft;actEditOpen=false;actInstr="";actMsg="✅ Rewritten — review it, then send.";}else{actMsg="Rewrite failed: "+(j.error||r.status);}}catch(e){if(actGeneration===rewriteGeneration&&curTk()&&keyOf(curTk())===rewriteTicketKey)actMsg="Rewrite failed.";}
+ if(actGeneration===rewriteGeneration&&curTk()&&keyOf(curTk())===rewriteTicketKey){actBusy=false;render();}
 }
 
 function whatsappConnectionSummary(data){

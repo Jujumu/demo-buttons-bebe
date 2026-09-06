@@ -46,11 +46,36 @@ test('switching tickets during operation preparation never changes approved send
  const body=html.slice(html.indexOf('async function submitAction('),html.indexOf('async function sendReply('));
  let captured;
  const t={ticket_id:1,message_id:'first',customer_email:'one@example.com'};
- const context=vm.createContext({actBusy:false,actDraft:'Approved for first customer',actLearn:false,
+ const context=vm.createContext({actBusy:false,actDraft:'Approved for first customer',actLearn:false,actSourceDraft:'',actEditorKey:'first',actGeneration:1,
   captureAct(){},curTk:()=>t,keyOf:x=>x.message_id,isEsc:()=>false,confirm:()=>true,render(){},API:'/console/api',
   async actionOperation(){context.actDraft='Different customer draft';return 'operation';},
   async fetch(url,opts){captured=JSON.parse(opts.body);return {async json(){return {delivery_status:'sent'};}};},
   hashActionText:async()=>"revision",rememberAction(){},actionMessage:()=> 'Sent'});
  vm.runInContext(body,context);await context.submitAction('send');
  assert.equal(captured.text,'Approved for first customer');assert.equal(captured.source_message_id,'first');
+});
+
+test('a refreshed server draft cannot bless text loaded from an older revision',async()=>{
+ const body=html.slice(html.indexOf('async function submitAction('),html.indexOf('async function sendReply('));
+ let calls=0;
+ const t={ticket_id:1,message_id:'first',draft_text:'new server draft'};
+ const context=vm.createContext({actBusy:false,actDraft:'old edited draft',actSourceDraft:'old server draft',actEditorKey:'first',actGeneration:1,
+ captureAct(){},curTk:()=>t,keyOf:x=>x.message_id,render(){},fetch(){calls++;}});
+ vm.runInContext(body,context);await context.submitAction('send');
+ assert.equal(calls,0);assert.match(context.actMsg,/source draft changed/);
+});
+test('status completion cannot overwrite a newly opened editor',async()=>{
+ const body=html.slice(html.indexOf('async function checkActionStatus('),html.indexOf('async function rewriteDraft('));
+ let current={ticket_id:1,message_id:'first'};
+ const context=vm.createContext({actBusy:false,actGeneration:1,actMsg:'',captureAct(){},curTk:()=>current,keyOf:x=>x.message_id,render(){},API:'/api',
+ localStorage:{getItem:()=>JSON.stringify({operation_id:'operation'})},actionStorageKey:()=>'',rememberAction(){},actionMessage:()=> 'old outcome',
+ async fetch(){context.actGeneration=2;context.actMsg='new editor';current={ticket_id:2,message_id:'second'};return {json:async()=>({delivery_status:'sent'})};}});
+ vm.runInContext(body,context);await context.checkActionStatus();assert.equal(context.actMsg,'new editor');
+});
+test('overview navigation initializes the requested ticket editor',()=>{
+ const source=html.slice(html.indexOf('function goTickets('),html.indexOf('\nfunction render(){'));
+ let opened;
+ const context=vm.createContext({openTicket:key=>{opened=key;},render(){}});
+ vm.runInContext(source,context);context.goTickets('all','customer-message-2');
+ assert.equal(opened,'customer-message-2');
 });
