@@ -94,8 +94,10 @@ def list_pending() -> list[dict]:
 
 
 def get_packet(ticket_id) -> dict | None:
+    if not re.fullmatch(r"[0-9]{1,20}",str(ticket_id)):
+        return None
     p = config.LEARNED_DIR / f"ticket-{ticket_id}.md"
-    if not p.exists():
+    if p.is_symlink() or not p.is_file():
         return None
     front, sections, raw = _parse(p)
     roles = _roles(sections)
@@ -176,6 +178,8 @@ def approve(ticket_id, pii_cleared: bool, note: str = "", why: str = "", review_
 
 
 def reject(ticket_id, purge: bool = False) -> dict:
+    if not re.fullmatch(r"[0-9]{1,20}",str(ticket_id)):
+        return {"ok":False,"error":"invalid ticket identifier"}
     src = config.LEARNED_DIR / f"ticket-{ticket_id}.md"
     if not src.exists():
         return {"ok": False, "error": "no such packet"}

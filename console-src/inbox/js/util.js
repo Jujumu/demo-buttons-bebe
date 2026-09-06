@@ -457,3 +457,12 @@ export function railWriteControlHits(html) {
   const slice = rail ? rail[0] : String(html || "");
   return forbiddenControlHits(slice).filter((hit) => hit !== "Gaia");
 }
+
+/** Only absolute web URLs may become links or remote image sources. */
+export function safeWebUrl(value) {
+  if (typeof value !== "string" || /[\u0000-\u0020\u007f]/.test(value)) return "";
+  try {
+    const url = new URL(value);
+    return ["https:","http:"].includes(url.protocol) && !url.username && !url.password ? url.href : "";
+  } catch { return ""; }
+}

@@ -21,6 +21,19 @@ class LegacyReviewTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('delivery_status',response.json())
 
 class LegacyReviewPacketTests(unittest.TestCase):
+    def test_packet_paths_reject_traversal_and_symlinks(self):
+        import tempfile
+        from pathlib import Path
+        from feedback import review
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);(root/'private.md').write_text('private synthetic value')
+            (root/'ticket-123.md').symlink_to(root/'private.md')
+            with patch.object(review.config,'LEARNED_DIR',root):
+                self.assertIsNone(review.get_packet('123'))
+                self.assertIsNone(review.get_packet('../private'))
+                self.assertFalse(review.reject('../private')['ok'])
+            self.assertEqual((root/'private.md').read_text(),'private synthetic value')
+
     def test_pii_review_creates_only_unconfirmed_exemplar_with_actor(self):
         import tempfile
         from pathlib import Path

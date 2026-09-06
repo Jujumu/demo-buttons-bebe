@@ -1,6 +1,6 @@
 import { MAILBOX_TOPICS } from "../contracts.js";
 import { clerkStatusEvents, listCustomerName, messageSpeaker, talkMessages } from "../shop/clerk-ticket.js";
-import { esc, formatWeekday, formatWhen, initials, requestTypeChrome, screenStatus } from "../util.js";
+import { esc, formatWeekday, formatWhen, initials, requestTypeChrome, safeWebUrl, screenStatus } from "../util.js";
 
 /**
  * Thread tissue.
@@ -24,12 +24,12 @@ export function createThreadTissue({ mailbox }) {
     const rows = Array.isArray(message.attachments) ? message.attachments : [];
     if (!rows.length) return "";
     const figures = rows
-      .filter((item) => item && item.url)
+      .filter((item) => item && safeWebUrl(item.url))
       .map((item) => {
         const alt = item.alt || "Attachment";
         return `<figure class="bubble-attach">
-          <button type="button" class="bubble-thumb" data-attach-open data-attach-url="${esc(item.url)}" data-attach-alt="${esc(alt)}" aria-label="Expand ${esc(alt)}" title="Click to enlarge photo">
-            <img src="${esc(item.url)}" alt="${esc(alt)}" loading="lazy" width="80" height="80" />
+          <button type="button" class="bubble-thumb" data-attach-open data-attach-url="${esc(safeWebUrl(item.url))}" data-attach-alt="${esc(alt)}" aria-label="Expand ${esc(alt)}" title="Click to enlarge photo">
+            <img src="${esc(safeWebUrl(item.url))}" alt="${esc(alt)}" loading="lazy" width="80" height="80" />
           </button>
           <figcaption>${esc(alt)}</figcaption>
         </figure>`;
@@ -39,10 +39,10 @@ export function createThreadTissue({ mailbox }) {
   }
 
   function renderLightbox() {
-    if (!lightbox?.url) return "";
+    if (!safeWebUrl(lightbox?.url)) return "";
     return `<div class="attach-lightbox-backdrop" data-attach-lightbox role="dialog" aria-modal="true" aria-label="Attachment">
       <figure class="attach-lightbox">
-        <img src="${esc(lightbox.url)}" alt="${esc(lightbox.alt || "Attachment")}" />
+        <img src="${esc(safeWebUrl(lightbox.url))}" alt="${esc(lightbox.alt || "Attachment")}" />
         <figcaption>${esc(lightbox.alt || "Attachment")}</figcaption>
       </figure>
     </div>`;
