@@ -28,7 +28,7 @@ export function createThreadTissue({ mailbox }) {
       .map((item) => {
         const alt = item.alt || "Attachment";
         return `<figure class="bubble-attach">
-          <button type="button" class="bubble-thumb" data-attach-open data-attach-url="${esc(item.url)}" data-attach-alt="${esc(alt)}" aria-label="Expand ${esc(alt)}">
+          <button type="button" class="bubble-thumb" data-attach-open data-attach-url="${esc(item.url)}" data-attach-alt="${esc(alt)}" aria-label="Expand ${esc(alt)}" title="Click to enlarge photo">
             <img src="${esc(item.url)}" alt="${esc(alt)}" loading="lazy" width="80" height="80" />
           </button>
           <figcaption>${esc(alt)}</figcaption>
@@ -99,7 +99,7 @@ export function createThreadTissue({ mailbox }) {
     const summarizeLabel = count === 1 ? "Summarize 1 message" : `Summarize ${count} messages`;
     const escalateControl = ticket.escalated
       ? ""
-      : `<button type="button" class="btn-quiet" data-escalate="${esc(ticket.id)}">Escalate</button>`;
+      : `<button type="button" class="btn-quiet" data-escalate="${esc(ticket.id)}" title="Flag this ticket for a human lead. Does not email the customer.">Escalate</button>`;
     const chrome = requestTypeChrome(ticket);
     const subtype = chrome?.subtype
       ? `<span class="thread-request-subtype mute">${esc(chrome.subtype)}</span>`
@@ -108,7 +108,7 @@ export function createThreadTissue({ mailbox }) {
       ? ""
       : chrome.handled
         ? `<p class="thread-request-handled mute">${esc(chrome.doneLabel)}</p>`
-        : `<button type="button" class="btn-hairline" ${chrome.gateAttr}>${esc(chrome.markLabel)}</button>`;
+        : `<button type="button" class="btn-hairline" ${chrome.gateAttr} title="Mark this request handled on the ticket only. No Shopify write.">${esc(chrome.markLabel)}</button>`;
     const typeLine = chrome
       ? `<div class="thread-request-row">
           <p class="thread-request mute" data-request-type="${esc(chrome.type)}"${chrome.severityAttr || ""}>${esc(chrome.title)}</p>
@@ -124,13 +124,13 @@ export function createThreadTissue({ mailbox }) {
           ${typeLine}
         </div>
         <div class="thread-head-actions">
-          <span class="status-badge">${esc(screenStatus(ticket.status))}</span>
+          <span class="status-badge" title="Ticket status">${esc(screenStatus(ticket.status))}</span>
           ${escalateControl}
         </div>
       </header>
       <div class="thread-scroll">${timeline(ticket)}</div>
       <div class="summarize-row">
-        <button type="button" class="btn-quiet" data-summarize="${esc(ticket.id)}">${esc(summarizeLabel)}</button>
+        <button type="button" class="btn-quiet" data-summarize="${esc(ticket.id)}" title="Show a short mute summary above the reply box">${esc(summarizeLabel)}</button>
       </div>
     </div>${renderLightbox()}`;
   }

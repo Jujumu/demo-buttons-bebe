@@ -164,8 +164,8 @@ export function createInboxOrgan(opts = {}) {
         <div class="gate-sheet" role="dialog" aria-modal="true" aria-labelledby="gate-sheet-copy">
           <p id="gate-sheet-copy">${PRIVACY_LOCKED_COPY}</p>
           <div class="gate-sheet-actions">
-            <button type="button" class="btn-ink" data-privacy-handled>${GATE_CONFIRM_LABEL}</button>
-            <button type="button" class="btn-hairline" data-gate-dismiss>Close</button>
+            <button type="button" class="btn-ink" data-privacy-handled title="Confirm on this ticket only. No live data erase or export.">${GATE_CONFIRM_LABEL}</button>
+            <button type="button" class="btn-hairline" data-gate-dismiss title="Close this notice">Close</button>
           </div>
         </div>
       </div>`;
@@ -175,8 +175,8 @@ export function createInboxOrgan(opts = {}) {
         <div class="gate-sheet" role="dialog" aria-modal="true" aria-labelledby="gate-sheet-copy">
           <p id="gate-sheet-copy">${MARKETING_LOCKED_COPY}</p>
           <div class="gate-sheet-actions">
-            <button type="button" class="btn-ink" data-unsubscribe-handled>${GATE_CONFIRM_LABEL}</button>
-            <button type="button" class="btn-hairline" data-gate-dismiss>Close</button>
+            <button type="button" class="btn-ink" data-unsubscribe-handled title="Confirm on this ticket only. No live unsubscribe.">${GATE_CONFIRM_LABEL}</button>
+            <button type="button" class="btn-hairline" data-gate-dismiss title="Close this notice">Close</button>
           </div>
         </div>
       </div>`;
@@ -186,7 +186,7 @@ export function createInboxOrgan(opts = {}) {
         <div class="gate-sheet" role="dialog" aria-modal="true" aria-labelledby="gate-sheet-copy">
           <p id="gate-sheet-copy">${CUSTOMER_JOIN_LOCKED_COPY}</p>
           <div class="gate-sheet-actions">
-            <button type="button" class="btn-hairline" data-gate-dismiss>Close</button>
+            <button type="button" class="btn-hairline" data-gate-dismiss title="Close this notice">Close</button>
           </div>
         </div>
       </div>`;
@@ -196,7 +196,7 @@ export function createInboxOrgan(opts = {}) {
         <div class="gate-sheet" role="dialog" aria-modal="true" aria-labelledby="gate-sheet-copy">
           <p id="gate-sheet-copy">${ORDER_LINK_LOCKED_COPY}</p>
           <div class="gate-sheet-actions">
-            <button type="button" class="btn-hairline" data-gate-dismiss>Close</button>
+            <button type="button" class="btn-hairline" data-gate-dismiss title="Close this notice">Close</button>
           </div>
         </div>
       </div>`;
@@ -206,7 +206,7 @@ export function createInboxOrgan(opts = {}) {
       <div class="gate-sheet" role="dialog" aria-modal="true" aria-labelledby="gate-sheet-copy">
         <p id="gate-sheet-copy">${PAYMENTS_LOCKED_COPY}</p>
         <div class="gate-sheet-actions">
-          <button type="button" class="btn-hairline" data-gate-dismiss>Close</button>
+          <button type="button" class="btn-hairline" data-gate-dismiss title="Close this notice">Close</button>
         </div>
       </div>
     </div>`;

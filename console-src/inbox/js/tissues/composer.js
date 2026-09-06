@@ -112,24 +112,24 @@ export function createComposerTissue({ mailbox }) {
             <p class="draft-text">${esc(next.strip)}</p>
           </div>
           <div class="draft-actions">
-            <button type="button" class="btn-quiet" data-insert>Use draft</button>
-            <button type="button" class="btn-quiet" data-regenerate>Regenerate</button>
-            <button type="button" class="btn-quiet btn-dismiss" data-discard>Dismiss</button>
+            <button type="button" class="btn-quiet" data-insert title="Copy the AI draft into the reply box">Use draft</button>
+            <button type="button" class="btn-quiet" data-regenerate title="Ask for a new AI draft">Regenerate</button>
+            <button type="button" class="btn-quiet btn-dismiss" data-discard title="Hide this AI draft">Dismiss</button>
           </div>
         </div>`
       : "";
     const idle = sendDisabled(next);
     const sendClose = hideSendAndClose(next)
       ? ""
-      : `<button type="button" class="btn-hairline${idle ? " is-disabled" : ""}" data-send-close ${idle ? "disabled" : ""}>Send &amp; close</button>`;
+      : `<button type="button" class="btn-hairline${idle ? " is-disabled" : ""}" data-send-close ${idle ? "disabled" : ""} title="Send the reply and mark this ticket closed">Send &amp; close</button>`;
     const macroLocked = selected ? "" : "disabled";
     const searchOpen = next.searchOpen === true;
     const picker = searchOpen
-      ? `<input class="macro-search" data-macro-search type="search" placeholder="Search macros by name or tags" value="${esc(next.query)}" aria-label="Search macros">
+      ? `<input class="macro-search" data-macro-search type="search" placeholder="Search macros by name or tags" value="${esc(next.query)}" aria-label="Search macros" title="Search saved reply macros">
         <div class="macro-list" data-macro-list>${macroItems || `<p class="macro-empty">No macros match.</p>`}</div>
         <div class="macro-actions">
-          <button type="button" class="btn-quiet" data-macro-insert ${macroLocked}>Replace</button>
-          <button type="button" class="btn-quiet" data-macro-append ${macroLocked}>Append</button>
+          <button type="button" class="btn-quiet" data-macro-insert ${macroLocked} title="Replace the reply box with this macro">Replace</button>
+          <button type="button" class="btn-quiet" data-macro-append ${macroLocked} title="Add this macro after the current reply">Append</button>
         </div>`
       : "";
     return `<section class="composer" data-composer>
@@ -139,12 +139,12 @@ export function createComposerTissue({ mailbox }) {
       ${strip}
       <div class="composer-box" data-macro-open="${searchOpen ? "true" : "false"}">
         ${picker}
-        <textarea data-body placeholder="Write the reply. The human always sends.">${esc(next.body)}</textarea>
+        <textarea data-body placeholder="Write the reply. The human always sends." title="Type the customer reply here. You still choose Send.">${esc(next.body)}</textarea>
       </div>
       <div class="composer-actions">
-        <button type="button" class="btn-hairline" data-macros aria-expanded="${searchOpen ? "true" : "false"}">Macros</button>
+        <button type="button" class="btn-hairline" data-macros aria-expanded="${searchOpen ? "true" : "false"}" title="Open saved reply macros">Macros</button>
         <div class="composer-send">
-          <button type="button" class="btn-ink btn-send${idle ? " is-disabled" : ""}" data-send ${idle ? "disabled" : ""}>Send</button>
+          <button type="button" class="btn-ink btn-send${idle ? " is-disabled" : ""}" data-send ${idle ? "disabled" : ""} title="Send this reply to the customer">Send</button>
           ${sendClose}
         </div>
       </div>

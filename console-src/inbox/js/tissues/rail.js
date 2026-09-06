@@ -77,7 +77,7 @@ export function createRailOrgan({ shop, mailbox }) {
       </button>
       <div class="rail-body">
         <p class="tissue-error">${esc(errorCopy(tissueId))}</p>
-        <button type="button" class="btn-hairline" data-retry="${esc(tissueId)}">Retry</button>
+        <button type="button" class="btn-hairline" data-retry="${esc(tissueId)}" title="Try loading this section again">Retry</button>
       </div>
     </section>`;
   }

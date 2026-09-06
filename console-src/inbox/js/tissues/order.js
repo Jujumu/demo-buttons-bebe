@@ -107,7 +107,7 @@ function renderTrackingCopy(tracking) {
     ? `<span class="ship-copy">${[company, number].filter(Boolean).join("")}</span>`
     : "";
   const track = tracking.url
-    ? `<a class="track-link" href="${esc(tracking.url)}" rel="noreferrer" target="_blank">Track</a>`
+    ? `<a class="track-link" href="${esc(tracking.url)}" rel="noreferrer" target="_blank" title="Open carrier tracking in a new tab">Track</a>`
     : "";
   return `<p class="ship-track">${copy}${track}</p>`;
 }
@@ -258,7 +258,7 @@ export function renderOrder(model, { open = true, addressesOpen = false, shipmen
   const record = model.record;
   const gateHairline = record
     ? `<div class="order-gate">
-      <button type="button" class="btn-hairline" data-write-gate-open>Payments locked</button>
+      <button type="button" class="btn-hairline" data-write-gate-open title="Refunds and cancels stay locked until someone names an exact write">Payments locked</button>
     </div>`
     : "";
   if (!model.ok || !record) {
@@ -269,7 +269,7 @@ export function renderOrder(model, { open = true, addressesOpen = false, shipmen
       <div class="rail-body">
         <div class="rail-empty-next">
           <p class="tissue-empty">No order</p>
-          <button type="button" class="btn-hairline" data-order-link-gate-open>Link order</button>
+          <button type="button" class="btn-hairline" data-order-link-gate-open title="Link order stays locked. No live link yet.">Link order</button>
         </div>
       </div>
     </section>`;

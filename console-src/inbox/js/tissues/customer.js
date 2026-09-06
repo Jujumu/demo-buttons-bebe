@@ -83,7 +83,7 @@ export function renderCustomer(model, { open = true, giftCardsOpen } = {}) {
   const body = !model.ok || !record
     ? `<div class="rail-empty-next">
         <p class="tissue-empty">No customer</p>
-        <button type="button" class="btn-hairline" data-customer-join-gate-open>Find customer</button>
+        <button type="button" class="btn-hairline" data-customer-join-gate-open title="Find customer stays locked. No live join yet.">Find customer</button>
       </div>`
     : `<dl class="rail-dl">
         <div><dt>Name</dt><dd>${esc(record.displayName)}</dd></div>

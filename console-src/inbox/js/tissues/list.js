@@ -92,7 +92,7 @@ export function createListTissue({ mailbox }) {
       <a class="console-link" href="../index.html">Console</a>
       <div class="list-toolbar-row">
         <div class="list-scope">
-          <button type="button" class="list-scope-btn" data-list-inbox aria-label="Inbox">
+          <button type="button" class="list-scope-btn" data-list-inbox aria-label="Inbox" title="Open the views menu">
             <span class="list-scope-label">Inbox</span>
             ${ICON_CHEVRON}
           </button>
