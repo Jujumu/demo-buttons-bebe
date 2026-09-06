@@ -86,3 +86,17 @@ three progressive-disclosure bridge definitions. For the bridge presentation,
 both the dispatcher catalog and agent executor scope must equal those same ten
 capabilities, and unknown/out-of-scope bridge calls must fail before dispatch.
 No production tool presentation is changed to make this check pass.
+
+Live synced products are runtime data and are not all tracked in Git. Before a
+policy-mode run that includes catalog retrieval, an operator may use
+`qa_catalog.py` to snapshot only filenames from the reviewed Shopify product
+folder. The snapshot rejects symlink boundaries, unexpected names, and documents
+without the confirmed `shopify-sync` product front matter. It requires the
+reviewed product-generator hash and never copies document bodies or URLs.
+
+Pass the immutable snapshot through `--product-manifest PATH` together with
+`--product-manifest-sha256 SHA256`. The loader admits only `products/product-*.md`
+filenames; it cannot admit tickets, learned content, directories, or traversal.
+The QA receipt records this snapshot's hash/count in addition to the merged
+allowlist hash. Unknown result paths still stop the run. A catalog change during
+QA may therefore require a separately reviewed new snapshot and a new run.

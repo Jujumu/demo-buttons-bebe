@@ -18,6 +18,7 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 from qa_safety import GROUPS, TOOLS, policy_files, redact, scenario_fixture
 from qa_metadata import prove_metadata
+from qa_catalog import load_manifest
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent
@@ -151,7 +152,7 @@ finally:
 
 
 class Harness:
-    def __init__(self, *, output: Path, model_config: Path, hermes: Path, hermes_python: Path, hermes_source: Path, kb_mode: str, timeout: int, base_port: int):
+    def __init__(self, *, output: Path, model_config: Path, hermes: Path, hermes_python: Path, hermes_source: Path, kb_mode: str, timeout: int, base_port: int, product_manifest: Path | None = None, product_manifest_sha256: str | None = None):
         if not model_config.is_file() or model_config.is_symlink() or model_config.stat().st_mode & 0o077:
             raise ValueError("Model-only config must be a private regular file")
         if model_config.stat().st_size > 16384:
@@ -182,7 +183,11 @@ class Harness:
         self.fixture_path=self.output/"active-fixture.json"
         self.audit_path=self.output/"tool-audit.jsonl"
         self.allowlist=self.output/"policy-allowlist.json"
-        atomic_json(self.allowlist,sorted(policy_files(REPO)))
+        if (product_manifest is None) != (product_manifest_sha256 is None):
+            raise ValueError("Product manifest and reviewed hash must be provided together")
+        extra = load_manifest(product_manifest,product_manifest_sha256) if product_manifest is not None else set()
+        self.catalog_receipt = {"sha256":product_manifest_sha256,"count":len(extra)}
+        atomic_json(self.allowlist,sorted(policy_files(REPO) | extra))
         self.kb_mode=kb_mode;self.timeout=timeout;self.children=[]
         self.secret_values=([model["access_token"]] if "access_token" in model else []) + [value for key,value in model["model"].items() if key=="api_key" and isinstance(value,str) and value]
 
@@ -210,7 +215,7 @@ class Harness:
                  "production_prompt_sha256":hashlib.sha256((REPO/"processor/hermes_runner/prompt.py").read_bytes()).hexdigest(),
                  "production_extract_sha256":hashlib.sha256((REPO/"processor/hermes_runner/extract.py").read_bytes()).hexdigest(),
                  "profile_sha256":hashlib.sha256(json.dumps(self.config,sort_keys=True).encode()).hexdigest(),
-                 "policy_allowlist_sha256":hashlib.sha256(self.allowlist.read_bytes()).hexdigest()}
+                 "product_catalog_manifest":self.catalog_receipt,"policy_allowlist_sha256":hashlib.sha256(self.allowlist.read_bytes()).hexdigest()}
         atomic_json(self.output/"preflight.json",receipt)
         self.assert_no_fatal_audit()
 

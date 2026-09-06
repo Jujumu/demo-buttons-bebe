@@ -18,6 +18,8 @@ def main():
     parser.add_argument("--hermes-source",type=Path,required=True)
     parser.add_argument("--model-config",type=Path,required=True,help="Private model-only JSON; never pass the production profile")
     parser.add_argument("--output",type=Path,required=True,help="New private run directory outside the live application")
+    parser.add_argument("--product-manifest",type=Path)
+    parser.add_argument("--product-manifest-sha256")
     parser.add_argument("--kb-mode",choices=("fixture","policies-only"),default="fixture")
     parser.add_argument("--base-port",type=int,default=18877)
     parser.add_argument("--timeout",type=int,default=180)
@@ -40,7 +42,8 @@ def main():
     harness=None
     try:
         harness=Harness(output=args.output,model_config=args.model_config,hermes=args.hermes,hermes_python=args.hermes_python,
-                        hermes_source=args.hermes_source,kb_mode=args.kb_mode,timeout=args.timeout,base_port=args.base_port)
+                        hermes_source=args.hermes_source,kb_mode=args.kb_mode,timeout=args.timeout,base_port=args.base_port,
+                        product_manifest=args.product_manifest,product_manifest_sha256=args.product_manifest_sha256)
         harness.start(scenario_fixture(indexed[0][1],indexed[0][0]))
         results=[]
         for ordinal,scenario in indexed:
