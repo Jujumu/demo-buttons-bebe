@@ -25,11 +25,11 @@ class ContractTests(unittest.TestCase):
     def setUp(self) -> None:
         reset_tickets()
 
-    def test_fifteen_tools_only(self) -> None:
+    def test_seventeen_tools(self) -> None:
         self.assertEqual(tuple(list_tools()), TOOL_NAMES)
-        self.assertEqual(len(TOOLS), 15)
+        self.assertEqual(len(TOOLS), 17)
         names = [item["name"] for item in tool_descriptors()]
-        self.assertEqual(names[:15], list(TOOL_NAMES))
+        self.assertEqual(names[:17], list(TOOL_NAMES))
         self.assertIn("helpdesk.draft_reply", TOOL_NAMES)
         self.assertIn("helpdesk.summarize_thread", TOOL_NAMES)
         self.assertIn("helpdesk.search_macros", TOOL_NAMES)
@@ -39,12 +39,14 @@ class ContractTests(unittest.TestCase):
         self.assertIn("helpdesk.pull_mailbox", TOOL_NAMES)
         self.assertIn("helpdesk.escalate_ticket", TOOL_NAMES)
         self.assertIn("helpdesk.write_gate_status", TOOL_NAMES)
+        self.assertIn("helpdesk.bridge_status", TOOL_NAMES)
+        self.assertIn("helpdesk.send_reply", TOOL_NAMES)
 
-    def test_mcp_lists_fifteen_tools_and_refused_writes(self) -> None:
+    def test_mcp_lists_live_tools_and_refused_writes(self) -> None:
         reply = handle_rpc({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
         names = [tool["name"] for tool in reply["result"]["tools"]]
-        self.assertEqual(names[:15], list(TOOL_NAMES))
-        self.assertEqual(len(list_tools()), 15)
+        self.assertEqual(names[:17], list(TOOL_NAMES))
+        self.assertEqual(len(list_tools()), 17)
         self.assertIn("helpdesk.send", names)
         self.assertIn("helpdesk.refund", names)
         self.assertIn("helpdesk.cancel", names)
@@ -146,6 +148,11 @@ class ContractTests(unittest.TestCase):
                 ["write-gate-status"],
                 {},
             ),
+            (
+                "helpdesk.bridge_status",
+                ["bridge-status"],
+                {},
+            ),
         ]
         with patch("helpdesk.tickets._now_iso", return_value="2026-09-04T12:00:00Z"):
             for tool, argv, args in cases:
@@ -169,6 +176,32 @@ class ContractTests(unittest.TestCase):
                 self.assertEqual(handled, mcp_body, tool)
                 self.assertEqual(handled, handle_http(tool, args), tool)
                 self.assertTrue(handled["ok"], tool)
+
+    def test_send_reply_human_only_exception(self) -> None:
+        """Documented parity exception: MCP/CLI refuse; HTTP door is human."""
+        mcp = handle_rpc(
+            {
+                "jsonrpc": "2.0",
+                "id": 3,
+                "method": "tools/call",
+                "params": {
+                    "name": "helpdesk.send_reply",
+                    "arguments": {"ticketId": "t-ada-track", "text": "Hi", "confirmed": True},
+                },
+            }
+        )
+        mcp_body = json.loads(mcp["result"]["content"][0]["text"])
+        self.assertEqual(mcp_body["error"], "human_only")
+        cli = self._cli(["send-reply", "--ticket-id", "t-ada-track", "--text", "Hi", "--confirmed"])
+        self.assertEqual(cli["error"], "human_only")
+        http_payload = handle_http(
+            "helpdesk.send_reply",
+            {"ticketId": "t-ada-track", "text": "Hi", "confirmed": True},
+            actor="human",
+        )
+        # Outbound off by default → outbound_disabled or no_real_recipient for seed
+        self.assertFalse(http_payload["ok"])
+        self.assertIn(http_payload["error"], {"outbound_disabled", "no_real_recipient", "confirmation_required"})
 
     def test_unknown_tool_is_structured_json(self) -> None:
         payload = invoke("helpdesk.send", {})

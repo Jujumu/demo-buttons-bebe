@@ -27,7 +27,7 @@ class HelpdeskDoorTests(unittest.TestCase):
     def setUp(self) -> None:
         reset_tickets()
 
-    def test_http_matches_dispatch_for_all_fifteen_tools(self) -> None:
+    def test_http_matches_dispatch_for_live_tools(self) -> None:
         cases = [
             ("helpdesk.list_tickets", {"view": "open", "limit": 5}),
             ("helpdesk.get_ticket", {"ticketId": "1001"}),
@@ -44,6 +44,7 @@ class HelpdeskDoorTests(unittest.TestCase):
             ("helpdesk.pull_mailbox", {"limit": 5}),
             ("helpdesk.escalate_ticket", {"ticketId": "t-ada-track"}),
             ("helpdesk.write_gate_status", {}),
+            ("helpdesk.bridge_status", {}),
         ]
         with patch("helpdesk.tickets._now_iso", return_value="2026-09-04T12:00:00Z"):
             for tool, args in cases:
@@ -56,6 +57,22 @@ class HelpdeskDoorTests(unittest.TestCase):
                 self.assertEqual(handled, http_payload, tool)
                 self.assertEqual(handled, door, tool)
                 self.assertTrue(handled["ok"], tool)
+
+    def test_send_reply_is_human_only_on_mcp_path(self) -> None:
+        blocked = invoke(
+            "helpdesk.send_reply",
+            {"ticketId": "t-ada-track", "text": "Hi", "confirmed": True},
+            actor="agent",
+        )
+        self.assertEqual(blocked["error"], "human_only")
+        # Production door defaults to human actor (console click).
+        human = handle_http(
+            "helpdesk.send_reply",
+            {"ticketId": "t-ada-track", "text": "Hi", "confirmed": True},
+            actor="human",
+        )
+        self.assertFalse(human["ok"])
+        self.assertIn(human["error"], {"outbound_disabled", "no_real_recipient"})
 
     def test_writes_are_forbidden(self) -> None:
         for tool in ("helpdesk.send", "helpdesk.refund", "helpdesk.cancel"):

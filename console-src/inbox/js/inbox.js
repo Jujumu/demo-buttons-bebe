@@ -69,6 +69,15 @@ export function createInboxOrgan(opts = {}) {
     refused: ["send", "refund", "cancel"],
     message: "Shopify writes are refused. SHOPIFY_MUTATIONS_ENABLED stays 0.",
   };
+  let bridgeStatus = {
+    gorgiasEnabled: false,
+    gorgiasConfigured: false,
+    outboundEnabled: false,
+    emailConfigured: false,
+    allowlistActive: false,
+  };
+  let sendError = "";
+  let bridgePollTimer = null;
   let writeGateOpen = false;
   let customerJoinGateOpen = false;
   let orderLinkGateOpen = false;
@@ -303,6 +312,29 @@ export function createInboxOrgan(opts = {}) {
     }
   }
 
+  async function refreshBridgeStatus() {
+    if (typeof shop.bridgeStatus !== "function") return;
+    try {
+      const result = await shop.bridgeStatus();
+      if (result && typeof result === "object") bridgeStatus = result;
+    } catch {
+      // keep defaults
+    }
+  }
+
+  function startBridgePoll() {
+    if (bridgePollTimer) {
+      clearInterval(bridgePollTimer);
+      bridgePollTimer = null;
+    }
+    if (!bridgeStatus.gorgiasEnabled || pinnedCatalog) return;
+    bridgePollTimer = setInterval(() => {
+      refreshList().then(() => {
+        paintMounted?.();
+      }).catch(() => {});
+    }, 30000);
+  }
+
   async function escalateSelected(reason) {
     const ticket = selectedTicket();
     if (!ticket || ticket.escalated) return ticket;
@@ -440,6 +472,8 @@ export function createInboxOrgan(opts = {}) {
       selectedMacroId,
       searchOpen: macrosOpen,
       writeGate,
+      bridgeStatus,
+      sendError,
     };
   }
 
@@ -524,6 +558,8 @@ export function createInboxOrgan(opts = {}) {
     await refreshComposer();
     await refreshMacros("");
     await refreshWriteGate();
+    await refreshBridgeStatus();
+    startBridgePoll();
 
     const paint = () => {
       const ticket = selectedTicket();
@@ -713,23 +749,59 @@ export function createInboxOrgan(opts = {}) {
     mailbox.subscribe(MAILBOX_TOPICS.COMPOSER_SEND, ({ text, close }) => {
       const ticket = selectedTicket();
       if (!ticket || !String(text || "").trim()) return;
-      ticket.messages = [
-        ...(ticket.messages || []),
-        {
-          id: `out-${Date.now()}`,
-          from: "agent",
-          fromAgent: true,
-          fromName: STORE_NAME,
-          name: STORE_NAME,
-          at: new Date().toISOString(),
-          body: text,
-        },
-      ];
-      if (close) ticket.status = "closed";
-      sent.push({ ticketId: ticket.id, text, close });
-      body = "";
-      strip = "";
+      const outbound = Boolean(bridgeStatus.outboundEnabled);
+      if (!outbound || typeof shop.sendReply !== "function") {
+        ticket.messages = [
+          ...(ticket.messages || []),
+          {
+            id: `out-${Date.now()}`,
+            from: "agent",
+            fromAgent: true,
+            fromName: STORE_NAME,
+            name: STORE_NAME,
+            at: new Date().toISOString(),
+            body: text,
+            via: "local",
+            deliveryStatus: "local",
+          },
+        ];
+        if (close) ticket.status = "closed";
+        sent.push({ ticketId: ticket.id, text, close });
+        body = "";
+        strip = "";
+        sendError = "";
+        paint();
+        return;
+      }
+      const recipient = ticket.fromEmail || ticket.toEmail || toEmail || "the customer";
+      const route = ticket.source === "gorgias" && bridgeStatus.gorgiasEnabled
+        ? `Gorgias (${recipient})`
+        : `email (${recipient})`;
+      const ok = globalThis.confirm?.(`Send this reply via ${route}?`) !== false;
+      if (!ok) return;
+      sendError = "";
       paint();
+      shop.sendReply({
+        ticketId: ticket.id,
+        text,
+        confirmed: true,
+        close: Boolean(close),
+      }).then((payload) => {
+        if (!payload?.ok) {
+          sendError = payload?.message || payload?.error || "Send failed";
+          paint();
+          return;
+        }
+        selected = payload.ticket || selected;
+        sent.push({ ticketId: ticket.id, text, close, via: payload.via });
+        body = "";
+        strip = "";
+        sendError = "";
+        return refreshThread().then(refreshList).then(paint);
+      }).catch((err) => {
+        sendError = String(err?.message || err || "Send failed");
+        paint();
+      });
     });
 
     paintMounted = paint;

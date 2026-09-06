@@ -293,6 +293,45 @@ export function createHelpdeskShop(opts = {}) {
       if (record) return record;
       return fallback.writeGateStatus(args);
     },
+    async bridgeStatus(args = {}) {
+      const record = await read(
+        "helpdesk.bridge_status",
+        args,
+        (payload) => ({
+          gorgiasEnabled: Boolean(payload.gorgiasEnabled),
+          gorgiasConfigured: Boolean(payload.gorgiasConfigured),
+          outboundEnabled: Boolean(payload.outboundEnabled),
+          emailConfigured: Boolean(payload.emailConfigured),
+          allowlistActive: Boolean(payload.allowlistActive),
+        }),
+      );
+      if (record) return record;
+      return {
+        gorgiasEnabled: false,
+        gorgiasConfigured: false,
+        outboundEnabled: false,
+        emailConfigured: false,
+        allowlistActive: false,
+      };
+    },
+    async sendReply(args = {}) {
+      // Human action — not read(). Goes through the HTTP door with actor=human.
+      try {
+        const payload = await client.invoke("helpdesk.send_reply", {
+          ticketId: args.ticketId,
+          text: args.text,
+          confirmed: args.confirmed === true,
+          close: args.close === true,
+        });
+        return payload;
+      } catch (err) {
+        return {
+          ok: false,
+          error: "send_failed",
+          message: err?.message || "send failed",
+        };
+      }
+    },
   };
 }
 

@@ -82,6 +82,16 @@ def handle_ingest_email(args: dict[str, Any]) -> dict[str, Any]:
     body = str(args["body"])
     received_at = str(args["receivedAt"])
     message_id = str(args["messageId"]).strip() if args.get("messageId") else None
+    source = str(args.get("source") or "agentmail").strip().lower() or "agentmail"
+    if source not in {"agentmail", "gorgias"}:
+        source = "agentmail"
+    external = tickets.normalize_external(args.get("external"))
+    if external is None and source == "gorgias" and message_id:
+        external = {"system": "gorgias", "messageId": message_id}
+        if args.get("externalTicketId") is not None:
+            external["ticketId"] = str(args["externalTicketId"])
+        if from_email:
+            external["customerEmail"] = from_email
     record = _intake_record(
         channel="email",
         from_name=from_name,
@@ -92,6 +102,9 @@ def handle_ingest_email(args: dict[str, Any]) -> dict[str, Any]:
         spam=is_spam(subject, body),
     )
     record["messageId"] = message_id
+    record["source"] = source
+    if external:
+        record["external"] = external
     tickets.remember_intake(record)
     if record["spam"]:
         return {"spam": True, "ticketId": None}
@@ -101,11 +114,10 @@ def handle_ingest_email(args: dict[str, Any]) -> dict[str, Any]:
         from_email=from_email,
         channel="email",
     )
-    dedupe_key = (
-        ("agentmail", message_id)
-        if message_id
-        else ("email", from_email or from_name, subject, body, received_at)
-    )
+    if message_id:
+        dedupe_key = (source, message_id)
+    else:
+        dedupe_key = ("email", from_email or from_name, subject, body, received_at)
     ticket = tickets.add_ticket(
         customer_name=from_name,
         subject=subject,
@@ -116,6 +128,8 @@ def handle_ingest_email(args: dict[str, Any]) -> dict[str, Any]:
         channel="email",
         from_email=from_email,
         dedupe_key=dedupe_key,
+        source=source,
+        external=external,
     )
     return {"spam": False, "ticketId": ticket["id"], **ticket}
 
@@ -156,5 +170,6 @@ def handle_ingest_chat(args: dict[str, Any]) -> dict[str, Any]:
         channel="chat",
         from_email=None,
         dedupe_key=("chat", from_name, subject, body, received_at),
+        source="chat",
     )
     return {"spam": False, "ticketId": ticket["id"], **ticket}

@@ -11,6 +11,7 @@ from .names import (
     CLI_COMMANDS,
     SAMPLE_SHOP,
     TOOL_APPLY_MACRO,
+    TOOL_BRIDGE_STATUS,
     TOOL_DRAFT_REPLY,
     TOOL_GET_CUSTOMER,
     TOOL_GET_ORDER,
@@ -22,6 +23,7 @@ from .names import (
     TOOL_LIST_PAST_ORDERS,
     TOOL_LIST_TICKETS,
     TOOL_SEARCH_MACROS,
+    TOOL_SEND_REPLY,
     TOOL_SUMMARIZE_THREAD,
     TOOL_ESCALATE_TICKET,
     TOOL_WRITE_GATE_STATUS,
@@ -42,7 +44,7 @@ def _add_shop_gid(parser: argparse.ArgumentParser, gid_flag: str, dest: str) -> 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="helpdesk", description="Shopify helpdesk organ (MCP + CLI).")
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("tools", help="list the fifteen v1 tools")
+    sub.add_parser("tools", help="list the live helpdesk tools")
     sub.add_parser("serve", help="run the MCP stdio server")
     tickets = sub.add_parser(CLI_COMMANDS[TOOL_LIST_TICKETS])
     tickets.add_argument("--view", default="open")
@@ -80,6 +82,12 @@ def build_parser() -> argparse.ArgumentParser:
     escalate.add_argument("--ticket-id", dest="ticketId", required=True)
     escalate.add_argument("--reason", default=None)
     sub.add_parser(CLI_COMMANDS[TOOL_WRITE_GATE_STATUS])
+    sub.add_parser(CLI_COMMANDS[TOOL_BRIDGE_STATUS])
+    send_reply = sub.add_parser(CLI_COMMANDS[TOOL_SEND_REPLY])
+    send_reply.add_argument("--ticket-id", dest="ticketId", required=True)
+    send_reply.add_argument("--text", required=True)
+    send_reply.add_argument("--confirmed", action="store_true")
+    send_reply.add_argument("--close", action="store_true")
     return parser
 
 
