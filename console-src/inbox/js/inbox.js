@@ -195,7 +195,10 @@ export function createInboxOrgan(opts = {}) {
           return;
         }
       } catch {
-        // fixture fallback below
+        if (shop.observedHistory) {
+          selected = {...(listRows.find(ticket => ticket.id === id) || {id}),historyUnavailable:true};
+          return;
+        }
       }
     }
     selected = fixtureTickets.find((ticket) => ticket.id === id)
@@ -370,7 +373,7 @@ export function createInboxOrgan(opts = {}) {
     bridgePollTimer = setInterval(() => {
       refreshList().then(async () => {
         if (shop.observedHistory && selectedId) {
-          try { selected = await shop.getTicket({ticketId:selectedId}); } catch { /* List notice reports unavailable history. */ }
+          try { selected = await shop.getTicket({ticketId:selectedId}); } catch { if (selected) selected = {...selected,historyUnavailable:true}; }
         }
         paintMounted?.();
       }).catch(() => {});

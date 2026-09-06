@@ -52,3 +52,18 @@ test('query-requested privacy dialog cannot reveal an unavailable workflow', asy
  const result=await createInboxOrgan({shop,viewId:'all',privacyGate:true}).ready();
  assert.doesNotMatch(result.html,/data-privacy-handled|data-privacy-gate/);
 });
+test('a failed thread fetch is announced instead of rendering an apparently empty conversation',async()=>{
+ const shop=createHelpdeskShop({client:{invoke:async tool=>{
+  if(tool==='helpdesk.get_ticket')throw new Error('offline');
+  return {ok:true,tickets:[{...localTicket,projectionSource:true}],projection:{generatedAt:'one',stale:false}};
+ }}});
+ const result=await createInboxOrgan({shop,viewId:'all'}).ready();
+ assert.match(result.html,/role="alert">Ticket history is unavailable/);
+});
+test('stale empty projection announces delayed history without invented rows',async()=>{
+ const shop=createHelpdeskShop({client:{invoke:async()=>({ok:true,tickets:[],projection:{generatedAt:'one',stale:true}})}});
+ const result=await createInboxOrgan({shop}).ready();
+ assert.match(result.html,/role="status">Observed history is stale/);
+ assert.match(result.html,/No tickets yet/);
+ assert.equal(result.selectedId,null);
+});

@@ -16,7 +16,7 @@ const organ = createInboxOrgan({
 });
 organ.mount(root);
 
-// Demo/review: expose organ for WebMCP verify + headless shots (not a product API).
+// Expose the capability-locked organ for local accessibility verification.
 globalThis.__inboxOrgan = organ;
 
 // WebMCP: register Document-scoped chrome tools after mount. No-op without
