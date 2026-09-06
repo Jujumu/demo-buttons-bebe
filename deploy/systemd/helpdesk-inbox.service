@@ -34,6 +34,9 @@ CapabilityBoundingSet=
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 IPAddressDeny=any
 IPAddressAllow=localhost
+# This service reads local snapshots and accepts Caddy requests; it never initiates connections.
+SystemCallFilter=~connect
+SystemCallErrorNumber=EPERM
 MemoryHigh=256M
 MemoryMax=512M
 TasksMax=64
