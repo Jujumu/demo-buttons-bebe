@@ -1,0 +1,11 @@
+{
+  "name": "Buttons Bebe Helpdesk",
+  "install": "bash .cursor/install.sh",
+  "terminals": [
+    {
+      "name": "inbox",
+      "command": ". .venv/bin/activate && INBOX_PORT=8766 python3 console-src/inbox/review_server.py --host 127.0.0.1 --port 8766"
+    }
+  ],
+  "ports": [8766, 8000]
+}
