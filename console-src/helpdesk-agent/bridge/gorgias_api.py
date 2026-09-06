@@ -110,13 +110,10 @@ def send_public_reply(ticket_id: int | str, body_text: str) -> dict[str, Any]:
     support_addr = None
     if our_to and isinstance(our_to[0], dict):
         support_addr = our_to[0].get("address")
-    customer_email = (
-        cust_from.get("address")
-        or cust_from.get("email")
-        or (base.get("sender") or {}).get("email")
-        if isinstance(base.get("sender"), dict)
-        else None
-    )
+    customer_email = cust_from.get("address") or cust_from.get("email")
+    if not customer_email:
+        sender = base.get("sender") if isinstance(base.get("sender"), dict) else {}
+        customer_email = sender.get("email") or sender.get("address")
     if not customer_email:
         return {"ok": False, "error": "customer email missing on last message"}
     email = os.environ.get("GORGIAS_API_EMAIL", "").strip()

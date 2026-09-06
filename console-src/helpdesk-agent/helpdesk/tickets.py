@@ -443,13 +443,26 @@ def remember_intake(record: dict) -> None:
     _intake.append(dict(record))
     message_id = record.get("messageId")
     if message_id:
-        mid = str(message_id)
+        source = str(record.get("source") or "agentmail").strip().lower() or "agentmail"
+        mid = f"{source}:{message_id}"
         _seen_messages.add(mid)
+        # Keep bare id for older seen files / AgentMail pull path.
+        _seen_messages.add(str(message_id))
         _persist_seen(mid)
 
 
-def seen_message_id(message_id: str | None) -> bool:
-    return bool(message_id) and str(message_id) in _seen_messages
+def seen_message_id(message_id: str | None, *, source: str | None = None) -> bool:
+    if not message_id:
+        return False
+    mid = str(message_id)
+    if source:
+        if f"{source}:{mid}" in _seen_messages:
+            return True
+        # Legacy flat ids only count as seen for the same pull path (agentmail).
+        if source == "agentmail" and mid in _seen_messages and f"gorgias:{mid}" not in _seen_messages:
+            return True
+        return False
+    return mid in _seen_messages or any(item.endswith(f":{mid}") for item in _seen_messages)
 
 
 def normalize_external(raw: Any) -> dict[str, Any] | None:

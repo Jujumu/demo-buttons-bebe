@@ -11,6 +11,7 @@ import os
 
 
 def verify_secret(headers: dict[str, str] | None, query_secret: str | None = None) -> bool:
+    """Header-only secret check. Query secrets are ignored (log leak risk)."""
     expected = os.environ.get("GORGIAS_BRIDGE_SECRET", "").strip()
     if not expected:
         return False
@@ -22,8 +23,8 @@ def verify_secret(headers: dict[str, str] | None, query_secret: str | None = Non
     bridge = headers.get("x-bridge-secret", "").strip()
     if bridge:
         candidates.append(bridge)
-    if query_secret:
-        candidates.append(str(query_secret).strip())
+    # query_secret intentionally unused — keep signature for review_server callers.
+    _ = query_secret
     return any(hmac.compare_digest(candidate, expected) for candidate in candidates if candidate)
 
 
@@ -102,7 +103,7 @@ def accept(payload: dict[str, Any] | None, *, invoke) -> dict[str, Any]:
     from helpdesk import tickets as ticket_store
 
     mid = str(event["message_id"])
-    if ticket_store.seen_message_id(mid):
+    if ticket_store.seen_message_id(mid, source="gorgias"):
         return {"ok": True, "status": "duplicate", "http": 200, "messageId": mid}
 
     email = event["customer_email"] or "unknown@example.com"
@@ -117,6 +118,7 @@ def accept(payload: dict[str, Any] | None, *, invoke) -> dict[str, Any]:
             "receivedAt": event["created_at"] or "1970-01-01T00:00:00Z",
             "messageId": mid,
             "source": "gorgias",
+            "_fromBridge": True,
             "external": {
                 "system": "gorgias",
                 "ticketId": str(event["ticket_id"]),

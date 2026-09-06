@@ -57,6 +57,7 @@ class BridgeStatusTests(unittest.TestCase):
                 "receivedAt": "2026-09-06T12:00:00Z",
                 "messageId": "gorgias-msg-1",
                 "source": "gorgias",
+                "_fromBridge": True,
                 "external": {
                     "system": "gorgias",
                     "ticketId": "4242",
@@ -70,6 +71,23 @@ class BridgeStatusTests(unittest.TestCase):
         self.assertEqual(ticket["source"], "gorgias")
         self.assertEqual(ticket["external"]["ticketId"], "4242")
         self.assertEqual(ticket["fromEmail"], "ada.bridge@example.com")
+
+    def test_source_gorgias_rejected_without_bridge_flag(self) -> None:
+        payload = invoke(
+            "helpdesk.ingest_email",
+            {
+                "from": "Ada <ada.bridge@example.com>",
+                "subject": "Forge",
+                "body": "Tracking on order #1001 please",
+                "receivedAt": "2026-09-06T12:00:00Z",
+                "messageId": "forged-1",
+                "source": "gorgias",
+                "external": {"system": "gorgias", "ticketId": "999", "messageId": "forged-1"},
+            },
+        )
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["error"], "bad_request")
+        self.assertIn("bridge-only", payload["message"])
 
     def test_intake_store_survives_reset(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -115,6 +133,8 @@ class GorgiasInboundTests(unittest.TestCase):
         self.assertTrue(verify_secret({"X-Bridge-Secret": "bridge-test-secret"}))
         self.assertFalse(verify_secret({"Authorization": "Bearer wrong"}))
         self.assertFalse(verify_secret({}))
+        # Query secrets are rejected (log-leak risk).
+        self.assertFalse(verify_secret({}, "bridge-test-secret"))
 
     def test_accept_customer_message(self) -> None:
         result = accept(
@@ -203,24 +223,24 @@ class SendReplyTests(unittest.TestCase):
         reset_tickets()
 
     def _intake(self, *, source: str = "agentmail", external=None) -> str:
-        payload = dispatch(
-            "helpdesk.ingest_email",
-            {
-                "from": "Ada <ada.bridge@example.com>",
-                "subject": "Where is #1001?",
-                "body": "Tracking on order #1001 please",
-                "receivedAt": "2026-09-06T12:00:00Z",
+        args = {
+            "from": "Ada <ada.bridge@example.com>",
+            "subject": "Where is #1001?",
+            "body": "Tracking on order #1001 please",
+            "receivedAt": "2026-09-06T12:00:00Z",
+            "messageId": f"{source}-msg-send",
+            "source": source,
+            "external": external
+            or {
+                "system": source if source in {"gorgias", "agentmail"} else "agentmail",
+                "ticketId": "4242" if source == "gorgias" else None,
                 "messageId": f"{source}-msg-send",
-                "source": source,
-                "external": external
-                or {
-                    "system": source if source in {"gorgias", "agentmail"} else "agentmail",
-                    "ticketId": "4242" if source == "gorgias" else None,
-                    "messageId": f"{source}-msg-send",
-                    "customerEmail": "ada.bridge@example.com",
-                },
+                "customerEmail": "ada.bridge@example.com",
             },
-        )
+        }
+        if source == "gorgias":
+            args["_fromBridge"] = True
+        payload = dispatch("helpdesk.ingest_email", args)
         self.assertTrue(payload["ok"])
         return payload["ticketId"]
 

@@ -85,13 +85,21 @@ def handle_ingest_email(args: dict[str, Any]) -> dict[str, Any]:
     source = str(args.get("source") or "agentmail").strip().lower() or "agentmail"
     if source not in {"agentmail", "gorgias"}:
         source = "agentmail"
+    # source=gorgias is bridge-webhook only — prevents forged external.ticketId routing.
+    if source == "gorgias" and args.get("_fromBridge") is not True:
+        raise bad_request("source=gorgias is bridge-only", field="source")
     external = tickets.normalize_external(args.get("external"))
-    if external is None and source == "gorgias" and message_id:
-        external = {"system": "gorgias", "messageId": message_id}
-        if args.get("externalTicketId") is not None:
-            external["ticketId"] = str(args["externalTicketId"])
-        if from_email:
-            external["customerEmail"] = from_email
+    if external is None and message_id:
+        if source == "gorgias":
+            external = {"system": "gorgias", "messageId": message_id}
+            if args.get("externalTicketId") is not None:
+                external["ticketId"] = str(args["externalTicketId"])
+            if from_email:
+                external["customerEmail"] = from_email
+        else:
+            external = {"system": "agentmail", "messageId": message_id}
+            if from_email:
+                external["customerEmail"] = from_email
     record = _intake_record(
         channel="email",
         from_name=from_name,

@@ -36,6 +36,7 @@ AgentMail email (or stays local if `HELPDESK_OUTBOUND_ENABLED=0`).
 4. URL: `https://helpdesk.teddyonfriday.com/webhook/gorgias`
    (or your tunnel / loopback via Caddy)
 5. Header: `Authorization: Bearer <GORGIAS_BRIDGE_SECRET>`
+   (Query-string secrets are rejected — they leak in logs.)
 6. Trigger: **Ticket message created** only (`ticket-message-created`)
 7. Body (JSON template):
 
