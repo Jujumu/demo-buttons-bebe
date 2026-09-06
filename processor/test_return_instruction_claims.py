@@ -53,3 +53,12 @@ class ReturnInstructionTests(unittest.TestCase):
         self.assertTrue(result['no_draft'])
         self.assertTrue(result['notify_owner'])
         self.assertEqual(draft_for_console(result), '')
+
+
+class ReturnInstructionPatternBoundaryTests(unittest.TestCase):
+    def test_standalone_search_is_anchored_without_changing_sentence_matching(self):
+        from draft_cleaner import _RETURN_IDENTIFICATION_INSTRUCTION_RE as pattern
+        self.assertIsNotNone(pattern.search(' \t'+INSTRUCTION+' \n'))
+        self.assertIsNone(pattern.search('Unrelated introduction. '+INSTRUCTION))
+        self.assertIsNone(pattern.search(INSTRUCTION+' Unrelated trailing promise.'))
+        self.assertIsNone(pattern.search(' '*12000+'not an instruction'))

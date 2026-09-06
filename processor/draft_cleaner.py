@@ -195,9 +195,9 @@ _SPANISH_REVIEW_COMMITMENT_RE = re.compile(
 # Confirmed return-packing guidance describes why the customer identifies each
 # item/order. It does not promise an individual return or financial outcome.
 _RETURN_IDENTIFICATION_INSTRUCTION_RE = re.compile(
-    r"\s*please\s+include\s+a\s+note\s+(?:inside\s+)?(?:the|your)\s+package\s+"
+    r"\A\s*please\s+include\s+a\s+note\s+(?:inside\s+)?(?:the|your)\s+package\s+"
     r"identifying\s+each\s+item\s+and\s+its\s+order\s+number\s+"
-    r"so\s+the\s+warehouse\s+can\s+process\s+each\s+return\s+correctly[.!]?\s*",
+    r"so\s+the\s+warehouse\s+can\s+process\s+each\s+return\s+correctly[.!]?\s*\Z",
     re.IGNORECASE,
 )
 
