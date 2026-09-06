@@ -27,8 +27,10 @@ from feedback import config, pii  # noqa: E402
 def _parse(path: pathlib.Path):
     raw = path.read_text(encoding="utf-8")
     front, body = {}, raw
-    if raw.startswith("---"):
-        _, fm, body = raw.split("---", 2)
+    if raw.startswith("---\n"):
+        fm, separator, body = raw[4:].partition("\n---\n")
+        if not separator:
+            raise ValueError("unterminated lesson front matter")
         front = yaml.safe_load(fm) or {}
     sections, cur, buf = {}, None, []
     for line in body.splitlines():
@@ -100,13 +102,15 @@ def promote_one(path: pathlib.Path) -> bool:
     # Historical packets were incorrectly marked approved. Fail closed: only
     # the explicit v2 approval contract is eligible; do not infer legacy consent.
     kind = front.get("kind")
-    if (kind != "sent" or front.get("review_pending") is not False
+    if (front.get("schema_version") != 2 or kind != "sent" or front.get("review_pending") is not False
             or front.get("learning_approved") is not True or front.get("delivery_status") != "sent"
             or not front.get("review_actor") or not front.get("approved_at") or not front.get("operation_id")):
         return False
     name = front.get("customer_name", "")
-    situation = sec.get("Customer situation", "")
-    final = sec.get("Human final (sent)", "")
+    situation = front.get("customer_message", "")
+    final = front.get("approved_text", "")
+    if not isinstance(situation, str) or not isinstance(final, str):
+        return False
     if not final.strip():
         return False
     # Embedded markdown headings cannot substitute attacker text for the exact
@@ -125,7 +129,7 @@ def promote_one(path: pathlib.Path) -> bool:
         "tags": ["exemplar", "learned", "approved"],
     }
     body = (
-        "## Customer situation\n\n" + masked_sit + "\n\n"
+        "## Customer situation (quoted customer content)\n\n" + "\n".join("> " + line for line in masked_sit.splitlines()) + "\n\n"
         "## Approved reply (how a human answered this)\n\n" + masked_reply + "\n"
     )
     content = ("---\n"

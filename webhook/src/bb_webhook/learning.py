@@ -17,6 +17,7 @@ import os
 import pathlib
 import secrets
 import sys
+import tempfile
 
 _AGENT_ROOT = pathlib.Path(__file__).resolve().parents[3]
 if str(_AGENT_ROOT) not in sys.path:
@@ -35,41 +36,48 @@ def _now() -> str:
     return datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H-%M-%SZ")
 
 
+def _sync_directory(path):
+    descriptor = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _write_staged_content(handle, content):
+    handle.write(content)
+    handle.flush()
+    os.fsync(handle.fileno())
+
+
 def _write_unique_lesson(ticket_id: object, content: str, operation_id="") -> tuple[pathlib.Path, bool]:
-    """Create a lesson without ever replacing another console action.
-
-    A ticket can receive multiple actions inside one second (for example an
-    internal note followed immediately by a public send).  The old timestamp-only
-    name silently replaced the first action.  An exclusive create plus a random
-    suffix makes the no-overwrite guarantee hold across threads and processes.
-    """
-    for _attempt in range(20):
-        token = secrets.token_hex(6)
-        out = LEARNED_DIR / (f"lesson-action-{operation_id}.md" if operation_id else f"lesson-{ticket_id}-{_now()}-{token}.md")
-        try:
-            fd = os.open(out, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        except FileExistsError:
-            if operation_id:
-                if out.read_text(encoding="utf-8") != content:
-                    raise ValueError("conflicting action lesson")
-                with out.open("rb") as existing:
-                    os.fsync(existing.fileno())
-                return out, False
-            continue
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            handle.write(content)
-            handle.flush()
-            os.fsync(handle.fileno())
-        directory_fd = os.open(LEARNED_DIR, os.O_RDONLY)
-        try:
-            os.fsync(directory_fd)
-        finally:
-            os.close(directory_fd)
-        return out, True
-    raise FileExistsError("could not allocate a unique lesson filename")
+    """Publish a complete private packet atomically without replacing a prior one."""
+    descriptor, temporary = tempfile.mkstemp(prefix=".capture-", dir=LEARNED_DIR)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            _write_staged_content(handle, content)
+        for _attempt in range(20):
+            token = secrets.token_hex(6)
+            out = LEARNED_DIR / (f"lesson-action-{operation_id}.md" if operation_id else f"lesson-{ticket_id}-{_now()}-{token}.md")
+            try:
+                os.link(temporary, out)
+            except FileExistsError:
+                if operation_id:
+                    if out.read_text(encoding="utf-8") != content:
+                        raise ValueError("conflicting action lesson")
+                    with out.open("rb") as existing:
+                        os.fsync(existing.fileno())
+                    _sync_directory(LEARNED_DIR)
+                    return out, False
+                continue
+            _sync_directory(LEARNED_DIR)
+            return out, True
+        raise FileExistsError("could not allocate a unique lesson filename")
+    finally:
+        pathlib.Path(temporary).unlink(missing_ok=True)
 
 
-def _bump_ledger(kind: str, edited: bool) -> None:
+def _bump_ledger(kind: str, edited: bool, operation_id="") -> None:
     temp_path: pathlib.Path | None = None
     try:
         LEARNED_DIR.mkdir(parents=True, exist_ok=True)
@@ -82,6 +90,12 @@ def _bump_ledger(kind: str, edited: bool) -> None:
                 loaded = json.loads(LEDGER.read_text(encoding="utf-8") or "{}")
                 if isinstance(loaded, dict):
                     data = loaded
+            operations = data.get("_operations", [])
+            if operation_id and operation_id in operations:
+                _sync_directory(LEARNED_DIR)
+                return
+            if operation_id:
+                data["_operations"] = operations + [operation_id]
             data["total"] = data.get("total", 0) + 1
             data[kind] = data.get(kind, 0) + 1
             if kind == "sent":
@@ -98,6 +112,7 @@ def _bump_ledger(kind: str, edited: bool) -> None:
                 handle.flush()
                 os.fsync(handle.fileno())
             os.replace(temp_path, LEDGER)
+            _sync_directory(LEARNED_DIR)
             temp_path = None
             fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
     except Exception as exc:
@@ -122,6 +137,9 @@ def record_lesson(kind, ticket_id, customer_message, ai_draft, final_text,
         edited = bool(final_text and ai_draft
                       and final_text.strip() != ai_draft.strip())
         fm = {
+            "schema_version": 2,
+            "customer_message": (customer_message or "").strip(),
+            "approved_text": (final_text or "").strip(),
             "title": f"lesson {kind} - ticket {ticket_id}",
             "kind": kind,
             "source_ticket_id": ticket_id,
@@ -148,8 +166,8 @@ def record_lesson(kind, ticket_id, customer_message, ai_draft, final_text,
                    + yaml.safe_dump(fm, sort_keys=False, allow_unicode=True)
                    + "---\n\n" + body)
         _path, created = _write_unique_lesson(ticket_id, content, operation_id)
-        if created:
-            _bump_ledger(kind, edited)
+        if created or operation_id:
+            _bump_ledger(kind, edited, operation_id)
         return True
     except Exception as exc:
         logging.getLogger(__name__).error("Learning lesson capture failed: %s", type(exc).__name__)
@@ -159,7 +177,7 @@ def record_lesson(kind, ticket_id, customer_message, ai_draft, final_text,
 def ledger() -> dict:
     try:
         if LEDGER.exists():
-            return json.loads(LEDGER.read_text() or "{}")
+            return {key: value for key, value in json.loads(LEDGER.read_text() or "{}").items() if key != "_operations"}
     except Exception:
         pass
     return {}

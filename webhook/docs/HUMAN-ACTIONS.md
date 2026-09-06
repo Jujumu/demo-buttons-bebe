@@ -40,6 +40,10 @@ exemplar. Browser-submitted context and draft metadata are ignored; context come
 from the DB. Notes, generated rewrites, pending sends and legacy packets never
 promote automatically. New packets carry reviewer/action/revision hashes, and the
 promoter verifies the exact captured situation and final text before masking.
+Lesson publication uses a private fsynced temporary file and atomic exclusive link.
+The ledger deduplicates operation IDs, so a capture retry repairs counter failures
+without duplicating a lesson or count. Quoted customer text cannot substitute
+markdown headings for the hash-verified approved reply.
 Learning capture failures are logged and retained in the action table for a
 safe capture retry through action status; they never cause another send.
 
