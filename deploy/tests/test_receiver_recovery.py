@@ -137,6 +137,7 @@ sys.exit(22 if (root/'live/webhook/app.py').read_text()=='new code' else 0)
         self.write(self.bin / 'curl', '#!/bin/sh\nexit 0\n')
         result = self.run_receiver()
         self.assertEqual(result.returncode, 0, result.stderr.decode())
+        self.assertNotIn('start buttonsbebe-inbox-projection.service', (self.root / 'calls').read_text())
         manifest = json.loads((self.root / 'manifest.json').read_text())
         self.assertEqual(manifest['generation'], 1)
         self.assertEqual(manifest['commit'], self.sha)
@@ -160,6 +161,55 @@ sys.exit(22 if (root/'live/webhook/app.py').read_text()=='new code' else 0)
         self.assertIn('stop buttonsbebe-inbox-projection.timer', calls)
         self.assertIn('start buttonsbebe-inbox-projection.timer', calls)
         self.assertIn('buttonsbebe-inbox-projection.timer', json.loads((self.root / 'active.json').read_text()))
+
+    def projection_fixture(self, fail_export=False, fail_ready=False):
+        self.write(self.root / 'active.json', json.dumps([
+            'buttonsbebe-webhook','helpdesk-inbox','buttonsbebe-inbox-projection.timer']))
+        self.write(self.bin / 'curl', """#!/usr/bin/env python3
+import json,os,pathlib,sys
+root=pathlib.Path(os.environ['HARNESS_ROOT'])
+url=next(arg for arg in sys.argv if arg.startswith('http://'))
+with (root/'calls').open('a') as out:out.write('probe '+url+'\\n')
+if url.endswith('/console/api/helpdesk'):
+ print(json.dumps({'ok':False,'error':'send_access_inactive','message':'Activate the send access.'}))
+elif url.endswith(':8766/ready'):
+ if FAIL_READY and (root/'live/webhook/app.py').read_text()=='new code':sys.exit(22)
+ print(json.dumps({'ok':True,'sendAccessEnabled':False}))
+""".replace('FAIL_READY',repr(fail_ready)))
+        script=(self.bin/'systemctl').read_text()
+        script=script.replace("if verb=='start':", """if verb=='start' and name=='buttonsbebe-inbox-projection.service':
+ if FAIL_EXPORT and (root/'live/webhook/app.py').read_text()=='new code':sys.exit(1)
+ (root/'snapshot-refreshed').write_text('derived snapshot')
+ sys.exit(0)
+if verb=='start':""".replace('FAIL_EXPORT',repr(fail_export)))
+        self.write(self.bin/'systemctl',script)
+
+    def test_projection_refresh_precedes_inbox_readiness_and_restores_timer(self):
+        self.projection_fixture()
+        result=self.run_receiver()
+        self.assertEqual(result.returncode,0,result.stderr.decode())
+        calls=(self.root/'calls').read_text()
+        self.assertLess(calls.index('start buttonsbebe-webhook'),calls.index('start buttonsbebe-inbox-projection.service'))
+        self.assertLess(calls.index('probe http://127.0.0.1:8000/ready'),calls.index('start buttonsbebe-inbox-projection.service'))
+        self.assertLess(calls.index('start buttonsbebe-inbox-projection.service'),calls.index('probe http://127.0.0.1:8766/ready'))
+        self.assertLess(calls.index('probe http://127.0.0.1:8766/ready'),calls.index('start buttonsbebe-inbox-projection.timer'))
+
+    def test_failed_projection_export_rolls_back_source_without_rewinding_data(self):
+        self.projection_fixture(fail_export=True)
+        result=self.run_receiver()
+        self.assertNotEqual(result.returncode,0)
+        self.assertIn(b'Prior source restored',result.stderr)
+        self.assertEqual((self.live/'webhook/app.py').read_text(),'old code')
+        self.assertEqual((self.live/'webhook/data/webhook.db').read_text(),'accepted after deployment began')
+        self.assertIn('buttonsbebe-inbox-projection.timer',json.loads((self.root/'active.json').read_text()))
+        self.assertTrue((self.root/'snapshot-refreshed').is_file())
+
+    def test_failed_inbox_ready_cannot_pass_on_send_lock_alone(self):
+        self.projection_fixture(fail_ready=True)
+        result=self.run_receiver()
+        self.assertNotEqual(result.returncode,0)
+        self.assertIn(b'Prior source restored',result.stderr)
+        self.assertEqual((self.live/'webhook/app.py').read_text(),'old code')
 
     def test_active_projection_aborts_without_stopping_export_or_app(self):
         self.write(self.root / 'active.json', json.dumps([

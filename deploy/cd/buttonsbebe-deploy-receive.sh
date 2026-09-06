@@ -158,6 +158,8 @@ readiness_ok() (
       buttonsbebe-webhook)
         curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8000/ready >/dev/null || return 1 ;;
       helpdesk-inbox)
+        curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8766/ready |
+          python3 -c 'import json,sys; x=json.load(sys.stdin); assert x.get("ok") is True and x.get("sendAccessEnabled") is False' || return 1
         curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8766/ >/dev/null || return 1
         curl --fail --silent --show-error --max-time 10 -X POST \
           http://127.0.0.1:8766/console/api/helpdesk -H 'content-type: application/json' \
@@ -194,6 +196,20 @@ start_active_services() {
     fi
     systemctl start "$service" || return 1
   done
+  if [[ " ${active_timers[*]} " == *" buttonsbebe-inbox-projection.timer "* ]]; then
+    # Its timer stays paused until deployment succeeds. Build a fresh snapshot
+    # using the selected source only after canonical schema startup is ready;
+    # never activate an exporter that was not already scheduled by the operator.
+    api_ready=0
+    for ((attempt=1; attempt<=readiness_attempts; attempt++)); do
+      if curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8000/ready >/dev/null; then
+        api_ready=1; break
+      fi
+      if ((attempt < readiness_attempts)); then sleep "$readiness_delay_seconds"; fi
+    done
+    ((api_ready)) || return 1
+    systemctl start buttonsbebe-inbox-projection.service || return 1
+  fi
 }
 stop_active_services() {
   local index failed=0

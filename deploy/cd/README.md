@@ -78,7 +78,8 @@ multi-file switch. An active KB maintenance job aborts before source changes;
 active timers are paused and restored. No package downloads or index work occur
 inside the outage. Readiness is scoped to changed services. WhatsApp's connected
 business state is monitored separately and does not roll back unrelated code.
-Inbox readiness includes the exact locked Send response.
+Inbox readiness requires `/ready` with healthy storage/fresh projection and the
+exact locked Send response; static HTML or the early Send lock alone cannot pass.
 
 On failure/INT/TERM, affected services stop, journaled source is restored, and
 previously active services restart and pass bounded readiness. A concurrent code
@@ -101,3 +102,11 @@ rollback. Projection SQLite snapshots remain runtime data outside the source
 manifest. The exporter and reader ship to the separate `/opt` inbox tree;
 `processor/hermes_runner/process.py` ships with processor source. QA lockfiles
 and harness files under `testing/` are CI-only and never replace a live venv.
+
+If the projection timer was active before deployment, startup waits for the
+canonical webhook readiness/schema, runs the approved projection oneshot once,
+and only then checks inbox readiness. The timer remains paused throughout this
+sequence. Export failure fails deployment and invokes source-only rollback;
+rollback refreshes using restored source before readiness and then restores the
+previous timer state. No canonical/inbox database is reset. A previously inactive
+projection timer does not cause an exporter to be started by deployment.
