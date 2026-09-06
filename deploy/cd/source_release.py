@@ -30,7 +30,7 @@ REQUIRED_FILES = {
     'feedback': ('__init__.py', 'pii.py'),
     'tools': ('run-gorgias.sh', 'run-redo.sh', 'requirements.txt'),
     'kb': ('scripts/index_kb.py', 'sync-products.sh', 'requirements.txt'),
-    'kb-admin': ('server.js', 'package.json'),
+    'kb-admin': ('server.js',),  # Node builtins only; no package manifest exists.
     'whatsapp-connect': ('server.js', 'package.json', 'package-lock.json'),
     'console-src/inbox': ('run-review.sh', 'index.html', 'requirements.txt', 'requirements.lock', 'projection.py', 'export_projection.py'),
     'console-src/helpdesk-agent': ('helpdesk/dispatch.py', 'helpdesk/send_access.py'),

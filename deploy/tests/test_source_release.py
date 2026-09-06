@@ -75,6 +75,24 @@ class SourceRecoveryTests(unittest.TestCase):
         self.assertEqual(journal['files']['app/processor/hermes_runner/process.py']['services'],
                          ['buttonsbebe-webhook', 'buttonsbebe-processor'])
 
+    def test_inventory_accepts_actual_tracked_archive_layout(self):
+        import io
+        import subprocess
+        import tarfile
+        repo = Path(__file__).resolve().parents[2]
+        payload = subprocess.check_output([
+            'git', '-C', str(repo), 'archive', '--format=tar', 'HEAD',
+            *release.COMPONENTS, 'console-src/index.html', 'console-src/login.html'])
+        destination = self.root / 'actual-git-archive'
+        destination.mkdir()
+        with tarfile.open(fileobj=io.BytesIO(payload)) as archive:
+            archive.extractall(destination, filter='data')
+        manifest = release.inventory(destination)
+        self.assertIn('app/kb-admin/server.js', manifest)
+        self.assertNotIn('app/kb-admin/package.json', manifest)
+        self.assertIn('app/processor/hermes_runner/process.py', manifest)
+        self.assertIn('inbox/console-src/inbox/export_projection.py', manifest)
+
     def test_partial_apply_recovers_and_repeated_rollback_is_safe(self):
         journal = self.prepare()
         first = journal['changes'][0]
