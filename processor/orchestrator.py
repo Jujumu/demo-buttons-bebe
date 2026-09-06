@@ -495,9 +495,9 @@ async def _notify_owner_once(job: dict, saved: dict, db_path: Path) -> None:
                   job_id=job["id"], ticket_id=job["ticket_id"])
         return
     payload = json.loads(job["payload"])
-    delivered = False
+    accepted = False
     try:
-        delivered = send_whatsapp(
+        accepted = send_whatsapp(
             ticket_id=job["ticket_id"], subject=payload.get("ticket_subject", ""),
             customer_email=payload.get("customer_email", ""),
             message_summary=str(payload.get("message_text") or "")[:300],
@@ -505,9 +505,9 @@ async def _notify_owner_once(job: dict, saved: dict, db_path: Path) -> None:
             max_retries=0,
         ) is True
     finally:
-        await finish_owner_alert(job["id"], delivered, db_path)
-    log_event(logger, "INFO" if delivered else "ERROR",
-              "Owner alert delivered" if delivered else "Owner alert uncertain; operator review required",
+        await finish_owner_alert(job["id"], accepted, db_path)
+    log_event(logger, "INFO" if accepted else "ERROR",
+              "Owner alert accepted by bridge" if accepted else "Owner alert uncertain; operator review required",
               job_id=job["id"], ticket_id=job["ticket_id"])
 
 

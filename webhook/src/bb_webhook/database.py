@@ -100,7 +100,7 @@ CREATE INDEX IF NOT EXISTS idx_results_message ON ticket_results(message_id);
 -- no recorded success is uncertain and must never be automatically resent.
 CREATE TABLE IF NOT EXISTS owner_alert_attempts (
     job_id INTEGER PRIMARY KEY,
-    status TEXT NOT NULL CHECK(status IN ('attempting', 'delivered', 'uncertain')),
+    status TEXT NOT NULL CHECK(status IN ('attempting', 'accepted', 'uncertain')),
     attempted_at TEXT NOT NULL,
     finished_at TEXT
 );
@@ -617,11 +617,11 @@ async def claim_owner_alert(job_id: int, db_path: Path | None = None) -> bool:
     return affected == 1
 
 
-async def finish_owner_alert(job_id: int, delivered: bool, db_path: Path | None = None) -> None:
+async def finish_owner_alert(job_id: int, accepted: bool, db_path: Path | None = None) -> None:
     await Database(db_path).execute(
         """UPDATE owner_alert_attempts SET status=?, finished_at=?
            WHERE job_id=? AND status='attempting'""",
-        ("delivered" if delivered else "uncertain", datetime.now(timezone.utc).isoformat(), job_id),
+        ("accepted" if accepted else "uncertain", datetime.now(timezone.utc).isoformat(), job_id),
         operation="finish_owner_alert",
     )
 
@@ -757,7 +757,7 @@ async def get_result_stats(db_path: Path | None = None) -> dict:
                         "no_kb_match": 0, "critical": 0, "high": 0, "normal": 0, "low": 0}
 
     alert_rows = await db.fetch(
-        "SELECT COUNT(*) AS count FROM owner_alert_attempts WHERE status != 'delivered'",
+        "SELECT COUNT(*) AS count FROM owner_alert_attempts WHERE status != 'accepted'",
         operation="owner_alert_attention_count",
     )
     return {**job_stats, **result_stats,

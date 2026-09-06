@@ -78,7 +78,9 @@ def send_whatsapp(
     *,
     max_retries: int = 3,
 ) -> bool:
-    """Send a WhatsApp alert to the owner about an IMMEDIATE/HIGH ticket.
+    """Submit an owner alert; True means the bridge returned HTTP 2xx.
+
+    This is transport acceptance, not proof of delivery to the owner device.
 
     Retries on transient failures (409 Conflict from Baileys reconnect
     cycle, 5xx) with exponential backoff.  The Baileys bridge disconnects
@@ -199,10 +201,10 @@ def send_whatsapp(
             if attempt < max_retries:
                 wait = backoff_seconds[min(attempt, len(backoff_seconds) - 1)]
                 log_event(logger, "WARNING",
-                          f"WhatsApp alert error, retrying in {wait}s: {exc}",
+                          f"WhatsApp alert error, retrying in {wait}s: {type(exc).__name__}",
                           ticket_id=ticket_id, attempt=attempt + 1)
                 time.sleep(wait)
                 continue
-            log_event(logger, "ERROR", f"WhatsApp alert failed: {exc}",
+            log_event(logger, "ERROR", f"WhatsApp alert failed: {type(exc).__name__}",
                       ticket_id=ticket_id, attempts=attempt + 1)
             return False

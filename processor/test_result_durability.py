@@ -71,6 +71,9 @@ class ResultDurabilityTests(unittest.IsolatedAsyncioTestCase):
             await orchestrator._process_one_job(await database.get_next_pending_job(self.path), True, self.settings)
             notify.assert_called_once()
         self.assertEqual((await self.status())["status"], "done")
+        tickets = await database.get_dashboard_tickets(db_path=self.path)
+        self.assertEqual(tickets[0]["owner_alert_status"], "accepted")
+        self.assertEqual((await database.get_result_stats(self.path))["owner_alerts_need_attention"], 0)
         self.assertEqual((await database.get_job_result(self.job_id, self.path))["draft_text"], "First draft")
 
     async def test_crash_after_alert_claim_is_visible_uncertain_and_never_resent(self):
