@@ -23,7 +23,10 @@ https://support.buttonsbebe.com:8443 {
 			forward_auth 127.0.0.1:8000 {
 				uri /auth/session
 			}
-			reverse_proxy 127.0.0.1:3210
+			reverse_proxy 127.0.0.1:3210 {
+				header_up -Cookie
+				header_up -Authorization
+			}
 		}
 		handle {
 			forward_auth 127.0.0.1:8000 {
@@ -34,14 +37,20 @@ https://support.buttonsbebe.com:8443 {
 					respond `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Sign in to receiving</title><body style="background:#f4f0ea;color:#1c1916;font-family:system-ui;margin:4rem auto;max-width:36rem;padding:1rem"><h1>Sign in to receiving</h1><p>Use your existing support console login, then return here.</p><p><a href="https://support.buttonsbebe.com/console/login" target="_blank" rel="noopener noreferrer">Open support sign-in</a></p><p><a href="/">Return to receiving</a></p></body></html>` 401
 				}
 			}
-			reverse_proxy 127.0.0.1:3210
+			reverse_proxy 127.0.0.1:3210 {
+				header_up -Cookie
+				header_up -Authorization
+			}
 		}
 	}
 	request_body {
+		# Matches the largest explicitly configured Express JSON parser.
 		max_size 2MB
 	}
 	header {
 		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Content-Security-Policy "frame-ancestors 'none'"
 		Referrer-Policy no-referrer
 	}
 	encode gzip zstd

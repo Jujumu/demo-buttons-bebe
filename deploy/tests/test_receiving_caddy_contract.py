@@ -20,6 +20,7 @@ ORIGIN = 'https://support.buttonsbebe.com:8443'
 class ReceivingProxyTests(unittest.TestCase):
     def test_session_and_exact_origin_protect_every_write_without_rewriting_paths(self):
         calls = []
+        backend_credentials = []
         class Auth(BaseHTTPRequestHandler):
             def do_GET(self):
                 calls.append(('auth',self.path))
@@ -30,6 +31,7 @@ class ReceivingProxyTests(unittest.TestCase):
         class Backend(BaseHTTPRequestHandler):
             def do_GET(self):
                 calls.append(('backend',self.command,self.path))
+                backend_credentials.append((self.headers.get('Cookie'),self.headers.get('Authorization')))
                 self.send_response(200);self.send_header('Content-Type','application/json');self.end_headers()
                 self.wfile.write(json.dumps({'path':self.path,'method':self.command}).encode())
             do_POST=do_GET
@@ -51,7 +53,9 @@ class ReceivingProxyTests(unittest.TestCase):
             process=subprocess.Popen(['caddy','run','--config',str(config),'--adapter','caddyfile'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
             def request(path,method='GET',cookie=False,origin=None):
                 headers={}
-                if cookie:headers['Cookie']='session=synthetic'
+                if cookie:
+                    headers['Cookie']='session=synthetic'
+                    headers['Authorization']='Bearer synthetic-not-a-real-token'
                 if origin is not None:headers['Origin']=origin
                 req=urllib.request.Request(f'http://127.0.0.1:{listen}'+path,method=method,headers=headers,data=b'{}' if method=='POST' else None)
                 try:
@@ -64,6 +68,8 @@ class ReceivingProxyTests(unittest.TestCase):
                         if attempt==59:raise
                         time.sleep(.05)
                 self.assertEqual(status,401)
+                self.assertEqual(headers['X-Frame-Options'],'DENY')
+                self.assertEqual(headers['Content-Security-Policy'],"frame-ancestors 'none'")
                 self.assertIn(b'https://support.buttonsbebe.com/console/login',body)
                 self.assertIn('text/html',headers.get('Content-Type',''))
                 status,body,headers=request('/api/tracking-stats')
@@ -79,7 +85,11 @@ class ReceivingProxyTests(unittest.TestCase):
                 self.assertEqual(status,200);self.assertEqual(json.loads(body),{'path':'/api/synthetic-action','method':'POST'})
                 self.assertEqual(request('/api/reconciliation','GET',True)[0],403)
                 self.assertEqual(request('/webhooks/redo','POST')[0],403)
-                self.assertEqual(request('/','GET',True)[0],200)
+                status,body,headers=request('/','GET',True)
+                self.assertEqual(status,200)
+                self.assertEqual(headers['X-Frame-Options'],'DENY')
+                self.assertEqual(headers['Content-Security-Policy'],"frame-ancestors 'none'")
+                self.assertEqual(backend_credentials,[(None,None),(None,None)])
                 self.assertTrue(all(item[1]=='/auth/session' for item in calls if item[0]=='auth'))
             finally:
                 process.terminate()
