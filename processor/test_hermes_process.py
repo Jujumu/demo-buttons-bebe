@@ -8,15 +8,49 @@ import tempfile
 import time
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
-from hermes_runner.process import run_bounded, OutputLimitExceeded
+from hermes_runner.process import run_bounded, OutputLimitExceeded, _signal_group
 from hermes_runner.runner import _run_environment
 
 
 class ProcessTests(unittest.TestCase):
     def run_python(self, code, timeout=2):
         return run_bounded([sys.executable, '-c', code], timeout=timeout, env={})
+
+    def test_group_permission_retry_requires_signal_success_or_group_absence(self):
+        for outcome in (None, ProcessLookupError()):
+            with patch('hermes_runner.process.os.killpg', side_effect=[PermissionError(), outcome]) as kill, \
+                 patch('hermes_runner.process.time.sleep'):
+                _signal_group(123456, signal.SIGKILL)
+                self.assertEqual(kill.call_count, 2)
+                kill.assert_called_with(123456, signal.SIGKILL)
+
+    def test_persistent_group_permission_failure_is_not_swallowed(self):
+        with patch('hermes_runner.process.os.killpg', side_effect=PermissionError()), \
+             patch('hermes_runner.process.time.monotonic', side_effect=[0, .1, .31]), \
+             patch('hermes_runner.process.time.sleep') as pause:
+            with self.assertRaises(PermissionError):
+                _signal_group(123456, signal.SIGKILL)
+            pause.assert_called_once_with(.01)
+
+    def test_cleanup_failure_retains_timeout_context_and_closes_descriptors(self):
+        child = MagicMock(pid=123456)
+        child.wait.side_effect = subprocess.TimeoutExpired('synthetic', .3)
+        selector = MagicMock()
+        selector.get_map.return_value = {'synthetic': True}
+        with patch('hermes_runner.process.subprocess.Popen', return_value=child), \
+             patch('hermes_runner.process.selectors.DefaultSelector', return_value=selector), \
+             patch('hermes_runner.process.os.set_blocking'), \
+             patch('hermes_runner.process.time.monotonic', side_effect=[0, 2]), \
+             patch('hermes_runner.process._signal_group', side_effect=PermissionError()):
+            with self.assertRaises(PermissionError) as failure:
+                run_bounded(['synthetic'], timeout=1, env={})
+        self.assertIsInstance(failure.exception.__context__, subprocess.TimeoutExpired)
+        child.wait.assert_called_once_with(timeout=.3)
+        selector.close.assert_called_once()
+        child.stdout.close.assert_called_once()
+        child.stderr.close.assert_called_once()
 
     def test_output_and_exit(self):
         result = self.run_python("import sys; print('draft'); print('err',file=sys.stderr); sys.exit(3)")

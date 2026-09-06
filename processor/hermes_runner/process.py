@@ -12,6 +12,27 @@ class OutputLimitExceeded(RuntimeError):
     pass
 
 
+def _signal_group(group_id: int, sig: int) -> None:
+    """Signal a child group; tolerate only a briefly disappearing-group race.
+
+    EPERM was observed on macOS just after the leader was reaped; an exiting
+    group race is suspected, not proven.
+    Never interpret EPERM as successful cleanup: a bounded retry must actually
+    signal the group or receive ESRCH. Persistent permission failures propagate.
+    """
+    deadline = time.monotonic() + 0.3
+    while True:
+        try:
+            os.killpg(group_id, sig)
+            return
+        except ProcessLookupError:
+            return
+        except PermissionError:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.01)
+
+
 def run_bounded(command, *, timeout, env, capture_output=True, text=True, cwd=None):
     """Return a CompletedProcess with bounded output and no surviving group.
 
@@ -58,18 +79,24 @@ def run_bounded(command, *, timeout, env, capture_output=True, text=True, cwd=No
         # Kill the whole group even when its leader already exited or a grandchild
         # closed inherited pipes. TERM then KILL is bounded; reap our direct child.
         try:
-            os.killpg(child.pid, signal.SIGTERM)
-        except ProcessLookupError:
-            pass
-        try:
+            _signal_group(child.pid, signal.SIGTERM)
+            try:
+                child.wait(timeout=0.3)
+            except subprocess.TimeoutExpired:
+                pass
+            _signal_group(child.pid, signal.SIGKILL)
             child.wait(timeout=0.3)
-        except subprocess.TimeoutExpired:
-            pass
-        try:
-            os.killpg(child.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        child.wait()
-        selector.close()
-        child.stdout.close()
-        child.stderr.close()
+        except BaseException:
+            # Reap an already-exiting direct child even if signalling failed.
+            # Do not hide that failure or wait indefinitely for a live child.
+            try:
+                child.wait(timeout=0.3)
+            except subprocess.TimeoutExpired:
+                pass
+            raise
+        finally:
+            # A real cleanup failure still propagates, but descriptor cleanup
+            # must not depend on process-group signalling succeeding.
+            selector.close()
+            child.stdout.close()
+            child.stderr.close()
