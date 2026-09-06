@@ -1589,7 +1589,36 @@ class ReDoSTests(unittest.TestCase):
         return list(dict.fromkeys(heads))
 
     def _worst_time(self, compiled: re.Pattern, heads: list[str], pad: int,
-                    repeats: int = 1) -> float:
+                    repeats: int = 1) -> tuple[float, bool]:
+        """Measure regex CPU, not time descheduled by concurrent test jobs.
+
+        A kernel CPU timer interrupts even a single catastrophic re.search;
+        checking elapsed time only after search returns cannot enforce a bound.
+        Both supported test hosts (Linux CI and macOS) provide ITIMER_PROF.
+        Restore the caller's handler; fail explicitly if nested under a timer.
+        """
+        import signal
+
+        class ProbeBudgetExceeded(Exception):
+            pass
+
+        def expired(signum, frame):
+            raise ProbeBudgetExceeded()
+
+        if signal.getitimer(signal.ITIMER_PROF) != (0.0, 0.0):
+            raise RuntimeError("regex guard requires an unused CPU timer")
+        previous = signal.signal(signal.SIGPROF, expired)
+        try:
+            signal.setitimer(signal.ITIMER_PROF, self.PUMP_BUDGET)
+            try:
+                return self._worst_cpu_time(compiled, heads, pad, repeats)
+            except ProbeBudgetExceeded:
+                return float("inf"), True
+        finally:
+            signal.setitimer(signal.ITIMER_PROF, 0)
+            signal.signal(signal.SIGPROF, previous)
+
+    def _worst_cpu_time(self, compiled, heads, pad, repeats):
         import time
         worst = 0.0
         # The dangerous input is one of a pattern's own literals followed by a
@@ -1601,6 +1630,10 @@ class ReDoSTests(unittest.TestCase):
         # can be quadratic in its own LEADING quantifiers, reaching no literal
         # at all. _MARKER_RE's "^[\\s>*#\\-]*[-\\s]*..." blows up on a bare run
         # of dashes, and every probe here used to be prefixed with a literal.
+        # process_time excludes time preempted/suspended by other work. Wall
+        # time here produced both false failures and missed positive controls
+        # under concurrent QA, including >100ms scheduler stalls. CPU frequency
+        # and cache variation still justify re-timing close candidates.
         # Two phases, because the SHAPE of the noise matters more than the
         # amount of it. This function takes a MAX over ~1300 probes, and a max
         # over 1300 single samples is tripped by ONE scheduler hiccup - it
@@ -1618,9 +1651,9 @@ class ReDoSTests(unittest.TestCase):
         for head in list(heads) + [""]:
             for filler in (" ", "-", "0", "x", "\t", "\u00a0"):
                 probe = head + filler * pad
-                start = time.perf_counter()
+                start = time.process_time()
                 compiled.search(probe)
-                elapsed = time.perf_counter() - start
+                elapsed = time.process_time() - start
                 spent += elapsed
                 if elapsed > self.PUMP_CEILING or spent > self.PUMP_BUDGET:
                     # Already catastrophic. Measuring the other 1300 probes
@@ -1650,9 +1683,9 @@ class ReDoSTests(unittest.TestCase):
                 continue
             best = None
             for _ in range(max(1, repeats)):
-                start = time.perf_counter()
+                start = time.process_time()
                 compiled.search(probe)
-                elapsed = time.perf_counter() - start
+                elapsed = time.process_time() - start
                 best = elapsed if best is None else min(best, elapsed)
             worst = max(worst, best)
         return worst, False
@@ -1737,6 +1770,37 @@ class ReDoSTests(unittest.TestCase):
         large, aborted = self._worst_time(compiled, literals,
                                           self.PUMP_N * 4, repeats)
         return small, (float("inf") if aborted else large), aborted
+
+    def test_measurement_ignores_time_descheduled(self):
+        import time
+        from unittest.mock import patch
+
+        class DescheduledSearch:
+            def search(self, probe):
+                time.sleep(0.005)
+
+        # Deliberately paused search has substantial wall time but no regex
+        # CPU cost. perf_counter must never decide regex complexity.
+        with patch("time.perf_counter", side_effect=AssertionError("wall clock")):
+            measured, aborted = self._worst_time(DescheduledSearch(), [], 1)
+        self.assertFalse(aborted)
+        self.assertLess(measured, self.PUMP_FLOOR)
+
+    def test_single_catastrophic_search_is_interrupted_in_subprocess(self):
+        import subprocess
+        # Real timer and regex engine; outer deadline contains this positive
+        # control if timer handling regresses.
+        code = """
+import re
+from test_classifier_rules import ReDoSTests
+probe = ReDoSTests()
+probe.PUMP_BUDGET = 0.05
+elapsed, aborted = probe._worst_time(re.compile(r'(x+)+y'), [], 80)
+assert aborted and elapsed == float('inf'), (elapsed, aborted)
+"""
+        result = subprocess.run([sys.executable, "-c", code], cwd=PROCESSOR_DIR,
+                                capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_no_pattern_is_superlinear(self):
         self.assertEqual(
