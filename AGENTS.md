@@ -96,19 +96,21 @@ When signed, tell the human: Ready for review, then squash-merge. Do not nag the
 - Explicit Shopify catalog/seed requests count as naming a write; still no refunds, cancels, or `customerCreate` unless named.
 - Prefers kid-simple architecture explanations using the organ/tissue analogy; use Excalidraw or the click-to-enter 3D sim; keep organs and wires accurate to this demo, not production Hermes (no Gorgias, Redo, or KB as peer organs).
 - Prefers Surge (`*.surge.sh`) for quick public static hosting; do not use Cloudflare tunnels for that.
-- Prefers inbox chrome in the live preview (browser element select + screenshots) over design canvases; folds view filters into the ticket list instead of a separate first column.
+- Prefers inbox chrome in the live preview (browser element select + screenshots) over design canvases; folds view filters into the ticket list (no separate views column); list and rail both collapse to thin strips with a clear expand control.
+- Prefers the conversation pane to keep the reply box visible: bottom-anchored composer, compact expandable attachment thumbs, and a full-width AI draft strip with Use draft / Regenerate / Dismiss under the text.
+- Prefers AI drafts that answer the ticket’s actual ask or request type; mismatched draft content undermines trust.
 
 ## Learned Workspace Facts
 
-- Local inbox preview: `console-src/inbox/run-review.sh` defaults to `http://127.0.0.1:8766/` (`INBOX_PORT`).
-- VPS demo inbox is also served at `https://helpdesk.teddyonfriday.com/` (systemd `helpdesk-inbox` → `:8766`).
+- Inbox preview: local `console-src/inbox/run-review.sh` → `http://127.0.0.1:8766/` (`INBOX_PORT`); VPS also serves `https://helpdesk.teddyonfriday.com/` (systemd `helpdesk-inbox` → `:8766`).
 - `helpdesk.pull_mailbox` needs Python package `agentmail` plus `AGENTMAIL_API_KEY`; if the package is missing it can fall back to fixtures and never ingest live mail.
 - Live tickets use the real intake From display name as `customerName` (e.g. the human’s Gmail), not the Ada/Sam scenario labels.
-- Demo ticket messages may include image attachments; the thread UI can show them above the reply box.
+- Demo ticket messages may include image attachments; the thread shows small expandable thumbs and keeps the composer bottom-anchored (PR 37 / `helpdesk-design/LOCK.md`).
 - Order rail line items show 48×48 product thumbnails from Shopify `lineItems.image.url` (PR 13).
 - Demo inbox baseline is 35 seed tickets; normal boot does not auto-pull mail — use `?pull=1` (optional `force=1` for fixtures).
 - Cross-boot AgentMail dedupe persists seen message ids in `console-src/inbox/data/seen_messages.json`.
-- Inbox UI is list / thread / rail (no separate views column): Inbox title + view filters live in the list toolbar; list pane collapses to a thin strip with an expand chevron.
+- Inbox UI is list / thread / rail: view filters live in the list toolbar; list and rail collapse to ~36px strips; unread names are bold (session-local); selected row is a narrow accent edge + pale accent wash.
+- `helpdesk/composer.py` `fixture_draft()` supplies Caduceus scenario language for demo ticket ids; draft-by-type covers privacy/unsubscribe asks; still no refund/cancel/send promises.
 - Organ/tissue architecture: Excalidraw at `docs/tissues/organ-tissue.excalidraw`; click-to-enter 3D sim at `docs/tissues/architecture-3d-sim.html` (world in `architecture-world.js`): LEGO-house organs, inside-Inbox list/thread/rail wireframe, info card off by default; mail → helpdesk intake, Shopify look-only, Send stays on the local thread.
 - This demo’s look-up path is Shopify Admin GraphQL only (`get_customer` / `get_order` / `get_returns` / `list_past_orders`); Redo and KB belong to production Hermes, not this repo’s helpdesk tissues.
 - Surge CLI is installed globally on this VPS (`surge` on PATH); publish a folder that contains `index.html`.
