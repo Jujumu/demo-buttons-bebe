@@ -9,6 +9,9 @@
   --warn: #9A6B12;
   --sans: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, monospace;
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-lg: 8px;
   /* Micro-feedback timings — hover subtle, press short, menus slightly longer */
   --motion-press: 80ms;
   --motion-hover: 120ms;
@@ -18,6 +21,7 @@
 
 * { box-sizing: border-box; margin: 0; }
 html, body, #inbox-root { height: 100%; }
+#inbox-root { overflow: hidden; }
 body {
   background: var(--ground);
   color: var(--ink);
@@ -37,18 +41,21 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 .inbox {
   position: relative;
   display: flex;
-  height: 100vh;
+  height: 100%;
+  padding: 8px;
+  gap: 8px;
   background: var(--ground);
 }
 
 .pane {
   min-height: 0;
-  border-right: 1px solid var(--line);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
   background: var(--surface);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
-.pane:last-child { border-right: 0; }
 .pane-list {
   flex: 0 0 24%;
   width: 24%;
@@ -112,8 +119,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 /* List column chrome: Inbox title + views filter / sort / collapse. */
 .pane-list .list-toolbar {
   padding: 10px 12px 8px;
-  border-top-left-radius: 10px;
-  border-top-right-radius: 10px;
   background: var(--ground);
 }
 .pane-list .list-toolbar .console-link {
@@ -158,7 +163,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   min-width: 200px;
   padding: 4px 0;
   border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
   background: var(--surface);
+  overflow: hidden;
 }
 .list-scope-menu.is-open { display: block; }
 .list-menu-item {
@@ -201,7 +208,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   height: 28px;
   padding: 0;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--ink);
 }
@@ -219,7 +226,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   min-height: 120px;
   padding: 16px 0;
   border: 0;
-  background: var(--ground);
+  background: transparent;
   color: var(--ink);
   flex-direction: column;
   gap: 10px;
@@ -378,6 +385,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   font-weight: 500;
   letter-spacing: .02em;
   border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
   padding: 1px 5px;
   line-height: 1.3;
 }
@@ -429,6 +437,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   letter-spacing: .02em;
   color: var(--mute);
   border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
   padding: 3px 7px;
 }
 .thread-scroll { flex: 1; overflow: auto; padding: 18px 20px 8px; }
@@ -440,6 +449,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   width: 22px; height: 22px;
   display: grid; place-items: center;
   border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
   font-size: 10px;
   font-weight: 600;
 }
@@ -455,8 +465,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   display: block;
   padding: 0;
   border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
   background: var(--ground);
   cursor: zoom-in;
+  overflow: hidden;
 }
 .bubble-attach img {
   display: block;
@@ -487,7 +499,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   max-height: calc(100vh - 48px);
   background: var(--surface);
   border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
   padding: 12px;
+  overflow: hidden;
 }
 .attach-lightbox img {
   display: block;
@@ -512,8 +526,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 .message-via { margin-left: 6px; font-size: 12px; }
 .composer-box {
   border: 1px solid var(--line);
+  border-radius: var(--radius);
   background: var(--ground);
   padding: 8px;
+  overflow: hidden;
   transition: border-color var(--motion-hover) var(--ease-out), background-color var(--motion-hover) var(--ease-out);
 }
 .composer-box:focus-within {
@@ -580,6 +596,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   width: 100%;
   min-height: 88px;
   border: 0;
+  border-radius: var(--radius-sm);
   background: var(--surface);
   padding: 10px 8px;
   resize: vertical;
@@ -610,6 +627,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   margin: 0 0 8px;
   padding: 10px 12px;
   border: 1px solid var(--line);
+  border-radius: var(--radius);
   background: var(--ground);
   animation: feedback-in var(--motion-menu) var(--ease-out);
 }
@@ -641,6 +659,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 
 .btn-ink, .btn-quiet, .btn-hairline {
   border: 1px solid var(--line);
+  border-radius: var(--radius);
   background: var(--surface);
   padding: 7px 12px;
   font-size: 13px;
@@ -707,13 +726,20 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   background: var(--surface);
   color: var(--ink);
   border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
   padding: 20px;
 }
 .gate-sheet p { font-size: 14px; line-height: 1.5; }
 .gate-sheet-actions { display: flex; justify-content: flex-end; margin-top: 16px; }
 
 .rail-inner { overflow: auto; padding: 10px; }
-.rail-card { background: var(--surface); border: 1px solid var(--line); margin-bottom: 8px; }
+.rail-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  margin-bottom: 8px;
+  overflow: hidden;
+}
 .rail-toggle, .rail-sub-toggle, .rail-static {
   width: 100%;
   display: flex;
@@ -763,6 +789,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   flex: 0 0 48px;
   object-fit: cover;
   border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
   background: var(--ground);
 }
 .line-thumb-empty { display: block; }
@@ -843,6 +870,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   text-decoration: none;
   font-size: 13px;
   font-weight: 500;
+  border-radius: var(--radius);
 }
 .skip-link:focus {
   left: 8px;
