@@ -26,6 +26,7 @@ class RouterContractTests(unittest.TestCase):
             ("POST", "/auth/logout"),
             ("GET", "/dashboard/api/messages"),
             ("GET", "/dashboard/api/stats"),
+            ("GET", "/dashboard/api/ops"),
             ("GET", "/dashboard/api/tickets"),
             ("POST", "/dashboard/api/results"),
             ("GET", "/dashboard/api/notifications"),

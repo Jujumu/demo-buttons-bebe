@@ -4,6 +4,8 @@ After=local-fs.target
 
 [Service]
 Type=oneshot
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONNOUSERSITE=1
 ExecStart=/usr/bin/python3 "/root/Buttonsbebe Agent/tools/ops/scheduled_backup.py"
 TimeoutStartSec=5min
 UMask=0077

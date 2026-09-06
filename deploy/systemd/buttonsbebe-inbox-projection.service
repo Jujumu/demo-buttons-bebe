@@ -4,6 +4,8 @@ After=buttonsbebe-webhook.service
 
 [Service]
 Type=oneshot
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONNOUSERSITE=1
 User=root
 Group=bb-inbox
 UMask=0027
