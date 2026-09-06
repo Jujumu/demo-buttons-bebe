@@ -289,6 +289,7 @@ body[data-support-page=console] .t-badge-dot { background:var(--accent); }
 <script>
 const API="/console/api", KBAPI="/console/kbapi";
 let stats={},tickets=[],learn={},tab="overview",openTk=null,filter="all";
+let opsData=null,opsState="loading",opsPoll=null,opsBusy=false;
 let kbData=null,kbHealth=null,kbHealthError="",kbSel=null,kbBuf="",kbMsg="",kbReindexing=false,kbLoaded=false,kbLoadError="";
 let waData=null,waMsg="",waMode=null,waNumber=null,waPoll=null;
 const WAAPI="/console/waapi";
@@ -321,6 +322,47 @@ const freshText=()=>lastUpdated?"Updated "+lastUpdated.toLocaleTimeString([],{ho
 const liveMessage=()=>tab==="tickets"&&actMsg?actMsg:tab==="kb"&&kbMsg?kbMsg:tab==="notices"&&(noticeError||noticeMsg)?(noticeError||noticeMsg):tab==="notif"&&(notificationMsg||waMsg)?(notificationMsg||waMsg):statusMsg;
 async function jget(u){try{const r=await fetch(u,{cache:"no-store"});if(!r.ok)return null;return await r.json();}catch(e){return null;}}
 
+function opsHealthSummary(data,state,now=Date.now()){
+ if(state==="auth")return {title:"Sign in to view system health",detail:"Your session needs to be renewed.",healthy:false,auth:true,issues:[]};
+ if(state==="loading")return {title:"Checking system health…",detail:"Waiting for the latest local report.",healthy:false,issues:[]};
+ if(!data||state==="unavailable")return {title:"System health is unavailable",detail:"Refresh to retry or ask your operator to check monitoring.",healthy:false,issues:[]};
+ const checked=Date.parse(data.checked_at),age=(now-checked)/1000;
+ if(data.status==="missing")return {title:"Monitoring has not reported yet",detail:"Ask your operator to check that monitoring is running.",healthy:false,issues:[]};
+ if(data.status==="stale"||(Number.isFinite(age)&&age>180))return {title:"The health report is out of date",detail:"Ask your operator to check monitoring before relying on this report.",healthy:false,issues:[]};
+ const checks=data.checks&&typeof data.checks==="object"&&!Array.isArray(data.checks)?data.checks:{};
+ const healthy=data.status==="ok"&&Number.isFinite(age)&&age>=-30&&age<=180&&Object.keys(checks).length>0&&Object.values(checks).every(value=>value==="ok");
+ const groups=[
+  ["Ticket processing",["buttonsbebe-webhook","buttonsbebe-processor","processor_progress","webhook_readiness"]],
+  ["Inbox history",["helpdesk-inbox","buttonsbebe-inbox-projection_timer","buttonsbebe-inbox-projection_result","inbox_readiness"]],
+  ["Backup checks",["buttonsbebe-backup_timer","buttonsbebe-backup_result","backup_freshness"]],
+  ["Support connections",["buttonsbebe-kb-mcp","buttonsbebe-redo-mcp","buttonsbebe-gorgias-mcp","buttonsbebe-whatsapp-connect","buttonsbebe-kb-admin","kb_socket","redo_socket","gorgias_socket","whatsapp_socket","kb_admin_socket"]],
+  ["Server storage",["disk_space"]]
+ ];
+ const issues=groups.filter(([,keys])=>keys.some(key=>Object.hasOwn(checks,key)&&checks[key]!=="ok")).map(([label])=>label);
+ return {title:healthy?"Local checks are passing":"System health needs attention",detail:healthy?"The latest server checks passed. This does not confirm message delivery or every connected provider.":"Ask your operator to review the current checks. No automatic repair has been made.",healthy,issues};
+}
+function opsCardContents(){
+ const health=opsHealthSummary(opsData,opsState);
+ return `<div class="panel-head"><div><h3>System health</h3><div class="ph">${esc(health.title)}</div></div><div class="ic ${health.healthy?'g':'a'}" aria-hidden="true">${health.healthy?IC.check:'!'}</div></div>
+ <p class="hint">${esc(health.detail)}</p>${health.issues.length?`<p class="hint"><b>Needs review:</b> ${health.issues.map(esc).join(", ")}</p>`:''}
+ ${health.auth?'<p><a class="view-all" href="/console/login">Sign in again →</a></p>':''}
+ <p class="hint">Local monitoring only. It does not send external outage alerts.</p>`;
+}
+function opsPanel(){return `<section class="panel" data-ops-card aria-label="System health" aria-live="polite" style="margin-bottom:20px">${opsCardContents()}</section>`;}
+function paintOps(){const card=document.querySelector('[data-ops-card]');if(card)card.innerHTML=opsCardContents();}
+async function loadOps(){
+ if(opsBusy)return;
+ opsBusy=true;const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),5000);
+ try{
+  const response=await fetch(API+"/ops",{cache:"no-store",signal:controller.signal});
+  if(response.status===401){opsData=null;opsState="auth";}
+  else if(!response.ok){opsData=null;opsState="unavailable";}
+  else{opsData=await response.json();opsState="loaded";}
+ }catch(_error){opsData=null;opsState="unavailable";}
+ finally{clearTimeout(timeout);opsBusy=false;paintOps();}
+}
+function startOpsPoll(){if(!opsPoll)opsPoll=setInterval(()=>{if(!document.hidden)loadOps();},60000);}
+
 function bindCompactHeader(){
  const wrap=document.querySelector(".wrap");
  const schedule=()=>{if(headerScrollFrame)return;headerScrollFrame=requestAnimationFrame(()=>{headerScrollFrame=0;const mobile=window.matchMedia("(max-width: 900px)").matches;const y=mobile?window.scrollY:(wrap?wrap.scrollTop:0);const next=headerCompact?y>12:y>36;if(next===headerCompact)return;headerCompact=next;const main=document.querySelector(".main");if(main)main.classList.toggle("header-compact",headerCompact);});};
@@ -328,6 +370,7 @@ function bindCompactHeader(){
 }
 
 async function boot(){
+ loadOps();startOpsPoll();
  const [s,t,lg,kh,nd,wd]=await Promise.all([jget(API+"/stats"),jget(API+"/tickets?limit=100"),jget(API+"/learning"),jget(KBAPI+"/health"),jget(API+"/notifications"),jget(WAAPI+"/status")]);
  loadErrors=[];if(s===null)loadErrors.push("stats");if(t===null)loadErrors.push("tickets");if(lg===null)loadErrors.push("learning");
  loadFailed=loadErrors.length>0;
@@ -390,7 +433,7 @@ function errorBanner(){return `<div class="error-banner" role="alert"><div><stro
 
 function ownerAlertWarning(count){return Number(count)>0?`<div class="warn" role="alert">${Number(count)} owner alert${Number(count)===1?'':'s'} need review. WhatsApp acknowledgement or delivery is uncertain; inspect the affected ticket. No automatic resend was attempted.</div>`:"";}
 function overview(){
- if(loadErrors.includes("stats")||loadErrors.includes("tickets"))return `<div class="panel" role="alert"><h3>Overview metrics are unavailable</h3><div class="ph">Refresh to retry. No missing values are being presented as zero.</div></div>${learnPanel()}`;
+ if(loadErrors.includes("stats")||loadErrors.includes("tickets"))return `${opsPanel()}<div class="panel" role="alert"><h3>Overview metrics are unavailable</h3><div class="ph">Refresh to retry. No missing values are being presented as zero.</div></div>${learnPanel()}`;
  const standardDrafts=stats.drafted||0,sensitiveDrafts=stats.sensitive_draft||0,noKbDrafts=stats.no_kb_match||0,legacyEscalated=stats.escalated||0;
  const drafted=standardDrafts+sensitiveDrafts+noKbDrafts,escalated=legacyEscalated+sensitiveDrafts,done=stats.done||0,failed=stats.failed||0;
  const handled=drafted+legacyEscalated,autor=handled?Math.round(drafted/handled*100):0;
@@ -405,7 +448,7 @@ function overview(){
  ];
  const pr=[["Critical",stats.critical||0,"#f43f5e"],["High",stats.high||0,"#f9a16c"],["Normal",stats.normal||0,"#e7f65e"],["Low",stats.low||0,"#34d399"]];
  const mx=Math.max(1,...pr.map(x=>x[1]));const recent=tickets.slice(0,5);
- return `${ownerAlertWarning(stats.owner_alerts_need_attention)}<section class="attention" aria-labelledby="attention-title"><div class="attention-head"><h2 id="attention-title">Needs your attention</h2><p>Current work that may need a human</p></div><div class="attention-items">
+ return `${opsPanel()}${ownerAlertWarning(stats.owner_alerts_need_attention)}<section class="attention" aria-labelledby="attention-title"><div class="attention-head"><h2 id="attention-title">Needs your attention</h2><p>Current work that may need a human</p></div><div class="attention-items">
    <button class="attention-btn" data-go-filter="escalated"><strong>${digits(currentEsc)}</strong><span>Recent escalations</span></button>
    <button class="attention-btn" data-go-filter="failed"><strong>${digits(failed)}</strong><span>Failed jobs</span></button>
    <button class="attention-btn" data-go-filter="queue"><strong>${digits(queue)}</strong><span>Waiting or running</span></button>
@@ -610,7 +653,7 @@ function kbView(){
 
 function settingsView(){
  const steps=[["Connect Gorgias","Read tickets and accept human-approved replies"],["Connect Shopify","Sync orders & products"],["Import knowledge base","Policies, FAQs, products"],["Set escalation channel","Sensitive tickets to WhatsApp"],["Go live","Agent drafts on new tickets for review"]];
- return `<div class="sec-title">Onboarding - you're all set</div>
+ return `${opsPanel()}<div class="sec-title">Support setup</div>
  <div class="panel"><div class="steps">${steps.map(x=>`<div class="step"><div class="ck">${IC.check}</div><div><b>${x[0]}</b><small>${x[1]}</small></div></div>`).join("")}</div></div>
  <div class="sec-title">Agent settings</div>
  <div class="panel"><div class="act"><div class="r"><div class="ic g">${IC.check}</div><div><b>Human review is always required</b><br><small style="color:var(--ink3)">The agent only prepares drafts in this console. A person must confirm every customer reply or internal note.</small></div><div class="tm">locked</div></div></div></div>
