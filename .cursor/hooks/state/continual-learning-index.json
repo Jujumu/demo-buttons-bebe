@@ -1,41 +1,241 @@
 {
+  "version": 1,
   "transcripts": {
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/0491cc82-f093-4d7d-b25b-1b077ab372c6/0491cc82-f093-4d7d-b25b-1b077ab372c6.jsonl": {
+      "mtimeMs": 1788624182366.839,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
     "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/0c61adf8-b660-41f8-94b3-92b79214420f/0c61adf8-b660-41f8-94b3-92b79214420f.jsonl": {
-      "lastProcessedAt": "2026-09-01T02:48:00Z",
-      "mtimeMs": 1788127421074.1853
+      "mtimeMs": 1788127421074.1853,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/187bee7a-2fc7-4f94-9be7-5dd980850046/187bee7a-2fc7-4f94-9be7-5dd980850046.jsonl": {
+      "mtimeMs": 1788458584807.1597,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
     },
     "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/18920665-760b-4fd1-8f39-1fe9694ef24b/18920665-760b-4fd1-8f39-1fe9694ef24b.jsonl": {
-      "lastProcessedAt": "2026-09-01T02:48:00Z",
-      "mtimeMs": 1788127816041.592
+      "mtimeMs": 1788127816041.592,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/34b6ebf6-7931-4646-b6bf-a13119f6e5a3/34b6ebf6-7931-4646-b6bf-a13119f6e5a3.jsonl": {
+      "mtimeMs": 1788604722597.3337,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/3546dc1b-4e2b-49d1-ae0a-e8723384177f/3546dc1b-4e2b-49d1-ae0a-e8723384177f.jsonl": {
+      "mtimeMs": 1788344666387.775,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/36bafb11-060f-4d78-ae17-9953c29b113e/36bafb11-060f-4d78-ae17-9953c29b113e.jsonl": {
+      "mtimeMs": 1788258266484.4067,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
     },
     "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/48ed0999-e360-4ed8-9968-47cad4f93c52/48ed0999-e360-4ed8-9968-47cad4f93c52.jsonl": {
-      "lastProcessedAt": "2026-09-01T02:48:00Z",
-      "mtimeMs": 1788209270316.7156
+      "mtimeMs": 1788258482897.8694,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/48ed0999-e360-4ed8-9968-47cad4f93c52/subagents/36bafb11-060f-4d78-ae17-9953c29b113e.jsonl": {
+      "mtimeMs": 1788258247412.3772,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
     },
     "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/48ed0999-e360-4ed8-9968-47cad4f93c52/subagents/62bf2da5-1ca4-4ffa-922a-26793550340f.jsonl": {
-      "lastProcessedAt": "2026-09-01T02:48:00Z",
-      "mtimeMs": 1788201646994.7126
+      "mtimeMs": 1788201646994.7126,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/48ed0999-e360-4ed8-9968-47cad4f93c52/subagents/68eef4d8-c555-42f7-a15c-61bb82991210.jsonl": {
+      "mtimeMs": 1788257859051.5496,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
     },
     "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/48ed0999-e360-4ed8-9968-47cad4f93c52/subagents/69ba7ec3-a6ca-4033-baa2-b5fdf53a2b90.jsonl": {
-      "lastProcessedAt": "2026-09-01T02:48:00Z",
-      "mtimeMs": 1788173664996.309
+      "mtimeMs": 1788173664996.309,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/48ed0999-e360-4ed8-9968-47cad4f93c52/subagents/9cf54baf-d8ab-4f16-84bf-90b809884c36.jsonl": {
+      "mtimeMs": 1788251831319.6248,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/48ed0999-e360-4ed8-9968-47cad4f93c52/subagents/aeee8f91-fed5-4814-ba9a-8a40546a9161.jsonl": {
+      "mtimeMs": 1788256875411.4763,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/48ed0999-e360-4ed8-9968-47cad4f93c52/subagents/c5bee91d-465b-442e-a451-afdee564668b.jsonl": {
+      "mtimeMs": 1788251499753.8564,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/48ed0999-e360-4ed8-9968-47cad4f93c52/subagents/c730d8a7-356c-4bda-8dd4-22ebcb60d3a9.jsonl": {
+      "mtimeMs": 1788256968910.65,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/48ed0999-e360-4ed8-9968-47cad4f93c52/subagents/cbcb00ad-64a8-428c-afae-0a764cea61a8.jsonl": {
+      "mtimeMs": 1788252143683.3481,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
     },
     "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/48ed0999-e360-4ed8-9968-47cad4f93c52/subagents/d33b2f1a-a5a1-4691-a69a-994238be31d2.jsonl": {
-      "lastProcessedAt": "2026-09-01T02:48:00Z",
-      "mtimeMs": 1788129650538.021
+      "mtimeMs": 1788129650538.021,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
     },
     "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/48ed0999-e360-4ed8-9968-47cad4f93c52/subagents/d6f46494-99e9-4cde-98fa-4065fb2cfc03.jsonl": {
-      "lastProcessedAt": "2026-09-01T02:48:00Z",
-      "mtimeMs": 1788209322700.3337
+      "mtimeMs": 1788209459197.7673,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/48ed0999-e360-4ed8-9968-47cad4f93c52/subagents/d926195d-84f1-4800-b83e-9537fc380fd9.jsonl": {
+      "mtimeMs": 1788258457352.8125,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
     },
     "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/48ed0999-e360-4ed8-9968-47cad4f93c52/subagents/dd3b1f3c-3927-4260-8cd4-0eecfba38327.jsonl": {
-      "lastProcessedAt": "2026-09-01T02:48:00Z",
-      "mtimeMs": 1788161057722.2761
+      "mtimeMs": 1788161057722.2761,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/48ed0999-e360-4ed8-9968-47cad4f93c52/subagents/e388788f-9270-4c47-97c6-46e5c2ece506.jsonl": {
+      "mtimeMs": 1788256561069.7769,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
     },
     "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/48ed0999-e360-4ed8-9968-47cad4f93c52/subagents/e6a2c1dd-a6dd-4430-9291-896b93fb64bc.jsonl": {
-      "lastProcessedAt": "2026-09-01T02:48:00Z",
-      "mtimeMs": 1788129672897.0999
+      "mtimeMs": 1788129672897.0999,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/4ff1e165-1409-4ba7-843e-4afd628acfbd/4ff1e165-1409-4ba7-843e-4afd628acfbd.jsonl": {
+      "mtimeMs": 1788600099004.2092,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/4ff1e165-1409-4ba7-843e-4afd628acfbd/subagents/12053132-60e0-4225-97b4-d9ee4b2e10d1.jsonl": {
+      "mtimeMs": 1788465183083.9802,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/4ff1e165-1409-4ba7-843e-4afd628acfbd/subagents/20d97f5d-18d8-4130-9f7a-60e063ef5048.jsonl": {
+      "mtimeMs": 1788465195300.8872,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/4ff1e165-1409-4ba7-843e-4afd628acfbd/subagents/3a70791e-102a-4206-baac-2726e06fc849.jsonl": {
+      "mtimeMs": 1788459731539.9355,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/4ff1e165-1409-4ba7-843e-4afd628acfbd/subagents/bac4a52a-b80d-4d57-8149-9758030c31d0.jsonl": {
+      "mtimeMs": 1788418808684.8813,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/4ff1e165-1409-4ba7-843e-4afd628acfbd/subagents/c945298c-3b23-40e4-8435-4bedc7d3c600.jsonl": {
+      "mtimeMs": 1788505091263.508,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/71db3907-8b88-4627-9751-e82750156287/71db3907-8b88-4627-9751-e82750156287.jsonl": {
+      "mtimeMs": 1788612780404.643,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/71db3907-8b88-4627-9751-e82750156287/subagents/34b6ebf6-7931-4646-b6bf-a13119f6e5a3.jsonl": {
+      "mtimeMs": 1788604701344.292,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/71db3907-8b88-4627-9751-e82750156287/subagents/91fc9c85-eb64-413c-b2ba-a118ea08ee82.jsonl": {
+      "mtimeMs": 1788604831755.5935,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/71db3907-8b88-4627-9751-e82750156287/subagents/bf99f3c6-18ce-4cd8-8f50-c602c91eeedf.jsonl": {
+      "mtimeMs": 1788604197386.1848,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/71db3907-8b88-4627-9751-e82750156287/subagents/e4f919e5-7c86-430d-9cbc-e3074352f992.jsonl": {
+      "mtimeMs": 1788604158032.0994,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/71fd9f14-c941-49eb-bdd1-760dfadd69f0/71fd9f14-c941-49eb-bdd1-760dfadd69f0.jsonl": {
+      "mtimeMs": 1788689648571.233,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/71fd9f14-c941-49eb-bdd1-760dfadd69f0/subagents/0491cc82-f093-4d7d-b25b-1b077ab372c6.jsonl": {
+      "mtimeMs": 1788624023386.4998,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/71fd9f14-c941-49eb-bdd1-760dfadd69f0/subagents/234cbb38-2676-4811-bb6e-75f648e5994c.jsonl": {
+      "mtimeMs": 1788634025381.125,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/71fd9f14-c941-49eb-bdd1-760dfadd69f0/subagents/4f458cd3-74d4-4659-b70a-c61abb71dfac.jsonl": {
+      "mtimeMs": 1788630406677.4304,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/71fd9f14-c941-49eb-bdd1-760dfadd69f0/subagents/6247013b-88f2-45ce-aa51-3352c20164f7.jsonl": {
+      "mtimeMs": 1788624187863.8518,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/71fd9f14-c941-49eb-bdd1-760dfadd69f0/subagents/77b31056-820b-4a36-b583-1e33594f5da9.jsonl": {
+      "mtimeMs": 1788634915101.3643,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/71fd9f14-c941-49eb-bdd1-760dfadd69f0/subagents/95e9ba74-c720-4219-8788-2bdf816e0338.jsonl": {
+      "mtimeMs": 1788630871986.681,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/71fd9f14-c941-49eb-bdd1-760dfadd69f0/subagents/af69fee9-3857-435f-8843-b6afab481e13.jsonl": {
+      "mtimeMs": 1788634879964.2747,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/71fd9f14-c941-49eb-bdd1-760dfadd69f0/subagents/d11e1d35-4549-4084-bb13-f73b9ed80d0b.jsonl": {
+      "mtimeMs": 1788634931054.404,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/71fd9f14-c941-49eb-bdd1-760dfadd69f0/subagents/db359bb3-b9f2-4773-ac84-b6aec3ebc8d9.jsonl": {
+      "mtimeMs": 1788617555280.964,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/71fd9f14-c941-49eb-bdd1-760dfadd69f0/subagents/ea4a19b6-82ac-49b0-b38d-503f31c942bf.jsonl": {
+      "mtimeMs": 1788630604135.8862,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/71fd9f14-c941-49eb-bdd1-760dfadd69f0/subagents/f94d4a4e-e0bc-421e-af7f-887fd199aac4.jsonl": {
+      "mtimeMs": 1788617552245.9575,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/8262ccc6-e31c-47aa-aebc-b0ab174ff4c7/8262ccc6-e31c-47aa-aebc-b0ab174ff4c7.jsonl": {
+      "mtimeMs": 1788694816312.2466,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/8262ccc6-e31c-47aa-aebc-b0ab174ff4c7/subagents/0522c9cc-f99b-4bed-ac51-661b072540c1.jsonl": {
+      "mtimeMs": 1788694753797.272,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/8262ccc6-e31c-47aa-aebc-b0ab174ff4c7/subagents/4326ebc8-56fe-46b0-b06c-57ce0f4dcc02.jsonl": {
+      "mtimeMs": 1788693580422.8335,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/8262ccc6-e31c-47aa-aebc-b0ab174ff4c7/subagents/824fb3e1-78d2-48c8-868e-9ff323bbe981.jsonl": {
+      "mtimeMs": 1788694840136.707,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/8262ccc6-e31c-47aa-aebc-b0ab174ff4c7/subagents/8f8c1d75-c8b3-4616-bd88-0bf112856048.jsonl": {
+      "mtimeMs": 1788693846522.8682,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/8262ccc6-e31c-47aa-aebc-b0ab174ff4c7/subagents/9cf70b61-df0a-47ac-b732-343c9056578c.jsonl": {
+      "mtimeMs": 1788693837258.9924,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/8262ccc6-e31c-47aa-aebc-b0ab174ff4c7/subagents/a77d4f43-0f96-4028-a8d4-db4bd9b528c1.jsonl": {
+      "mtimeMs": 1788694635101.3071,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/85b3acea-c9f3-417a-a18c-5144cafd9533/85b3acea-c9f3-417a-a18c-5144cafd9533.jsonl": {
+      "mtimeMs": 1788612773976.6287,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/85b3acea-c9f3-417a-a18c-5144cafd9533/subagents/d53160e7-73da-4aed-ad96-41905ad5e539.jsonl": {
+      "mtimeMs": 1788603987641.7302,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/aeee8f91-fed5-4814-ba9a-8a40546a9161/aeee8f91-fed5-4814-ba9a-8a40546a9161.jsonl": {
+      "mtimeMs": 1788258186122.2402,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/af69fee9-3857-435f-8843-b6afab481e13/af69fee9-3857-435f-8843-b6afab481e13.jsonl": {
+      "mtimeMs": 1788634900441.3274,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/d926195d-84f1-4800-b83e-9537fc380fd9/d926195d-84f1-4800-b83e-9537fc380fd9.jsonl": {
+      "mtimeMs": 1788258479744.8623,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
+    },
+    "/home/ubuntu/.cursor/projects/home-ubuntu-demo-buttons-bebe/agent-transcripts/fe039e5f-3e4a-4d1e-ab00-156f1900e53e/fe039e5f-3e4a-4d1e-ab00-156f1900e53e.jsonl": {
+      "mtimeMs": 1788352950840.7134,
+      "lastProcessedAt": "2026-09-06T11:41:56Z"
     }
-  },
-  "version": 1
+  }
 }

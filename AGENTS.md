@@ -109,7 +109,7 @@ When signed, tell the human: Ready for review, then squash-merge. Do not nag the
 - Order rail line items show 48×48 product thumbnails from Shopify `lineItems.image.url` (PR 13).
 - Demo inbox baseline is 35 seed tickets; normal boot does not auto-pull mail — use `?pull=1` (optional `force=1` for fixtures).
 - Cross-boot AgentMail dedupe persists seen message ids in `console-src/inbox/data/seen_messages.json`.
-- Inbox UI is list / thread / rail: view filters live in the list toolbar; list and rail collapse to ~36px strips; unread names are bold (session-local); selected row is a narrow accent edge + pale accent wash.
+- Inbox WebMCP (`console-src/inbox/js/webmcp.js`): registers `document.modelContext` UI verbs (`select_view`, `select_ticket`, `use_draft`, `regenerate_draft`, `dismiss_draft`, plus summarize/macros); omits Send; server `helpdesk.*` MCP/CLI stays for data/AI.
 - `helpdesk/composer.py` `fixture_draft()` supplies Caduceus scenario language for demo ticket ids; draft-by-type covers privacy/unsubscribe asks; still no refund/cancel/send promises.
 - Organ/tissue architecture: Excalidraw at `docs/tissues/organ-tissue.excalidraw`; click-to-enter 3D sim at `docs/tissues/architecture-3d-sim.html` (world in `architecture-world.js`): LEGO-house organs, inside-Inbox list/thread/rail wireframe, info card off by default; mail → helpdesk intake, Shopify look-only, Send stays on the local thread.
 - This demo’s look-up path is Shopify Admin GraphQL only (`get_customer` / `get_order` / `get_returns` / `list_past_orders`); Redo and KB belong to production Hermes, not this repo’s helpdesk tissues.
