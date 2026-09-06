@@ -7,6 +7,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from .. import deps
 from ..db import Database
+from ..result_auth import configured_secret
 
 router = APIRouter()
 _REQUIRED_TABLES = {"webhook_events", "parsed_messages", "job_queue", "ticket_results", "app_settings", "console_sessions"}
@@ -32,7 +33,7 @@ def _age(value):
 @router.get("/ready")
 async def ready() -> JSONResponse:
     settings = deps.get_settings()
-    checks = {"db": "unavailable", "schema": "unavailable", "gorgias_configured": bool(settings.gorgias_auth)}
+    checks = {"db": "unavailable", "schema": "unavailable", "gorgias_configured": bool(settings.gorgias_auth), "processor_result_configured": bool(configured_secret(settings))}
     diagnostics = {}
     try:
         path = settings.db_path_absolute
@@ -63,6 +64,6 @@ async def ready() -> JSONResponse:
         # Never echo DB paths, credentials or provider errors from a public probe.
         checks["db"] = "unavailable"
         checks["schema"] = "unavailable"
-    ready = checks["db"] == "ok" and checks["schema"] == "ok" and checks["gorgias_configured"]
+    ready = checks["db"] == "ok" and checks["schema"] == "ok" and checks["gorgias_configured"] and checks["processor_result_configured"]
     return JSONResponse(status_code=200 if ready else 503,
                         content={"status": "ready" if ready else "not_ready", "checks": checks, "diagnostics": diagnostics})

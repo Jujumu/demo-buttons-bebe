@@ -52,6 +52,7 @@ from bb_webhook.database import (  # noqa: E402
     requeue_stale_jobs,
 )
 
+from bb_webhook.result_auth import configured_secret
 from config import get_settings  # noqa: E402
 from classifier import classify as deterministic_classify, IMMEDIATE, HIGH, NORMAL  # noqa: E402
 from demo_safety import demo_mode_enabled, demo_url_allowed  # noqa: E402
@@ -94,6 +95,16 @@ def _save_result_to_webhook(
             ticket_id=ticket_id,
         )
         raise RuntimeError("Demo result persistence destination is blocked")
+    from urllib.parse import urlsplit
+    parsed = urlsplit(url)
+    if (parsed.scheme != "http" or parsed.hostname not in {"127.0.0.1", "::1"}
+            or parsed.port != (8100 if demo_mode_enabled() else 8000)
+            or parsed.path != "/dashboard/api/results" or parsed.query or parsed.fragment
+            or parsed.username or parsed.password):
+        raise RuntimeError("Result persistence destination must be the local result API")
+    secret = configured_secret(get_settings())
+    if not secret:
+        raise RuntimeError("Result persistence credential is not configured")
     payload = json.dumps({
         "ticket_id": ticket_id,
         "message_id": str(message_id),
@@ -111,9 +122,13 @@ def _save_result_to_webhook(
 
     req = urllib.request.Request(
         url, data=payload,
-        headers={"Content-Type": "application/json"}, method="POST",
+        headers={"Content-Type": "application/json", "Authorization": "Bearer " + secret}, method="POST",
     )
-    with urllib.request.urlopen(req, timeout=10) as resp:
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *args, **kwargs):
+            return None
+
+    with urllib.request.build_opener(NoRedirect()).open(req, timeout=10) as resp:
         if not 200 <= resp.status < 300:
             raise RuntimeError(f"Result persistence HTTP status {resp.status}")
         acknowledgement = json.loads(resp.read(4097))

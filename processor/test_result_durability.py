@@ -128,7 +128,7 @@ class ResultAcknowledgementTests(unittest.TestCase):
         response.read.return_value = b'{"status":"not_saved"}'
         response.__enter__ = Mock(return_value=response)
         response.__exit__ = Mock(return_value=False)
-        with patch("urllib.request.urlopen", return_value=response):
+        with patch("urllib.request.OpenerDirector.open", return_value=response), patch.object(orchestrator,"get_settings",return_value=SimpleNamespace(processor_result_secret="synthetic-result-secret-0123456789")):
             with self.assertRaisesRegex(RuntimeError, "acknowledgement"):
                 orchestrator._save_result_to_webhook(123, "synthetic", 1, {})
 

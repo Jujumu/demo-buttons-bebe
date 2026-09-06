@@ -33,7 +33,7 @@ class SessionSecurityTests(unittest.IsolatedAsyncioTestCase):
         self.path = Path(self.temp.name) / "state.sqlite3"
         await database.init_db(self.path)
         await session_store.initialize(self.path)
-        self.settings = SimpleNamespace(console_username="chaim", console_password_hash=hash_password("local-test-password"), console_session_secret="local-test-secret", demo_mode=False, db_path_absolute=self.path, gorgias_auth="local-placeholder")
+        self.settings = SimpleNamespace(console_username="chaim", console_password_hash=hash_password("local-test-password"), console_session_secret="local-test-secret", demo_mode=False, db_path_absolute=self.path, gorgias_auth="local-placeholder", processor_result_secret="synthetic-result-secret-0123456789")
         self.settings_patch = patch.object(app_module, "get_settings", return_value=self.settings)
         self.settings_patch.start()
         self.login_patch = patch.object(auth, "_login_allowed", return_value=True)
@@ -99,13 +99,26 @@ class SessionSecurityTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_processor_results_are_not_a_public_or_browser_api(self):
         # Direct local producer reaches the handler's normal payload validator.
-        self.assertEqual((await self.client.post("/dashboard/api/results",json={})).status_code,400)
+        self.assertEqual((await self.client.post("/dashboard/api/results",headers={"authorization":"Bearer "+self.settings.processor_result_secret},json={})).status_code,400)
         await self.login()
         for headers in ({"x-forwarded-for":"127.0.0.1"}, {"forwarded":"for=127.0.0.1"}, {"origin":ORIGIN}):
             self.assertEqual((await self.client.post("/dashboard/api/results",headers=headers,json={})).status_code,403)
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=self.app,client=("203.0.113.5",123)),base_url=ORIGIN) as remote:
             self.assertEqual((await remote.post("/dashboard/api/results",json={})).status_code,403)
             self.assertEqual((await remote.get("/dashboard/api/tickets",headers={"x-forwarded-for":"127.0.0.1","x-authenticated-actor":"owner:chaim"})).status_code,401)
+
+    async def test_result_credential_required_even_for_local_owner_session(self):
+        await self.login()
+        for headers in ({},{'authorization':'Bearer wrong'},{'authorization':'Basic synthetic'}):
+            response=await self.client.post('/dashboard/api/results',headers=headers,json={})
+            self.assertEqual(response.status_code,401)
+        valid={'authorization':'Bearer '+self.settings.processor_result_secret}
+        self.assertEqual((await self.client.post('/dashboard/api/results',headers={**valid,'x-forwarded-for':'127.0.0.1'},json={})).status_code,403)
+        self.settings.processor_result_secret=''
+        self.assertEqual((await self.client.post('/dashboard/api/results',headers=valid,json={})).status_code,503)
+        ready=await self.client.get('/ready')
+        self.assertEqual(ready.status_code,503)
+        self.assertFalse(ready.json()['checks']['processor_result_configured'])
 
     async def test_forward_auth_uses_original_uri_and_method(self):
         response = await self.client.get("/auth/page-check",headers={"x-forwarded-uri":"/inbox/?view=all", "x-forwarded-method":"GET"})

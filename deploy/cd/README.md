@@ -110,3 +110,16 @@ sequence. Export failure fails deployment and invokes source-only rollback;
 rollback refreshes using restored source before readiness and then restores the
 previous timer state. No canonical/inbox database is reset. A previously inactive
 projection timer does not cause an exporter to be started by deployment.
+
+Internal result authentication: before deploying the protected result endpoint,
+an operator must generate a new dedicated random `PROCESSOR_RESULT_SECRET` (at
+least 32 URL-safe characters) and store it privately in the shared root runtime
+`.env` used by webhook and processor. Never reuse the owner session/webhook
+credential, put the value in CLI arguments/logs, or copy it into the inbox/model
+runtime. Both services must reload configuration together. The webhook `/ready`
+returns 503 when this credential is missing/invalid, so failed preparation stops
+release readiness before processor startup. The result route also requires direct
+loopback/no forwarded or browser-origin headers, and constant-time Bearer auth.
+Processor result delivery is pinned to the local API and refuses redirects;
+Hermes child environment allowlists exclude the credential. This is a service
+boundary, not filesystem isolation of the still-root core processes.

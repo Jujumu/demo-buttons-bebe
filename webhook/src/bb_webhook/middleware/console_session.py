@@ -6,6 +6,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.responses import JSONResponse
 from .. import deps, session_store
 from ..console_auth import session_claims
+from ..result_auth import configured_secret, authorized
 
 COOKIE_NAME = "bb_console_session"
 TRUSTED_ORIGINS = frozenset({"https://support.buttonsbebe.com", "https://srv1766050.hstgr.cloud"})
@@ -40,6 +41,11 @@ class ConsoleSessionMiddleware(BaseHTTPMiddleware):
         if path == "/dashboard/api/results":
             if not direct_loopback(request):
                 return JSONResponse({"error": "internal_endpoint"}, status_code=403)
+            secret = configured_secret(deps.get_settings())
+            if not secret:
+                return JSONResponse({"error": "result_authentication_unavailable"}, status_code=503)
+            if not authorized(request.headers.get("authorization", ""), secret):
+                return JSONResponse({"error": "not_authenticated"}, status_code=401)
             request.state.actor_id = "processor"
             request.state.actor_role = "processor"
             return await call_next(request)
