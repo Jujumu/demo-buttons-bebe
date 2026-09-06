@@ -13,7 +13,7 @@ WhatsApp notification, retry, timeout, and error recovery.
 
 Risk mitigations:
   - Singleton lock (only one processor instance can run)
-  - Stale job recovery on startup (reclaims crashed 'processing' jobs)
+  - Periodic stale job recovery (reclaims crashed 'processing' jobs)
   - Per-job timeout (prevents hung Hermes calls from blocking the queue)
   - Retry with backoff (up to 3 retries for transient failures)
   - Graceful shutdown (finishes current job, then exits)
@@ -429,9 +429,23 @@ async def run_processor() -> int:
     # Monotonic timestamp of the last "still alive" line. Starts at -inf so the
     # first idle pass logs immediately, proving liveness right after startup.
     last_idle_heartbeat = float("-inf")
+    last_recovery = time.monotonic()
+    # Sweep between jobs under the singleton lock, never in a background task
+    # that could reclaim this process's still-running job. Newly abandoned
+    # claims after a quick restart will age out without a second restart.
+    recovery_interval = 60.0
 
     while not _shutdown:
         try:
+            if time.monotonic() - last_recovery >= recovery_interval:
+                recovered = await requeue_stale_jobs(
+                    settings.stale_job_minutes, settings.db_path_absolute,
+                )
+                last_recovery = time.monotonic()
+                if recovered:
+                    log_event(logger, "WARNING", "Recovered abandoned jobs",
+                              count=recovered,
+                              max_age_minutes=settings.stale_job_minutes)
             # One query per pass, with customer messages ordered ahead of
             # agent feedback work. This avoids a second round trip and keeps
             # the customer-first policy in the database boundary.

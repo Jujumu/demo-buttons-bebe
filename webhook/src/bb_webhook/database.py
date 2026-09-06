@@ -8,7 +8,7 @@ Gorgias sends bursts of webhook deliveries.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -89,6 +89,7 @@ CREATE TABLE IF NOT EXISTS ticket_results (
 
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON job_queue(status);
 CREATE INDEX IF NOT EXISTS idx_jobs_tenant ON job_queue(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_jobs_message ON job_queue(message_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_customer ON job_queue(is_customer_message);
 CREATE INDEX IF NOT EXISTS idx_parsed_received ON parsed_messages(received_at);
 CREATE INDEX IF NOT EXISTS idx_parsed_customer ON parsed_messages(is_customer_message);
@@ -179,6 +180,76 @@ async def record_event(
     return inserted == 1
 
 
+async def ingest_event(
+    event: dict,
+    raw_payload: str,
+    db_path: Path | None = None,
+) -> int | None:
+    """Atomically persist accepted intake and queue work.
+
+    Return the new job ID, or None for an already committed event. The event
+    primary key is the intake uniqueness gate; both concurrent duplicates and
+    retries after an interrupted commit use the same gate. Historical partial
+    events are deliberately not replayed automatically.
+    """
+    db = Database(db_path)
+    now = datetime.now(timezone.utc).isoformat()
+    message_id = str(event["message_id"])
+    customer = bool(event.get("is_customer_message", False))
+    payload = {key: event.get(key) for key in (
+        "tenant_id", "ticket_id", "message_id", "event_type", "author_type",
+        "author_email", "channel", "customer_email", "ticket_subject",
+        "message_text", "created_at",
+    )}
+    payload["intents"] = event.get("intents", [])
+    intent_names = json.dumps([i.get("name") for i in payload["intents"]
+                              if isinstance(i, dict) and i.get("name")])
+
+    async def persist(conn: aiosqlite.Connection) -> int | None:
+        async with conn.execute(
+            """INSERT INTO webhook_events
+               (message_id, tenant_id, ticket_id, event_type, author_type,
+                raw_payload, received_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(message_id) DO NOTHING""",
+            (message_id, event["tenant_id"], event["ticket_id"], event["event_type"],
+             event["author_type"], raw_payload, now),
+        ) as cursor:
+            if cursor.rowcount == 0:
+                return None
+        await conn.execute(
+            """INSERT INTO parsed_messages
+               (message_id, ticket_id, event_type, author_type, author_email,
+                channel, customer_email, ticket_subject, message_text, intents,
+                is_customer_message, created_at, received_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (message_id, event["ticket_id"], event["event_type"], event["author_type"],
+             event.get("author_email"), event.get("channel"), event.get("customer_email"),
+             event.get("ticket_subject"), event.get("message_text"), intent_names,
+             int(customer), event.get("created_at"), now),
+        )
+        # Preserve the legacy enqueue helper's dedupe if an operator previously
+        # created a job independently of webhook_events. Never enqueue twice.
+        await conn.execute(
+            """INSERT INTO job_queue
+               (tenant_id, ticket_id, message_id, event_type, author_type,
+                is_customer_message, status, payload, created_at)
+               SELECT ?, ?, ?, ?, ?, ?, 'pending', ?, ?
+               WHERE NOT EXISTS (SELECT 1 FROM job_queue WHERE message_id = ?)""",
+            (event["tenant_id"], event["ticket_id"], message_id, event["event_type"],
+             event["author_type"], int(customer), json.dumps(payload), now, message_id),
+        )
+        async with conn.execute(
+            "SELECT id FROM job_queue WHERE message_id = ? ORDER BY id LIMIT 1",
+            (message_id,),
+        ) as cursor:
+            row = await cursor.fetchone()
+        if row is None:
+            raise RuntimeError("Intake did not create queue work")
+        return int(row["id"])
+
+    return await db.transaction(persist, operation="ingest_event")
+
+
 async def enqueue_job(
     tenant_id: str,
     ticket_id: int,
@@ -215,6 +286,28 @@ async def enqueue_job(
         operation="enqueue_job_existing",
     )
     return int(rows[0]["id"]) if rows else 0
+
+
+async def get_intake_integrity_stats(db_path: Path | None = None) -> list[dict]:
+    """Count historical partial intake by event category without exposing PII.
+
+    This is diagnostic only: never automatically replay old events or infer
+    that missing work should be sent. An operator must establish whether each
+    historical category intentionally skipped processing before repair.
+    """
+    rows = await Database(db_path).fetch(
+        """SELECT e.event_type, e.author_type, COUNT(*) AS events,
+                  SUM(NOT EXISTS (SELECT 1 FROM parsed_messages p
+                                  WHERE p.message_id=e.message_id)) AS missing_parsed,
+                  SUM(NOT EXISTS (SELECT 1 FROM job_queue j
+                                  WHERE j.message_id=e.message_id)) AS missing_jobs
+           FROM webhook_events e
+           WHERE NOT EXISTS (SELECT 1 FROM parsed_messages p WHERE p.message_id=e.message_id)
+              OR NOT EXISTS (SELECT 1 FROM job_queue j WHERE j.message_id=e.message_id)
+           GROUP BY e.event_type, e.author_type""",
+        operation="intake_integrity_stats",
+    )
+    return [dict(row) for row in rows]
 
 
 async def get_pending_jobs(
@@ -326,42 +419,33 @@ async def requeue_stale_jobs(
     max_age_minutes: int = 10,
     db_path: Path | None = None,
 ) -> int:
-    """Reclaim jobs stuck in 'processing' for too long.
+    """Reclaim up to 100 abandoned claims per singleton-loop sweep.
 
-    Returns the number of jobs reclaimed.
-    Called at processor startup to recover from crashes.
+    Call only between jobs while holding the processor singleton lock. This
+    is not a multi-worker lease implementation. SQLite compares timestamps
+    (including legacy Z offsets) and changes status in one atomic statement.
+    Missing/invalid claim timestamps are also abandoned, rather than silently
+    remaining processing forever.
     """
+    if max_age_minutes < 0:
+        raise ValueError("max_age_minutes must be nonnegative")
     db = Database(db_path)
-    now = datetime.now(timezone.utc).isoformat()
-    rows = await db.fetch(
-        """SELECT id, started_at FROM job_queue
-           WHERE status = 'processing'
-             AND started_at < ?""",
-        (now,),
-        operation="requeue_stale_jobs_select",
+    cutoff = (datetime.now(timezone.utc) - timedelta(minutes=max_age_minutes)).isoformat()
+    affected = await db.execute(
+        """UPDATE job_queue
+           SET status = 'pending', started_at = NULL,
+               finished_at = NULL, retry_count = retry_count + 1
+           WHERE id IN (
+               SELECT id FROM job_queue WHERE status = 'processing'
+                 AND (julianday(started_at) IS NULL OR
+                      julianday(started_at) < julianday(?))
+               ORDER BY id LIMIT 100
+           ) AND status = 'processing'""",
+        (cutoff,),
+        operation="requeue_stale_jobs",
+        return_rowcount=True,
     )
-    count = 0
-    for row in (rows or []):
-        # Check age
-        try:
-            started = datetime.fromisoformat(row["started_at"].replace("Z", "+00:00"))
-            age_min = (datetime.now(timezone.utc) - started).total_seconds() / 60
-            if age_min > max_age_minutes:
-                affected = await db.execute(
-                    """UPDATE job_queue
-                       SET status = 'pending', started_at = NULL,
-                           retry_count = retry_count + 1
-                       WHERE id = ? AND status = 'processing'
-                         AND started_at = ?""",
-                    (row["id"], row["started_at"]),
-                    operation="requeue_stale_job",
-                    return_rowcount=True,
-                )
-                if affected == 1:
-                    count += 1
-        except (ValueError, TypeError):
-            continue
-    return count
+    return int(affected or 0)
 
 
 async def requeue_failed_job(
