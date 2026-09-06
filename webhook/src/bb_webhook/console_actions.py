@@ -38,23 +38,40 @@ async def capture_learning(store, row, recorder):
                   operation_id=row['operation_id'], error_type=type(exc).__name__)
 
 
+async def preflight_refusal(status, error, body):
+    """Do not erase an earlier ambiguous operation when this request is refused."""
+    payload={'ok':False,'error':error}
+    operation_id=body.get('operation_id') if isinstance(body,dict) else None
+    if valid_operation(operation_id):
+        try:
+            existing=await IntentStore(deps.get_db()).get(operation_id)
+        except Exception:
+            return JSONResponse(status_code=status,content=payload)
+        if existing is not None:
+            return JSONResponse(status_code=status,content=payload)
+    payload['delivery_status']='not_attempted'
+    return JSONResponse(status_code=status,content=payload)
+
+
 async def execute_action(kind, ticket_id, request, body, text, client_factory, recorder):
     actor_id = actor(request)
     if not actor_id:
         return JSONResponse(status_code=401, content={'error': 'not_authenticated'})
     if body.get('confirmed') is not True:
-        return JSONResponse(status_code=409, content={'error': 'confirmation_required'})
+        return await preflight_refusal(409,'confirmation_required',body)
     source_id = body.get('source_message_id')
     if not isinstance(source_id, (str, int)) or isinstance(source_id, bool):
-        return JSONResponse(status_code=400, content={'error': 'source_message_id_required'})
+        return await preflight_refusal(400,'source_message_id_required',body)
     if 'approve_learning' in body and type(body['approve_learning']) is not bool:
-        return JSONResponse(status_code=400, content={'error': 'invalid_learning_approval'})
+        return await preflight_refusal(400,'invalid_learning_approval',body)
     store = IntentStore(deps.get_db())
     try:
         row, fresh = await store.reserve(operation_id=body.get('operation_id'), actor_id=actor_id,
                                          kind=kind, ticket_id=ticket_id, source_message_id=str(source_id),
                                          text=text, draft_revision=body.get('draft_revision'), approve_learning=kind == 'send' and body.get('approve_learning') is True)
     except ActionConflict as exc:
+        if exc.error in {'valid_operation_id_required','source_message_id_required','draft_revision_required','source_message_not_in_console','recipient_unavailable','draft_changed_refresh_ticket'}:
+            return await preflight_refusal(exc.status,exc.error,body)
         return JSONResponse(status_code=exc.status, content={'error': exc.error,
             'message': {'previous_delivery_unresolved': 'An earlier action is unresolved. Check its status before sending again.',
                         'learning_approval_is_fixed_for_existing_action': 'This reply already has a recorded approval choice. Resending cannot change it; check its status.',

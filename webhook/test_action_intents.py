@@ -161,6 +161,17 @@ class ActionIntentTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn(response.status_code, (400, 409))
             client.assert_not_called()
 
+    async def test_preflight_refusals_allow_recovery_only_without_prior_intent(self):
+        with patch.object(app_module, '_GClient') as transport:
+            response=await self.client.post('/dashboard/api/ticket/1/send',json=self.payload|{'draft_revision':'0'*64})
+            self.assertEqual(response.json()['delivery_status'],'not_attempted')
+            self.assertIsNone(await self.store.get(self.operation))
+            await self.reserve()
+            for change in ({'confirmed':False},{'text':''},{'draft_revision':'0'*64}):
+                response=await self.client.post('/dashboard/api/ticket/1/send',json=self.payload|change)
+                self.assertNotEqual(response.json().get('delivery_status'),'not_attempted')
+            transport.assert_not_called()
+
     async def test_unauthenticated_or_wrong_origin_cannot_send(self):
         self.client.cookies.clear()
         with patch.object(app_module, '_GClient') as client:

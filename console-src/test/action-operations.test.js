@@ -79,3 +79,10 @@ test('overview navigation initializes the requested ticket editor',()=>{
  vm.runInContext(source,context);context.goTickets('all','customer-message-2');
  assert.equal(opened,'customer-message-2');
 });
+test('explicit preflight refusal releases local retry block; unknown transport does not',async()=>{
+ const {context}=browser();const id=await context.actionOperation(ticket,'send','first',false);
+ context.rememberAction(ticket,'send',{error:'invalid_reply'});
+ await assert.rejects(context.actionOperation(ticket,'send','fixed',false),/unresolved/);
+ context.rememberAction(ticket,'send',{delivery_status:'not_attempted',error:'draft_changed_refresh_ticket'});
+ assert.notEqual(await context.actionOperation(ticket,'send','fixed',false),id);
+});

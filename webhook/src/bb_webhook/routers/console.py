@@ -9,7 +9,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from .. import deps
-from ..console_actions import execute_action, action_status, actor
+from ..console_actions import execute_action, action_status, actor, preflight_refusal
 from ..gorgias_client import GorgiasClient as _GClient
 from ..learning import ledger as _ledger, record_lesson as _record_lesson
 from ..rewrite_runner import run_rewrite, RewriteFailure
@@ -108,22 +108,23 @@ async def review_reindex() -> JSONResponse:
 @router.post("/ticket/{ticket_id}/send")
 async def action_send(ticket_id: int, request: Request) -> JSONResponse:
     """Send a customer-facing reply after an explicit human confirmation."""
+    body = None
     try:
         body = await request.json()
     except Exception:
-        return JSONResponse(status_code=400, content={"error": "invalid_json"})
+        return await preflight_refusal(400, "invalid_json", body)
     if not isinstance(body, dict):
-        return JSONResponse(status_code=400, content={"error": "invalid_json_object"})
+        return await preflight_refusal(400, "invalid_json_object", body)
     if not await deps.database_function("dashboard_ticket_exists")(ticket_id):
-        return JSONResponse(status_code=404, content={"error": "ticket_not_in_console"})
+        return await preflight_refusal(404, "ticket_not_in_console", body)
     raw_text = body.get("text", "")
     if not isinstance(raw_text, str):
-        return JSONResponse(status_code=400, content={"error": "invalid_reply"})
+        return await preflight_refusal(400, "invalid_reply", body)
     text = raw_text.strip()
     if not text or len(text) > 50_000:
-        return JSONResponse(status_code=400, content={"error": "empty reply"})
+        return await preflight_refusal(400, "empty reply", body)
     if body.get("confirmed") is not True:
-        return JSONResponse(status_code=409, content={"error": "confirmation_required"})
+        return await preflight_refusal(409, "confirmation_required", body)
     return await execute_action('send', ticket_id, request, body, text,
                                 _app_value("_GClient", _GClient), _app_value("_record_lesson", _record_lesson))
 
@@ -131,20 +132,21 @@ async def action_send(ticket_id: int, request: Request) -> JSONResponse:
 @router.post("/ticket/{ticket_id}/note")
 async def action_note(ticket_id: int, request: Request) -> JSONResponse:
     """Post a draft as a staff-only Gorgias internal note."""
+    body = None
     try:
         body = await request.json()
     except Exception:
-        return JSONResponse(status_code=400, content={"error": "invalid_json"})
+        return await preflight_refusal(400, "invalid_json", body)
     if not isinstance(body, dict):
-        return JSONResponse(status_code=400, content={"error": "invalid_json_object"})
+        return await preflight_refusal(400, "invalid_json_object", body)
     if not await deps.database_function("dashboard_ticket_exists")(ticket_id):
-        return JSONResponse(status_code=404, content={"error": "ticket_not_in_console"})
+        return await preflight_refusal(404, "ticket_not_in_console", body)
     raw_text = body.get("text", "")
     if not isinstance(raw_text, str):
-        return JSONResponse(status_code=400, content={"error": "invalid_note"})
+        return await preflight_refusal(400, "invalid_note", body)
     text = raw_text.strip()
     if not text or len(text) > 50_000:
-        return JSONResponse(status_code=400, content={"error": "empty note"})
+        return await preflight_refusal(400, "empty note", body)
     return await execute_action('note', ticket_id, request, body, text,
                                 _app_value("_GClient", _GClient), _app_value("_record_lesson", _record_lesson))
 
