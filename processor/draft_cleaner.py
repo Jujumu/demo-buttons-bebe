@@ -392,12 +392,23 @@ def _find_action_claim(text: str) -> str:
     return ""
 
 
+# Short internal output markers are review instructions, never customer replies.
+_INTERNAL_NO_REPLY_RE = re.compile(
+    r"(?:no\s+(?:reply|response|draft)\s+(?:is\s+)?(?:needed|required|necessary))"
+    r"(?:[.!]?|\s*(?:[—–:-]|because)\s*[^\r\n]{1,360}[.!]?)",
+    re.IGNORECASE,
+)
+
+
 def clean_draft(text: str) -> CleanResult:
     """Clean an AI draft before it is shown to a human / posted anywhere."""
     if text is None or not str(text).strip():
         return CleanResult(text="", no_draft=True, reasons=["empty draft"])
 
     out = str(text)
+    if len(out) <= 420 and _INTERNAL_NO_REPLY_RE.fullmatch(out.strip()):
+        return CleanResult(text="", no_draft=True,
+                           reasons=["internal no-reply instruction is not a customer draft"])
     reasons: list[str] = []
     removed: list[str] = []
 
