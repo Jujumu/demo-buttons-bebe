@@ -1,0 +1,4 @@
+# QA-only local MCP servers and the exact production runner's Python imports.
+mcp>=1.20,<2
+pydantic-settings>=2,<3
+python-dotenv>=1,<2
