@@ -285,10 +285,10 @@ export function renderOrder(model, { open = true, addressesOpen = false, shipmen
     const skuRow = skuLabel
       ? `<p class="mono line-sku" data-sku="${esc(skuLabel)}">${esc(skuLabel)}</p>`
       : "";
-    const imageUrl = item.image?.url || "";
+    const imageUrl = safeWebUrl(item.image?.url);
     const imageAlt = item.image?.altText || item.title || "Product";
     const thumb = imageUrl
-      ? `<img class="line-thumb" src="${esc(safeWebUrl(imageUrl))}" alt="${esc(imageAlt)}" loading="lazy" />`
+      ? `<img class="line-thumb" src="${esc(imageUrl)}" alt="${esc(imageAlt)}" loading="lazy" />`
       : `<span class="line-thumb line-thumb-empty" aria-hidden="true"></span>`;
     const fulfillLabel = model.lineFulfillLabels?.[index] || lineFulfillmentLabel(item);
     const fulfillCue = fulfillLabel

@@ -16,3 +16,9 @@ test('tracking and invoice renderers omit executable hyperlinks',()=>{
  const html=renderOrder({ok:true,record:{lineItems:{nodes:[]}},hasTracking:true,tracking:{url:'javascript:alert(1)'},invoiceUrl:'javascript:alert(2)'});
  assert.doesNotMatch(html,/href="javascript:/);
 });
+
+test('rejected product image URLs use the empty thumbnail instead of an empty src',()=>{
+ const html=renderOrder({ok:true,record:{lineItems:{nodes:[{title:'Product',image:{url:'javascript:alert(1)'}}]}},skuLabels:[]});
+ assert.doesNotMatch(html,/<img/);
+ assert.match(html,/line-thumb-empty/);
+});
