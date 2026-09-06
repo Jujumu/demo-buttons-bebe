@@ -6,6 +6,8 @@ readonly live_root="/root/Buttonsbebe Agent"
 readonly releases_root="/opt/buttonsbebe/releases"
 readonly backups_root="/opt/buttonsbebe/backups"
 readonly web_root="/var/www/console"
+readonly inbox_root="/opt/buttonsbebe/inbox"
+readonly state_file="/var/lib/buttonsbebe-deploy/source-manifest.json"
 readonly approved_config_file="/etc/buttonsbebe-deploy-approved-config.sha256"
 readonly source_helper="/usr/local/lib/buttonsbebe-deploy/source_release.py"
 readonly max_archive_bytes=$((64 * 1024 * 1024))
@@ -135,10 +137,12 @@ if not required.issubset(entries):
 PYCONFIG
 # A root-approved helper owns the exclusions; an incoming archive cannot weaken
 # rollback data protection. Dependency changes fail here, before service stops.
-python3 "$source_helper" prepare --release "$release_dir" --journal "$backup_root"
+python3 "$source_helper" prepare --release "$release_dir" --journal "$backup_root" \
+  --live "$live_root" --web "$web_root" --inbox "$inbox_root" --state "$state_file"
+service_output="$(python3 "$source_helper" services --journal "$backup_root")"
 while IFS= read -r service; do
   [[ -n "$service" ]] && services+=("$service")
-done < <(python3 "$source_helper" services --journal "$backup_root")
+done <<< "$service_output"
 for service in "${services[@]}"; do
   if systemctl is-active --quiet "$service"; then active_services+=("$service"); fi
 done
@@ -221,7 +225,7 @@ python3 "$source_helper" apply --journal "$backup_root"
 for service in "${active_services[@]}"; do systemctl start "$service"; done
 wait_ready
 restore_timers
-python3 "$source_helper" commit --journal "$backup_root"
+python3 "$source_helper" commit --journal "$backup_root" --state "$state_file"
 rollback_needed=0
 trap - ERR INT TERM
 # Retain journals until separately backed up; automatic pruning never deletes recovery evidence.

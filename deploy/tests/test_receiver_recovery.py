@@ -34,10 +34,29 @@ class ReceiverRecoveryTests(unittest.TestCase):
         tree_digest = hashlib.sha256((hashlib.sha256(b'config').hexdigest() + '  ./approved.txt\n').encode()).hexdigest()
         self.write(self.root / 'approved', f'deploy/systemd {tree_digest}\ndeploy/caddy {tree_digest}\n{self.root}/applied-config {config_digest}\n')
         helper = (ROOT / 'deploy/cd/source_release.py').read_text().replace('/var/lib/buttonsbebe-deploy/source-manifest.json', str(self.root / 'manifest.json')).replace('/opt/buttonsbebe/inbox', str(self.root / 'inbox'))
+        # Defense in depth: even a missing receiver substitution must never
+        # reach a real service tree. Reject every root outside this test's temp.
+        helper = helper.replace('    args = parser.parse_args()', '''
+    args = parser.parse_args()
+    harness_root = Path(os.environ['HARNESS_ROOT']).resolve()
+    for candidate in (args.live, args.web, args.inbox, args.journal, args.state):
+        if not candidate.resolve().is_relative_to(harness_root):
+            raise SystemExit('HARNESS refused non-temporary deployment target')
+    if args.action in {'apply', 'rollback', 'services', 'commit'}:
+        check = json.loads((args.journal / 'journal.json').read_text())
+        for key in ('live', 'web', 'inbox', 'release'):
+            if not Path(check[key]).resolve().is_relative_to(harness_root):
+                raise SystemExit('HARNESS refused non-temporary journal root')
+''')
+        # Root defaults must also be temporary for helper subcommands which
+        # read paths only from the validated journal.
+        helper = helper.replace('/root/Buttonsbebe Agent', str(self.live)).replace('/var/www/console', str(self.web))
         self.write(self.root / 'helper.py', helper)
         receiver = (ROOT / 'deploy/cd/buttonsbebe-deploy-receive.sh').read_text()
         replacements = {'/root/Buttonsbebe Agent': str(self.live), '/opt/buttonsbebe/releases': str(self.root / 'releases'),
             '/opt/buttonsbebe/backups': str(self.root / 'backups'), '/var/www/console': str(self.web),
+            '/opt/buttonsbebe/inbox': str(self.root / 'inbox'),
+            '/var/lib/buttonsbebe-deploy/source-manifest.json': str(self.root / 'manifest.json'),
             '/etc/buttonsbebe-deploy-approved-config.sha256': str(self.root / 'approved'),
             '/etc/caddy/sites/support.caddy': str(self.root / 'applied-config'),
             '/etc/systemd/system/helpdesk-inbox.service': str(self.root / 'applied-config'),
@@ -47,6 +66,9 @@ class ReceiverRecoveryTests(unittest.TestCase):
             'readonly readiness_attempts=10': 'readonly readiness_attempts=1'}
         for before, after in replacements.items():
             receiver = receiver.replace(before, after)
+        for forbidden in ('/root/Buttonsbebe Agent', '/var/www/console', '/opt/buttonsbebe/inbox', '/var/lib/buttonsbebe-deploy'):
+            self.assertNotIn(forbidden, receiver)
+            self.assertNotIn(forbidden, helper)
         self.write(self.root / 'receiver.sh', receiver)
         self.write(self.bin / 'systemctl', '''#!/usr/bin/env python3
 import json,os,pathlib,sys
