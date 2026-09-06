@@ -100,3 +100,20 @@ time.sleep(.1)
                 self.assertTrue(result['draft_text'])
                 self.assertFalse(result['note_posted'])
                 self.assertNotIn('PROVIDER-SECRET', str(log.call_args_list))
+
+    def test_misconfigured_tools_keep_sensitive_fallback_without_launch(self):
+        from hermes_runner import runner
+        for invalid in ('', 'shell', 'buttonsbebe_kb,buttonsbebe_redo',
+                        'buttonsbebe_kb,buttonsbebe_redo,buttonsbebe_gorgias,shell'):
+            with self.subTest(invalid=invalid), patch.object(
+                runner, 'get_settings', return_value=SimpleNamespace(
+                    job_timeout=2, hermes_toolsets=invalid)
+            ), patch.object(runner, 'run_bounded') as execute:
+                result = runner.process_ticket_with_hermes(
+                    1, 'My order never arrived', 'Missing order', 'test@example.invalid', [])
+                execute.assert_not_called()
+                self.assertTrue(result['draft_text'])
+                self.assertEqual(result['priority'], 'high')
+                self.assertTrue(result['notify_owner'])
+                self.assertFalse(result['gorgias_priority_set'])
+                self.assertFalse(result['note_posted'])

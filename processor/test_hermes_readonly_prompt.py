@@ -106,10 +106,10 @@ class HermesReadOnlyPromptTests(unittest.TestCase):
         with patch.object(
             runner,
             "get_settings",
-            return_value=SimpleNamespace(job_timeout=30),
+            return_value=SimpleNamespace(job_timeout=30, hermes_toolsets="buttonsbebe_kb,buttonsbebe_redo,buttonsbebe_gorgias"),
         ), patch.object(
-            runner.subprocess,
-            "run",
+            runner,
+            "run_bounded",
             return_value=SimpleNamespace(
                 returncode=0,
                 stderr="",

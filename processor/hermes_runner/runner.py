@@ -156,18 +156,18 @@ def process_ticket_with_hermes(
         run_token,
         getattr(settings, "support_store_name", "Buttons Bebe"),
     )
-    command = build_hermes_command(prompt, settings)
-    log_event(
-        logger,
-        "INFO",
-        "Invoking Hermes headless",
-        ticket_id=ticket_id,
-        prompt_length=len(prompt),
-        hermes_flags=command[1:-1],
-        timeout=settings.job_timeout,
-    )
-
     try:
+        command = build_hermes_command(prompt, settings)
+        log_event(
+            logger,
+            "INFO",
+            "Invoking Hermes headless",
+            ticket_id=ticket_id,
+            prompt_length=len(prompt),
+            hermes_flags=command[1:-1],
+            timeout=settings.job_timeout,
+        )
+
         result = run_bounded(
             command,
             capture_output=True,
