@@ -7,9 +7,10 @@ import subprocess
 from typing import Any
 
 from config import get_settings
-from draft_cleaner import SENSITIVE_DRAFT_PREFIX, clean_draft, should_draft
+from draft_cleaner import clean_draft, should_draft
 from logging_setup import get_logger, log_event
 from shared.priority import RANK
+from shared.review_policy import final_review_result
 
 from .process import run_bounded
 
@@ -63,17 +64,12 @@ def build_hermes_command(prompt: str, settings: Any) -> list[str]:
 def draft_for_console(hermes_result: dict[str, Any]) -> str:
     """Return only a reviewable draft; never synthesize one for no-draft results."""
 
-    if hermes_result.get("no_draft"):
+    reviewed = final_review_result(hermes_result)
+    if reviewed.get("no_draft"):
         return ""
-    draft = str(hermes_result.get("draft_text") or "").strip()
-    if not draft:
-        return str(_FALLBACK_RESULT["draft_text"])
-    if (
-        hermes_result.get("action") == "sensitive_draft"
-        and not draft.lstrip().lower().startswith(SENSITIVE_DRAFT_PREFIX.lower())
-    ):
-        return f"{SENSITIVE_DRAFT_PREFIX}\n\n{draft}"
-    return draft
+    draft = reviewed["draft_text"]
+    return draft if draft else str(_FALLBACK_RESULT["draft_text"])
+
 
 
 # ADR-015 §2.3 — auth anomalies are non-sendable; runner failures fall back.
@@ -281,7 +277,7 @@ def process_ticket_with_hermes(
             note_posted=parsed["note_posted"],
         )
         parsed["_raw_output_preview"] = stdout[:500]
-        return parsed
+        return final_review_result(parsed)
 
     except subprocess.TimeoutExpired:
         log_event(

@@ -58,7 +58,8 @@ from classifier import classify as deterministic_classify, IMMEDIATE, HIGH, NORM
 from demo_safety import demo_mode_enabled, demo_url_allowed  # noqa: E402
 from hermes_runner import draft_for_console, process_ticket_with_hermes  # noqa: E402
 from logging_setup import get_logger, setup_logging, log_event  # noqa: E402
-from shared.priority import Priority, at_least, normalize  # noqa: E402
+from shared.priority import Priority, at_least, normalize
+from shared.review_policy import final_review_result  # noqa: E402
 from whatsapp_notifier import send_whatsapp  # noqa: E402
 
 logger = get_logger(__name__)
@@ -244,34 +245,6 @@ async def process_customer_message(job: dict[str, Any]) -> dict[str, Any]:
     result["action"] = hermes_result.get("action", "sensitive_draft")
     notify_owner = hermes_result.get("notify_owner", False)
 
-    # ── Deterministic priority enforcement (defense-in-depth) ──────
-    # The spec requires sensitive topics to be at least HIGH with owner
-    # notification.  Hermes (the LLM) sometimes misclassifies sensitive
-    # tickets as NORMAL — this gate catches that regardless of what the
-    # LLM outputs.  The Gorgias write toggle must NOT affect this.
-    action = result["action"]
-    priority = result["priority"]
-
-    if action == "sensitive_draft":
-        # Sensitive topics (refunds, damaged/wrong items, disputes, etc.)
-        # must always be at least HIGH and must always notify the owner.
-        if not at_least(priority, Priority.HIGH):
-            log_event(logger, "WARNING",
-                      "Overriding LLM priority for sensitive topic",
-                      ticket_id=ticket_id,
-                      llm_priority=priority,
-                      enforced_priority="high")
-            result["priority"] = "high"
-            hermes_result["priority"] = "high"
-        if not notify_owner:
-            log_event(logger, "WARNING",
-                      "Forcing notify_owner for sensitive topic",
-                      ticket_id=ticket_id,
-                      llm_notify=False,
-                      enforced_notify=True)
-            notify_owner = True
-            hermes_result["notify_owner"] = True
-
     # ── Deterministic classifier enforcement (escalate-only) ──────
     # If the deterministic classifier (which ran before Hermes) flagged
     # this ticket as IMMEDIATE or HIGH, escalate the final result to
@@ -318,6 +291,13 @@ async def process_customer_message(job: dict[str, Any]) -> dict[str, Any]:
                       det_notify=True)
             notify_owner = True
             hermes_result["notify_owner"] = True
+
+    # Apply the shared final review contract after every model/classifier change.
+    # Unknown KB facts, explicit warnings and elevated priority cannot persist as
+    # an ordinary draft merely because the model chose a contradictory action.
+    hermes_result = final_review_result(hermes_result)
+    result["priority"] = hermes_result["priority"]
+    result["action"] = hermes_result.get("action", "sensitive_draft")
 
     # gorgias_priority_set and note_posted are always false here: the processor
     # and Hermes are strictly read-only. Human console actions are separate.

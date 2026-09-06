@@ -87,7 +87,7 @@ class HermesReadOnlyPromptTests(unittest.TestCase):
             draft, customer_message
         )
         self.assertEqual(
-            draft_for_console({"draft_text": "  A real generated draft.  "}),
+            draft_for_console({"draft_text": "  A real generated draft.  ", "priority": "normal", "action": "drafted"}),
             "A real generated draft.",
         )
         self.assertTrue(
