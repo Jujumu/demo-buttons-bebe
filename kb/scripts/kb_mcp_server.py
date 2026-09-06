@@ -28,6 +28,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 from search_kb import search
 from kb_lib import CATEGORY_WEIGHT, CONTENT_FOLDERS, _get_model
 
@@ -50,7 +51,7 @@ def _validate_category_configuration() -> None:
 _validate_category_configuration()
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=True))
 def search_kb(query: str, k: int = 5) -> list[dict]:
     """Search the shared, weighted Buttons Bebe knowledge base.
 

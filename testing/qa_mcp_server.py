@@ -9,6 +9,7 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
+from pydantic import StrictInt
 from qa_safety import GROUPS, audit, filter_policy_results
 
 
@@ -27,22 +28,28 @@ def create_server(group: str, port: int, fixture_path: Path, audit_path: Path, a
 
     if group == "buttonsbebe_gorgias":
         @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False))
-        def list_recent_tickets(limit: int = 10) -> dict:
+        def list_recent_tickets(limit: StrictInt = 10) -> dict:
             value = state("list_recent_tickets")
             return {"count":1,"tickets":[value["ticket"]],"qa_fixture":True}
 
         @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False))
-        def get_ticket(ticket_id: int) -> dict:
+        def get_ticket(ticket_id: StrictInt) -> dict:
             value = state("get_ticket")
             return value["ticket"] if ticket_id == value["ticket"]["id"] else unknown()
 
         @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False))
-        def get_ticket_messages(ticket_id: int, limit: int = 30) -> dict:
+        def get_ticket_messages(ticket_id: StrictInt, limit: StrictInt = 30, cursor: str | None = None) -> dict:
             value = state("get_ticket_messages")
-            return {"data": value["messages"], "qa_fixture":True} if ticket_id == value["ticket"]["id"] else unknown()
+            if ticket_id <= 0 or not 1 <= limit < 2**63:
+                raise ValueError("QA requires positive bounded identifiers and limits")
+            if cursor is not None:
+                if not cursor or len(cursor) > 2048:
+                    raise ValueError("Invalid bounded QA cursor")
+                return unknown()  # Fixture has exactly one page; never reach other tickets.
+            return {"data": value["messages"][:min(limit,50)], "meta":{"next_cursor":None}, "qa_fixture":True} if ticket_id == value["ticket"]["id"] else unknown()
 
         @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False))
-        def get_customer(customer_id: int) -> dict:
+        def get_customer(customer_id: StrictInt) -> dict:
             value = state("get_customer")
             return value["customer"] if customer_id == value["customer"]["id"] else unknown()
 
