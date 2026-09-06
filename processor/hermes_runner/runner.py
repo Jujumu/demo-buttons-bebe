@@ -11,6 +11,8 @@ from draft_cleaner import SENSITIVE_DRAFT_PREFIX, clean_draft, should_draft
 from logging_setup import get_logger, log_event
 from shared.priority import RANK
 
+from .process import run_bounded
+
 from .constants import (
     _FALLBACK_RESULT,
     _MAX_NOTE,
@@ -40,14 +42,11 @@ def build_hermes_command(prompt: str, settings: Any) -> list[str]:
         command.append("--ignore-rules")
 
     toolsets = str(getattr(settings, "hermes_toolsets", "") or "").strip()
-    if toolsets:
-        wanted: list[str] = []
-        for name in toolsets.split(","):
-            name = name.strip()
-            if name and name not in wanted:
-                wanted.append(name)
-        if wanted:
-            command += ["-t", ",".join(wanted)]
+    wanted = [name.strip() for name in toolsets.split(",")]
+    allowed = {"buttonsbebe_kb", "buttonsbebe_redo", "buttonsbebe_gorgias"}
+    if len(wanted) != 3 or set(wanted) != allowed:
+        raise ValueError("Hermes requires exactly the three approved read-only toolsets")
+    command += ["-t", ",".join(wanted)]
 
     if getattr(settings, "hermes_skip_approval", False):
         log_event(
@@ -104,7 +103,10 @@ def _no_draft_result(parsed: dict[str, Any], reason: str) -> dict[str, Any]:
 def _run_environment(settings: Any) -> dict[str, str]:
     """Build the Hermes environment without loading credentials in this module."""
 
-    environment = dict(os.environ)
+    # Model-provider credentials are necessary; commerce, session, webhook,
+    # WhatsApp and Python/loader startup variables must never cross this boundary.
+    allowed = {"LANG", "LC_ALL", "TERM", "OLLAMA_API_KEY", "OPENAI_API_KEY"}
+    environment = {key: value for key, value in os.environ.items() if key in allowed}
     hermes_home = str(getattr(settings, "hermes_home", "/root") or "").strip()
     hermes_path = str(
         getattr(
@@ -166,7 +168,7 @@ def process_ticket_with_hermes(
     )
 
     try:
-        result = subprocess.run(
+        result = run_bounded(
             command,
             capture_output=True,
             text=True,
@@ -174,7 +176,6 @@ def process_ticket_with_hermes(
             env=_run_environment(settings),
         )
         stdout = str(result.stdout or "").strip()
-        stderr = str(result.stderr or "").strip()
         if result.returncode != 0:
             log_event(
                 logger,
@@ -182,7 +183,6 @@ def process_ticket_with_hermes(
                 "Hermes exited with non-zero code",
                 ticket_id=ticket_id,
                 returncode=result.returncode,
-                stderr=stderr[:500],
             )
             return dict(_FALLBACK_RESULT)
         if not stdout:
@@ -296,7 +296,7 @@ def process_ticket_with_hermes(
         log_event(
             logger,
             "ERROR",
-            f"Hermes invocation failed: {exc}",
+            "Hermes invocation failed",
             ticket_id=ticket_id,
             error_type=type(exc).__name__,
         )
