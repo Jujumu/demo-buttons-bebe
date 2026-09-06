@@ -173,3 +173,36 @@ post-restart probe. Restore operation with `--acknowledge-public-reopen` is only
 for a separately reviewed recovery with alternative network containment, because
 restoring the old bind would otherwise recreate the known unauthenticated
 financial exposure. Refuse stale rollback when source has subsequently changed.
+
+### Temporary owner rewrite maintenance gate
+
+`rewrite_maintenance.py install|remove --expected-sha256 SHA` is a manual root-only
+helper for a coordinated Hermes maintenance window. It only changes the imported
+support Caddy fragment. It does not stop producers, patch Hermes, change the
+approved deploy-config fingerprints, or touch webhook intake, login, console
+pages, customer sends, or application data. Pause deployment/configuration work
+while this temporary gate exists; remove it before normal deployment resumes.
+
+Review the SHA of the effective `/etc/caddy/sites/support.caddy` target first.
+The installed layout uses a `sites` directory symlink; the helper resolves the
+exact target and requires the supported four-import entrypoint plus unique site
+and console-API anchors. Both support and srv hostnames share that site block.
+The gate matches only `/console/api/ticket/<digits>/rewrite` and its trailing
+slash form, returning 503 with Retry-After. Public `/dashboard` remains governed
+by its existing deny routes; there is no new alias or authentication bypass.
+
+The helper creates a new private backup for each operation, validates a private
+copy of the complete imported configuration and the rollback configuration,
+rechecks all source bytes, then atomically replaces the fragment and reloads
+Caddy. A reload failure revalidates/restores/reloads the prior source. Failed
+rollback is an operator incident; do not assume the previous active state. Raw
+Caddy output is never printed because it can include private configuration.
+Successful output contains only backup location and source fingerprints. Remove
+requires the current installed SHA and the exact unmodified maintenance block.
+
+For a Hermes cache maintenance window, separately inventory and quiesce the
+processor, Hermes dashboard, WhatsApp bridge, root **user** Hermes gateway, and
+any QA run; drain already-running webhook rewrite children before modifying
+Hermes. Keep webhook intake and owner console pages running. Restore only the
+previously active producers and remove the gate after compatibility checks.
+The helper deliberately does none of these service operations automatically.
