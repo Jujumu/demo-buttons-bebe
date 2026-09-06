@@ -62,6 +62,24 @@ class EvidenceDraftTests(unittest.TestCase):
         self.assertNotIn("write 'We're checking on that for you and will follow up shortly.'",prompt)
         self.assertNotIn("say that it is being reviewed",prompt)
 
+    def test_customer_clarification_is_allowed_without_guessing_catalog_identity(self):
+        prompt=_build_prompt(ticket_id=123,message_text='Product question',ticket_subject='Question',customer_email='synthetic@example.invalid',intents=[],token='0123456789abcdef')
+        for phrase in ('A retrieved catalog candidate is not proof',
+                       'do not silently select a brand',
+                       'verified ticket/order context identifies it',
+                       'a count alone is not an answer',
+                       'a few grounded examples',
+                       'without implying current stock',
+                       'essential missing identifier',
+                       'Do not ask again for information already provided',
+                       'Do not ask the CLI operator questions',
+                       'The customer-facing draft may ask'):
+            self.assertIn(phrase,prompt)
+        self.assertNotIn('Do not ask questions.',prompt)
+        self.assertIn('Never skip drafting',prompt)
+        self.assertIn('READ-ONLY',prompt)
+        self.assertIn('JSON_RESULT[0123456789abcdef]',prompt)
+
     def test_review_commitment_detector_has_bounded_cpu_on_adversarial_near_matches(self):
         samples=('we '+' '*100000+'are not checking',('we will follow '+'x'*100+' ')*1000,('our team is '+ 'currently '*20)*1000)
         start=time.process_time()
