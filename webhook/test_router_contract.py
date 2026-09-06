@@ -75,6 +75,7 @@ class RouterContractTests(unittest.TestCase):
             webhook_host="127.0.0.1",
             webhook_port=8000,
             gorgias_subdomain="test",
+            db_path_absolute="unused-test.sqlite3",
         )
 
         async def init_db() -> None:
@@ -89,12 +90,13 @@ class RouterContractTests(unittest.TestCase):
             patch.object(app_module, "get_settings", Mock(side_effect=lambda: (events.append("settings") or settings))),
             patch.object(app_module, "log_event", Mock(side_effect=lambda *args, **kwargs: events.append("log"))),
             patch.object(app_module, "init_db", AsyncMock(side_effect=init_db)),
+            patch.object(app_module.session_store, "initialize", AsyncMock(side_effect=lambda *args: events.append("sessions"))),
         ):
             import asyncio
 
             asyncio.run(exercise())
 
-        self.assertEqual(events, ["logging", "settings", "log", "db", "yield", "log"])
+        self.assertEqual(events, ["logging", "settings", "log", "db", "sessions", "yield", "log"])
 
 
 if __name__ == "__main__":

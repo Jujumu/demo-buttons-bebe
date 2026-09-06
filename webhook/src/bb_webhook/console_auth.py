@@ -8,6 +8,8 @@ import hashlib
 import hmac
 import secrets
 from datetime import datetime, timedelta, timezone
+from dataclasses import dataclass
+from urllib.parse import unquote, urlsplit
 
 try:
     import crypt
@@ -95,37 +97,75 @@ def build_session_token(
     if not username or not secret:
         raise ValueError("username and secret are required")
     expires = _timestamp(now) + int(_SESSION_TTL.total_seconds())
-    payload = _b64encode(f"{username}\n{expires}".encode("utf-8"))
+    payload = _b64encode(f"v2\n{username}\n{expires}\n{secrets.token_urlsafe(32)}".encode("utf-8"))
     signature = _b64encode(hmac.new(secret.encode("utf-8"), payload.encode(), hashlib.sha256).digest())
     return f"{payload}.{signature}"
 
 
-def verify_session_token(
-    token: str | None,
-    secret: str,
-    *,
-    now: datetime | None = None,
-) -> str | None:
-    """Return the session username only when the signed token is valid."""
+@dataclass(frozen=True)
+class SessionClaims:
+    username: str
+    expires_at: int
+    token_id: str
+    version: int
 
+
+def session_claims(token: str | None, secret: str, *, now: datetime | None = None) -> SessionClaims | None:
+    """Verify canonical signed tokens; registry checks are a separate DB step.
+
+    Canonical encoding matters: alternate base64 spellings must not create new
+    registry IDs for an already revoked legacy session.
+    """
     if not token or len(token) > 4096 or not secret:
         return None
     try:
         payload, signature = token.split(".", 1)
+        decoded = _b64decode(payload)
+        signed = _b64decode(signature)
+        if _b64encode(decoded) != payload or _b64encode(signed) != signature:
+            return None
         expected = hmac.new(secret.encode("utf-8"), payload.encode(), hashlib.sha256).digest()
-        if not hmac.compare_digest(_b64decode(signature), expected):
+        if not hmac.compare_digest(signed, expected):
             return None
-        username, expires_text = _b64decode(payload).decode("utf-8").split("\n", 1)
-        if not username or _timestamp(now) >= int(expires_text):
+        parts = decoded.decode("utf-8").split("\n")
+        if len(parts) == 2:
+            username, expires_text = parts
+            version = 1
+        elif len(parts) == 4 and parts[0] == "v2" and len(parts[3]) == 43:
+            _, username, expires_text, nonce = parts
+            version = 2
+        else:
             return None
-        return username
+        expires = int(expires_text)
+        if not username or _timestamp(now) >= expires:
+            return None
+        return SessionClaims(username, expires, hashlib.sha256(token.encode()).hexdigest(), version)
     except (binascii.Error, TypeError, ValueError, UnicodeError):
         return None
 
 
-def safe_next_path(value: str | None) -> str:
-    """Keep post-login redirects inside the console and prevent open redirects."""
+def verify_session_token(token: str | None, secret: str, *, now: datetime | None = None) -> str | None:
+    claims = session_claims(token, secret, now=now)
+    return claims.username if claims else None
 
-    if isinstance(value, str) and (value == "/console" or value.startswith("/console/")):
-        return value
-    return "/console/"
+
+def safe_next_path(value: str | None) -> str:
+    """Allow console/inbox relative destinations without traversal or redirects."""
+    if not isinstance(value, str) or len(value) > 2048:
+        return "/console/"
+    decoded = unquote(value)
+    if any(ord(char) < 32 or ord(char) == 127 for char in decoded) or "\\" in decoded:
+        return "/console/"
+    try:
+        parsed = urlsplit(decoded)
+    except ValueError:
+        return "/console/"
+    if parsed.scheme or parsed.netloc or any(part in (".", "..") for part in parsed.path.split("/")):
+        return "/console/"
+    if parsed.path not in ("/console", "/inbox") and not parsed.path.startswith(("/console/", "/inbox/")):
+        return "/console/"
+    # Encoded path separators and double encoding can be interpreted differently
+    # by a browser/proxy. Return only the decoded, unambiguous relative URL.
+    if "%" in decoded or decoded.startswith("//"):
+        return "/console/"
+    return decoded
