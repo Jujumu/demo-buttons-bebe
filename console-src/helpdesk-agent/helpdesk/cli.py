@@ -1,0 +1,111 @@
+"""CLI door. Same handlers as MCP. JSON stdout."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+
+from .dispatch import invoke, list_tools
+from .names import (
+    CLI_COMMANDS,
+    SAMPLE_SHOP,
+    TOOL_APPLY_MACRO,
+    TOOL_BRIDGE_STATUS,
+    TOOL_DRAFT_REPLY,
+    TOOL_GET_CUSTOMER,
+    TOOL_GET_ORDER,
+    TOOL_GET_RETURNS,
+    TOOL_GET_TICKET,
+    TOOL_INGEST_CHAT,
+    TOOL_INGEST_EMAIL,
+    TOOL_PULL_MAILBOX,
+    TOOL_LIST_PAST_ORDERS,
+    TOOL_LIST_TICKETS,
+    TOOL_SEARCH_MACROS,
+    TOOL_SEND_REPLY,
+    TOOL_SUMMARIZE_THREAD,
+    TOOL_ESCALATE_TICKET,
+    TOOL_WRITE_GATE_STATUS,
+)
+
+
+def _print(payload: dict) -> int:
+    json.dump(payload, sys.stdout, indent=2, sort_keys=True)
+    sys.stdout.write("\n")
+    return 0 if payload.get("ok") else 1
+
+
+def _add_shop_gid(parser: argparse.ArgumentParser, gid_flag: str, dest: str) -> None:
+    parser.add_argument("--shop", default=SAMPLE_SHOP)
+    parser.add_argument(gid_flag, dest=dest, required=True)
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="helpdesk", description="Shopify helpdesk organ (MCP + CLI).")
+    sub = parser.add_subparsers(dest="command", required=True)
+    sub.add_parser("tools", help="list the live helpdesk tools")
+    sub.add_parser("serve", help="run the MCP stdio server")
+    tickets = sub.add_parser(CLI_COMMANDS[TOOL_LIST_TICKETS])
+    tickets.add_argument("--view", default="open")
+    tickets.add_argument("--limit", type=int, default=20)
+    get_ticket = sub.add_parser(CLI_COMMANDS[TOOL_GET_TICKET])
+    get_ticket.add_argument("--ticket-id", dest="ticketId", required=True)
+    _add_shop_gid(sub.add_parser(CLI_COMMANDS[TOOL_GET_CUSTOMER]), "--customer-id", "customerId")
+    _add_shop_gid(sub.add_parser(CLI_COMMANDS[TOOL_GET_ORDER]), "--order-id", "orderId")
+    _add_shop_gid(sub.add_parser(CLI_COMMANDS[TOOL_GET_RETURNS]), "--order-id", "orderId")
+    _add_shop_gid(sub.add_parser(CLI_COMMANDS[TOOL_LIST_PAST_ORDERS]), "--customer-id", "customerId")
+    draft = sub.add_parser(CLI_COMMANDS[TOOL_DRAFT_REPLY])
+    draft.add_argument("--ticket", dest="ticketId", required=True)
+    draft.add_argument("--shop", default=SAMPLE_SHOP)
+    summarize = sub.add_parser(CLI_COMMANDS[TOOL_SUMMARIZE_THREAD])
+    summarize.add_argument("--ticket", dest="ticketId", required=True)
+    summarize.add_argument("--shop", default=SAMPLE_SHOP)
+    search = sub.add_parser(CLI_COMMANDS[TOOL_SEARCH_MACROS])
+    search.add_argument("--query", default="")
+    apply_macro = sub.add_parser(CLI_COMMANDS[TOOL_APPLY_MACRO])
+    apply_macro.add_argument("--macro-id", dest="macroId", required=True)
+    apply_macro.add_argument("--mode", default="replace", choices=("replace", "append"))
+    apply_macro.add_argument("--current-body", dest="currentBody", default="")
+    ingest_email = sub.add_parser(CLI_COMMANDS[TOOL_INGEST_EMAIL])
+    ingest_email.add_argument("--from", dest="from", required=True)
+    ingest_email.add_argument("--subject", dest="subject", required=True)
+    ingest_email.add_argument("--body", dest="body", required=True)
+    ingest_email.add_argument("--received-at", dest="receivedAt", required=True)
+    ingest_chat = sub.add_parser(CLI_COMMANDS[TOOL_INGEST_CHAT])
+    ingest_chat.add_argument("--from-name", dest="fromName", required=True)
+    ingest_chat.add_argument("--body", dest="body", required=True)
+    ingest_chat.add_argument("--received-at", dest="receivedAt", required=True)
+    pull = sub.add_parser(CLI_COMMANDS[TOOL_PULL_MAILBOX])
+    pull.add_argument("--limit", type=int, default=20)
+    escalate = sub.add_parser(CLI_COMMANDS[TOOL_ESCALATE_TICKET])
+    escalate.add_argument("--ticket-id", dest="ticketId", required=True)
+    escalate.add_argument("--reason", default=None)
+    sub.add_parser(CLI_COMMANDS[TOOL_WRITE_GATE_STATUS])
+    sub.add_parser(CLI_COMMANDS[TOOL_BRIDGE_STATUS])
+    send_reply = sub.add_parser(CLI_COMMANDS[TOOL_SEND_REPLY])
+    send_reply.add_argument("--ticket-id", dest="ticketId", required=True)
+    send_reply.add_argument("--text", required=True)
+    send_reply.add_argument("--confirmed", action="store_true")
+    send_reply.add_argument("--close", action="store_true")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.command == "tools":
+        return _print({"ok": True, "tools": list_tools()})
+    if args.command == "serve":
+        from .mcp_server import run_stdio
+
+        run_stdio()
+        return 0
+    inverse = {value: key for key, value in CLI_COMMANDS.items()}
+    tool = inverse[args.command]
+    payload = {key: value for key, value in vars(args).items() if key != "command" and value is not None}
+    return _print(invoke(tool, payload))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,36 @@
+import { createInboxOrgan } from "./inbox.js";
+import { createHelpdeskClient } from "./shop/helpdesk-client.js";
+import { createHelpdeskShop, resolveLiveInbox } from "./shop/helpdesk-shop.js";
+import { registerInboxWebMcp } from "./webmcp.js";
+
+const root = document.getElementById("inbox-root");
+const client = createHelpdeskClient();
+const shop = createHelpdeskShop({ client });
+const live = await resolveLiveInbox(client);
+if (live) shop.setShop(live.shop);
+const params = new URLSearchParams(location.search);
+// Always list from helpdesk.list_tickets (SEED + intake). Live mint only
+// pins the shop host — do not replace the catalog with the 5-row live stub.
+const organ = createInboxOrgan({
+  shop,
+  shopHost: live?.shop,
+  viewId: params.get("view") || "open",
+  ticketId: params.get("ticket") || undefined,
+  privacyGate: params.get("gate") === "privacy",
+});
+if (params.get("pull") === "1") {
+  const pullArgs = { limit: Number(params.get("limit") || 20) || 20 };
+  if (params.get("force") === "1") pullArgs.force = true;
+  await organ.pullMailbox(pullArgs);
+}
+organ.mount(root);
+
+// Demo/review: expose organ for WebMCP verify + headless shots (not a product API).
+globalThis.__inboxOrgan = organ;
+
+// WebMCP: register Document-scoped chrome tools after mount. No-op without
+// modelContext (chrome://flags/#enable-webmcp-testing). Abort on page hide.
+const webmcp = registerInboxWebMcp(organ);
+await webmcp.ready;
+globalThis.__inboxWebMcp = webmcp;
+window.addEventListener("pagehide", () => webmcp.dispose(), { once: true });
