@@ -118,3 +118,58 @@ launch code and preserving Caddy reachability. Revalidate PID/start identity
 before stopping the stray preview. Do not blindly stop redo3210: determine its
 login/API protection and legitimate consumers first. No listener is stopped or
 firewall changed by the inventory tool.
+
+## Receiving service containment (port 3210)
+
+The reviewed receiving process was externally reachable without a session.
+Source inspection found unguarded financial POST handlers and a public aggregate
+GET confirmed the API boundary, without reading customer bodies or invoking a
+mutation. This is a separate legacy application; its business code is not moved
+into this repository.
+
+The new `sites/receiving.caddy` origin is
+`https://support.buttonsbebe.com:8443`. It preserves all root-relative assets and
+APIs. `/auth/session` checks the existing console cookie without expanding the
+console's trusted Origin list. Caddy rejects unsafe methods unless Origin is
+exactly that 8443 origin, **before authentication**. Missing/expired sessions get
+401 JSON for APIs and a friendly sign-in link for pages. Sign in at the existing
+443 console, then return to receiving; no new credential or login form exists.
+
+`GET/HEAD /api/reconciliation` is blocked because its recomputation changes
+persistent reconciliation classifications. It needs an explicit reviewed POST
+workflow before re-enabling through this origin. Other inspected GET handlers
+read records, aggregate statistics, labels or configuration; `snapshotFees` is a
+read operation despite its name. No provider financial mutation was found in a
+GET handler. This does not certify the underlying app's entire business logic.
+
+1. Install the reviewed receiving fragment and add its import while retaining
+   **all existing imports**. Validate/reload Caddy; verify existing 443 HTTPS and
+   HTTP-to-443 redirect behavior as well as the new8443 listener.
+2. Prove unauthenticated API401, unauthenticated page401 with sign-in link,
+   rejected missing/cross-origin writes, and an authenticated **aggregate-only**
+   GET before changing port3210. Use a private root-owned cookie file; never
+   print it or put its value in a command argument.
+3. Record the named PM2 process, current PID/start ticks, and server.js SHA256
+   without dumping PM2's environment. Invoke `contain_receiving.py apply` with
+   `--process-name`, `--expected-pid`, `--expected-start-ticks`,
+   `--expected-source-sha256`, and `--proxy-cookie-file`. It changes exactly the
+   single `app.listen` host to127.0.0.1, validates syntax, and restarts only the
+   named process. It omits `--update-env`, preserving the existing environment.
+4. Independently verify external3210 cannot connect, authenticated8443 still
+   works, all other services remain active, and no source/credential/data file
+   other than this one bind argument changed. No financial POST is an acceptance
+   test. Update applied Caddy fingerprints after successful review/verification.
+
+The previous `/webhooks/redo` handler used an optional secret that was not
+configured in the inspected runtime/environment file. There is **no public
+exception** for this unverified webhook on the new origin. Provider signing and
+callback coordination are required before introducing a public route; do not
+weaken the session/origin gate to restore unauthenticated input. Existing
+Gorgias `/webhook/gorgias/*` routing is unrelated and remains unchanged.
+
+A dated root-only source backup and exact hashes are recorded by the helper.
+It deliberately does not automatically reopen the public listener after a failed
+post-restart probe. Restore operation with `--acknowledge-public-reopen` is only
+for a separately reviewed recovery with alternative network containment, because
+restoring the old bind would otherwise recreate the known unauthenticated
+financial exposure. Refuse stale rollback when source has subsequently changed.

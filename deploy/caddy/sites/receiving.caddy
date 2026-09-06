@@ -1,0 +1,58 @@
+# Authenticated receiving workspace. Existing root-relative API/asset URLs remain
+# intact on this dedicated TLS origin; it does not share the dashboard's origin.
+# The backend must bind 127.0.0.1:3210 only after this proxy has been verified.
+https://support.buttonsbebe.com:8443 {
+	@unsafe_origin {
+		method POST PUT PATCH DELETE
+		not header Origin https://support.buttonsbebe.com:8443
+	}
+	@stateful_get {
+		method GET HEAD
+		path /api/reconciliation
+	}
+	@receiving_api path /api/* /webhooks/*
+
+	# route preserves security-check order ahead of proxy authentication.
+	route {
+		header @unsafe_origin Content-Type application/json
+		respond @unsafe_origin `{"error":"untrusted_origin"}` 403
+		header @stateful_get Content-Type application/json
+		respond @stateful_get `{"error":"stateful_get_requires_review"}` 403
+
+		handle @receiving_api {
+			forward_auth 127.0.0.1:8000 {
+				uri /auth/session
+			}
+			reverse_proxy 127.0.0.1:3210
+		}
+		handle {
+			forward_auth 127.0.0.1:8000 {
+				uri /auth/session
+				@unauthorized status 401
+				handle_response @unauthorized {
+					header Content-Type "text/html; charset=utf-8"
+					respond `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Sign in to receiving</title><body style="background:#f4f0ea;color:#1c1916;font-family:system-ui;margin:4rem auto;max-width:36rem;padding:1rem"><h1>Sign in to receiving</h1><p>Use your existing support console login, then return here.</p><p><a href="https://support.buttonsbebe.com/console/login" target="_blank" rel="noopener noreferrer">Open support sign-in</a></p><p><a href="/">Return to receiving</a></p></body></html>` 401
+				}
+			}
+			reverse_proxy 127.0.0.1:3210
+		}
+	}
+	request_body {
+		max_size 2MB
+	}
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+	}
+	encode gzip zstd
+	log {
+		output file /var/log/bb-webhook/caddy-receiving.log
+		format filter {
+			wrap json
+			fields {
+				request>uri delete
+				request>headers>Referer delete
+			}
+		}
+	}
+}
