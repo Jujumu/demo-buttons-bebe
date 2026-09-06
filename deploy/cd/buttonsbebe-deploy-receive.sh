@@ -1,106 +1,46 @@
 #!/usr/bin/env bash
-# Receive a verified release archive from GitHub Actions and atomically update
-# the application source while deliberately preserving production data/config.
+# Journaled source-file deployment. Per-file replacement is atomic; the whole
+# release is NOT atomic. Stop affected readers until apply/rollback completes.
 set -Eeuo pipefail
-
 readonly live_root="/root/Buttonsbebe Agent"
 readonly releases_root="/opt/buttonsbebe/releases"
 readonly backups_root="/opt/buttonsbebe/backups"
 readonly web_root="/var/www/console"
-readonly uv_bin="/root/.local/bin/uv"
 readonly approved_config_file="/etc/buttonsbebe-deploy-approved-config.sha256"
-readonly whatsapp_override_file="/etc/buttonsbebe-deploy-whatsapp-qr-until"
+readonly source_helper="/usr/local/lib/buttonsbebe-deploy/source_release.py"
 readonly max_archive_bytes=$((64 * 1024 * 1024))
-readonly retention_count=5
 readonly readiness_attempts=10
 readonly readiness_delay_seconds=3
-readonly services=(
-  buttonsbebe-webhook
-  buttonsbebe-processor
-  buttonsbebe-kb-mcp
-  buttonsbebe-gorgias-mcp
-  buttonsbebe-redo-mcp
-  buttonsbebe-kb-admin
-  buttonsbebe-whatsapp-connect
-)
-readonly maintenance_services=(
-  buttonsbebe-kb-sync.service
-  buttonsbebe-kb-learn.service
-  buttonsbebe-kb-notices-gc.service
-)
-readonly maintenance_timers=(
-  buttonsbebe-kb-sync.timer
-  buttonsbebe-kb-learn.timer
-  buttonsbebe-kb-notices-gc.timer
-)
-
 if [[ $# -ne 2 || ! "$1" =~ ^[0-9a-f]{40}$ || ! "$2" =~ ^[0-9a-f]{64}$ ]]; then
   echo "Usage: buttonsbebe-deploy-receive <commit-sha> <archive-sha256>" >&2
   exit 64
 fi
-
+# Covers all entrypoints (GitHub and manual), before staging, backups or stops.
+exec 9>/run/lock/buttonsbebe-deploy.lock
+flock -n 9 || { echo "Another deployment is in progress." >&2; exit 75; }
 readonly release_sha="$1"
 readonly expected_digest="$2"
 readonly timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
 readonly staging_archive="$(mktemp /var/tmp/buttonsbebe-release.XXXXXX.tar.gz)"
 readonly backup_root="$backups_root/${release_sha}-${timestamp}"
 readonly release_dir="$releases_root/$release_sha"
+services=()
+active_services=()
+active_timers=()
 rollback_needed=0
-
-cleanup() {
-  rm -f "$staging_archive"
-}
+cleanup() { rm -f "$staging_archive"; }
 trap cleanup EXIT
-
-rollback() {
-  local service timer
-  [[ "$rollback_needed" -eq 1 && -d "$backup_root/source" ]] || return 0
-  trap - ERR
-  echo "Deployment failed; restoring the prior application source." >&2
-  for service in "${services[@]}"; do
-    systemctl stop "$service" 2>/dev/null || true
-  done
-  rsync -a --delete --no-specials --no-devices "$backup_root/source/" "$live_root/"
-  if [[ -f "$backup_root/console/index.html" ]]; then
-    install -D -m 0644 "$backup_root/console/index.html" "$web_root/index.html"
-  fi
-  if [[ -f "$backup_root/console/login.html" ]]; then
-    install -D -m 0644 "$backup_root/console/login.html" "$web_root/login.html"
-  else
-    rm -f "$web_root/login.html"
-  fi
-  for service in "${services[@]}"; do
-    systemctl start "$service" 2>/dev/null || true
-  done
-  for service in "${maintenance_services[@]}"; do
-    systemctl start "$service" 2>/dev/null || true
-  done
-  for timer in "${maintenance_timers[@]}"; do
-    systemctl start "$timer" 2>/dev/null || true
-  done
-}
-trap rollback ERR
-
 install -d -m 0750 "$releases_root" "$backups_root"
-if [[ ! -x "$uv_bin" ]]; then
-  echo "Required locked-environment tool is unavailable: $uv_bin" >&2
-  exit 69
-fi
+[[ -f "$source_helper" ]] || { echo "Install reviewed source helper first." >&2; exit 78; }
 if ! LC_ALL=C head -c "$((max_archive_bytes + 1))" >"$staging_archive"; then
-  echo "Could not receive the release archive." >&2
-  exit 65
+  echo "Could not receive the release archive." >&2; exit 65
 fi
 archive_bytes="$(wc -c <"$staging_archive")"
 if ((archive_bytes > max_archive_bytes)); then
-  echo "Release archive exceeds the ${max_archive_bytes}-byte limit." >&2
-  exit 65
+  echo "Release archive exceeds the byte limit." >&2; exit 65
 fi
 actual_digest="$(sha256sum "$staging_archive" | awk '{print $1}')"
-if [[ "$actual_digest" != "$expected_digest" ]]; then
-  echo "Release archive checksum did not match." >&2
-  exit 65
-fi
-
+[[ "$actual_digest" == "$expected_digest" ]] || { echo "Archive checksum mismatch." >&2; exit 65; }
 if ! python3 - "$staging_archive" <<'PY'
 import pathlib
 import sys
@@ -121,9 +61,12 @@ with tarfile.open(sys.argv[1], "r|gz") as archive:
         path = pathlib.PurePosixPath(member.name)
         if not member.name or member.name.startswith("/") or ".." in path.parts:
             raise SystemExit(f"unsafe archive member: {member.name!r}")
-        if member.name in seen:
+        canonical = str(path)
+        if canonical == '.':
+            raise SystemExit('archive root entry is not permitted')
+        if canonical in seen:
             raise SystemExit(f"duplicate archive member: {member.name!r}")
-        seen.add(member.name)
+        seen.add(canonical)
         if not (member.isfile() or member.isdir()):
             raise SystemExit(f"unsupported archive member type: {member.name!r}")
         if member.size < 0 or member.size > MAX_MEMBER_BYTES:
@@ -137,15 +80,19 @@ then
   exit 65
 fi
 
+# Never delete/replace an existing immutable release directory.
 tmp_release="$(mktemp -d "$releases_root/.${release_sha}.XXXXXX")"
 tar --extract --gzip --file "$staging_archive" --directory "$tmp_release" \
   --no-same-owner --no-same-permissions
-rm -rf "$release_dir"
-mv "$tmp_release" "$release_dir"
-
-# System configuration contains credentials and is intentionally not part of
-# release archives. Root approves its source fingerprint only after manually
-# applying a configuration change; all other releases then remain automatic.
+if [[ -e "$release_dir" ]]; then
+  if ! diff -qr "$tmp_release" "$release_dir" >/dev/null; then
+    rm -rf "$tmp_release"
+    echo "Existing release differs; manual inspection required." >&2; exit 78
+  fi
+  rm -rf "$tmp_release"
+else
+  mv "$tmp_release" "$release_dir"
+fi
 assert_config_approved() {
   local relative_path="$1"
   local expected actual
@@ -163,151 +110,119 @@ assert_config_approved() {
 assert_config_approved deploy/systemd
 assert_config_approved deploy/caddy
 
-install -d -m 0700 "$backup_root/source" "$backup_root/console"
-rsync -a --no-specials --no-devices "$live_root/" "$backup_root/source/"
-if [[ -f "$web_root/index.html" ]]; then
-  cp -p "$web_root/index.html" "$backup_root/console/index.html"
-fi
-if [[ -f "$web_root/login.html" ]]; then
-  cp -p "$web_root/login.html" "$backup_root/console/login.html"
-fi
-rollback_needed=1
 
-for timer in "${maintenance_timers[@]}"; do
-  systemctl stop "$timer"
-done
-for service in "${maintenance_services[@]}"; do
-  systemctl stop "$service"
-done
+python3 - "$release_dir/.buttonsbebe-release.json" "$release_sha" <<'PYMETA'
+import json, pathlib, sys
+metadata = json.loads(pathlib.Path(sys.argv[1]).read_text())
+if metadata.get('commit') != sys.argv[2]:
+    raise SystemExit('Archive metadata does not match requested verified commit')
+PYMETA
+# Validate the applied files as well as the reviewed source fingerprints.
+# The approval file uses: absolute-path sha256, one protected file per line.
+python3 - "$approved_config_file" <<'PYCONFIG'
+import hashlib, pathlib, sys
+entries = []
+for line in pathlib.Path(sys.argv[1]).read_text().splitlines():
+    if line.startswith('/'):
+        path, expected = line.rsplit(None, 1)
+        actual = hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()
+        if actual != expected:
+            raise SystemExit('Applied configuration drift: ' + path)
+        entries.append(path)
+required = {'/etc/caddy/sites/support.caddy', '/etc/systemd/system/helpdesk-inbox.service'}
+if not required.issubset(entries):
+    raise SystemExit('Support Caddy and inbox unit applied fingerprints are required')
+PYCONFIG
+# A root-approved helper owns the exclusions; an incoming archive cannot weaken
+# rollback data protection. Dependency changes fail here, before service stops.
+python3 "$source_helper" prepare --release "$release_dir" --journal "$backup_root"
+while IFS= read -r service; do
+  [[ -n "$service" ]] && services+=("$service")
+done < <(python3 "$source_helper" services --journal "$backup_root")
 for service in "${services[@]}"; do
-  systemctl stop "$service"
+  if systemctl is-active --quiet "$service"; then active_services+=("$service"); fi
 done
-
-sync_source() {
-  local source="$1"
-  local destination="$2"
-  shift 2
-  install -d "$destination"
-  rsync -a --delete --no-specials --no-devices "$@" "$release_dir/$source/" "$destination/"
-}
-
-sync_source webhook "$live_root/webhook" \
-  --exclude '.env' --exclude '.venv/' --exclude '__pycache__/' \
-  --exclude 'data/' --exclude 'logs/'
-sync_source processor "$live_root/processor" \
-  --exclude '.env' --exclude '.venv/' --exclude '__pycache__/' \
-  --exclude 'data/' --exclude 'logs/'
-sync_source tools "$live_root/tools" \
-  --exclude '.env' --exclude '.venv/' --exclude '__pycache__/' --exclude 'logs/'
-sync_source whatsapp-connect "$live_root/whatsapp-connect" \
-  --exclude '.env' --exclude 'auth/' --exclude 'node_modules/' --exclude '.wwebjs_auth/' \
-  --exclude '.wwebjs_cache/' --exclude 'logs/'
-sync_source kb "$live_root/KB" \
-  --exclude '.env' --exclude '.venv/' --exclude '__pycache__/' \
-  --exclude 'lancedb/' --exclude 'products/' --exclude 'learned/' \
-  --exclude 'notices/' --exclude 'archive/' --exclude '_archive_learned/' \
-  --exclude 'logs/'
-# Git archive extraction deliberately drops source modes. Restore the one
-# executable maintenance entrypoint explicitly so the systemd timer cannot
-# regress to status=203/EXEC after an otherwise successful release.
-install -m 0755 "$release_dir/kb/sync-products.sh" "$live_root/KB/sync-products.sh"
-sync_source kb-admin "$live_root/kb-admin" \
-  --exclude '.env' --exclude '.venv/' --exclude '__pycache__/' \
-  --exclude 'node_modules/' --exclude 'data/' --exclude 'logs/'
-install -D -m 0644 "$release_dir/console-src/index.html" "$web_root/index.html"
-install -D -m 0644 "$release_dir/console-src/login.html" "$web_root/login.html"
-
-(cd "$live_root/webhook" && "$uv_bin" sync --locked)
-(cd "$live_root/processor" && "$uv_bin" sync --locked)
-"$live_root/KB/.venv/bin/pip" install -r "$live_root/KB/requirements.txt"
-"$live_root/tools/.venv/bin/pip" install -r "$live_root/tools/requirements.txt"
-(cd "$live_root/whatsapp-connect" && npm ci --omit=dev)
-(cd "$live_root/KB" && timeout 600 ./.venv/bin/python scripts/index_kb.py)
-
-for service in "${services[@]}"; do
-  systemctl start "$service"
-done
-for timer in "${maintenance_timers[@]}"; do
-  systemctl start "$timer"
-done
-
-whatsapp_readiness_override_active() {
-  local expires_at current_epoch
-  [[ -r "$whatsapp_override_file" ]] || return 1
-  expires_at="$(<"$whatsapp_override_file")"
-  [[ "$expires_at" =~ ^[0-9]+$ ]] || return 1
-  current_epoch="$(date +%s)"
-  if ((expires_at > current_epoch)); then
-    echo "WARNING: WhatsApp QR readiness override active until ${expires_at}." >&2
-    return 0
-  fi
-  return 1
-}
 
 readiness_ok() (
-  # Startup failures are expected while services warm up. Keep the global ERR
-  # rollback trap out of this probe subprocess; the caller decides after all
-  # bounded attempts have been exhausted.
   trap - ERR
-  local service whatsapp_state
-  for service in "${services[@]}"; do
+  local service
+  for service in "${active_services[@]}"; do
     systemctl is-active --quiet "$service" || return 1
+    case "$service" in
+      buttonsbebe-webhook)
+        curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8000/ready >/dev/null || return 1 ;;
+      helpdesk-inbox)
+        curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8766/ >/dev/null || return 1
+        curl --fail --silent --show-error --max-time 10 -X POST \
+          http://127.0.0.1:8766/console/api/helpdesk -H 'content-type: application/json' \
+          -d '{"tool":"helpdesk.send_reply","arguments":{"ticketId":"deployment-lock-probe","text":"Hi","confirmed":true}}' |
+          python3 -c 'import json,sys; x=json.load(sys.stdin); assert x.get("ok") is False and x.get("error")=="send_access_inactive" and x.get("message")=="Activate the send access."' || return 1 ;;
+      buttonsbebe-whatsapp-connect)
+        # Connected vs QR/disconnected is business health, not code liveness.
+        curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8085/wa/status >/dev/null || return 1 ;;
+      buttonsbebe-kb-mcp)
+        (cd "$live_root/KB" && timeout 20 ./.venv/bin/python scripts/search_kb.py "size guide" >/dev/null) || return 1 ;;
+    esac
   done
-  curl --fail --silent --show-error --max-time 10 \
-    http://127.0.0.1:8000/health >/dev/null || return 1
-  whatsapp_state="$(
-    curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8085/wa/status |
-      python3 -c 'import json, sys; print(json.load(sys.stdin).get("state", ""))'
-  )" || return 1
-  if [[ "$whatsapp_state" != "connected" ]] && ! whatsapp_readiness_override_active; then
-    return 1
-  fi
-  (cd "$live_root/KB" && \
-    ./.venv/bin/python scripts/search_kb.py "size guide" >/dev/null) || return 1
 )
-
-ready=0
-for ((attempt = 1; attempt <= readiness_attempts; attempt++)); do
-  if readiness_ok; then
-    ready=1
-    break
-  fi
-  if ((attempt < readiness_attempts)); then
-    sleep "$readiness_delay_seconds"
-  fi
-done
-if ((ready == 0)); then
-  echo "Services did not become ready after $readiness_attempts attempts." >&2
-  false
-fi
-
-prune_old_directories() {
-  local root="$1"
-  local protected="$2"
-  python3 - "$root" "$retention_count" "$protected" <<'PY'
-import pathlib
-import shutil
-import sys
-
-root = pathlib.Path(sys.argv[1])
-limit = int(sys.argv[2])
-protected = pathlib.Path(sys.argv[3])
-directories = sorted(
-    (path for path in root.iterdir() if path.is_dir() and not path.is_symlink()),
-    key=lambda path: path.stat().st_mtime_ns,
-    reverse=True,
-)
-kept = 0
-for path in directories:
-    if path == protected or kept < limit:
-        kept += 1
-        continue
-    shutil.rmtree(path)
-PY
+wait_ready() {
+  local attempt
+  for ((attempt=1; attempt<=readiness_attempts; attempt++)); do
+    if readiness_ok; then return 0; fi
+    if ((attempt < readiness_attempts)); then sleep "$readiness_delay_seconds"; fi
+  done
+  return 1
 }
-
-prune_old_directories "$releases_root" "$release_dir"
-prune_old_directories "$backups_root" "$backup_root"
-
+restore_timers() {
+  local timer
+  for timer in "${active_timers[@]}"; do systemctl start "$timer" || return 1; done
+}
+rollback() {
+  local service failed=0
+  trap - ERR INT TERM
+  if ((rollback_needed)); then
+    echo "Deployment failed; restoring only journaled source files." >&2
+    for service in "${active_services[@]}"; do systemctl stop "$service" || failed=1; done
+    if ((failed == 0)) && python3 "$source_helper" rollback --journal "$backup_root"; then
+      for service in "${active_services[@]}"; do systemctl start "$service" || failed=1; done
+      wait_ready || failed=1
+    else
+      failed=1
+    fi
+  fi
+  restore_timers || failed=1
+  if ((failed)); then
+    echo "ROLLBACK INCOMPLETE: operator inspection required; journal retained at $backup_root" >&2
+  else
+    echo "Prior source restored and previous active services passed readiness." >&2
+  fi
+  exit 1
+}
+trap rollback ERR INT TERM
+# Do not interrupt an active index/learning transaction. Stop only active timers
+# before checking jobs, and restore precisely those timers on either outcome.
+if [[ " ${services[*]} " == *" buttonsbebe-kb-mcp "* ]]; then
+  for timer in buttonsbebe-kb-sync.timer buttonsbebe-kb-learn.timer buttonsbebe-kb-notices-gc.timer; do
+    if systemctl is-active --quiet "$timer"; then
+      active_timers+=("$timer")
+      systemctl stop "$timer"
+    fi
+  done
+  for service in buttonsbebe-kb-sync.service buttonsbebe-kb-learn.service buttonsbebe-kb-notices-gc.service; do
+    if systemctl is-active --quiet "$service"; then
+      echo "KB maintenance active; retry deployment after it finishes." >&2
+      false
+    fi
+  done
+fi
+rollback_needed=1
+for service in "${active_services[@]}"; do systemctl stop "$service"; done
+python3 "$source_helper" apply --journal "$backup_root"
+for service in "${active_services[@]}"; do systemctl start "$service"; done
+wait_ready
+restore_timers
+python3 "$source_helper" commit --journal "$backup_root"
 rollback_needed=0
+trap - ERR INT TERM
+# Retain journals until separately backed up; automatic pruning never deletes recovery evidence.
 echo "Deployed Buttons Bebe release $release_sha successfully."

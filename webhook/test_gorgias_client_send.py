@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import httpx
@@ -63,7 +64,7 @@ class _FakeAsyncClient:
 class GorgiasClientSendTests(unittest.IsolatedAsyncioTestCase):
     async def test_send_public_reply_uses_current_listing_and_confirms_delivery(self) -> None:
         _FakeAsyncClient.calls = []
-        with patch("bb_webhook.gorgias_client.httpx.AsyncClient", _FakeAsyncClient):
+        with patch("bb_webhook.gorgias_client.get_settings", return_value=SimpleNamespace(demo_mode=False)), patch("bb_webhook.gorgias_client.httpx.AsyncClient", _FakeAsyncClient):
             result = await GorgiasClient(
                 subdomain="buttons-bebe",
                 email="agent@buttonsbebe.com",

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# offline-gate: skip -- live diagnostic sends signed requests to a running receiver
 """Test script for the webhook receiver.
 
 Sends three requests:

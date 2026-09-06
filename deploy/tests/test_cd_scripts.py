@@ -68,6 +68,13 @@ class ArchiveValidationTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("unsafe archive member", result.stderr)
 
+    def test_rejects_normalized_duplicate_paths(self) -> None:
+        first = tarfile.TarInfo("webhook/app.py")
+        second = tarfile.TarInfo("./webhook/app.py")
+        result = self.validate([first, second])
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("duplicate archive member", result.stderr)
+
     def test_rejects_special_files(self) -> None:
         member = tarfile.TarInfo("named-pipe")
         member.type = tarfile.FIFOTYPE
@@ -101,37 +108,12 @@ class ArchiveValidationTests(unittest.TestCase):
         self.assertIn("expands beyond", result.stderr)
 
 
-class RetentionTests(unittest.TestCase):
-    def test_prunes_old_directories_and_preserves_current_release(self) -> None:
-        script = embedded_python('python3 - "$root"')
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            paths = [root / f"release-{index}" for index in range(4)]
-            for index, path in enumerate(paths):
-                path.mkdir()
-                os.utime(path, (index + 1, index + 1))
-
-            result = subprocess.run(
-                [sys.executable, "-", str(root), "2", str(paths[0])],
-                input=script,
-                text=True,
-                capture_output=True,
-                check=False,
-            )
-
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertTrue(paths[0].exists())
-            self.assertFalse(paths[1].exists())
-            self.assertTrue(paths[2].exists())
-            self.assertTrue(paths[3].exists())
-
-
 class DeploymentGuardrailTests(unittest.TestCase):
     def test_bounded_input_and_hardened_copy_flags_are_present(self) -> None:
         source = RECEIVER.read_text(encoding="utf-8")
         self.assertIn('head -c "$((max_archive_bytes + 1))"', source)
         self.assertIn("--no-same-owner --no-same-permissions", source)
-        self.assertIn("--no-specials --no-devices", source)
+        self.assertNotIn("rsync", source)
 
     def test_readiness_retries_do_not_trigger_the_global_rollback_trap(self) -> None:
         source = RECEIVER.read_text(encoding="utf-8")
@@ -139,19 +121,16 @@ class DeploymentGuardrailTests(unittest.TestCase):
         self.assertIn("trap - ERR", readiness)
         self.assertIn("curl --fail", readiness)
 
-    def test_whatsapp_readiness_override_is_explicitly_time_bound(self) -> None:
-        source = RECEIVER.read_text(encoding="utf-8")
-        self.assertIn(
-            'readonly whatsapp_override_file="/etc/buttonsbebe-deploy-whatsapp-qr-until"',
-            source,
-        )
-        self.assertIn("whatsapp_readiness_override_active()", source)
-        self.assertIn('[[ "$expires_at" =~ ^[0-9]+$ ]]', source)
-        self.assertIn("if ((expires_at > current_epoch)); then", source)
-        self.assertIn(
-            '[[ "$whatsapp_state" != "connected" ]] && ! whatsapp_readiness_override_active',
-            source,
-        )
+    def test_host_lock_precedes_staging_and_no_live_dependency_mutation(self) -> None:
+        source = RECEIVER.read_text()
+        self.assertIn("flock -n 9", source)
+        self.assertLess(source.index("flock -n 9"), source.index("mktemp"))
+        for forbidden in ("uv sync", "pip install", "npm ci", "scripts/index_kb.py", "rsync"):
+            self.assertNotIn(forbidden, source)
+        self.assertIn('python3 "$source_helper" rollback', source)
+        self.assertIn("ROLLBACK INCOMPLETE", source)
+        self.assertIn("wait_ready || failed=1", source)
+        self.assertNotIn('[[ "$whatsapp_state" != "connected" ]]', source)
 
     def test_checkout_and_sudo_do_not_persist_or_prompt_for_credentials(self) -> None:
         workflow = (ROOT / ".github/workflows/deploy-production.yml").read_text(

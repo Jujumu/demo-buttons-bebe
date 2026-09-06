@@ -1,0 +1,111 @@
+"""Execute the receiver against temporary fake services, never the real VPS.
+
+Linux CI supplies util-linux flock. The same harness can be run in any isolated
+Linux directory; constants and all service/network commands are redirected.
+"""
+import hashlib
+import io
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import tarfile
+import tempfile
+import unittest
+
+ROOT = Path(__file__).parents[2]
+
+@unittest.skipUnless(shutil.which('flock') and shutil.which('sha256sum'), 'Linux deployment toolchain required')
+class ReceiverRecoveryTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.live = self.root / 'live'
+        self.web = self.root / 'web'
+        self.bin = self.root / 'bin'
+        self.bin.mkdir()
+        self.write(self.live / 'webhook/app.py', 'old code')
+        self.write(self.live / 'webhook/data/webhook.db', 'accepted before deployment')
+        self.write(self.root / 'active.json', json.dumps(['buttonsbebe-webhook']))
+        self.write(self.root / 'applied-config', 'approved config')
+        config_digest = hashlib.sha256(b'approved config').hexdigest()
+        tree_digest = hashlib.sha256((hashlib.sha256(b'config').hexdigest() + '  ./approved.txt\n').encode()).hexdigest()
+        self.write(self.root / 'approved', f'deploy/systemd {tree_digest}\ndeploy/caddy {tree_digest}\n{self.root}/applied-config {config_digest}\n')
+        helper = (ROOT / 'deploy/cd/source_release.py').read_text().replace('/var/lib/buttonsbebe-deploy/source-manifest.json', str(self.root / 'manifest.json')).replace('/opt/buttonsbebe/inbox', str(self.root / 'inbox'))
+        self.write(self.root / 'helper.py', helper)
+        receiver = (ROOT / 'deploy/cd/buttonsbebe-deploy-receive.sh').read_text()
+        replacements = {'/root/Buttonsbebe Agent': str(self.live), '/opt/buttonsbebe/releases': str(self.root / 'releases'),
+            '/opt/buttonsbebe/backups': str(self.root / 'backups'), '/var/www/console': str(self.web),
+            '/etc/buttonsbebe-deploy-approved-config.sha256': str(self.root / 'approved'),
+            '/etc/caddy/sites/support.caddy': str(self.root / 'applied-config'),
+            '/etc/systemd/system/helpdesk-inbox.service': str(self.root / 'applied-config'),
+            '/usr/local/lib/buttonsbebe-deploy/source_release.py': str(self.root / 'helper.py'),
+            '/run/lock/buttonsbebe-deploy.lock': str(self.root / 'deploy.lock'),
+            '/var/tmp/buttonsbebe-release': str(self.root / 'archive'),
+            'readonly readiness_attempts=10': 'readonly readiness_attempts=1'}
+        for before, after in replacements.items():
+            receiver = receiver.replace(before, after)
+        self.write(self.root / 'receiver.sh', receiver)
+        self.write(self.bin / 'systemctl', '''#!/usr/bin/env python3
+import json,os,pathlib,sys
+root=pathlib.Path(os.environ['HARNESS_ROOT'])
+state=root/'active.json'; active=set(json.loads(state.read_text())); verb=sys.argv[1]; name=sys.argv[-1]
+if verb=='is-active': sys.exit(0 if name in active else 3)
+with (root/'calls').open('a') as out: out.write(verb+' '+name+'\\n')
+if verb=='stop': active.discard(name)
+if verb=='start':
+ active.add(name)
+ (root/'live/webhook/data/webhook.db').write_text('accepted after deployment began')
+state.write_text(json.dumps(sorted(active)))
+''')
+        self.write(self.bin / 'curl', '''#!/usr/bin/env python3
+import os,pathlib,sys
+root=pathlib.Path(os.environ['HARNESS_ROOT'])
+sys.exit(22 if (root/'live/webhook/app.py').read_text()=='new code' else 0)
+''')
+        self.env = dict(os.environ, PATH=str(self.bin) + os.pathsep + os.environ['PATH'], HARNESS_ROOT=str(self.root))
+        self.sha = 'a' * 40
+        self.archive = io.BytesIO()
+        components = ['feedback', 'webhook', 'processor', 'tools', 'kb', 'kb-admin', 'whatsapp-connect', 'console-src/inbox', 'console-src/helpdesk-agent']
+        files = {c + '/app.py': b'new code' for c in components}
+        files.update({'console-src/index.html': b'html', 'console-src/login.html': b'login',
+            'deploy/caddy/approved.txt': b'config', 'deploy/systemd/approved.txt': b'config',
+            '.buttonsbebe-release.json': json.dumps({'commit': self.sha, 'generation': 1}).encode()})
+        with tarfile.open(fileobj=self.archive, mode='w:gz') as archive:
+            for name, body in files.items():
+                info = tarfile.TarInfo(name); info.size = len(body)
+                archive.addfile(info, io.BytesIO(body))
+        self.payload = self.archive.getvalue()
+
+    def write(self, path, value):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(value)
+        path.chmod(0o755)
+
+    def run_receiver(self):
+        return subprocess.run(['bash', str(self.root / 'receiver.sh'), self.sha, hashlib.sha256(self.payload).hexdigest()],
+                              input=self.payload, capture_output=True, env=self.env, timeout=20)
+
+    def test_failed_readiness_restores_code_not_new_database_work(self):
+        result = self.run_receiver()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(b'Prior source restored', result.stderr, result.stderr.decode())
+        self.assertEqual((self.live / 'webhook/app.py').read_text(), 'old code')
+        self.assertEqual((self.live / 'webhook/data/webhook.db').read_text(), 'accepted after deployment began')
+        self.assertEqual(json.loads((self.root / 'active.json').read_text()), ['buttonsbebe-webhook'])
+        self.assertNotIn('buttonsbebe-processor', (self.root / 'calls').read_text())
+        self.assertFalse((self.root / 'manifest.json').exists())
+
+    def test_second_deployment_exits_before_receiving_or_stopping_services(self):
+        import fcntl
+        with (self.root / 'deploy.lock').open('w') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            result = self.run_receiver()
+        self.assertEqual(result.returncode, 75, result.stderr.decode())
+        self.assertFalse((self.root / 'calls').exists())
+        self.assertFalse((self.root / 'backups').exists())
+
+if __name__ == '__main__':
+    unittest.main()
