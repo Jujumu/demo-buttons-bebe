@@ -207,3 +207,24 @@ test("KB file and folder symlinks cannot expose or overwrite outside files",asyn
  fs.rmdirSync(path.join(kb,'tickets'));fs.symlinkSync(kb,path.join(kb,'tickets'));
  assert.equal((await fetch(baseUrl+'/file?path=tickets/private.md')).status,400);
 });
+
+test("interrupted atomic publication preserves old document and file mode",()=>{
+ const vm=require('node:vm');
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'bb-kb-atomic-'));
+ try{
+  fs.mkdirSync(path.join(root,'intents'));const fp=path.join(root,'intents','test.md');
+  fs.writeFileSync(fp,'old complete content');fs.chmodSync(fp,0o640);
+  const source=fs.readFileSync(SERVER,'utf8');
+  const functions=source.slice(source.indexOf('function safePath('),source.indexOf('function frontTitle('));
+  const broken={...fs,renameSync(){throw new Error('simulated publication interruption');}};
+  const context=vm.createContext({fs:broken,path,KB:root,FOLDERS:['intents'],process,Math,Date});
+  vm.runInContext(functions,context);
+  assert.throws(()=>context.atomicSave(fp,'replacement'),/interruption/);
+  assert.equal(fs.readFileSync(fp,'utf8'),'old complete content');
+  assert.equal(fs.statSync(fp).mode & 0o777,0o640);
+  assert.ok(!fs.readdirSync(path.dirname(fp)).some(name=>name.startsWith('.kb-save-')));
+  context.fs=fs;context.atomicSave(fp,'new complete content');
+  assert.equal(fs.readFileSync(fp,'utf8'),'new complete content');
+  assert.equal(fs.statSync(fp).mode & 0o777,0o640);
+ }finally{fs.rmSync(root,{recursive:true,force:true});}
+});
