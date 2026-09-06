@@ -69,6 +69,17 @@ class RuntimeBoundaryTests(unittest.TestCase):
     def harness(self,binary=None):
         return Harness(output=self.root/"run",model_config=self.model,hermes=binary or Path(sys.executable),hermes_python=Path(sys.executable),hermes_source=self.source,kb_mode="fixture",timeout=10,base_port=28877)
 
+    def test_interpreter_symlink_keeps_virtual_environment_context(self):
+        interpreter = self.root / 'venv/bin/python'
+        interpreter.parent.mkdir(parents=True)
+        interpreter.symlink_to(sys.executable)
+        harness = Harness(output=self.root/'interpreter-run', model_config=self.model,
+                          hermes=Path(sys.executable), hermes_python=interpreter,
+                          hermes_source=self.source, kb_mode='fixture', timeout=10,
+                          base_port=28877)
+        self.assertEqual(harness.hermes_python, interpreter.absolute())
+        self.assertNotEqual(harness.hermes_python, interpreter.resolve())
+
     def test_codex_access_only_profile_never_contains_refresh_credentials(self):
         self.model.write_text(json.dumps({"model":{"default":"test","provider":"openai-codex"},"access_token":"synthetic-access-only"}))
         harness=self.harness()
@@ -136,6 +147,43 @@ print('JSON_RESULT['+token+']: '+json.dumps({'priority':'normal','action':'draft
                 self.assertEqual(outcome.returncode, 3 if mode == "nonzero" else 0)
             time.sleep(.9)
             self.assertFalse(marker.exists())
+
+    def test_binding_preflight_discovers_before_exact_allowlist_check(self):
+        names = sorted(f"mcp__{g}__{t}" for g in GROUPS for t in TOOLS[g])
+        (self.source / 'tools').mkdir()
+        (self.source / 'tools/__init__.py').write_text('')
+        (self.source / 'tools/mcp_tool.py').write_text(
+            "discovered=False\ndef discover_mcp_tools():\n global discovered\n discovered=True\ndef shutdown_mcp_servers(): pass\n")
+        module = ("from tools import mcp_tool\n"
+                  "def get_tool_definitions(**kwargs):\n"
+                  f" return [{{'function':{{'name':n}}}} for n in {names!r}] if mcp_tool.discovered else []\n")
+        (self.source / 'model_tools.py').write_text(module)
+        result = prove_hermes_bindings(Path(sys.executable), self.source,
+                                      minimal_environment(self.root), self.root, 5)
+        self.assertEqual(result, {'raw': names, 'actual': names})
+        (self.source / 'model_tools.py').write_text(module.replace(repr(names), repr(names + ['terminal'])))
+        with self.assertRaisesRegex(ValueError, 'missing or extra'):
+            prove_hermes_bindings(Path(sys.executable), self.source,
+                                  minimal_environment(self.root), self.root, 5)
+
+    def test_bridge_receipt_requires_exact_catalog_and_rejection_proof(self):
+        import copy
+        import qa_harness
+        names = sorted(f"mcp__{g}__{t}" for g in GROUPS for t in TOOLS[g])
+        receipt = {'raw':names, 'actual':['tool_call','tool_describe','tool_search'],
+                   'bridge_scope':{'reachable':names, 'executor_scope':names,
+                                   'rejected_outside_without_dispatch':True}}
+        def verify(value):
+            completed = subprocess.CompletedProcess([], 0, 'QA_BINDINGS='+json.dumps(value), '')
+            with patch.object(qa_harness, 'isolated_run', return_value=completed):
+                return prove_hermes_bindings(Path(sys.executable), self.source,
+                                            minimal_environment(self.root), self.root, 5)
+        self.assertEqual(verify(receipt), receipt)
+        for key, value in [('reachable', names+['terminal']), ('executor_scope', names[:-1]),
+                           ('rejected_outside_without_dispatch', False)]:
+            broken=copy.deepcopy(receipt); broken['bridge_scope'][key]=value
+            with self.subTest(key=key), self.assertRaisesRegex(ValueError, 'missing or extra'):
+                verify(broken)
 
     def test_timeout_terminates_process_group(self):
         marker=self.root/"should-not-exist"

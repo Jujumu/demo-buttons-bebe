@@ -77,3 +77,12 @@ prepared from `testing/requirements-qa.lock` with `--require-hashes`; CI prepare
 a separate `.qa-venv`. The harness uses the production bounded process helper
 with a private working directory and explicit QA HOME/HERMES_HOME/HERMES_CONFIG.
 It supplies the isolated QA environment instead of using root's profile.
+
+
+Hermes startup preflight explicitly discovers MCPs before inspecting schemas and
+preserves the interpreter's venv path (resolving its symlink bypasses that venv).
+It accepts either the exact ten explicit read-only definitions or Hermes' normal
+three progressive-disclosure bridge definitions. For the bridge presentation,
+both the dispatcher catalog and agent executor scope must equal those same ten
+capabilities, and unknown/out-of-scope bridge calls must fail before dispatch.
+No production tool presentation is changed to make this check pass.

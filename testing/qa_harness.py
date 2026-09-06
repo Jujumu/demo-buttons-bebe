@@ -108,12 +108,28 @@ def prove_hermes_bindings(hermes_python, hermes_source, env, home, timeout):
 import sys,json
 sys.path.insert(0,sys.argv[1])
 from model_tools import get_tool_definitions
-from tools.mcp_tool import shutdown_mcp_servers
+from tools.mcp_tool import discover_mcp_tools, shutdown_mcp_servers
 try:
+ discover_mcp_tools()
  groups=json.loads(sys.argv[2])
  raw=get_tool_definitions(enabled_toolsets=groups,quiet_mode=True,skip_tool_search_assembly=True)
  actual=get_tool_definitions(enabled_toolsets=groups,quiet_mode=True)
- print('QA_BINDINGS='+json.dumps({'raw':sorted(x['function']['name'] for x in raw),'actual':sorted(x['function']['name'] for x in actual)}))
+ bindings={'raw':sorted(x['function']['name'] for x in raw),'actual':sorted(x['function']['name'] for x in actual)}
+ if set(bindings['actual'])=={'tool_call','tool_describe','tool_search'}:
+  from tools.tool_search import scoped_deferrable_names
+  from model_tools import handle_function_call
+  from tools.registry import registry
+  from agent.tool_executor import _tool_search_scoped_names
+  from types import SimpleNamespace
+  from unittest.mock import patch
+  reachable=sorted(scoped_deferrable_names(raw))
+  executor_scope=sorted(_tool_search_scoped_names(SimpleNamespace(enabled_toolsets=groups,disabled_toolsets=[])))
+  with patch.object(registry,'dispatch',side_effect=AssertionError('unexpected QA dispatch')) as dispatch:
+   unknown=json.loads(handle_function_call('tool_call',{'name':'mcp__qa_forbidden__never','arguments':{}},enabled_toolsets=groups))
+   outside=json.loads(handle_function_call('tool_call',{'name':'mcp__buttonsbebe_gorgias__get_ticket','arguments':{'ticket_id':-1}},enabled_toolsets=['buttonsbebe_kb']))
+   rejected=bool(unknown.get('error')) and bool(outside.get('error')) and not dispatch.called
+  bindings['bridge_scope']={'reachable':reachable,'executor_scope':executor_scope,'rejected_outside_without_dispatch':rejected}
+ print('QA_BINDINGS='+json.dumps(bindings))
 finally:
  shutdown_mcp_servers()
 """
@@ -122,7 +138,11 @@ finally:
     if result.returncode or len(matches)!=1:
         raise ValueError("Hermes tool-binding preflight failed; no scenarios run")
     actual=json.loads(matches[0])
-    if actual!={"raw":expected,"actual":expected}:
+    direct = {"raw":expected,"actual":expected}
+    bridged = {"raw":expected,"actual":["tool_call","tool_describe","tool_search"],
+               "bridge_scope":{"reachable":expected,"executor_scope":expected,
+                               "rejected_outside_without_dispatch":True}}
+    if actual not in (direct, bridged):
         raise ValueError("Hermes exposes missing or extra tools; no scenarios run")
     return actual
 
@@ -153,7 +173,7 @@ class Harness:
                 raise ValueError("Access-token input requires the Codex provider")
             atomic_json(self.home/".hermes"/"auth.json", {"credential_pool":{"openai-codex":[{"id":"qa-access-only","label":"QA access only","source":"manual:qa","auth_type":"oauth","priority":0,"access_token":model["access_token"]}]}})
         self.env=minimal_environment(self.home)
-        self.hermes=hermes.resolve();self.hermes_python=hermes_python.resolve();self.hermes_source=hermes_source.resolve()
+        self.hermes=hermes.resolve();self.hermes_python=hermes_python.absolute();self.hermes_source=hermes_source.resolve()
         if not self.hermes.is_file() or not self.hermes_python.is_file() or not (self.hermes_source/"model_tools.py").is_file():
             raise ValueError("Explicit Hermes executable/interpreter/source paths are required")
         self.fixture_path=self.output/"active-fixture.json"
