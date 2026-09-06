@@ -13,7 +13,8 @@ a ticket marks it read. Omit repeating **Open** in open queues; keep
 Closed / Snoozed. Privacy / Unsubscribe / Bug / severity are small mute
 badges — not purple.
 Palette: ground `#F4F0EA`, surface `#FFFDF9`, ink `#1C1916`, mute `#5C564F`,
-accent `#B5471D`. Human Send only. No Gorgias chrome, purple, Gaia, or a
+accent `#B5471D`. Corners use a small shared radius (chips/thumbs 4px,
+controls 6px, cards/panes/sheets 8px). Human Send only. No Gorgias chrome, purple, Gaia, or a
 fifth AI column. No Customer Edit, Refund, or Cancel.
 Composer stays anchored under the thread scroll. Attachment images are
 small expandable thumbs. AI draft is full-width with **Use draft** /
