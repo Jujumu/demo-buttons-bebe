@@ -15,6 +15,18 @@ class DiscoveryProofTests(unittest.TestCase):
         return SimpleNamespace(url=SimpleNamespace(host=host,port=port,scheme='http'),
                                method='POST',content=json.dumps({'method':method}).encode())
 
+    def test_sdk1_and_sdk2_alias_shapes_preserve_false_and_none(self):
+        for snake in (True, False):
+            tool = SimpleNamespace(name='search_kb', annotations=SimpleNamespace(**{
+                'read_only_hint' if snake else 'readOnlyHint':True}), **{
+                'input_schema' if snake else 'inputSchema':{'type':'object','properties':{'q':{'type':'string'}}}})
+            listing = SimpleNamespace(tools=[tool], **{'next_cursor' if snake else 'nextCursor':None})
+            result = proof.endpoint_metadata('buttonsbebe_kb',listing)
+            self.assertTrue(result['readonly']['mcp__buttonsbebe_kb__search_kb'])
+            self.assertTrue(result['schemas']['mcp__buttonsbebe_kb__search_kb']['properties'])
+        self.assertIs(proof.mcp_field(SimpleNamespace(read_only_hint=False,readOnlyHint=True),'read_only_hint','readOnlyHint'),False)
+        self.assertIsNone(proof.mcp_field({'next_cursor':None,'nextCursor':'bad'},'next_cursor','nextCursor'))
+
     def test_only_local_discovery_not_tool_or_model_calls(self):
         proof.guard_request(self.request())
         for req in (self.request('tools/call'),self.request('sampling/createMessage'),

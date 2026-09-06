@@ -26,6 +26,26 @@ PREFIX = 'MCP_PROOF='
 def sha(path): return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def mcp_field(value, snake, camel):
+    """Read SDK2 name first, then SDK1 alias, without truthiness fallback."""
+    if isinstance(value, dict):
+        return value[snake] if snake in value else value.get(camel)
+    if hasattr(value, snake): return getattr(value, snake)
+    return getattr(value, camel, None)
+
+
+def endpoint_metadata(group, listing):
+    names = GROUPS[group][1]
+    if mcp_field(listing, 'next_cursor', 'nextCursor') or {t.name for t in listing.tools} != names:
+        raise ValueError('Endpoint tools changed')
+    result = {'schemas':{}, 'readonly':{}}
+    for tool in listing.tools:
+        key = 'mcp__'+group+'__'+tool.name
+        result['schemas'][key] = mcp_field(tool, 'input_schema', 'inputSchema')
+        result['readonly'][key] = mcp_field(tool.annotations, 'read_only_hint', 'readOnlyHint') is True
+    return result
+
+
 def canonical_nullable_schema(node):
     # Exactly the reviewed optional string/null equivalence; never strip fields.
     if isinstance(node, list): return [canonical_nullable_schema(v) for v in node]
@@ -109,11 +129,9 @@ def child(mode):
                 async with streamablehttp_client(f'http://127.0.0.1:{port}/mcp',timeout=5,sse_read_timeout=15) as (read,write,_):
                     async with ClientSession(read,write) as session:
                         await session.initialize(); listing = await session.list_tools()
-                        if listing.nextCursor or {t.name for t in listing.tools} != names: raise ValueError('Endpoint tools changed')
-                        for tool in listing.tools:
-                            key='mcp__'+group+'__'+tool.name
-                            result['schemas'][key]=tool.inputSchema
-                            result['readonly'][key]=tool.annotations is not None and tool.annotations.readOnlyHint is True
+                        metadata = endpoint_metadata(group, listing)
+                        result['schemas'].update(metadata['schemas'])
+                        result['readonly'].update(metadata['readonly'])
             return result
         value = asyncio.run(inspect())
     else:
