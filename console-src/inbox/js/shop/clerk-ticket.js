@@ -6,7 +6,7 @@
  */
 
 export const TICKET_STATUSES = Object.freeze(["open", "closed", "snoozed"]);
-export const STORE_NAME = "Demo Shop";
+export const STORE_NAME = "Buttons Bebe";
 
 const MAILBOX_EMAILS = new Set([
   "helpdesk-support@agentmail.to",

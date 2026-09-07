@@ -13,7 +13,7 @@ class CompareClassifierTests(unittest.TestCase):
         release_gate = (Path(__file__).resolve().parent / "verify_release.sh").read_text(
             encoding="utf-8"
         )
-        self.assertIn("tools.test_compare_classifier", release_gate)
+        self.assertIn("unittest discover -s tools -p 'test_*.py'", release_gate)
         self.assertIn("tools/compare_classifier.py", release_gate)
         self.assertIn("processor/classifier/__init__.py", release_gate)
         self.assertIn("--samples 10000", release_gate)

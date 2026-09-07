@@ -83,6 +83,7 @@ export function createRailOrgan({ shop, mailbox }) {
   }
 
   function render() {
+    if (shop.observedHistory) return `<div class="pane-inner"><h2>Context</h2><p class="mute">This view contains observed webhook messages and review drafts. Live customer, order, return, assignment and ticket status details are not connected.</p></div>`;
     const customerHtml = models.customer.error
       ? renderError("customer", "Customer", models.customer.peek)
       : renderCustomer(models.customer, { open: open.customer, giftCardsOpen: open.giftCards });

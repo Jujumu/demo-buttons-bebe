@@ -7,9 +7,12 @@ import subprocess
 from typing import Any
 
 from config import get_settings
-from draft_cleaner import SENSITIVE_DRAFT_PREFIX, clean_draft, should_draft
+from draft_cleaner import clean_draft, should_draft
 from logging_setup import get_logger, log_event
 from shared.priority import RANK
+from shared.review_policy import final_review_result
+
+from .process import run_bounded
 
 from .constants import (
     _FALLBACK_RESULT,
@@ -40,14 +43,11 @@ def build_hermes_command(prompt: str, settings: Any) -> list[str]:
         command.append("--ignore-rules")
 
     toolsets = str(getattr(settings, "hermes_toolsets", "") or "").strip()
-    if toolsets:
-        wanted: list[str] = []
-        for name in toolsets.split(","):
-            name = name.strip()
-            if name and name not in wanted:
-                wanted.append(name)
-        if wanted:
-            command += ["-t", ",".join(wanted)]
+    wanted = [name.strip() for name in toolsets.split(",")]
+    allowed = {"buttonsbebe_kb", "buttonsbebe_redo", "buttonsbebe_gorgias"}
+    if len(wanted) != 3 or set(wanted) != allowed:
+        raise ValueError("Hermes requires exactly the three approved read-only toolsets")
+    command += ["-t", ",".join(wanted)]
 
     if getattr(settings, "hermes_skip_approval", False):
         log_event(
@@ -64,17 +64,12 @@ def build_hermes_command(prompt: str, settings: Any) -> list[str]:
 def draft_for_console(hermes_result: dict[str, Any]) -> str:
     """Return only a reviewable draft; never synthesize one for no-draft results."""
 
-    if hermes_result.get("no_draft"):
+    reviewed = final_review_result(hermes_result)
+    if reviewed.get("no_draft"):
         return ""
-    draft = str(hermes_result.get("draft_text") or "").strip()
-    if not draft:
-        return str(_FALLBACK_RESULT["draft_text"])
-    if (
-        hermes_result.get("action") == "sensitive_draft"
-        and not draft.lstrip().lower().startswith(SENSITIVE_DRAFT_PREFIX.lower())
-    ):
-        return f"{SENSITIVE_DRAFT_PREFIX}\n\n{draft}"
-    return draft
+    draft = reviewed["draft_text"]
+    return draft if draft else str(_FALLBACK_RESULT["draft_text"])
+
 
 
 # ADR-015 §2.3 — auth anomalies are non-sendable; runner failures fall back.
@@ -104,7 +99,10 @@ def _no_draft_result(parsed: dict[str, Any], reason: str) -> dict[str, Any]:
 def _run_environment(settings: Any) -> dict[str, str]:
     """Build the Hermes environment without loading credentials in this module."""
 
-    environment = dict(os.environ)
+    # Model-provider credentials are necessary; commerce, session, webhook,
+    # WhatsApp and Python/loader startup variables must never cross this boundary.
+    allowed = {"LANG", "LC_ALL", "TERM", "OLLAMA_API_KEY", "OPENAI_API_KEY"}
+    environment = {key: value for key, value in os.environ.items() if key in allowed}
     hermes_home = str(getattr(settings, "hermes_home", "/root") or "").strip()
     hermes_path = str(
         getattr(
@@ -154,19 +152,19 @@ def process_ticket_with_hermes(
         run_token,
         getattr(settings, "support_store_name", "Buttons Bebe"),
     )
-    command = build_hermes_command(prompt, settings)
-    log_event(
-        logger,
-        "INFO",
-        "Invoking Hermes headless",
-        ticket_id=ticket_id,
-        prompt_length=len(prompt),
-        hermes_flags=command[1:-1],
-        timeout=settings.job_timeout,
-    )
-
     try:
-        result = subprocess.run(
+        command = build_hermes_command(prompt, settings)
+        log_event(
+            logger,
+            "INFO",
+            "Invoking Hermes headless",
+            ticket_id=ticket_id,
+            prompt_length=len(prompt),
+            hermes_flags=command[1:-1],
+            timeout=settings.job_timeout,
+        )
+
+        result = run_bounded(
             command,
             capture_output=True,
             text=True,
@@ -174,7 +172,6 @@ def process_ticket_with_hermes(
             env=_run_environment(settings),
         )
         stdout = str(result.stdout or "").strip()
-        stderr = str(result.stderr or "").strip()
         if result.returncode != 0:
             log_event(
                 logger,
@@ -182,7 +179,6 @@ def process_ticket_with_hermes(
                 "Hermes exited with non-zero code",
                 ticket_id=ticket_id,
                 returncode=result.returncode,
-                stderr=stderr[:500],
             )
             return dict(_FALLBACK_RESULT)
         if not stdout:
@@ -281,7 +277,7 @@ def process_ticket_with_hermes(
             note_posted=parsed["note_posted"],
         )
         parsed["_raw_output_preview"] = stdout[:500]
-        return parsed
+        return final_review_result(parsed)
 
     except subprocess.TimeoutExpired:
         log_event(
@@ -296,7 +292,7 @@ def process_ticket_with_hermes(
         log_event(
             logger,
             "ERROR",
-            f"Hermes invocation failed: {exc}",
+            "Hermes invocation failed",
             ticket_id=ticket_id,
             error_type=type(exc).__name__,
         )

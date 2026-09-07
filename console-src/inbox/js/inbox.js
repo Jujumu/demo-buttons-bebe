@@ -1,13 +1,35 @@
 import { MAILBOX_TOPICS, MARKETING_LOCKED_COPY, PAYMENTS_LOCKED_COPY, PRIVACY_LOCKED_COPY, CUSTOMER_JOIN_LOCKED_COPY, ORDER_LINK_LOCKED_COPY } from "./contracts.js";
 import { ACTIVATE_SEND_MESSAGE } from "./send-access.js";
-import { SHOP, macros as fixtureMacros, ticketInView, tickets as fixtureTickets, viewCounts, views } from "./fixtures/demo-inbox.js";
+import { ticketInView, viewCounts, views } from "./view-model.js";
+// A refresh can atomically publish a new snapshot between pages. Retry once,
+// starting from zero; never combine generations or retry unrelated API errors.
+export async function readObservedTickets(shop) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const rows = [];
+    let generation;
+    let changed = false;
+    for (let offset = 0; offset < 500; offset += 100) {
+      const page = await shop.listTickets({view: "all", limit: 100, offset});
+      const nextGeneration = shop.projection?.generatedAt;
+      if (offset && generation !== nextGeneration) { changed = true; break; }
+      generation = nextGeneration;
+      rows.push(...page);
+      if (page.length < 100) break;
+    }
+    if (!changed) return rows;
+  }
+  throw new Error("Projection refreshed repeatedly during pagination.");
+}
+const SHOP = "";
+const fixtureTickets = [];
+const fixtureMacros = [];
 import { createMailbox } from "./mailbox.js";
-import { createHelpdeskShop } from "./shop/helpdesk-shop.js";
+import { createHelpdeskShop } from "./shop/production-shop.js";
 import { createComposerTissue } from "./tissues/composer.js";
 import { createListTissue } from "./tissues/list.js";
 import { createRailOrgan } from "./tissues/rail.js";
 import { createThreadTissue } from "./tissues/thread.js";
-import { forbiddenControlHits, GATE_CONFIRM_LABEL } from "./util.js";
+import { esc, formatWhen, forbiddenControlHits, GATE_CONFIRM_LABEL } from "./util.js";
 
 const RAIL_EXPAND_ICON = `<svg class="list-expand-icon" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" focusable="false">
   <path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M9 2.5 4.5 7 9 11.5"/>
@@ -40,6 +62,7 @@ function safeMount(tissue, el, input) {
 export function createInboxOrgan(opts = {}) {
   const mailbox = opts.mailbox || createMailbox();
   const shop = opts.shop || createHelpdeskShop({ fail: opts.fail });
+  let capabilities = { ...(shop.capabilities || {}) };
   const shopHost = opts.shopHost || shop.shop || SHOP;
   const pinnedCatalog = opts.tickets || null;
   const listTissue = createListTissue({ mailbox });
@@ -47,7 +70,8 @@ export function createInboxOrgan(opts = {}) {
   const composerTissue = createComposerTissue({ mailbox });
   const rail = createRailOrgan({ shop, mailbox });
 
-  let viewId = opts.viewId || "mine";
+  let viewId = shop.observedHistory ? "all" : (opts.viewId || "mine");
+  const availableViews = shop.observedHistory ? [{id:"all",label:"Observed history"}] : views;
   let selectedId = opts.ticketId || null;
   let body = "";
   let strip = "";
@@ -65,6 +89,7 @@ export function createInboxOrgan(opts = {}) {
   const unreadIds = new Set(
     (pinnedCatalog || fixtureTickets).map((ticket) => ticket.id).filter(Boolean),
   );
+  const knownTicketIds = new Set(unreadIds);
   let writeGate = {
     mutationsEnabled: false,
     refused: ["send", "refund", "cancel"],
@@ -84,6 +109,8 @@ export function createInboxOrgan(opts = {}) {
   let orderLinkGateOpen = false;
   let privacyGateOpen = Boolean(opts.privacyGate);
   let marketingGateOpen = Boolean(opts.marketingGate);
+  let listError = "";
+  let projectionNotice = "";
   let listRows = pinnedCatalog ? pinnedCatalog.filter((ticket) => ticketInView(ticket, viewId)) : [];
   let selected = pinnedCatalog?.find((ticket) => ticket.id === selectedId) || null;
   let counts = pinnedCatalog ? viewCounts(pinnedCatalog) : viewCounts(fixtureTickets);
@@ -121,6 +148,7 @@ export function createInboxOrgan(opts = {}) {
   }
 
   async function refreshList() {
+    listError = "";
     if (pinnedCatalog) {
       listRows = pinnedCatalog.filter((ticket) => ticketInView(ticket, viewId));
       counts = viewCounts(pinnedCatalog);
@@ -128,18 +156,35 @@ export function createInboxOrgan(opts = {}) {
     }
     if (typeof shop.listTickets === "function") {
       try {
+        if (shop.observedHistory) {
+          const rows = await readObservedTickets(shop);
+          listRows = rows;
+          counts = {all:rows.length};
+          projectionNotice = shop.projection?.stale ? "Observed history is stale; refresh is delayed." : "Observed history · last 90 days · up to 500 tickets. Status and assignment are unknown.";
+          return;
+        }
         const [rows, ...viewRows] = await Promise.all([
           shop.listTickets({ view: viewId, limit: 50 }),
-          ...views.map((view) => shop.listTickets({ view: view.id, limit: 100 })),
+          ...availableViews.map((view) => shop.listTickets({ view: view.id, limit: 100 })),
         ]);
-        if (Array.isArray(rows)) listRows = rows;
-        counts = Object.fromEntries(views.map((view, index) => [
+        if (Array.isArray(rows)) {
+          listRows = rows;
+          for (const row of rows) {
+            if (!knownTicketIds.has(row.id)) unreadIds.add(row.id);
+            knownTicketIds.add(row.id);
+          }
+        }
+        counts = Object.fromEntries(availableViews.map((view, index) => [
           view.id,
           Array.isArray(viewRows[index]) ? viewRows[index].length : 0,
         ]));
         return;
       } catch {
-        // fixture fallback below
+        listError = "Could not load tickets. Refresh to try again.";
+        if (shop.observedHistory) {
+          if (listRows.length) projectionNotice = "Showing previously loaded history. Refresh failed; these tickets may be stale. Refresh to try again.";
+          return;
+        }
       }
     }
     listRows = fixtureTickets.filter((ticket) => ticketInView(ticket, viewId));
@@ -164,7 +209,10 @@ export function createInboxOrgan(opts = {}) {
           return;
         }
       } catch {
-        // fixture fallback below
+        if (shop.observedHistory) {
+          selected = {...(listRows.find(ticket => ticket.id === id) || {id}),historyUnavailable:true};
+          return;
+        }
       }
     }
     selected = fixtureTickets.find((ticket) => ticket.id === id)
@@ -181,7 +229,7 @@ export function createInboxOrgan(opts = {}) {
   }
 
   function gateSheetHtml() {
-    if (privacyGateOpen) {
+    if (privacyGateOpen && capabilities.markPrivacyHandled !== false) {
       return `<div class="gate-sheet-backdrop" data-gate-sheet data-privacy-gate>
         <div class="gate-sheet" role="dialog" aria-modal="true" aria-labelledby="gate-sheet-copy">
           <p id="gate-sheet-copy">${PRIVACY_LOCKED_COPY}</p>
@@ -192,7 +240,7 @@ export function createInboxOrgan(opts = {}) {
         </div>
       </div>`;
     }
-    if (marketingGateOpen) {
+    if (marketingGateOpen && capabilities.markUnsubscribed !== false) {
       return `<div class="gate-sheet-backdrop" data-gate-sheet data-marketing-gate>
         <div class="gate-sheet" role="dialog" aria-modal="true" aria-labelledby="gate-sheet-copy">
           <p id="gate-sheet-copy">${MARKETING_LOCKED_COPY}</p>
@@ -257,6 +305,7 @@ export function createInboxOrgan(opts = {}) {
   }
 
   async function loadDraft(ticket) {
+    if (capabilities.draftReply === false) return "";
     if (!ticket) return "";
     if (typeof shop.draftReply === "function") {
       try {
@@ -281,6 +330,7 @@ export function createInboxOrgan(opts = {}) {
   }
 
   async function loadSummary(ticket) {
+    if (capabilities.summarizeThread === false) return "";
     if (!ticket) return "";
     if (typeof shop.summarizeThread === "function") {
       try {
@@ -333,120 +383,55 @@ export function createInboxOrgan(opts = {}) {
       clearInterval(bridgePollTimer);
       bridgePollTimer = null;
     }
-    if (!bridgeStatus.gorgiasEnabled || pinnedCatalog) return;
+    if ((!bridgeStatus.gorgiasEnabled && !shop.observedHistory) || pinnedCatalog) return;
     bridgePollTimer = setInterval(() => {
-      refreshList().then(() => {
+      refreshList().then(async () => {
+        if (shop.observedHistory && selectedId) {
+          try { selected = await shop.getTicket({ticketId:selectedId}); } catch { if (selected) selected = {...selected,historyUnavailable:true}; }
+        }
         paintMounted?.();
       }).catch(() => {});
     }, 30000);
+    bridgePollTimer.unref?.();
+  }
+
+  async function persistAction(method, args, flag) {
+    const ticket = selectedTicket();
+    if (!ticket) return null;
+    if (capabilities[method] === false || typeof shop[method] !== "function") {
+      throw new Error("This action is not available in this inbox.");
+    }
+    const result = await shop[method]({ ticketId: ticket.id, ...args });
+    if (!result || result.id !== ticket.id || !result[flag]) {
+      throw new Error("The action was not confirmed. Please try again.");
+    }
+    // Never turn an error or missing response into a local success marker.
+    if (selectedId === ticket.id) selected = result;
+    return result;
   }
 
   async function escalateSelected(reason) {
-    const ticket = selectedTicket();
-    if (!ticket || ticket.escalated) return ticket;
-    if (typeof shop.escalateTicket === "function") {
-      try {
-        const result = await shop.escalateTicket({ ticketId: ticket.id, reason });
-        if (result) {
-          selected = result;
-          return result;
-        }
-      } catch {
-        // local flag below
-      }
-    }
-    selected = {
-      ...ticket,
-      escalated: true,
-      escalationReason: reason || "",
-      statusEvents: [
-        ...(ticket.statusEvents || []),
-        { at: new Date().toISOString(), status: ticket.status, note: "escalated" },
-      ],
-    };
-    return selected;
+    return persistAction("escalateTicket", { reason }, "escalated");
   }
 
   async function markPrivacyHandled() {
-    const ticket = selectedTicket();
-    if (!ticket || ticket.requestType !== "privacy_request") return ticket;
-    if (typeof shop.markPrivacyHandled === "function") {
-      try {
-        const result = await shop.markPrivacyHandled({ ticketId: ticket.id });
-        if (result) {
-          selected = result;
-          privacyGateOpen = false;
-          return result;
-        }
-      } catch {
-        // local flag below
-      }
-    }
-    selected = {
-      ...ticket,
-      privacyHandled: true,
-      statusEvents: [
-        ...(ticket.statusEvents || []),
-        { at: new Date().toISOString(), status: ticket.status, note: "privacy handled" },
-      ],
-    };
+    const result = await persistAction("markPrivacyHandled", {}, "privacyHandled");
     privacyGateOpen = false;
-    return selected;
+    return result;
   }
 
   async function markUnsubscribed() {
-    const ticket = selectedTicket();
-    if (!ticket || ticket.requestType !== "marketing_unsubscribe") return ticket;
-    if (typeof shop.markUnsubscribed === "function") {
-      try {
-        const result = await shop.markUnsubscribed({ ticketId: ticket.id });
-        if (result) {
-          selected = result;
-          marketingGateOpen = false;
-          return result;
-        }
-      } catch {
-        // local flag below
-      }
-    }
-    selected = {
-      ...ticket,
-      unsubscribeHandled: true,
-      statusEvents: [
-        ...(ticket.statusEvents || []),
-        { at: new Date().toISOString(), status: ticket.status, note: "unsubscribed" },
-      ],
-    };
+    const result = await persistAction("markUnsubscribed", {}, "unsubscribeHandled");
     marketingGateOpen = false;
-    return selected;
+    return result;
   }
 
   async function markBugHandled() {
-    const ticket = selectedTicket();
-    if (!ticket || ticket.requestType !== "bug") return ticket;
-    if (typeof shop.markBugHandled === "function") {
-      try {
-        const result = await shop.markBugHandled({ ticketId: ticket.id });
-        if (result) {
-          selected = result;
-          return result;
-        }
-      } catch {
-        // local flag below
-      }
-    }
-    selected = {
-      ...ticket,
-      bugHandled: true,
-      statusEvents: [
-        ...(ticket.statusEvents || []),
-        { at: new Date().toISOString(), status: ticket.status, note: "bug handled" },
-      ],
-    };
-    return selected;
+    return persistAction("markBugHandled", {}, "bugHandled");
   }
 
   async function refreshMacros(query = "") {
+    if (capabilities.searchMacros === false) { macros = []; return; }
     macroQuery = query;
     if (typeof shop.searchMacros === "function") {
       try {
@@ -468,6 +453,7 @@ export function createInboxOrgan(opts = {}) {
 
   function composerInput(ticket) {
     return {
+      capabilities,
       ticket: withRecipient(ticket, toEmail),
       draft: discarded ? "" : strip,
       summarize: summarizeText,
@@ -486,8 +472,10 @@ export function createInboxOrgan(opts = {}) {
   function listInput() {
     return {
       tickets: visibleTickets(),
+      error: listError,
+      notice: projectionNotice,
       selectedTicketId: selectedId,
-      views,
+      views: availableViews,
       counts,
       selectedViewId: viewId,
       collapsed: listCollapsed,
@@ -499,9 +487,9 @@ export function createInboxOrgan(opts = {}) {
     ensureSelection();
     const ticket = selectedTicket();
     const listModel = listTissue.update(listInput());
-    const threadModel = threadTissue.update({ ticket });
+    const threadModel = threadTissue.update({ ticket, capabilities });
     const composerModel = composerTissue.update(composerInput(ticket));
-    const railHtml = railCollapsed ? railCollapsedHtml() : rail.render();
+    const railHtml = (!ticket || ticket.projectionSource || capabilities.customerDetails === false) ? emptyRailHtml() : railCollapsed ? railCollapsedHtml() : rail.render();
     const html = `<div class="inbox" data-organ="inbox">
       <a class="skip-link" href="#inbox-thread">Skip to thread.</a>
       <section class="pane pane-list${listCollapsed ? " is-collapsed" : ""}" data-pane="list">${listTissue.render(listModel)}</section>
@@ -539,8 +527,26 @@ export function createInboxOrgan(opts = {}) {
     };
   }
 
+  function emptyRailHtml() {
+    const ticket = selectedTicket();
+    const context = ticket?.customerContext;
+    if (ticket?.projectionSource) {
+      const identity = context?.source === "canonical_webhook" && !context.conflict && context.status === "observed" ? context.identity : null;
+      const fields = [["Name", identity?.name], ["Email", identity?.email], ["Phone", identity?.phone], ["Gorgias customer ID", identity?.id]]
+        .filter(([, value]) => typeof value === "string" && value.trim())
+        .map(([label, value]) => `<dt>${esc(label)}</dt><dd>${esc(value)}</dd>`).join("");
+      return `<div class="empty-pane observed-customer"><strong>Customer details</strong>
+        ${fields ? `<dl>${fields}</dl>` : `<p>${context?.conflict ? "Conflicting customer details were observed; identity needs review." : "Customer identity was not included in the observed history."}</p>`}
+        <p class="customer-source">Source: observed Gorgias webhook${context?.observedAt ? ` · ${esc(formatWhen(context.observedAt))}` : ""}. ${ticket.projection?.stale ? "Snapshot is stale." : "This is a snapshot, not a live customer lookup."}</p>
+        <strong>Orders and returns</strong><p>Order and return details are not available in this inbox.</p>
+      </div>`;
+    }
+    return `<div class="empty-pane"><strong>Customer details</strong><p>${capabilities.customerDetails === false ? "Customer and order lookup is not connected to this inbox." : "Select a conversation to see customer and order details."}</p></div>`;
+  }
+
   async function refreshRail() {
     const ticket = selectedTicket();
+    if (!ticket || ticket.projectionSource || capabilities.customerDetails === false) { toEmail = ticket?.fromEmail || ""; return; }
     await rail.load({
       shop: shopHost,
       customerId: ticket?.customerId,
@@ -548,6 +554,16 @@ export function createInboxOrgan(opts = {}) {
       ticketId: ticket?.id,
     });
     toEmail = rail.snapshot().models.customer?.record?.defaultEmailAddress?.emailAddress || "";
+  }
+
+  async function refreshCapabilities() {
+    if (typeof shop.getCapabilities === "function") {
+      try {
+        const result = await shop.getCapabilities();
+        // Only explicit booleans in the known capability vocabulary count.
+        for (const key of Object.keys(capabilities)) capabilities[key] = result?.[key] === true;
+      } catch { for (const key of Object.keys(capabilities)) capabilities[key] = false; }
+    }
   }
 
   async function mount(root) {
@@ -558,6 +574,7 @@ export function createInboxOrgan(opts = {}) {
       composer: root.querySelector("[data-slot=composer]"),
       rail: root.querySelector('[data-pane="rail"]'),
     };
+    await refreshCapabilities();
     await refreshList();
     ensureSelection();
     await refreshThread();
@@ -573,10 +590,12 @@ export function createInboxOrgan(opts = {}) {
       panes.list?.classList?.toggle?.("is-collapsed", listCollapsed);
       panes.rail?.classList?.toggle?.("is-collapsed", railCollapsed);
       safeMount(listTissue, panes.list, listInput());
-      const threadResult = safeMount(threadTissue, panes.thread, { ticket });
+      const threadResult = safeMount(threadTissue, panes.thread, { ticket, capabilities });
       safeMount(composerTissue, panes.composer, composerInput(ticket));
       try {
-        if (railCollapsed) {
+        if (!ticket || ticket.projectionSource || capabilities.customerDetails === false) {
+          panes.rail.innerHTML = emptyRailHtml();
+        } else if (railCollapsed) {
           panes.rail.innerHTML = railCollapsedHtml();
         } else {
           rail.mount(panes.rail);
@@ -592,6 +611,10 @@ export function createInboxOrgan(opts = {}) {
       if (host) host.innerHTML = gateSheetHtml();
     };
 
+    const showActionError = error => {
+      sendError = String(error?.message || "Action failed. No change was confirmed.");
+      paint();
+    };
     mailbox.subscribe(MAILBOX_TOPICS.LIST_COLLAPSED, ({ collapsed }) => {
       listCollapsed = Boolean(collapsed);
       paint();
@@ -668,7 +691,7 @@ export function createInboxOrgan(opts = {}) {
     });
     mailbox.subscribe(MAILBOX_TOPICS.THREAD_ESCALATE, ({ ticketId, reason }) => {
       if (ticketId && ticketId !== selectedId) selectedId = ticketId;
-      escalateSelected(reason).then(() => refreshThread()).then(paint);
+      escalateSelected(reason).then(() => refreshThread()).then(paint).catch(showActionError);
     });
     mailbox.subscribe(MAILBOX_TOPICS.WRITE_GATE_OPEN, () => {
       closeAllGates();
@@ -708,7 +731,7 @@ export function createInboxOrgan(opts = {}) {
     });
     mailbox.subscribe(MAILBOX_TOPICS.PRIVACY_HANDLED, ({ ticketId }) => {
       if (ticketId && ticketId !== selectedId) selectedId = ticketId;
-      markPrivacyHandled().then(() => refreshRail()).then(paint);
+      markPrivacyHandled().then(() => refreshRail()).then(paint).catch(showActionError);
     });
     mailbox.subscribe(MAILBOX_TOPICS.MARKETING_GATE_OPEN, () => {
       closeAllGates();
@@ -721,11 +744,11 @@ export function createInboxOrgan(opts = {}) {
     });
     mailbox.subscribe(MAILBOX_TOPICS.MARKETING_HANDLED, ({ ticketId }) => {
       if (ticketId && ticketId !== selectedId) selectedId = ticketId;
-      markUnsubscribed().then(() => refreshRail()).then(paint);
+      markUnsubscribed().then(() => refreshRail()).then(paint).catch(showActionError);
     });
     mailbox.subscribe(MAILBOX_TOPICS.BUG_HANDLED, ({ ticketId }) => {
       if (ticketId && ticketId !== selectedId) selectedId = ticketId;
-      markBugHandled().then(() => refreshRail()).then(paint);
+      markBugHandled().then(() => refreshRail()).then(paint).catch(showActionError);
     });
     root.onclick = (event) => {
       if (event.target.closest("[data-rail-expand]")) {
@@ -879,7 +902,7 @@ export function createInboxOrgan(opts = {}) {
       const ticket = await escalateSelected(reason);
       if (ticket && !pinnedCatalog) await refreshThread();
       composerTissue.update(composerInput(selectedTicket()));
-      threadTissue.update({ ticket: selectedTicket() });
+      threadTissue.update({ ticket: selectedTicket(), capabilities });
       return snapshot();
     },
     openWriteGate() {
@@ -952,6 +975,7 @@ export function createInboxOrgan(opts = {}) {
       return afterUi();
     },
     async ready() {
+      await refreshCapabilities();
       await refreshList();
       ensureSelection();
       await refreshThread();

@@ -110,8 +110,8 @@ _OPERATION_OBJECTS = (
 _UPDATE_OPERATION = r"update(?!\s+(?:you|yourself|us|the\s+customer)\b)"
 
 # Hermes is read-only. These patterns target first-person operational claims,
-# while deliberately allowing safe language such as "we're reviewing" and
-# "we'll get back to you". A match fails closed so the customer never sees a
+# including unsupported review/follow-up commitments. A match fails closed so
+# the customer never sees a
 # claim that the store has performed or committed to an external action.
 _ACTION_CLAIM_RE = re.compile(
     r"(?:"
@@ -175,12 +175,36 @@ _PENDING_ACTION_RE = re.compile(
     re.IGNORECASE,
 )
 
-_SAFE_REVIEW_BODY = (
-    "Hi! We’re reviewing this for you and will follow up with the correct "
-    "information as soon as possible."
+# No tool evidence is available to the cleaner. First-person work commitments
+# cannot be authenticated here; preserve factual policy and customer questions.
+_REVIEW_COMMITMENT_RE = re.compile(
+    r"\b(?:we|i|our team|the team)\s*(?:['\u2019](?:re|m)|are|am|is)\s+"
+    r"(?:currently\s+)?(?:reviewing|checking|investigating|looking into|working on)\b"
+    r"|\b(?:we|i|our team|the team)\s*(?:['\u2019]ll|will)\s+"
+    r"(?:review|check|investigate|look into|get back|follow up|update you|send (?:you )?an update|make it right)\b",
+    re.IGNORECASE,
 )
-_COMPACT_SAFE_REVIEW_BODY = "Hi! We’re reviewing this."
-_SHORT_SAFE_REVIEW_BODY = "Reviewing."
+# Observed Spanish first-person work claims only; this is not a language-wide
+# safety detector. Do not replace these with an English customer-facing fallback.
+_SPANISH_REVIEW_COMMITMENT_RE = re.compile(
+    r"\b(?:estamos|estoy)\s+(?:actualmente\s+)?"
+    r"(?:revisando|comprobando|investigando)\b"
+    r"|\b(?:revisaremos|comprobaremos|investigaremos)\b",
+    re.IGNORECASE,
+)
+# Confirmed return-packing guidance describes why the customer identifies each
+# item/order. It does not promise an individual return or financial outcome.
+_RETURN_IDENTIFICATION_INSTRUCTION_RE = re.compile(
+    r"\A\s*please\s+include\s+a\s+note\s+(?:inside\s+)?(?:the|your)\s+package\s+"
+    r"identifying\s+each\s+item\s+and\s+its\s+order\s+number\s+"
+    r"so\s+the\s+warehouse\s+can\s+process\s+each\s+return\s+correctly[.!]?\s*\Z",
+    re.IGNORECASE,
+)
+
+_SAFE_REVIEW_BODY = "Thanks for your message. I don’t have a confirmed answer to share yet."
+_COMPACT_SAFE_REVIEW_BODY = "Thanks for your message."
+_SHORT_SAFE_REVIEW_BODY = "Thank you."
+
 
 
 @dataclass
@@ -364,6 +388,9 @@ def _exceeds_sentence_limit(text: str) -> bool:
 def _find_action_claim(text: str) -> str:
     """Return the first unsupported operational claim, if any."""
 
+    commitment = _REVIEW_COMMITMENT_RE.search(text)
+    if commitment:
+        return " ".join(commitment.group(0).split())[:240]
     for match in _ACTION_CLAIM_RE.finditer(text):
         sentence_start = max(
             text.rfind(".", 0, match.start()),
@@ -371,6 +398,12 @@ def _find_action_claim(text: str) -> str:
             text.rfind("?", 0, match.start()),
             text.rfind("\n", 0, match.start()),
         ) + 1
+        endings = [pos for char in ".!?\n" if (pos := text.find(char, match.end())) >= 0]
+        sentence_end = min(endings) + 1 if endings else len(text)
+        full_sentence = text[sentence_start:sentence_end]
+        if (len(full_sentence) <= 250
+                and _RETURN_IDENTIFICATION_INSTRUCTION_RE.fullmatch(full_sentence)):
+            continue
         sentence = text[sentence_start:match.end()]
         pending_action = _PENDING_ACTION_RE.search(sentence)
         if pending_action and pending_action.end() == match.end() - sentence_start:
@@ -382,12 +415,23 @@ def _find_action_claim(text: str) -> str:
     return ""
 
 
+# Short internal output markers are review instructions, never customer replies.
+_INTERNAL_NO_REPLY_RE = re.compile(
+    r"(?:no\s+(?:reply|response|draft)\s+(?:is\s+)?(?:needed|required|necessary))"
+    r"(?:[.!]?|\s*(?:[—–:-]|because)\s*[^\r\n]{1,360}[.!]?)",
+    re.IGNORECASE,
+)
+
+
 def clean_draft(text: str) -> CleanResult:
     """Clean an AI draft before it is shown to a human / posted anywhere."""
     if text is None or not str(text).strip():
         return CleanResult(text="", no_draft=True, reasons=["empty draft"])
 
     out = str(text)
+    if len(out) <= 420 and _INTERNAL_NO_REPLY_RE.fullmatch(out.strip()):
+        return CleanResult(text="", no_draft=True,
+                           reasons=["internal no-reply instruction is not a customer draft"])
     reasons: list[str] = []
     removed: list[str] = []
 
@@ -414,6 +458,12 @@ def clean_draft(text: str) -> CleanResult:
             reasons=reasons + ["nothing left after cleaning"],
             removed_note=note,
         )
+    if _SPANISH_REVIEW_COMMITMENT_RE.search(out):
+        return CleanResult(
+            text="", no_draft=True,
+            reasons=reasons + ["unsupported Spanish review commitment requires a human draft"],
+            removed_note=note,
+        )
     shortened, removed_tail = _shorten_to_sentence_limit(out)
     if shortened != out:
         out = shortened
@@ -432,7 +482,7 @@ def clean_draft(text: str) -> CleanResult:
             reasons=reasons + [
                 "replaced unsupported operational promise with review-only fallback"
             ],
-            removed_note=action_claim,
+            removed_note="\n".join(part for part in (note, action_claim) if part),
         )
     return CleanResult(text=out, no_draft=False, reasons=reasons,
                        removed_note=note)

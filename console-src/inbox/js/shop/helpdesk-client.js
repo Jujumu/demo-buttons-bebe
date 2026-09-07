@@ -1,6 +1,6 @@
 import { TOOL_NAMES } from "./helpdesk-tools.js";
 
-export const HELPDESK_HTTP_PATH = "/console/api/helpdesk";
+export const HELPDESK_HTTP_PATH = import.meta.url.startsWith("http") ? new URL("../../console/api/helpdesk", import.meta.url).pathname : "/console/api/helpdesk";
 
 /**
  * Browser/Node client for the live helpdesk.* tools.
@@ -19,11 +19,13 @@ export function createHelpdeskClient(opts = {}) {
       throw new Error("helpdesk client has no fetch");
     }
     const response = await fetchImpl(url, {
+      signal: AbortSignal.timeout(15000),
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       credentials: "same-origin",
       body: JSON.stringify({ tool, arguments: args || {} }),
     });
+    if (response.status === 401 || response.redirected) throw new Error("Your session expired. Sign in again to continue.");
     const payload = await response.json();
     if (!payload || typeof payload !== "object") {
       throw new Error("helpdesk client received an empty payload");

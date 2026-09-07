@@ -21,6 +21,7 @@ set -u
 TOOLSETS="$(printf '%s' "${HERMES_TOOLSETS:-buttonsbebe_kb,buttonsbebe_redo,buttonsbebe_gorgias}" | tr -d '[:space:]')"
 EXPECTED_SERVERS="buttonsbebe_kb buttonsbebe_redo buttonsbebe_gorgias"
 FAILED=0
+VERIFIER_PYTHON="${HERMES_VERIFY_PYTHON:-${PYTHON:-python3}}"
 
 say()  { printf '\n\033[1m%s\033[0m\n' "$*"; }
 ok()   { printf '  \033[32mOK\033[0m   %s\n' "$*"; }
@@ -79,14 +80,14 @@ say "4. Dangerous toolsets are not in scope"
 CFG="${HERMES_CONFIG:-${HOME:-/root}/.hermes/config.yaml}"
 if [ ! -f "$CFG" ]; then
     note "no config at $CFG — skipping (set HERMES_CONFIG to point at it)"
-elif ! command -v python3 >/dev/null 2>&1; then
-    bad "python3 not available — cannot parse $CFG, so this check did not run"
+elif ! command -v "$VERIFIER_PYTHON" >/dev/null 2>&1; then
+    bad "Selected verifier Python not available — cannot parse $CFG, so this check did not run"
 else
     # A real YAML parse. The previous awk version only recognised one exact
     # layout: 4-space indent, tabs, an inline list, quoted entries, a trailing
     # comment or any nesting all reported OK while terminal/file were granted.
     set +e
-    CLI_TOOLS="$(HERMES_CFG="$CFG" python3 - <<'PY'
+    CLI_TOOLS="$(HERMES_CFG="$CFG" "$VERIFIER_PYTHON" - <<'PY'
 import os, sys
 try:
     import yaml
@@ -117,7 +118,7 @@ PY
     set -e
     case "$CLI_TOOLS" in
         __NOYAML__*)
-            bad "python3 has no yaml module — cannot parse $CFG, so this check did not run" ;;
+            bad "Selected verifier Python has no yaml module — cannot parse $CFG, so this check did not run" ;;
         __ERROR__*)
             bad "could not parse $CFG: ${CLI_TOOLS#__ERROR__}" ;;
         *)
@@ -172,7 +173,7 @@ Do not write, post, tag or send anything anywhere. Do not run any shell command.
         bad "Hermes rejected a toolset name — fix HERMES_TOOLSETS before deploying."
     elif printf '%s' "$SMOKE" | grep -qiE "approve|approval required|\[y/n\]|permission denied for tool"; then
         bad "looks like it stopped on an approval prompt. Investigate before deploying;"
-        bad "HERMES_SKIP_APPROVAL=1 is the temporary unblock."
+        bad "Inspect MCP metadata and configuration; preserve the approval guard."
     elif ! printf '%s' "$SMOKE" | grep -q "KBOK:"; then
         # Require a POSITIVE signal. Checking only for the absence of a few
         # error strings meant any other failure - "connection refused", a

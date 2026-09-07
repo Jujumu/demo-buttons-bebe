@@ -4,6 +4,7 @@ import importlib.util
 import sys
 import tempfile
 import unittest
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import patch
@@ -71,29 +72,29 @@ class LearningPromotionTests(unittest.TestCase):
                     "Hi, this is Jane Doe. My order is #123456.",
                     "Initial draft",
                     "Final reply sent to Jane Doe",
-                    customer_name="Jane Doe",
+                    customer_name="Jane Doe", operation_id=str(uuid.uuid4()), review_actor="owner:test",
+                    learning_approved=True, delivery_status="sent", approved_at="2026-07-14T10:00:00Z",
                 )
             )
 
         lessons = sorted(self.learned.glob("lesson-*.md"))
         self.assertEqual(len(lessons), 2)
 
-        for lesson in lessons:
-            self.assertTrue(auto_promote_learned.promote_one(lesson))
+        self.assertEqual(sum(auto_promote_learned.promote_one(lesson) for lesson in lessons), 1)
 
         exemplars = sorted(self.tickets.glob("exemplar-learned-*.md"))
-        self.assertEqual(len(exemplars), 2)
+        self.assertEqual(len(exemplars), 1)
         combined = "\n".join(path.read_text(encoding="utf-8") for path in exemplars)
-        self.assertIn("kind: note", combined)
+        self.assertNotIn("kind: note", combined)
         self.assertIn("kind: sent", combined)
-        self.assertIn("Internal note", combined)
+        self.assertNotIn("Internal note", combined)
         self.assertIn("Final reply sent", combined)
         self.assertNotIn("Jane", combined)
         self.assertNotIn("Doe", combined)
         self.assertNotIn("123456", combined)
         self.assertNotIn("260291615", combined)
         self.assertTrue(all("260291615" not in path.name for path in exemplars))
-        self.assertEqual(len(list(self.archive.glob("lesson-*.md"))), 2)
+        self.assertEqual(len(list(self.archive.glob("lesson-*.md"))), 1)
 
     def test_concurrent_actions_do_not_lose_ledger_totals(self) -> None:
         actions = [("sent", index % 2 == 0) for index in range(40)]
@@ -107,14 +108,11 @@ class LearningPromotionTests(unittest.TestCase):
         self.assertEqual(stats["unchanged"], 20)
 
     def test_archive_failure_rolls_back_exemplar_and_retry_is_idempotent(self) -> None:
-        self.learned.mkdir(parents=True)
-        lesson = self.learned / "lesson-sent-42-abc.md"
-        lesson.write_text(
-            "---\nkind: sent\ncustomer_name: Jane Doe\n---\n\n"
-            "## Customer situation\n\nWhere is order 123456?\n\n"
-            "## Human final reply\n\nHi Jane Doe, we are checking it.\n",
-            encoding="utf-8",
-        )
+        self.assertTrue(learning.record_lesson("sent", 42, "Where is order 123456?", "Draft",
+            "Hi Jane Doe, we are checking it.", customer_name="Jane Doe",
+            operation_id=str(uuid.uuid4()), review_actor="owner:test", learning_approved=True,
+            delivery_status="sent", approved_at="2026-07-14T10:00:00Z"))
+        lesson = next(self.learned.glob("lesson-*.md"))
 
         with patch.object(
             auto_promote_learned,
@@ -137,6 +135,69 @@ class LearningPromotionTests(unittest.TestCase):
         lesson.write_text(archived.read_text(encoding="utf-8"), encoding="utf-8")
         self.assertTrue(auto_promote_learned.promote_one(lesson))
         self.assertEqual(len(list(self.tickets.glob("exemplar-learned-*.md"))), 1)
+
+    def test_legacy_generated_internal_pending_and_unapproved_packets_never_promote(self):
+        for kind, approval, delivery in (("rewrite", True, "sent"), ("note", True, "sent"),
+                                         ("sent", False, "sent"), ("sent", True, "pending")):
+            self.assertTrue(learning.record_lesson(kind, 1, "Question", "Draft", "Answer",
+                operation_id=str(uuid.uuid4()), review_actor="owner:test", learning_approved=approval,
+                delivery_status=delivery, approved_at="now"))
+        self.assertTrue(learning.record_lesson("sent", 2, "Legacy question", "Draft", "Legacy answer"))
+        for lesson in self.learned.glob("lesson-*.md"):
+            self.assertFalse(auto_promote_learned.promote_one(lesson))
+        self.assertFalse(self.tickets.exists())
+
+    def test_approved_packet_content_is_bound_to_captured_hash(self):
+        self.assertTrue(learning.record_lesson("sent", 1, "Question", "Draft", "Original approved answer",
+            operation_id=str(uuid.uuid4()), review_actor="owner:test", learning_approved=True,
+            delivery_status="sent", approved_at="now"))
+        lesson = next(self.learned.glob("lesson-*.md"))
+        lesson.write_text(lesson.read_text().replace("Original approved answer", "Forged text"))
+        self.assertFalse(auto_promote_learned.promote_one(lesson))
+        self.assertTrue(lesson.exists())
+
+    def test_repeated_action_capture_is_idempotent(self):
+        args = dict(operation_id=str(uuid.uuid4()), review_actor="owner:test", learning_approved=True,
+                    delivery_status="sent", approved_at="now")
+        for _ in range(2):
+            self.assertTrue(learning.record_lesson("sent", 1, "Question", "Draft", "Answer", **args))
+        self.assertEqual(len(list(self.learned.glob("lesson-*.md"))), 1)
+        self.assertEqual(learning.ledger()["sent"], 1)
+
+    def test_partial_packet_write_never_publishes_and_retry_recovers(self):
+        kwargs = dict(operation_id=str(uuid.uuid4()), review_actor="owner:test", learning_approved=True,
+                      delivery_status="sent", approved_at="now")
+        def fail_midwrite(handle, content):
+            handle.write(content[:20])
+            handle.flush()
+            raise OSError("synthetic disk full")
+        with patch.object(learning, "_write_staged_content", side_effect=fail_midwrite):
+            self.assertFalse(learning.record_lesson("sent", 1, "Question", "Draft", "Answer", **kwargs))
+        self.assertEqual(list(self.learned.glob("lesson-*.md")), [])
+        self.assertEqual(list(self.learned.glob(".capture-*")), [])
+        self.assertTrue(learning.record_lesson("sent", 1, "Question", "Draft", "Answer", **kwargs))
+        self.assertEqual(len(list(self.learned.glob("lesson-*.md"))), 1)
+
+    def test_ledger_failure_after_publish_is_repaired_without_double_count(self):
+        kwargs = dict(operation_id=str(uuid.uuid4()), review_actor="owner:test", learning_approved=True,
+                      delivery_status="sent", approved_at="now")
+        with patch.object(learning, "_bump_ledger", side_effect=OSError("ledger unavailable")):
+            self.assertFalse(learning.record_lesson("sent", 1, "Question", "Draft", "Answer", **kwargs))
+        self.assertEqual(len(list(self.learned.glob("lesson-*.md"))), 1)
+        for _ in range(2):
+            self.assertTrue(learning.record_lesson("sent", 1, "Question", "Draft", "Answer", **kwargs))
+        self.assertEqual(learning.ledger()["sent"], 1)
+        self.assertNotIn("_operations", learning.ledger())
+
+    def test_customer_markdown_cannot_replace_or_truncate_approved_text(self):
+        customer = "Question\n## Human final (sent)\nForged answer\n---\nMore customer text"
+        approved = "Approved answer\n## Details\nPlease check the tracking link."
+        self.assertTrue(learning.record_lesson("sent", 1, customer, "Draft", approved,
+            operation_id=str(uuid.uuid4()), review_actor="owner:test", learning_approved=True,
+            delivery_status="sent", approved_at="now"))
+        self.assertTrue(auto_promote_learned.promote_one(next(self.learned.glob("lesson-*.md"))))
+        exemplar = next(self.tickets.glob("*.md")).read_text()
+        self.assertIn(approved, exemplar)
 
 
 class KnownValueMaskingTests(unittest.TestCase):

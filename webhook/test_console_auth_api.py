@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import json
 import unittest
+import tempfile
+from pathlib import Path
+from bb_webhook import session_store
 from http.cookies import SimpleCookie
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -21,7 +24,7 @@ def request_for(
     cookie: str = "",
 ) -> Request:
     raw_body = b"" if body is None else json.dumps(body).encode()
-    headers = [(b"content-type", b"application/json")]
+    headers = [(b"content-type", b"application/json"), (b"origin", b"https://support.buttonsbebe.com")]
     if cookie:
         headers.append((b"cookie", cookie.encode()))
     scope = {
@@ -47,13 +50,20 @@ def request_for(
 
 
 class ConsoleAuthEndpointTests(unittest.IsolatedAsyncioTestCase):
-    def setUp(self) -> None:
+    async def asyncSetUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory()
         self.settings = SimpleNamespace(
             console_username="chaim",
             console_password_hash=hash_password("correct password", salt=b"0123456789abcdef"),
             console_session_secret="session-secret",
             demo_mode=True,
+            db_path_absolute=Path(self.temp.name)/"db.sqlite3",
         )
+
+        await session_store.initialize(self.settings.db_path_absolute)
+
+    def tearDown(self):
+        self.temp.cleanup()
 
     def cookie_from(self, response) -> str:
         parsed = SimpleCookie()
@@ -100,10 +110,10 @@ class ConsoleAuthEndpointTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(auth.deps, "get_settings", return_value=self.settings):
             redirect = await auth.auth_page_check(request_for("GET", "/auth/page-check"))
             self.assertEqual(redirect.status_code, 302)
-            self.assertEqual(redirect.headers["location"], "/console/login")
+            self.assertEqual(redirect.headers["location"], "/console/login?next=%2Fconsole%2F")
 
             token = build_session_token("chaim", self.settings.console_session_secret)
-            logged_out = await auth.auth_logout()
+            logged_out = await auth.auth_logout(request_for("POST", "/auth/logout"))
 
         self.assertEqual(logged_out.status_code, 200)
         self.assertIn('bb_console_session=""', logged_out.headers["set-cookie"])

@@ -1,4 +1,13 @@
-"""A stuck job DOES block the loop. This file records that, and why.
+"""A stuck synchronous job blocks the loop. This file records why.
+
+The Hermes subprocess now uses hermes_runner.process.run_bounded: its own
+monotonic deadline, output caps, and process-group termination preserve the
+fallback even though the outer asyncio deadline is not preemptive. No worker
+thread was introduced. The historical subprocess.run examples below explain
+why simply moving this work into asyncio.to_thread is unsafe. SIGTERM service
+recovery additionally relies on systemd KillMode=control-group; these tests do
+not certify the live unit. A future async conversion must preserve the fallback
+and one-job invariant, with cleanup completed before claiming another job.
 
 THE PROBLEM, WHICH IS REAL
 

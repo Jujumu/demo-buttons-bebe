@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createInboxOrgan } from "../js/inbox.js";
+import { createInboxOrgan as createProductionInbox } from "../js/inbox.js";
 import { createFixtureShop } from "../js/shop/fixture-shop.js";
 import {
   buildInboxWebMcpTools,
@@ -117,3 +117,5 @@ test("registerInboxWebMcp wires organ tools when context present", async () => {
   assert.ok(!names.some((n) => n.includes("send")));
   handle.dispose();
 });
+
+function createInboxOrgan(opts = {}) { return createProductionInbox({shop: createFixtureShop(), ...opts}); }

@@ -1,3 +1,4 @@
+import { createFixtureShop } from "../js/shop/fixture-shop.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -5,7 +6,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { orders } from "../js/fixtures/demo-inbox.js";
-import { createInboxOrgan } from "../js/inbox.js";
+import { createInboxOrgan as createProductionInbox } from "../js/inbox.js";
 import {
   displayedSkus,
   reviewBlockViolations,
@@ -279,3 +280,5 @@ test("UX Pro blocks absolute clock time in the list", async () => {
   const hits = reviewBlockViolations(`<aside data-pane="list"><time class="ticket-time">28 Aug, 15:10</time></aside>`);
   assert.ok(hits.includes("absolute list time"));
 });
+
+function createInboxOrgan(opts = {}) { return createProductionInbox({shop: createFixtureShop(), ...opts}); }

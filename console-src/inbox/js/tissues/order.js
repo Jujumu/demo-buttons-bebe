@@ -3,6 +3,7 @@ import {
   discountPeek,
   DISCOUNTS_MISSING_LABEL,
   esc,
+  safeWebUrl,
   firstTracking,
   formatMoney,
   formatSku,
@@ -106,8 +107,8 @@ function renderTrackingCopy(tracking) {
   const copy = company || number
     ? `<span class="ship-copy">${[company, number].filter(Boolean).join("")}</span>`
     : "";
-  const track = tracking.url
-    ? `<a class="track-link" href="${esc(tracking.url)}" rel="noreferrer" target="_blank" title="Open carrier tracking in a new tab">Track</a>`
+  const track = safeWebUrl(tracking.url)
+    ? `<a class="track-link" href="${esc(safeWebUrl(tracking.url))}" rel="noreferrer" target="_blank" title="Open carrier tracking in a new tab">Track</a>`
     : "";
   return `<p class="ship-track">${copy}${track}</p>`;
 }
@@ -168,7 +169,7 @@ function renderDiscounts(model, discountsOpen) {
 }
 
 function renderInvoice(model, invoiceOpen) {
-  const url = model.invoiceUrl || "";
+  const url = safeWebUrl(model.invoiceUrl);
   if (!url) {
     return `<div class="rail-sub" data-open="${invoiceOpen ? "true" : "false"}">
       <button type="button" class="rail-sub-toggle" data-toggle="invoice" aria-expanded="${invoiceOpen ? "true" : "false"}">
@@ -284,7 +285,7 @@ export function renderOrder(model, { open = true, addressesOpen = false, shipmen
     const skuRow = skuLabel
       ? `<p class="mono line-sku" data-sku="${esc(skuLabel)}">${esc(skuLabel)}</p>`
       : "";
-    const imageUrl = item.image?.url || "";
+    const imageUrl = safeWebUrl(item.image?.url);
     const imageAlt = item.image?.altText || item.title || "Product";
     const thumb = imageUrl
       ? `<img class="line-thumb" src="${esc(imageUrl)}" alt="${esc(imageAlt)}" loading="lazy" />`

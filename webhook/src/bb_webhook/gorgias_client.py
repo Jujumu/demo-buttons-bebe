@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import html
+import re
+from datetime import datetime
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -11,6 +13,24 @@ import httpx
 
 from .config import get_settings
 from .logging_utils import get_logger, log_event
+
+
+def _verified_message_id(value):
+    if type(value) is int and 0 < value < 2**63:
+        return value
+    if isinstance(value,str) and re.fullmatch(r"[1-9][0-9]{0,18}",value) and int(value)<2**63:
+        return int(value)
+    return None
+
+
+def _valid_sent_timestamp(value):
+    if not isinstance(value,str) or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})?",value):
+        return False
+    try:
+        datetime.fromisoformat(value.replace("Z","+00:00"))
+        return True
+    except ValueError:
+        return False
 
 logger = get_logger(__name__)
 
@@ -202,7 +222,7 @@ class GorgiasClient:
                 if resp.status_code == 400 and "body_text" in payload:
                     p2 = dict(payload)
                     txt = p2.pop("body_text")
-                    p2["body_html"] = txt.replace("\n", "<br>")
+                    p2["body_html"] = html.escape(txt).replace("\n", "<br>")
                     resp2 = await client.post(
                         url,
                         auth=self._auth,
@@ -216,7 +236,7 @@ class GorgiasClient:
         except Exception as exc:
             return {"ok": False, "error": str(exc)}
 
-    async def post_internal_note(self, ticket_id: int, body_text: str) -> dict:
+    async def post_internal_note(self, ticket_id: int, body_text: str, *, on_created=None) -> dict:
         """Post a staff-only internal note (not sent to the customer)."""
         payload = {
             "channel": "internal-note",
@@ -226,9 +246,13 @@ class GorgiasClient:
             "public": False,
             "sender": {"email": self.email},
         }
-        return await self._post_message(ticket_id, payload)
+        result = await self._post_message(ticket_id, payload)
+        message_id = _verified_message_id((result.get("message") or {}).get("id"))
+        if result.get("ok") and message_id and on_created is not None:
+            await on_created(int(message_id))
+        return result
 
-    async def send_public_reply(self, ticket_id: int, body_text: str) -> dict:
+    async def send_public_reply(self, ticket_id: int, body_text: str, *, expected_recipient=None, expected_source_message_id=None, on_created=None) -> dict:
         """Send a customer-facing reply on the ticket's own channel.
 
         Mirrors the most recent customer message's channel + source (swapping
@@ -236,7 +260,7 @@ class GorgiasClient:
         Leaves ticket status unchanged (stays open).
         """
         if not self._auth:
-            return {"ok": False, "error": "gorgias credentials not configured"}
+            return {"ok": False, "delivery_status": "not_attempted", "error": "gorgias credentials not configured"}
         murl = f"{self.base_url}{_API_VERSION}/messages"
         msgs = []
         try:
@@ -258,28 +282,34 @@ class GorgiasClient:
                     await asyncio.sleep(_retry_after(mr))
                 assert mr is not None
                 if mr.status_code == 404:
-                    return {"ok": False, "error": "ticket not found"}
+                    return {"ok": False, "delivery_status": "not_attempted", "error": "ticket not found"}
                 if mr.status_code != 200:
-                    return {"ok": False, "error": f"gorgias {mr.status_code}: {mr.text[:300]}"}
+                    return {"ok": False, "delivery_status": "not_attempted", "error": f"gorgias {mr.status_code}: {mr.text[:300]}"}
                 jd = mr.json()
                 msgs = jd.get("data", jd) if isinstance(jd, dict) else jd
         except Exception as exc:
-            return {"ok": False, "error": f"failed to read ticket: {exc}"}
+            return {"ok": False, "delivery_status": "not_attempted", "error": f"failed to read ticket: {exc}"}
         if not isinstance(msgs, list):
             msgs = []
-        def _dt(m):
-            return m.get("created_datetime") or m.get("sent_datetime") or ""
-        msgs_sorted = sorted(msgs, key=_dt)
+        # The provider applies created_datetime:desc. Re-sorting strings here
+        # reverses ties and misorders valid timestamps with different offsets.
+        expected_id = _verified_message_id(expected_source_message_id)
+        if expected_source_message_id is not None and expected_id is None:
+            return {"ok": False, "delivery_status": "not_attempted", "error": "invalid_reviewed_source_message_id"}
         base = None
-        for m in reversed(msgs_sorted):
-            if not m.get("from_agent", False):
+        for m in msgs:
+            if (not isinstance(m, dict) or _verified_message_id(m.get("id")) is None
+                    or type(m.get("from_agent")) is not bool
+                    or not _valid_sent_timestamp(m.get("created_datetime"))):
+                return {"ok": False, "delivery_status": "not_attempted", "error": "invalid_provider_message_history"}
+            if m["from_agent"] is False:
                 base = m
                 break
         if base is None:
-            return {"ok": False, "error": "no customer message available for reply routing"}
+            return {"ok": False, "delivery_status": "not_attempted", "error": "no customer message available for reply routing"}
         channel = str(base.get("channel") or "").strip()
         if not channel:
-            return {"ok": False, "error": "customer message has no reply channel"}
+            return {"ok": False, "delivery_status": "not_attempted", "error": "customer message has no reply channel"}
         src = base.get("source") or {}
         cust_from = src.get("from") or base.get("sender") or {}
         our_to = src.get("to") or []
@@ -287,11 +317,15 @@ class GorgiasClient:
             our_to = [our_to]
         customer_email = _address(cust_from)
         if not customer_email:
-            return {"ok": False, "error": "customer message has no recipient address"}
+            return {"ok": False, "delivery_status": "not_attempted", "error": "customer message has no recipient address"}
+        if expected_recipient is not None and customer_email.strip().lower() != expected_recipient.strip().lower():
+            return {"ok": False, "delivery_status": "not_attempted", "error": "recipient_changed_refresh_ticket"}
+        if expected_id is not None and _verified_message_id(base.get("id")) != expected_id:
+            return {"ok": False, "delivery_status": "not_attempted", "error": "new_customer_message_refresh_ticket"}
         source_from = our_to[0] if isinstance(our_to, list) and our_to else {}
         source_from_address = _address(source_from)
         if not source_from_address:
-            return {"ok": False, "error": "customer message has no support mailbox route"}
+            return {"ok": False, "delivery_status": "not_attempted", "error": "customer message has no support mailbox route"}
         new_source = {}
         stype = src.get("type") or channel
         if stype:
@@ -314,9 +348,11 @@ class GorgiasClient:
         if not result.get("ok"):
             return result
         created = result.get("message") or {}
-        message_id = created.get("id")
+        message_id = _verified_message_id(created.get("id"))
         if not message_id:
             return {"ok": False, "error": "Gorgias did not return a message id"}
+        if on_created is not None:
+            await on_created(int(message_id))
         delivery = await self._wait_for_delivery(ticket_id, int(message_id))
         return {
             "ok": delivery["status"] != "failed",
@@ -340,11 +376,15 @@ class GorgiasClient:
                     )
                     if resp.status_code == 200:
                         latest = resp.json()
-                        if latest.get("sent_datetime"):
-                            return {"status": "sent", "message": latest}
+                        if not isinstance(latest,dict) or _verified_message_id(latest.get("id")) != message_id:
+                            return {"status":"unknown","error":"Gorgias message identity did not match the recorded action"}
                         if latest.get("failed_datetime") or latest.get("last_sending_error"):
                             error = latest.get("last_sending_error") or "Gorgias failed to deliver the message"
                             return {"status": "failed", "message": latest, "error": str(error)}
+                        if latest.get("sent_datetime"):
+                            if not _valid_sent_timestamp(latest["sent_datetime"]):
+                                return {"status":"unknown","error":"Gorgias sent timestamp was invalid"}
+                            return {"status": "sent", "message": latest}
                     elif resp.status_code == 429 and attempt < _DELIVERY_POLLS - 1:
                         await asyncio.sleep(_retry_after(resp))
                         continue

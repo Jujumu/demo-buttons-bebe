@@ -12,6 +12,10 @@ import json
 import os
 import re
 import threading
+import sqlite3
+from contextlib import contextmanager
+from functools import wraps
+from . import state_store
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -295,7 +299,8 @@ _intake: list[dict] = []
 _by_dedupe: dict[tuple, dict] = {}
 _seen_messages: set[str] = set()
 _next_seq = 1
-_store_lock = threading.Lock()
+_store_lock = threading.RLock()
+_transaction_local = threading.local()
 
 INTAKE_SOURCES = frozenset({"agentmail", "gorgias", "chat", "seed"})
 
@@ -316,8 +321,10 @@ def _load_persisted_seen() -> None:
         return
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError, TypeError, ValueError):
-        return
+    except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+        raise state_store.StoreUnavailable("Legacy inbox state is unreadable; migration refused") from exc
+    if not isinstance(data, list) or any(not isinstance(item, str) for item in data):
+        raise state_store.StoreUnavailable("Legacy seen state is invalid; migration refused")
     if isinstance(data, list):
         for item in data:
             if item:
@@ -325,6 +332,8 @@ def _load_persisted_seen() -> None:
 
 
 def _persist_seen(message_id: str) -> None:
+    if os.environ.get("HELPDESK_DB_FILE"):
+        return  # Committed with tickets in transaction().
     path = _seen_file()
     if not path:
         return
@@ -347,6 +356,8 @@ def _intake_tickets() -> list[dict]:
 
 
 def _persist_store() -> None:
+    if os.environ.get("HELPDESK_DB_FILE"):
+        return  # Committed with seen IDs in transaction().
     path = _store_file()
     if not path:
         return
@@ -374,20 +385,17 @@ def _load_persisted_store() -> None:
         return
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError, TypeError, ValueError):
-        return
-    if not isinstance(data, dict):
-        return
-    tickets = data.get("tickets")
-    if not isinstance(tickets, list):
-        return
+    except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+        raise state_store.StoreUnavailable("Legacy inbox state is unreadable; migration refused") from exc
+    state_store.validate(data)
+    tickets = data["tickets"]
     by_id: dict[str, dict] = {}
     for raw in tickets:
         if not isinstance(raw, dict):
             continue
         ticket_id = str(raw.get("id") or "")
         if not ticket_id.startswith("t-in-"):
-            continue
+            raise state_store.StoreUnavailable("Unexpected legacy ticket ID; migration refused")
         ticket = copy.deepcopy(raw)
         ticket.setdefault("joined", True)
         ticket.setdefault("source", "agentmail")
@@ -428,13 +436,33 @@ def is_seed_ticket(ticket_id: str | None) -> bool:
 
 def reset() -> None:
     global _store, _intake, _by_dedupe, _seen_messages, _next_seq
-    _store = [copy.deepcopy(row) for row in SEED_TICKETS]
+    _store = [] if os.environ.get("HELPDESK_PRODUCTION") == "1" else [copy.deepcopy(row) for row in SEED_TICKETS]
     for ticket in _store:
         ticket.setdefault("source", "seed")
     _intake = []
     _by_dedupe = {}
     _seen_messages = set()
     _next_seq = 1
+    db_path = os.environ.get("HELPDESK_DB_FILE")
+    if db_path:
+        db = getattr(_transaction_local, "db", None)
+        own = db is None
+        if own:
+            db = state_store.connect(Path(db_path))
+        try:
+            state = state_store.read(db)
+            if state is None and getattr(_transaction_local, "readonly", False):
+                raise state_store.StoreUnavailable("Inbox state has not been initialized")
+            if state is not None:
+                _store = copy.deepcopy(state["tickets"])
+                _seen_messages = set(state.get("seen", []))
+                _next_seq = state.get("nextSeq", 1)
+                by_id = {row["id"]: row for row in _store}
+                _by_dedupe = {_dedupe_key_from_list(row["key"]): by_id[row["ticketId"]] for row in state.get("dedupe", [])}
+                return
+        finally:
+            if own:
+                db.close()
     _load_persisted_seen()
     _load_persisted_store()
 
@@ -816,6 +844,7 @@ def escalate_ticket(ticket_id: str, reason: str | None = None, gid_source: str =
             ticket.setdefault("statusEvents", []).append(
                 {"at": now, "status": ticket["status"], "note": note}
             )
+        _persist_store()
         return get_ticket(canonical, gid_source)
     raise not_found("ticket", str(ticket_id))
 
@@ -838,6 +867,7 @@ def mark_privacy_handled(ticket_id: str, gid_source: str = "sample") -> dict:
             ticket.setdefault("statusEvents", []).append(
                 {"at": now, "status": ticket["status"], "note": "privacy handled"}
             )
+        _persist_store()
         return get_ticket(canonical, gid_source)
     raise not_found("ticket", str(ticket_id))
 
@@ -860,6 +890,7 @@ def mark_unsubscribed(ticket_id: str, gid_source: str = "sample") -> dict:
             ticket.setdefault("statusEvents", []).append(
                 {"at": now, "status": ticket["status"], "note": "unsubscribed"}
             )
+        _persist_store()
         return get_ticket(canonical, gid_source)
     raise not_found("ticket", str(ticket_id))
 
@@ -882,5 +913,58 @@ def mark_bug_handled(ticket_id: str, gid_source: str = "sample") -> dict:
             ticket.setdefault("statusEvents", []).append(
                 {"at": now, "status": ticket["status"], "note": "bug handled"}
             )
+        _persist_store()
         return get_ticket(canonical, gid_source)
     raise not_found("ticket", str(ticket_id))
+
+
+@contextmanager
+def transaction(*, write: bool = True):
+    """Reload and commit one complete operation, including intake deduplication.
+
+    Nested ticket helpers reuse the dispatch transaction. Failed operations
+    roll back both the database and the process-local cache.
+    """
+    db_path = os.environ.get("HELPDESK_DB_FILE")
+    with _store_lock:
+        if not db_path or getattr(_transaction_local, "db", None) is not None:
+            if write and getattr(_transaction_local, "readonly", False):
+                raise state_store.StoreUnavailable("Mutation refused in a read-only operation")
+            yield
+            return
+        db = state_store.connect(Path(db_path), readonly=not write)
+        _transaction_local.db = db
+        _transaction_local.readonly = not write
+        try:
+            db.execute("BEGIN IMMEDIATE" if write else "BEGIN")
+            reset()
+            yield
+            if write:
+                state_store.write(db, {
+                    "tickets": copy.deepcopy(_store),
+                    "seen": sorted(_seen_messages),
+                    "nextSeq": _next_seq,
+                    "dedupe": [{"key": _dedupe_key_to_list(k), "ticketId": v["id"]} for k, v in _by_dedupe.items()],
+                })
+            db.commit()
+        except Exception:
+            db.rollback()
+            reset()
+            raise
+        finally:
+            _transaction_local.db = None
+            _transaction_local.readonly = False
+            db.close()
+
+
+def _transactional(function):
+    @wraps(function)
+    def wrapped(*args, **kwargs):
+        with transaction():
+            return function(*args, **kwargs)
+    return wrapped
+
+
+for _name in ("remember_intake", "add_ticket", "append_agent_message", "escalate_ticket",
+              "mark_privacy_handled", "mark_unsubscribed", "mark_bug_handled"):
+    globals()[_name] = _transactional(globals()[_name])

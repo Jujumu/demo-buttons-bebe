@@ -1,0 +1,11 @@
+[Unit]
+Description=Encrypted SQLite backup every six hours
+
+[Timer]
+OnCalendar=*-*-* 00,06,12,18:15:00 UTC
+Persistent=true
+RandomizedDelaySec=5min
+Unit=buttonsbebe-backup.service
+
+[Install]
+WantedBy=timers.target

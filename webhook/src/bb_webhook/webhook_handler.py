@@ -14,6 +14,7 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
+from .message_content import message_text as retained_message_text
 from .config import get_settings
 from .logging_utils import get_logger, log_event
 
@@ -282,12 +283,7 @@ def parse_event(raw_body: bytes) -> dict[str, Any] | None:
     # ── Message text ───────────────────────────────────────
     message_text = None
     if message:
-        message_text = (
-            message.get("body_text")
-            or message.get("stripped_text")
-            or message.get("text")
-            or ""
-        )
+        message_text = retained_message_text(message)
 
     ticket_subject = ticket.get("subject") if ticket else None
 

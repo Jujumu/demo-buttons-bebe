@@ -6,7 +6,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from . import database, deps
+from . import database, deps, session_store
+from .middleware.console_session import ConsoleSessionMiddleware
 from .config import get_settings
 from .logging_utils import get_logger, log_event, setup_logging
 from .middleware import rate_limit as _rate_limit
@@ -23,7 +24,7 @@ from .routers import (
 # this composition root. deps.resolve() consults these facades at call time.
 _DATABASE_NAMES = {"dashboard_ticket_exists", "enqueue_job", "get_dashboard_tickets",
                    "get_parsed_messages", "get_parsed_stats", "get_result_stats",
-                   "get_setting", "init_db", "is_duplicate", "record_event",
+                   "get_setting", "init_db", "ingest_event", "is_duplicate", "record_event",
                    "record_parsed_message", "record_ticket_result", "set_setting"}
 _CONSOLE_NAMES = {"_GClient", "_HERMES_BIN", "_HERMES_HOME", "_HERMES_IGNORE_RULES",
                   "_HERMES_PROFILE", "_HERMES_REWRITE_TOOLSETS", "_SUPPORT_STORE_NAME",
@@ -68,6 +69,7 @@ async def lifespan(_app: FastAPI):
     log_event(logger, "INFO", "Starting webhook receiver", host=settings.webhook_host,
               port=settings.webhook_port, tenant=settings.gorgias_subdomain)
     await deps.database_function("init_db")()
+    await session_store.initialize(settings.db_path_absolute)
     yield
     log_event(logger, "INFO", "Shutting down webhook receiver")
 
@@ -80,6 +82,7 @@ def create_app() -> FastAPI:
         version="0.2.0",
         lifespan=lifespan,
     )
+    application.add_middleware(ConsoleSessionMiddleware)
     for route_router in (
         _health.router, _webhook.router, _auth.router, _dashboard.router,
         _notifications.router, _console.router,

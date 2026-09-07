@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import Any
+from typing import Any, Awaitable, Callable, TypeVar
 
 import aiosqlite
 
@@ -13,12 +13,14 @@ from .logging_utils import get_logger
 
 logger = get_logger(__name__)
 
+_T = TypeVar("_T")
+
 _LOCK_RETRY_ATTEMPTS = 5
 _LOCK_RETRY_DELAY = 0.15  # seconds
 
 
 class Database:
-    """Execute one SQLite statement per short-lived, retried connection."""
+    """Short-lived SQLite statements and explicit atomic transactions."""
 
     def __init__(self, path: Path | str | None = None) -> None:
         self.path = Path(path) if path is not None else get_settings().db_path_absolute
@@ -68,6 +70,41 @@ class Database:
                     continue
                 raise
         return None
+
+    async def transaction(
+        self,
+        callback: Callable[[aiosqlite.Connection], Awaitable[_T]],
+        *,
+        operation: str = "transaction",
+    ) -> _T:
+        """Commit a short database-only callback atomically, or roll it all back.
+
+        Retry the entire transaction on contention. Callbacks must contain no
+        external side effects: they may run more than once. BEGIN IMMEDIATE
+        serializes competing writers before they make deduplication decisions.
+        Cancellation is also rolled back; an acknowledgement is safe only
+        after this method returns from commit.
+        """
+        for attempt in range(_LOCK_RETRY_ATTEMPTS):
+            try:
+                async with aiosqlite.connect(str(self.path)) as conn:
+                    conn.row_factory = aiosqlite.Row
+                    await conn.execute("PRAGMA busy_timeout=3000")
+                    try:
+                        await conn.execute("BEGIN IMMEDIATE")
+                        result = await callback(conn)
+                        await conn.commit()
+                        return result
+                    except BaseException:
+                        await conn.rollback()
+                        raise
+            except aiosqlite.OperationalError as exc:
+                if "locked" not in str(exc).lower() or attempt == _LOCK_RETRY_ATTEMPTS - 1:
+                    raise
+                logger.warning("DB locked on %s — transaction retry %d/%d",
+                               operation, attempt + 1, _LOCK_RETRY_ATTEMPTS)
+                await asyncio.sleep(_LOCK_RETRY_DELAY)
+        raise RuntimeError("Database transaction retry exhausted")
 
     async def fetch(self, sql: str, params: tuple = (), *, operation: str = "database") -> list[Any]:
         """Fetch all rows for a SELECT statement."""

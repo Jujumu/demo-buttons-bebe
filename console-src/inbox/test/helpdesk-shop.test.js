@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -9,7 +9,7 @@ import { createHelpdeskClient } from "../js/shop/helpdesk-client.js";
 import { createHelpdeskShop, resolveLiveInbox } from "../js/shop/helpdesk-shop.js";
 import { TOOL_NAMES, WRITE_TOOLS } from "../js/shop/helpdesk-tools.js";
 import { LIVE_IDS, LIVE_SHOP, liveTickets } from "../js/shop/live-catalog.js";
-import { createInboxOrgan } from "../js/inbox.js";
+import { createInboxOrgan as createProductionInbox } from "../js/inbox.js";
 import { createFixtureShop, draftForRequestType, fixtureDraftFromThread } from "../js/shop/fixture-shop.js";
 import { createMailbox } from "../js/mailbox.js";
 import { createRailOrgan } from "../js/tissues/rail.js";
@@ -19,7 +19,8 @@ import { projectOrderHistory } from "../js/tissues/order-history.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const helpdeskRoot = join(here, "../../helpdesk-agent");
-const python = process.env.PYTHON || "python3";
+const selectedPython = process.env.INBOX_PYTHON || process.env.PYTHON || "python3";
+const python = selectedPython.includes("/") ? resolve(process.cwd(), selectedPython) : selectedPython;
 
 const SAMPLE_SHOP = "demo-helpdesk.example";
 const SAMPLE_ADA = "gid://shopify/Customer/9001";
@@ -1062,3 +1063,5 @@ test("null SKU and missing billing stay hidden on a live-hole order", async () =
   assert.doesNotMatch(html, />\s*null\s*</);
   assert.match(html, /No billing/);
 });
+
+function createInboxOrgan(opts = {}) { return createProductionInbox({shop: createFixtureShop(), ...opts}); }

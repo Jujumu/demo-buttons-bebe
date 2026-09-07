@@ -9,11 +9,31 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PYTHON="${PYTHON:-python3}"
 PROCESSOR_PYTHON="${PROCESSOR_PYTHON:-$PYTHON}"
+WEBHOOK_PYTHON="${WEBHOOK_PYTHON:-$PYTHON}"
+INBOX_PYTHON="${INBOX_PYTHON:-$WEBHOOK_PYTHON}"
+QA_PYTHON="${QA_PYTHON:-$PROCESSOR_PYTHON}"
 
 fail() {
   echo "release gate failed: $*" >&2
   exit 1
 }
+
+# Resolve relative executable paths once, before nested suites change cwd.
+# Do not realpath Python: resolving a venv symlink loses its environment.
+absolute_interpreter() {
+  case "$1" in
+    /*) printf '%s\n' "$1" ;;
+    */*) printf '%s/%s\n' "$ROOT_DIR" "$1" ;;
+    *) command -v "$1" ;;
+  esac
+}
+PYTHON="$(absolute_interpreter "$PYTHON")"
+PROCESSOR_PYTHON="$(absolute_interpreter "$PROCESSOR_PYTHON")"
+WEBHOOK_PYTHON="$(absolute_interpreter "$WEBHOOK_PYTHON")"
+INBOX_PYTHON="$(absolute_interpreter "$INBOX_PYTHON")"
+QA_PYTHON="$(absolute_interpreter "$QA_PYTHON")"
+HERMES_VERIFY_PYTHON="$(absolute_interpreter "${HERMES_VERIFY_PYTHON:-$PYTHON}")"
+export PYTHON PROCESSOR_PYTHON WEBHOOK_PYTHON INBOX_PYTHON QA_PYTHON HERMES_VERIFY_PYTHON
 
 cd "$ROOT_DIR"
 
@@ -40,7 +60,12 @@ for required in \
   "webhook/pyproject.toml" \
   "webhook/uv.lock" \
   "kb/requirements.txt" \
+  "kb/requirements.lock" \
+  "kb/runtime-constraints.txt" \
   "tools/requirements.txt" \
+  "tools/requirements.lock" \
+  "tools/runtime-constraints.txt" \
+  "testing/requirements-qa.lock" \
   "whatsapp-connect/package.json" \
   "whatsapp-connect/package-lock.json"; do
   [[ -f "$required" ]] || fail "missing dependency manifest: $required"
@@ -56,7 +81,7 @@ from pathlib import Path
 import ast
 import json
 
-roots = [Path("feedback"), Path("kb"), Path("processor"), Path("testing"), Path("tools"), Path("webhook"), Path("deploy")]
+roots = [Path("feedback"), Path("kb"), Path("processor"), Path("testing"), Path("tools"), Path("webhook"), Path("deploy"), Path("console-src/inbox"), Path("console-src/helpdesk-agent")]
 
 # Installed dependencies are not ours to syntax-check, and checking them made
 # the gate's verdict depend on which interpreter happened to run it: a local
@@ -139,21 +164,31 @@ esac
 # The feedback and KB suites already replace optional network/vector modules in
 # their tests. Keep the requests stub explicit so this gate remains offline.
 "$PYTHON" -c 'import sys,types,unittest; requests=types.ModuleType("requests"); requests.get=lambda *a,**k: None; requests.post=lambda *a,**k: None; sys.modules["requests"]=requests; names=["feedback.tests.test_all","feedback.tests.test_retirement"]; suite=unittest.TestSuite(unittest.defaultTestLoader.loadTestsFromName(n) for n in names); result=unittest.TextTestRunner(verbosity=1).run(suite); raise SystemExit(not result.wasSuccessful())'
+"$QA_PYTHON" -m unittest discover -s testing -p 'test_*.py' -v
 "$PYTHON" -m unittest discover -s kb/tests -v
 "$PYTHON" -m unittest discover -s deploy/tests -v
-"$PYTHON" -m unittest \
-  tools.test_tool_contracts \
-  tools.test_compare_classifier \
-  tools.test_python_file_sizes \
-  tools.test_shopify_safety \
-  shopify.test_shopify_read_only \
-  -v
-PYTHONPATH="$ROOT_DIR/webhook/src${PYTHONPATH:+:$PYTHONPATH}" \
-  "$PYTHON" -m unittest discover -s webhook -p 'test_notifications.py' -v
-if "$PYTHON" -c 'import aiosqlite' >/dev/null 2>&1; then
+"$PYTHON" -m unittest discover -s tools -p 'test_*.py' -v
+for _test in shopify/test_*.py; do
+  [[ -f "$_test" ]] || fail "no Shopify tests discovered"
+  "$PYTHON" -m unittest "shopify.$(basename "$_test" .py)" -v
+done
+# Fresh process per module prevents one suite's fake optional modules leaking
+# into another suite. Live diagnostics require an explicit opt-out marker.
+webhook_count=0
+for _test in webhook/test_*.py; do
+  [[ -f "$_test" ]] || continue
+  grep -q '^# offline-gate: skip' "$_test" && continue
   PYTHONPATH="$ROOT_DIR/webhook/src${PYTHONPATH:+:$PYTHONPATH}" \
-    "$PYTHON" -m unittest discover -s webhook -p 'test_notification_api.py' -v
-fi
+    "$WEBHOOK_PYTHON" -m unittest "webhook.$(basename "$_test" .py)" -v
+  webhook_count=$((webhook_count + 1))
+done
+((webhook_count > 0)) || fail "no webhook tests discovered"
+PYTHONPATH="$ROOT_DIR/console-src/helpdesk-agent${PYTHONPATH:+:$PYTHONPATH}" \
+  "$INBOX_PYTHON" -m unittest discover -s console-src/helpdesk-agent/tests -v
+"$INBOX_PYTHON" -m unittest discover -s console-src/inbox/tests -p 'test_*.py' -v
+"$PYTHON" tools/build_support_theme.py --check
+"$PYTHON" tools/check_inbox_locks.py
+node --test console-src/inbox/test/*.test.js
 # Every processor/test_*.py runs, discovered rather than listed, so a new test
 # file cannot be added without CI picking it up - and so each task in the Fable
 # port does not have to edit this same line (which conflicts on merge).
@@ -190,9 +225,9 @@ else
 fi
 
 node --check whatsapp-connect/server.js
-node --test whatsapp-connect/test/security.test.js
-node --test console-src/test/connections.test.js
+node --test whatsapp-connect/test/*.test.js
+node --test console-src/test/*.test.js
 node --check kb-admin/server.js
-node --test kb-admin/test/server.test.js
+node --test kb-admin/test/*.test.js
 
 echo "release gate passed: manifests, syntax, offline tests, KB admin safety, WhatsApp auth, and no-Twilio check"

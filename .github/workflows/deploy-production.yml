@@ -32,6 +32,7 @@ jobs:
           DEPLOY_HOST: ${{ secrets.BB_DEPLOY_HOST }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.BB_DEPLOY_KNOWN_HOSTS }}
           DEPLOY_SSH_KEY: ${{ secrets.BB_DEPLOY_SSH_KEY }}
+          VERIFIED_GENERATION: ${{ github.event.workflow_run.run_number }}
           RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
@@ -43,7 +44,8 @@ jobs:
           printf '%s\n' "$DEPLOY_SSH_KEY" > "$RUNNER_TEMP/deploy_key"
           chmod 600 "$RUNNER_TEMP/deploy_key"
           archive="$RUNNER_TEMP/buttonsbebe-${RELEASE_SHA}.tar.gz"
-          git archive --format=tar "$RELEASE_SHA" | gzip -n > "$archive"
+          metadata="$(python3 -c 'import json,os; print(json.dumps({"commit":os.environ["RELEASE_SHA"],"generation":int(os.environ["VERIFIED_GENERATION"])}))')"
+          git archive --format=tar --add-virtual-file=".buttonsbebe-release.json:$metadata" "$RELEASE_SHA" | gzip -n > "$archive"
           digest="$(sha256sum "$archive" | awk '{print $1}')"
           ssh -i "$RUNNER_TEMP/deploy_key" \
             -o BatchMode=yes -o IdentitiesOnly=yes \

@@ -13,7 +13,7 @@ WhatsApp notification, retry, timeout, and error recovery.
 
 Risk mitigations:
   - Singleton lock (only one processor instance can run)
-  - Stale job recovery on startup (reclaims crashed 'processing' jobs)
+  - Periodic stale job recovery (reclaims crashed 'processing' jobs)
   - Per-job timeout (prevents hung Hermes calls from blocking the queue)
   - Retry with backoff (up to 3 retries for transient failures)
   - Graceful shutdown (finishes current job, then exits)
@@ -41,6 +41,9 @@ if str(_webhook_src) not in sys.path:
 
 from bb_webhook.database import (  # noqa: E402
     claim_job,
+    claim_owner_alert,
+    finish_owner_alert,
+    get_job_result,
     complete_job,
     fail_job,
     get_next_pending_job,
@@ -49,12 +52,14 @@ from bb_webhook.database import (  # noqa: E402
     requeue_stale_jobs,
 )
 
+from bb_webhook.result_auth import configured_secret
 from config import get_settings  # noqa: E402
 from classifier import classify as deterministic_classify, IMMEDIATE, HIGH, NORMAL  # noqa: E402
 from demo_safety import demo_mode_enabled, demo_url_allowed  # noqa: E402
 from hermes_runner import draft_for_console, process_ticket_with_hermes  # noqa: E402
 from logging_setup import get_logger, setup_logging, log_event  # noqa: E402
-from shared.priority import Priority, at_least, normalize  # noqa: E402
+from shared.priority import Priority, at_least, normalize
+from shared.review_policy import final_review_result  # noqa: E402
 from whatsapp_notifier import send_whatsapp  # noqa: E402
 
 logger = get_logger(__name__)
@@ -69,7 +74,9 @@ def _save_result_to_webhook(
 ) -> None:
     """POST the Hermes result to the webhook API so the dashboard can show it.
 
-    Fail-soft: logs a warning on error but never raises.
+    Fail closed on transport or acknowledgement errors. Queue completion also
+    verifies the committed row through the shared database, since even a valid
+    HTTP acknowledgement is not proof of the exact job's persisted result.
     """
     import urllib.request
 
@@ -88,7 +95,17 @@ def _save_result_to_webhook(
             "Demo result persistence blocked: destination is not the local demo webhook",
             ticket_id=ticket_id,
         )
-        return
+        raise RuntimeError("Demo result persistence destination is blocked")
+    from urllib.parse import urlsplit
+    parsed = urlsplit(url)
+    if (parsed.scheme != "http" or parsed.hostname not in {"127.0.0.1", "::1"}
+            or parsed.port != (8100 if demo_mode_enabled() else 8000)
+            or parsed.path != "/dashboard/api/results" or parsed.query or parsed.fragment
+            or parsed.username or parsed.password):
+        raise RuntimeError("Result persistence destination must be the local result API")
+    secret = configured_secret(get_settings())
+    if not secret:
+        raise RuntimeError("Result persistence credential is not configured")
     payload = json.dumps({
         "ticket_id": ticket_id,
         "message_id": str(message_id),
@@ -104,22 +121,21 @@ def _save_result_to_webhook(
         "draft_text": draft_text,
     }).encode("utf-8")
 
-    try:
-        req = urllib.request.Request(
-            url, data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            if 200 <= resp.status < 300:
-                log_event(logger, "DEBUG", "Result saved to dashboard API",
-                          ticket_id=ticket_id, status=resp.status)
-            else:
-                log_event(logger, "WARNING", "Dashboard API returned non-2xx",
-                          ticket_id=ticket_id, status=resp.status)
-    except Exception as exc:
-        log_event(logger, "WARNING", f"Failed to save result to dashboard API: {exc}",
-                  ticket_id=ticket_id)
+    req = urllib.request.Request(
+        url, data=payload,
+        headers={"Content-Type": "application/json", "Authorization": "Bearer " + secret}, method="POST",
+    )
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *args, **kwargs):
+            return None
+
+    with urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect()).open(req, timeout=10) as resp:
+        if not 200 <= resp.status < 300:
+            raise RuntimeError(f"Result persistence HTTP status {resp.status}")
+        acknowledgement = json.loads(resp.read(4097))
+        if not isinstance(acknowledgement, dict) or acknowledgement.get("status") != "ok":
+            raise RuntimeError("Result persistence acknowledgement missing")
+    log_event(logger, "DEBUG", "Result acknowledged by dashboard API", ticket_id=ticket_id)
 
 
 # ── Globals ────────────────────────────────────────────────
@@ -176,9 +192,8 @@ async def process_customer_message(job: dict[str, Any]) -> dict[str, Any]:
     6. Return the draft for the console Ticket feed; perform no Gorgias write
     7. Return JSON_RESULT
 
-    The processor then:
-    - If CRITICAL or HIGH → sends WhatsApp notification to owner
-    - Marks the job as done
+    This function persists the draft. The job wrapper verifies that committed
+    result, attempts any required owner alert once, and then completes the job.
     """
     payload = json.loads(job["payload"])
     ticket_id = payload.get("ticket_id")
@@ -230,34 +245,6 @@ async def process_customer_message(job: dict[str, Any]) -> dict[str, Any]:
     result["action"] = hermes_result.get("action", "sensitive_draft")
     notify_owner = hermes_result.get("notify_owner", False)
 
-    # ── Deterministic priority enforcement (defense-in-depth) ──────
-    # The spec requires sensitive topics to be at least HIGH with owner
-    # notification.  Hermes (the LLM) sometimes misclassifies sensitive
-    # tickets as NORMAL — this gate catches that regardless of what the
-    # LLM outputs.  The Gorgias write toggle must NOT affect this.
-    action = result["action"]
-    priority = result["priority"]
-
-    if action == "sensitive_draft":
-        # Sensitive topics (refunds, damaged/wrong items, disputes, etc.)
-        # must always be at least HIGH and must always notify the owner.
-        if not at_least(priority, Priority.HIGH):
-            log_event(logger, "WARNING",
-                      "Overriding LLM priority for sensitive topic",
-                      ticket_id=ticket_id,
-                      llm_priority=priority,
-                      enforced_priority="high")
-            result["priority"] = "high"
-            hermes_result["priority"] = "high"
-        if not notify_owner:
-            log_event(logger, "WARNING",
-                      "Forcing notify_owner for sensitive topic",
-                      ticket_id=ticket_id,
-                      llm_notify=False,
-                      enforced_notify=True)
-            notify_owner = True
-            hermes_result["notify_owner"] = True
-
     # ── Deterministic classifier enforcement (escalate-only) ──────
     # If the deterministic classifier (which ran before Hermes) flagged
     # this ticket as IMMEDIATE or HIGH, escalate the final result to
@@ -305,10 +292,17 @@ async def process_customer_message(job: dict[str, Any]) -> dict[str, Any]:
             notify_owner = True
             hermes_result["notify_owner"] = True
 
+    # Apply the shared final review contract after every model/classifier change.
+    # Unknown KB facts, explicit warnings and elevated priority cannot persist as
+    # an ordinary draft merely because the model chose a contradictory action.
+    hermes_result = final_review_result(hermes_result)
+    result["priority"] = hermes_result["priority"]
+    result["action"] = hermes_result.get("action", "sensitive_draft")
+
     # gorgias_priority_set and note_posted are always false here: the processor
     # and Hermes are strictly read-only. Human console actions are separate.
 
-    # Save result to the dashboard API (fail-soft)
+    # Save result before any alert or queue completion; failures must propagate.
     # Never substitute the customer's message for a failed AI draft. An empty
     # draft makes the console show a human-action-required state with no send or
     # internal-note buttons, while the high-priority fallback reason remains.
@@ -321,20 +315,6 @@ async def process_customer_message(job: dict[str, Any]) -> dict[str, Any]:
         hermes_result=hermes_result,
         draft_text=draft_text,
     )
-
-    # Send WhatsApp notification if CRITICAL or HIGH
-    if notify_owner:
-        send_whatsapp(
-            ticket_id=ticket_id,
-            subject=ticket_subject,
-            customer_email=customer_email,
-            message_summary=message_text[:300],
-            reason=hermes_result.get("reason", "Priority notification"),
-        )
-        log_event(logger, "INFO", "Owner notification sent",
-                  ticket_id=ticket_id,
-                  priority=result["priority"],
-                  reason=hermes_result.get("reason"))
 
     log_event(logger, "INFO", "Customer message processed",
               job_id=job_id,
@@ -413,9 +393,11 @@ async def run_processor() -> int:
     await init_db(settings.db_path_absolute)
 
     # 3. Recover stale jobs
-    stale_count = await requeue_stale_jobs(settings.stale_job_minutes, settings.db_path_absolute)
+    stale_count = await requeue_stale_jobs(
+        settings.stale_job_minutes, settings.db_path_absolute, max_retries=settings.max_retries,
+    )
     if stale_count > 0:
-        log_event(logger, "INFO", "Recovered stale jobs",
+        log_event(logger, "INFO", "Resolved abandoned claims; exhausted retries marked failed",
                   count=stale_count,
                   max_age_minutes=settings.stale_job_minutes)
 
@@ -429,9 +411,24 @@ async def run_processor() -> int:
     # Monotonic timestamp of the last "still alive" line. Starts at -inf so the
     # first idle pass logs immediately, proving liveness right after startup.
     last_idle_heartbeat = float("-inf")
+    last_recovery = time.monotonic()
+    # Sweep between jobs under the singleton lock, never in a background task
+    # that could reclaim this process's still-running job. Newly abandoned
+    # claims after a quick restart will age out without a second restart.
+    recovery_interval = 60.0
 
     while not _shutdown:
         try:
+            if time.monotonic() - last_recovery >= recovery_interval:
+                recovered = await requeue_stale_jobs(
+                    settings.stale_job_minutes, settings.db_path_absolute,
+                    max_retries=settings.max_retries,
+                )
+                last_recovery = time.monotonic()
+                if recovered:
+                    log_event(logger, "WARNING", "Resolved abandoned claims; exhausted retries marked failed",
+                              count=recovered,
+                              max_age_minutes=settings.stale_job_minutes)
             # One query per pass, with customer messages ordered ahead of
             # agent feedback work. This avoids a second round trip and keeps
             # the customer-first policy in the database boundary.
@@ -481,6 +478,34 @@ async def run_processor() -> int:
     return 0
 
 
+async def _notify_owner_once(job: dict, saved: dict, db_path: Path) -> None:
+    """Avoid repeat transport after a crash or unknown acknowledgement.
+
+    An uncertain attempt remains operator-visible in dashboard data/stats.
+    It is not automatically retried: the bridge has no end-to-end idempotency
+    guarantee, so the system cannot prove a timed-out message was not sent.
+    """
+    if not await claim_owner_alert(job["id"], db_path):
+        log_event(logger, "WARNING", "Owner alert already attempted; inspect delivery state",
+                  job_id=job["id"], ticket_id=job["ticket_id"])
+        return
+    payload = json.loads(job["payload"])
+    accepted = False
+    try:
+        accepted = send_whatsapp(
+            ticket_id=job["ticket_id"], subject=payload.get("ticket_subject", ""),
+            customer_email=payload.get("customer_email", ""),
+            message_summary=str(payload.get("message_text") or "")[:300],
+            reason=saved.get("reason", "Priority notification"),
+            max_retries=0,
+        ) is True
+    finally:
+        await finish_owner_alert(job["id"], accepted, db_path)
+    log_event(logger, "INFO" if accepted else "ERROR",
+              "Owner alert accepted by bridge" if accepted else "Owner alert uncertain; operator review required",
+              job_id=job["id"], ticket_id=job["ticket_id"])
+
+
 async def _process_one_job(
     job: dict[str, Any],
     is_customer: bool,
@@ -502,20 +527,33 @@ async def _process_one_job(
               retry_count=retry_count)
 
     try:
-        if is_customer:
+        saved = await get_job_result(job_id, settings.db_path_absolute) if is_customer else None
+        if saved is not None:
+            # A prior attempt may have committed successfully before losing its
+            # HTTP response or crashing. Keep that reviewed draft and do not run
+            # Hermes again or create another owner-alert attempt.
+            result = saved
+        elif is_customer:
             result = await _run_with_timeout(
-                process_customer_message(job),
-                timeout=settings.job_timeout,
-                job_id=job_id,
+                process_customer_message(job), timeout=settings.job_timeout, job_id=job_id,
             )
         else:
             result = await _run_with_timeout(
-                process_agent_message(job),
-                timeout=settings.job_timeout,
-                job_id=job_id,
+                process_agent_message(job), timeout=settings.job_timeout, job_id=job_id,
             )
 
-        await complete_job(job_id, db_path=settings.db_path_absolute)
+        if is_customer:
+            saved = await get_job_result(job_id, settings.db_path_absolute)
+            if saved is None:
+                raise RuntimeError("No committed result for this job; completion refused")
+            if saved.get("notify_owner"):
+                await _notify_owner_once(job, saved, settings.db_path_absolute)
+
+        completed = await complete_job(
+            job_id, db_path=settings.db_path_absolute, require_result=is_customer,
+        )
+        if not completed:
+            raise RuntimeError("Job completion rejected: claim or durable result missing")
         log_event(logger, "INFO", "Job completed",
                   job_id=job_id,
                   action=result.get("action"),
@@ -529,7 +567,7 @@ async def _process_one_job(
 
         if retry_count < settings.max_retries:
             from bb_webhook.database import requeue_failed_job
-            await requeue_failed_job(job_id, settings.db_path_absolute)
+            await requeue_failed_job(job_id, settings.db_path_absolute, max_retries=settings.max_retries)
             log_event(logger, "INFO", "Job requeued for retry",
                       job_id=job_id, retry_count=retry_count + 1)
 
@@ -543,7 +581,7 @@ async def _process_one_job(
 
         if retry_count < settings.max_retries:
             from bb_webhook.database import requeue_failed_job
-            await requeue_failed_job(job_id, settings.db_path_absolute)
+            await requeue_failed_job(job_id, settings.db_path_absolute, max_retries=settings.max_retries)
             log_event(logger, "INFO", "Job requeued for retry",
                       job_id=job_id, retry_count=retry_count + 1)
 

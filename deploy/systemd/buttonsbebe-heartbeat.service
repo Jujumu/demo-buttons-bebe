@@ -1,6 +1,6 @@
 [Unit]
 Description=Buttons Bebe processor heartbeat (dead-man's switch)
-Documentation="file:///root/Buttonsbebe%20Agent/processor/heartbeat.sh"
+Documentation=file:///root/Buttonsbebe%%20Agent/processor/heartbeat.sh
 After=network-online.target
 
 [Service]
@@ -23,6 +23,14 @@ Environment="HEARTBEAT_STATE_FILE=/var/lib/buttonsbebe/heartbeat.state"
 Environment="HEARTBEAT_STALE_MINUTES=10"
 # EnvironmentFile= is merged AFTER Environment= regardless of order here,
 # so anything the shared .env defines wins. Keep these two OUT of the .env.
+
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+UMask=0077
 
 StandardOutput=journal
 StandardError=journal

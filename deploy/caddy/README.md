@@ -7,6 +7,7 @@ live in `sites/`, one owned fragment per service boundary:
 | --- | --- | --- |
 | `sites/support.caddy` | `hermes.buttonsbebe.com`, `srv1766050.hstgr.cloud`, `support.buttonsbebe.com` | `127.0.0.1:8000`, `:8085`, `:8087`, `:9119` |
 | `sites/exchange.caddy` | `exchange.buttonsbebe.com` | `127.0.0.1:4100` |
+| `sites/receiving.caddy` | `support.buttonsbebe.com:8443` | session-protected `127.0.0.1:3210` |
 | `sites/warehouse.caddy` | `wh.buttonsbebe.com` | `127.0.0.1:4000` |
 
 The tracked files are redacted templates. `<WA_TOKEN>` and
@@ -57,6 +58,7 @@ It is intentionally fragment-based and keeps the import entrypoint stable.
    install -o root -g caddy -m 0640 reviewed/support.caddy "$next/support.caddy"
    install -o root -g caddy -m 0640 reviewed/exchange.caddy "$next/exchange.caddy"
    install -o root -g caddy -m 0640 reviewed/warehouse.caddy "$next/warehouse.caddy"
+   install -o root -g caddy -m 0640 reviewed/receiving.caddy "$next/receiving.caddy"
    ```
 
 3. Validate a temporary candidate that imports the staged directory. Validate
@@ -68,7 +70,8 @@ It is intentionally fragment-based and keeps the import entrypoint stable.
    printf '%s\n' \
      "import $next/support.caddy" \
      "import $next/exchange.caddy" \
-     "import $next/warehouse.caddy" > "$candidate"
+     "import $next/warehouse.caddy" \
+     "import $next/receiving.caddy" > "$candidate"
    caddy validate --config "$candidate" --adapter caddyfile
    caddy adapt --config "$candidate" --adapter caddyfile --pretty \
      | jq -r '.. | objects | .match?.host? // empty | .[]?' \
@@ -92,7 +95,8 @@ It is intentionally fragment-based and keeps the import entrypoint stable.
    printf '%s\n' \
      'import sites/support.caddy' \
      'import sites/exchange.caddy' \
-     'import sites/warehouse.caddy' > "$candidate_root"
+     'import sites/warehouse.caddy' \
+     'import sites/receiving.caddy' > "$candidate_root"
    install -o root -g caddy -m 0640 "$candidate_root" /etc/caddy/Caddyfile
    if ! caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile; then
        if [ -n "$old_sites" ]; then
@@ -114,7 +118,7 @@ It is intentionally fragment-based and keeps the import entrypoint stable.
    ```sh
    cd /etc/caddy
    sha256sum Caddyfile sites/support.caddy sites/exchange.caddy \
-     sites/warehouse.caddy > buttonsbebe-caddy.sha256
+     sites/warehouse.caddy sites/receiving.caddy > buttonsbebe-caddy.sha256
    chown root:root buttonsbebe-caddy.sha256
    chmod 0600 buttonsbebe-caddy.sha256
    ```

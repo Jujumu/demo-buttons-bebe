@@ -3,7 +3,7 @@
  *
  * Naming: short verbs (`select_ticket`, `use_draft`, …). These are Document-scoped
  * chrome drivers on this page, not helpdesk.* server/MCP tools. Never register a
- * Send / refund / cancel tool here — Human Send only; Ada strip Use/Regenerate/Dismiss.
+ * Send / refund / cancel tool here — Human Send only; Draft strip Use/Regenerate/Dismiss.
  *
  * Prefer document.modelContext; fall back to navigator.modelContext for older
  * Chrome 146–149 previews. Progressive enhancement when modelContext is absent.
@@ -171,7 +171,7 @@ export function buildInboxWebMcpTools(organ) {
         properties: {
           ticketId: {
             type: "string",
-            description: "First-party inbox ticket id (e.g. t-ada-track).",
+            description: "First-party inbox ticket id.",
           },
         },
         required: ["ticketId"],
@@ -195,7 +195,7 @@ export function buildInboxWebMcpTools(organ) {
       name: "use_draft",
       title: "Use AI draft",
       description:
-        "Insert the Ada AI draft strip into the reply box (Use draft). Does not send.",
+        "Insert the AI draft strip into the reply box (Use draft). Does not send.",
       inputSchema: { type: "object", properties: {} },
       annotations: {
         readOnlyHint: false,
@@ -212,7 +212,7 @@ export function buildInboxWebMcpTools(organ) {
       name: "regenerate_draft",
       title: "Regenerate AI draft",
       description:
-        "Regenerate the Ada AI draft strip for the selected ticket. Does not send.",
+        "Regenerate the AI draft strip for the selected ticket. Does not send.",
       inputSchema: { type: "object", properties: {} },
       annotations: {
         readOnlyHint: false,
@@ -230,7 +230,7 @@ export function buildInboxWebMcpTools(organ) {
     {
       name: "dismiss_draft",
       title: "Dismiss AI draft",
-      description: "Dismiss the Ada AI draft strip without inserting it. Does not send.",
+      description: "Dismiss the AI draft strip without inserting it. Does not send.",
       inputSchema: { type: "object", properties: {} },
       annotations: {
         readOnlyHint: false,

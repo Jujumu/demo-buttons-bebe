@@ -1,6 +1,6 @@
 import { MAILBOX_TOPICS } from "../contracts.js";
 import { clerkStatusEvents, listCustomerName, messageSpeaker, talkMessages } from "../shop/clerk-ticket.js";
-import { esc, formatWeekday, formatWhen, initials, requestTypeChrome, screenStatus } from "../util.js";
+import { esc, formatWeekday, formatWhen, initials, requestTypeChrome, safeWebUrl, screenStatus } from "../util.js";
 
 /**
  * Thread tissue.
@@ -17,19 +17,19 @@ export function createThreadTissue({ mailbox }) {
   let host = null;
 
   function project(input) {
-    return { ticket: input.ticket || null };
+    return { ticket: input.ticket || null, capabilities: input.capabilities || {} };
   }
 
   function renderAttachments(message) {
     const rows = Array.isArray(message.attachments) ? message.attachments : [];
     if (!rows.length) return "";
     const figures = rows
-      .filter((item) => item && item.url)
+      .filter((item) => item && safeWebUrl(item.url))
       .map((item) => {
         const alt = item.alt || "Attachment";
         return `<figure class="bubble-attach">
-          <button type="button" class="bubble-thumb" data-attach-open data-attach-url="${esc(item.url)}" data-attach-alt="${esc(alt)}" aria-label="Expand ${esc(alt)}" title="Click to enlarge photo">
-            <img src="${esc(item.url)}" alt="${esc(alt)}" loading="lazy" width="80" height="80" />
+          <button type="button" class="bubble-thumb" data-attach-open data-attach-url="${esc(safeWebUrl(item.url))}" data-attach-alt="${esc(alt)}" aria-label="Expand ${esc(alt)}" title="Click to enlarge photo">
+            <img src="${esc(safeWebUrl(item.url))}" alt="${esc(alt)}" loading="lazy" width="80" height="80" />
           </button>
           <figcaption>${esc(alt)}</figcaption>
         </figure>`;
@@ -39,10 +39,10 @@ export function createThreadTissue({ mailbox }) {
   }
 
   function renderLightbox() {
-    if (!lightbox?.url) return "";
+    if (!safeWebUrl(lightbox?.url)) return "";
     return `<div class="attach-lightbox-backdrop" data-attach-lightbox role="dialog" aria-modal="true" aria-label="Attachment">
       <figure class="attach-lightbox">
-        <img src="${esc(lightbox.url)}" alt="${esc(lightbox.alt || "Attachment")}" />
+        <img src="${esc(safeWebUrl(lightbox.url))}" alt="${esc(lightbox.alt || "Attachment")}" />
         <figcaption>${esc(lightbox.alt || "Attachment")}</figcaption>
       </figure>
     </div>`;
@@ -50,7 +50,7 @@ export function createThreadTissue({ mailbox }) {
 
   function renderMessage(ticket, message) {
     const speaker = messageSpeaker(ticket, message);
-    const email = speaker.email
+    const email = speaker.email && speaker.email !== speaker.name
       ? `<span class="from-email">${esc(speaker.email)}</span>`
       : "";
     let via = "";
@@ -107,16 +107,18 @@ export function createThreadTissue({ mailbox }) {
     if (!ticket) {
       return `<div class="pane-inner"><p class="empty-pane">Select a ticket.</p></div>${renderLightbox()}`;
     }
+    if (ticket.historyUnavailable) return `<div class="pane-inner"><p role="alert">Ticket history is unavailable. Refresh to retry. Existing customer records have not been reset.</p><a href="/console/">Open support console</a></div>`;
     const count = talkMessages(ticket).length;
     const summarizeLabel = count === 1 ? "Summarize 1 message" : `Summarize ${count} messages`;
-    const escalateControl = ticket.escalated
+    const escalateControl = ticket.escalated || next.capabilities?.escalateTicket === false
       ? ""
       : `<button type="button" class="btn-quiet" data-escalate="${esc(ticket.id)}" title="Flag this ticket for a human lead. Does not email the customer.">Escalate</button>`;
     const chrome = requestTypeChrome(ticket);
     const subtype = chrome?.subtype
       ? `<span class="thread-request-subtype mute">${esc(chrome.subtype)}</span>`
       : "";
-    const mark = !chrome
+    const capability = { privacy_request: "markPrivacyHandled", marketing_unsubscribe: "markUnsubscribed", bug: "markBugHandled" }[ticket.requestType];
+    const mark = !chrome || next.capabilities?.[capability] === false
       ? ""
       : chrome.handled
         ? `<p class="thread-request-handled mute">${esc(chrome.doneLabel)}</p>`
@@ -136,14 +138,16 @@ export function createThreadTissue({ mailbox }) {
           ${typeLine}
         </div>
         <div class="thread-head-actions">
-          <span class="status-badge" title="Ticket status">${esc(screenStatus(ticket.status))}</span>
+          <span class="status-badge" title="Ticket status">${esc(ticket.projectionSource ? "Status unknown" : screenStatus(ticket.status))}</span>
           ${escalateControl}
         </div>
       </header>
-      <div class="thread-scroll">${timeline(ticket)}</div>
-      <div class="summarize-row">
+      <div class="thread-scroll">${ticket.projectionSource ? `<p class="history-notice" role="status">Partial webhook history; earlier messages may be missing. ${ticket.truncated ? "History or text is truncated." : ""} ${ticket.projection?.stale ? "Snapshot is stale; refresh is delayed." : ""}</p>` : ""}${timeline(ticket)}
+      ${ticket.draftSuperseded ? `<p class="mute">An earlier draft is withheld because a newer customer message needs review.</p>` : ""}
+      ${ticket.readonlyDraft ? `<article class="bubble"><strong>AI draft · not sent · read only</strong><p>${esc(ticket.readonlyDraft)}</p><p class="mute">Source message: ${esc(ticket.draftSourceMessageId || "")} · ${esc(ticket.draftSourceMessageAt || "")}</p><p class="mute">${esc(ticket.draftReason || "")}</p></article>` : ""}</div>
+      ${next.capabilities?.summarizeThread === false ? "" : `<div class="summarize-row">
         <button type="button" class="btn-quiet" data-summarize="${esc(ticket.id)}" title="Show a short mute summary above the reply box">${esc(summarizeLabel)}</button>
-      </div>
+      </div>`}
     </div>${renderLightbox()}`;
   }
 

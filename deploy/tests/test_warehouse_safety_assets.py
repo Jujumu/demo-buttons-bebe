@@ -216,12 +216,9 @@ class WarehouseSafetyAssetTests(unittest.TestCase):
             self.assertTrue(exec_lines[0].endswith("/sync-products.sh\""), unit)
 
     def test_deploy_receiver_restores_kb_sync_execute_mode(self) -> None:
-        text = DEPLOY_RECEIVER.read_text(encoding="utf-8")
-        self.assertIn(
-            'install -m 0755 "$release_dir/kb/sync-products.sh" '
-            '"$live_root/KB/sync-products.sh"',
-            text,
-        )
+        helper = (ROOT / "deploy/cd/source_release.py").read_text()
+        self.assertIn("0o755 if path.suffix == '.sh' else 0o644", helper)
+        self.assertIn("change['entry']['mode']", helper)
 
 
 if __name__ == "__main__":

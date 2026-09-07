@@ -291,7 +291,7 @@ app.get(`${BASE}`, (req, res) => res.redirect(`${BASE}/`));
 app.get("/connect-whatsapp/*", (req, res) => res.status(404).send("Not found"));
 
 app.listen(PORT, "127.0.0.1", () =>
-  console.log(`whatsapp-connect listening on 127.0.0.1:${PORT} base=${BASE}`)
+  console.log(`whatsapp-connect listening on 127.0.0.1:${PORT}`)
 );
 
 startSock().catch((e) => console.error("startSock error", e));

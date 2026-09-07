@@ -8,4 +8,4 @@ export SHOPIFY_MUTATIONS_ENABLED=0
 export HELPDESK_OUTBOUND_ENABLED=0
 export GORGIAS_BRIDGE_ENABLED=0
 export PYTHONUNBUFFERED=1
-exec python3 console-src/inbox/review_server.py --host "$HOST" --port "$PORT"
+exec "${INBOX_PYTHON:-python3}" console-src/inbox/review_server.py --host "$HOST" --port "$PORT"

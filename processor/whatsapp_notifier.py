@@ -75,13 +75,19 @@ def send_whatsapp(
     customer_email: str,
     message_summary: str,
     reason: str,
+    *,
+    max_retries: int = 3,
 ) -> bool:
-    """Send a WhatsApp alert to the owner about an IMMEDIATE/HIGH ticket.
+    """Submit an owner alert; True means the bridge returned HTTP 2xx.
+
+    This is transport acceptance, not proof of delivery to the owner device.
 
     Retries on transient failures (409 Conflict from Baileys reconnect
     cycle, 5xx) with exponential backoff.  The Baileys bridge disconnects
     and reconnects every ~2.5 minutes, so a 409 on the first attempt
-    often succeeds on retry a few seconds later.
+    often succeeds on retry a few seconds later. Durable per-job callers pass
+    max_retries=0 because a timeout may follow an accepted message; they expose
+    uncertain delivery for operator review instead of sending again.
     """
     url = os.getenv("WHATSAPP_SEND_URL", "").strip()
     send_secret = os.getenv("WA_SEND_SECRET", "").strip()
@@ -141,7 +147,7 @@ def send_whatsapp(
                   ticket_id=ticket_id, reason=reason)
         return False
 
-    max_retries = 3
+    max_retries = max(0, min(max_retries, 3))
     backoff_seconds = [2, 5, 10]
 
     for attempt in range(max_retries + 1):
@@ -195,10 +201,10 @@ def send_whatsapp(
             if attempt < max_retries:
                 wait = backoff_seconds[min(attempt, len(backoff_seconds) - 1)]
                 log_event(logger, "WARNING",
-                          f"WhatsApp alert error, retrying in {wait}s: {exc}",
+                          f"WhatsApp alert error, retrying in {wait}s: {type(exc).__name__}",
                           ticket_id=ticket_id, attempt=attempt + 1)
                 time.sleep(wait)
                 continue
-            log_event(logger, "ERROR", f"WhatsApp alert failed: {exc}",
+            log_event(logger, "ERROR", f"WhatsApp alert failed: {type(exc).__name__}",
                       ticket_id=ticket_id, attempts=attempt + 1)
             return False

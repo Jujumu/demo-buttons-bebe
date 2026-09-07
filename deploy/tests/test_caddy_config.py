@@ -23,7 +23,7 @@ class CaddyConfigTests(unittest.TestCase):
         imports = re.findall(r"^import (.+)$", self.root_text, re.MULTILINE)
         self.assertEqual(
             imports,
-            ["sites/support.caddy", "sites/exchange.caddy", "sites/warehouse.caddy"],
+            ["sites/support.caddy", "sites/exchange.caddy", "sites/warehouse.caddy", "sites/receiving.caddy"],
         )
         non_comment = "\n".join(
             line
@@ -47,6 +47,7 @@ class CaddyConfigTests(unittest.TestCase):
             },
             "exchange": {"exchange.buttonsbebe.com"},
             "warehouse": {"wh.buttonsbebe.com"},
+            "receiving": {"support.buttonsbebe.com:8443"},
         }
         self.assertEqual(set(self.fragments), set(expected))
         declared: dict[str, str] = {}
@@ -60,10 +61,10 @@ class CaddyConfigTests(unittest.TestCase):
                     host_parts = [part.strip() for part in candidate.split(",")]
                     if (
                         host_parts
-                        and all(re.fullmatch(r"[A-Za-z0-9.-]+", part) for part in host_parts)
+                        and all(re.fullmatch(r"(?:https?://)?[A-Za-z0-9.-]+(?::[0-9]+)?", part) for part in host_parts)
                         and not candidate.startswith(("@", "handle", "forward", "basic"))
                     ):
-                        hosts.update(host_parts)
+                        hosts.update(re.sub(r"^https?://", "", part) for part in host_parts)
                 depth += stripped.count("{") - stripped.count("}")
             self.assertEqual(hosts, expected[name], msg=name)
             for host in hosts:
@@ -95,6 +96,16 @@ class CaddyConfigTests(unittest.TestCase):
         self.assertIn("hermes.buttonsbebe.com {", text)
         self.assertIn("reverse_proxy 127.0.0.1:9119", text)
         self.assertIn("output file /var/log/bb-webhook/caddy-hermes.log", text)
+
+    def test_support_logs_never_store_bearer_uris(self) -> None:
+        text = self.fragments["support"]
+        # Full URI removal also covers path credentials and alternate query
+        # spellings; it does not rewrite the upstream request itself.
+        self.assertEqual(text.count("format filter {"), 2)
+        self.assertEqual(text.count("request>uri delete"), 2)
+        self.assertEqual(text.count("request>headers>Referer delete"), 2)
+        self.assertEqual(text.count("wrap json"), 2)
+        self.assertNotIn("format json", text)
 
     def test_warehouse_bypasses_auth_only_for_webhook_path(self) -> None:
         text = self.fragments["warehouse"]

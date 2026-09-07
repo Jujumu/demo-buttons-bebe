@@ -145,66 +145,21 @@ async def receive_gorgias_webhook(request: Request, tenant_id: str) -> JSONRespo
         )
         return JSONResponse(status_code=400, content={"error": "event_in_future"})
 
-    inserted = await deps.database_function("record_event")(
-        message_id=message_id_str,
-        tenant_id=tenant_id,
-        ticket_id=ticket_id,
-        event_type=event["event_type"],
-        author_type=event["author_type"],
+    job_id = await deps.database_function("ingest_event")(
+        event=event,
         raw_payload=raw_body.decode("utf-8", errors="replace"),
     )
-    if not inserted:
+    if job_id is None:
         log_event(
-            logger,
-            "INFO",
-            "Concurrent duplicate webhook — skipping",
-            message_id=message_id_str,
-            ticket_id=ticket_id,
+            logger, "INFO", "Concurrent duplicate webhook — skipping",
+            message_id=message_id_str, ticket_id=ticket_id,
         )
         return JSONResponse(
             status_code=200,
             content={"status": "duplicate", "message_id": message_id_str},
         )
 
-    await deps.database_function("record_parsed_message")(
-        message_id=message_id_str,
-        ticket_id=ticket_id,
-        event_type=event["event_type"],
-        author_type=event["author_type"],
-        author_email=event.get("author_email"),
-        channel=event.get("channel"),
-        customer_email=event.get("customer_email"),
-        ticket_subject=event.get("ticket_subject"),
-        message_text=event.get("message_text"),
-        intents=event.get("intents", []),
-        is_customer_message=bool(event.get("is_customer_message", False)),
-        created_at=event.get("created_at"),
-    )
-
     is_customer = event.get("is_customer_message", False)
-    job_payload = {
-        "tenant_id": tenant_id,
-        "ticket_id": ticket_id,
-        "message_id": event.get("message_id"),
-        "event_type": event["event_type"],
-        "author_type": event["author_type"],
-        "author_email": event.get("author_email"),
-        "channel": event.get("channel"),
-        "customer_email": event.get("customer_email"),
-        "ticket_subject": event.get("ticket_subject"),
-        "message_text": event.get("message_text"),
-        "intents": event.get("intents", []),
-        "created_at": event.get("created_at"),
-    }
-    job_id = await deps.database_function("enqueue_job")(
-        tenant_id=tenant_id,
-        ticket_id=ticket_id,
-        message_id=message_id_str,
-        event_type=event["event_type"],
-        author_type=event["author_type"],
-        is_customer_message=is_customer,
-        payload=job_payload,
-    )
 
     if not is_customer:
         log_event(

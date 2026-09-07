@@ -187,3 +187,44 @@ test("console binds only KB item buttons and disables saving after a load error"
   assert.match(legacyDashboard, /noKbDrafts=stats\.no_kb_match\|\|0/);
   assert.match(legacyDashboard, /Raw lessons stay out of search with restricted file permissions/);
 });
+
+test("invalid and oversized JSON do not alter KB content", async(t)=>{
+ const {baseUrl,kb}=await startServer(t);
+ const before=fs.readFileSync(path.join(kb,"intents","shipping.md"),"utf8");
+ for(const body of ['null','[]','{',JSON.stringify({path:'intents/shipping.md',content:'x'.repeat(1024*1024)})]){
+  const response=await fetch(baseUrl+'/save',{method:'POST',headers:{'content-type':'application/json'},body});
+  assert.ok([400,413].includes(response.status));
+ }
+ assert.equal(fs.readFileSync(path.join(kb,"intents","shipping.md"),"utf8"),before);
+});
+test("KB file and folder symlinks cannot expose or overwrite outside files",async(t)=>{
+ const {baseUrl,kb}=await startServer(t);
+ const privateFile=path.join(kb,'private.txt');fs.writeFileSync(privateFile,'PRIVATE TEST VALUE');
+ fs.symlinkSync(privateFile,path.join(kb,'faq','linked.md'));
+ assert.equal((await fetch(baseUrl+'/file?path=faq/linked.md')).status,400);
+ assert.equal((await fetch(baseUrl+'/save',{method:'POST',body:JSON.stringify({path:'faq/linked.md',content:'bad'})})).status,400);
+ assert.equal(fs.readFileSync(privateFile,'utf8'),'PRIVATE TEST VALUE');
+ fs.rmdirSync(path.join(kb,'tickets'));fs.symlinkSync(kb,path.join(kb,'tickets'));
+ assert.equal((await fetch(baseUrl+'/file?path=tickets/private.md')).status,400);
+});
+
+test("interrupted atomic publication preserves old document and file mode",()=>{
+ const vm=require('node:vm');
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'bb-kb-atomic-'));
+ try{
+  fs.mkdirSync(path.join(root,'intents'));const fp=path.join(root,'intents','test.md');
+  fs.writeFileSync(fp,'old complete content');fs.chmodSync(fp,0o640);
+  const source=fs.readFileSync(SERVER,'utf8');
+  const functions=source.slice(source.indexOf('function safePath('),source.indexOf('function frontTitle('));
+  const broken={...fs,renameSync(){throw new Error('simulated publication interruption');}};
+  const context=vm.createContext({fs:broken,path,KB:root,FOLDERS:['intents'],process,Math,Date});
+  vm.runInContext(functions,context);
+  assert.throws(()=>context.atomicSave(fp,'replacement'),/interruption/);
+  assert.equal(fs.readFileSync(fp,'utf8'),'old complete content');
+  assert.equal(fs.statSync(fp).mode & 0o777,0o640);
+  assert.ok(!fs.readdirSync(path.dirname(fp)).some(name=>name.startsWith('.kb-save-')));
+  context.fs=fs;context.atomicSave(fp,'new complete content');
+  assert.equal(fs.readFileSync(fp,'utf8'),'new complete content');
+  assert.equal(fs.statSync(fp).mode & 0o777,0o640);
+ }finally{fs.rmSync(root,{recursive:true,force:true});}
+});

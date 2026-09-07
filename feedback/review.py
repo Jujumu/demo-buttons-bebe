@@ -94,8 +94,10 @@ def list_pending() -> list[dict]:
 
 
 def get_packet(ticket_id) -> dict | None:
+    if not re.fullmatch(r"[0-9]{1,20}",str(ticket_id)):
+        return None
     p = config.LEARNED_DIR / f"ticket-{ticket_id}.md"
-    if not p.exists():
+    if p.is_symlink() or not p.is_file():
         return None
     front, sections, raw = _parse(p)
     roles = _roles(sections)
@@ -116,12 +118,12 @@ def _slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", (text or "").lower()).strip("-")[:40] or "ticket"
 
 
-def approve(ticket_id, pii_cleared: bool, note: str = "", why: str = "") -> dict:
+def approve(ticket_id, pii_cleared: bool, note: str = "", why: str = "", review_actor: str | None = None) -> dict:
     """Promote a packet to kb/tickets/ (PII masked). Refuses without pii_cleared."""
     packet = get_packet(ticket_id)
     if packet is None:
         return {"ok": False, "error": "no such packet"}
-    if not pii_cleared:
+    if pii_cleared is not True:
         return {"ok": False, "error": "pii_not_cleared", "pii": packet["pii_reply"]["by_kind"],
                 "warning": packet["pii_reply"]["warning"]}
 
@@ -139,6 +141,11 @@ def approve(ticket_id, pii_cleared: bool, note: str = "", why: str = "") -> dict
         "source_ticket_id": ticket_id,
         "tags": ["exemplar", "learned"],
     }
+    if review_actor:
+        # PII review is separate from verified delivery and learning approval.
+        # Never fabricate either eligibility field for legacy packets.
+        front["pii_review_actor"] = review_actor
+        front["pii_review_scope"] = "masked_draft_requires_final_edit"
     quoted = (reply or "").replace("\n", "\n> ")
     body = f"""## Customer situation
 
@@ -171,6 +178,8 @@ def approve(ticket_id, pii_cleared: bool, note: str = "", why: str = "") -> dict
 
 
 def reject(ticket_id, purge: bool = False) -> dict:
+    if not re.fullmatch(r"[0-9]{1,20}",str(ticket_id)):
+        return {"ok":False,"error":"invalid ticket identifier"}
     src = config.LEARNED_DIR / f"ticket-{ticket_id}.md"
     if not src.exists():
         return {"ok": False, "error": "no such packet"}

@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import requests
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 from _common import load_env
 
 HOST = os.environ.get("REDO_MCP_HOST", "127.0.0.1")
@@ -98,7 +99,7 @@ def _trim(ret):
     return ret
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=True))
 def list_recent_returns(limit: int = 10) -> dict:
     """List the most recent returns/RMAs from Redo (read-only). Use this to see
     recent return activity across the store."""
@@ -108,7 +109,7 @@ def list_recent_returns(limit: int = 10) -> dict:
     return d
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=True))
 def get_returns_for_order(order_name: str) -> dict:
     """Look up returns for a specific Shopify order by its name/number
     (e.g. '#12345' or '12345'). Read-only."""
@@ -118,13 +119,13 @@ def get_returns_for_order(order_name: str) -> dict:
     return d
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=True))
 def get_return(return_id: str) -> dict:
     """Get one return by its Redo return id (read-only)."""
     return _trim(_get(f"/returns/{return_id}"))
 
 
-@mcp.tool()
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=True))
 def get_order(order_name: str) -> dict:
     """Look up a Shopify order by its name/number (e.g. '12345' or '#12345').
 

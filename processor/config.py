@@ -34,6 +34,7 @@ class ProcessorSettings(BaseSettings):
     )
 
     demo_mode: bool = Field(default=False, alias="DEMO_MODE")
+    processor_result_secret: str = Field(default="", alias="PROCESSOR_RESULT_SECRET", repr=False)
 
     # ── Gorgias ───────────────────────────────────────────
     gorgias_subdomain: str = Field(default="buttonsbebe", alias="GORGIAS_SUBDOMAIN")

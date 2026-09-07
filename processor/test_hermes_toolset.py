@@ -76,19 +76,18 @@ class CommandShapeTests(unittest.TestCase):
             self.assertNotIn(dangerous, joined)
 
     def test_toolset_list_is_normalised(self):
-        cmd = build_hermes_command(
-            "hi", _settings(hermes_toolsets=" mcp-a , mcp-b ,, mcp-a "))
-        self.assertEqual(cmd[cmd.index("-t") + 1], "mcp-a,mcp-b")
+        cmd = build_hermes_command("hi", _settings(hermes_toolsets=
+            " buttonsbebe_kb , buttonsbebe_redo , buttonsbebe_gorgias "))
+        self.assertEqual(cmd[cmd.index("-t") + 1], DEFAULT_TOOLSETS)
 
-    def test_empty_toolset_list_omits_the_flag_entirely(self):
-        # "" means "whatever config.yaml grants" — allowed, but it must not
-        # produce a bare `-t` that Hermes would choke on.
-        cmd = build_hermes_command("hi", _settings(hermes_toolsets=""))
-        self.assertNotIn("-t", cmd)
-        self.assertEqual(cmd, ["hermes", "-z", "hi"])
+    def test_invalid_toolsets_fail_closed(self):
+        for invalid in ("", "mcp-a,mcp-b", DEFAULT_TOOLSETS + ",shell",
+                        DEFAULT_TOOLSETS + ",", "buttonsbebe_kb" * 3):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                build_hermes_command("hi", _settings(hermes_toolsets=invalid))
 
     def test_prompt_is_always_the_final_argument(self):
-        for toolsets in (DEFAULT_TOOLSETS, ""):
+        for toolsets in (DEFAULT_TOOLSETS,):
             for skip in (True, False):
                 with self.subTest(toolsets=bool(toolsets), skip=skip):
                     cmd = build_hermes_command(
@@ -129,8 +128,8 @@ class RunnerIntegrationTests(unittest.TestCase):
         ), patch.object(
             runner, "_make_run_token", return_value=TOKEN
         ), patch.object(
-            runner.subprocess,
-            "run",
+            runner,
+            "run_bounded",
             return_value=SimpleNamespace(
                 returncode=0, stderr="", stdout=tagged_output()
             ),
