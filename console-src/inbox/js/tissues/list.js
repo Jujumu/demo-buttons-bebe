@@ -115,7 +115,7 @@ export function createListTissue({ mailbox }) {
     const on = ticket.id === selectedId;
     const unread = unreadIds.includes(ticket.id);
     const status = ticket.status || "";
-    const statusWord = status === "open" ? "" : screenStatus(status);
+    const statusWord = status === "open" || ticket.projectionSource ? "" : screenStatus(status);
     const typeWord = requestTypeLabel(ticket.requestType);
     const severityWord = severityLabel(ticket.severity);
     const statusHtml = statusWord
@@ -134,7 +134,7 @@ export function createListTissue({ mailbox }) {
     return `<button type="button" class="ticket-row${on ? " is-selected" : ""}${unreadClass}" data-ticket="${esc(ticket.id)}" data-status="${esc(status)}"${typeAttr}${severityAttr}${deviceAttr} aria-current="${on ? "true" : "false"}">
       <span class="ticket-bar" aria-hidden="true"></span>
       <span class="ticket-top">
-        <span class="ticket-name">${esc(listCustomerName(ticket))}</span>
+        <span title="${esc(listCustomerName(ticket))}" class="ticket-name">${esc(listCustomerName(ticket))}</span>
         <span class="ticket-meta">
           ${typeHtml}
           ${severityHtml}
@@ -163,7 +163,7 @@ export function createListTissue({ mailbox }) {
       : `<div class="empty-pane" role="status"><strong>${next.error ? "Tickets unavailable" : "No tickets yet"}</strong><p>${esc(next.error || "This inbox has no conversations in this view. Customer support continues in the support console.")}</p><a href="/console/">Open support console</a></div>`;
     return `<div class="pane-inner">
       ${renderToolbar(next)}
-      ${next.notice ? `<p class="mute" role="status">${esc(next.notice)}</p>` : ""}
+      ${next.notice ? `<p class="history-notice" role="status">${esc(next.notice)}</p>` : ""}
       <div class="ticket-list" role="list">${rows}</div>
     </div>`;
   }

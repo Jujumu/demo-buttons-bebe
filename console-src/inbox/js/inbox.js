@@ -10,7 +10,7 @@ import { createComposerTissue } from "./tissues/composer.js";
 import { createListTissue } from "./tissues/list.js";
 import { createRailOrgan } from "./tissues/rail.js";
 import { createThreadTissue } from "./tissues/thread.js";
-import { forbiddenControlHits, GATE_CONFIRM_LABEL } from "./util.js";
+import { esc, formatWhen, forbiddenControlHits, GATE_CONFIRM_LABEL } from "./util.js";
 
 const RAIL_EXPAND_ICON = `<svg class="list-expand-icon" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" focusable="false">
   <path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M9 2.5 4.5 7 9 11.5"/>
@@ -475,7 +475,7 @@ export function createInboxOrgan(opts = {}) {
     const listModel = listTissue.update(listInput());
     const threadModel = threadTissue.update({ ticket, capabilities });
     const composerModel = composerTissue.update(composerInput(ticket));
-    const railHtml = (!ticket || capabilities.customerDetails === false) ? emptyRailHtml() : railCollapsed ? railCollapsedHtml() : rail.render();
+    const railHtml = (!ticket || ticket.projectionSource || capabilities.customerDetails === false) ? emptyRailHtml() : railCollapsed ? railCollapsedHtml() : rail.render();
     const html = `<div class="inbox" data-organ="inbox">
       <a class="skip-link" href="#inbox-thread">Skip to thread.</a>
       <section class="pane pane-list${listCollapsed ? " is-collapsed" : ""}" data-pane="list">${listTissue.render(listModel)}</section>
@@ -513,11 +513,26 @@ export function createInboxOrgan(opts = {}) {
     };
   }
 
-  function emptyRailHtml() { return `<div class="empty-pane"><strong>Customer details</strong><p>${capabilities.customerDetails === false ? "Customer and order lookup is not connected to this inbox." : "Select a conversation to see customer and order details."}</p></div>`; }
+  function emptyRailHtml() {
+    const ticket = selectedTicket();
+    const context = ticket?.customerContext;
+    if (ticket?.projectionSource) {
+      const identity = context?.source === "canonical_webhook" && !context.conflict && context.status === "observed" ? context.identity : null;
+      const fields = [["Name", identity?.name], ["Email", identity?.email], ["Phone", identity?.phone], ["Gorgias customer ID", identity?.id]]
+        .filter(([, value]) => typeof value === "string" && value.trim())
+        .map(([label, value]) => `<dt>${esc(label)}</dt><dd>${esc(value)}</dd>`).join("");
+      return `<div class="empty-pane observed-customer"><strong>Customer details</strong>
+        ${fields ? `<dl>${fields}</dl>` : `<p>${context?.conflict ? "Conflicting customer details were observed; identity needs review." : "Customer identity was not included in the observed history."}</p>`}
+        <p class="customer-source">Source: observed Gorgias webhook${context?.observedAt ? ` · ${esc(formatWhen(context.observedAt))}` : ""}. ${ticket.projection?.stale ? "Snapshot is stale." : "This is a snapshot, not a live customer lookup."}</p>
+        <strong>Orders and returns</strong><p>Order and return details are not available in this inbox.</p>
+      </div>`;
+    }
+    return `<div class="empty-pane"><strong>Customer details</strong><p>${capabilities.customerDetails === false ? "Customer and order lookup is not connected to this inbox." : "Select a conversation to see customer and order details."}</p></div>`;
+  }
 
   async function refreshRail() {
     const ticket = selectedTicket();
-    if (!ticket || capabilities.customerDetails === false) { toEmail = ticket?.fromEmail || ""; return; }
+    if (!ticket || ticket.projectionSource || capabilities.customerDetails === false) { toEmail = ticket?.fromEmail || ""; return; }
     await rail.load({
       shop: shopHost,
       customerId: ticket?.customerId,
@@ -564,7 +579,7 @@ export function createInboxOrgan(opts = {}) {
       const threadResult = safeMount(threadTissue, panes.thread, { ticket, capabilities });
       safeMount(composerTissue, panes.composer, composerInput(ticket));
       try {
-        if (!ticket || capabilities.customerDetails === false) {
+        if (!ticket || ticket.projectionSource || capabilities.customerDetails === false) {
           panes.rail.innerHTML = emptyRailHtml();
         } else if (railCollapsed) {
           panes.rail.innerHTML = railCollapsedHtml();

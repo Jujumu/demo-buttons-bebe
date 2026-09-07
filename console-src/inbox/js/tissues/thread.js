@@ -50,7 +50,7 @@ export function createThreadTissue({ mailbox }) {
 
   function renderMessage(ticket, message) {
     const speaker = messageSpeaker(ticket, message);
-    const email = speaker.email
+    const email = speaker.email && speaker.email !== speaker.name
       ? `<span class="from-email">${esc(speaker.email)}</span>`
       : "";
     let via = "";
@@ -142,7 +142,7 @@ export function createThreadTissue({ mailbox }) {
           ${escalateControl}
         </div>
       </header>
-      <div class="thread-scroll">${ticket.projectionSource ? `<p class="mute" role="status">Observed webhook history only; this may omit earlier messages. ${ticket.truncated ? "History or text is truncated." : ""} ${ticket.projection?.stale ? "Snapshot is stale; refresh is delayed." : ""}</p>` : ""}${timeline(ticket)}
+      <div class="thread-scroll">${ticket.projectionSource ? `<p class="history-notice" role="status">Partial webhook history; earlier messages may be missing. ${ticket.truncated ? "History or text is truncated." : ""} ${ticket.projection?.stale ? "Snapshot is stale; refresh is delayed." : ""}</p>` : ""}${timeline(ticket)}
       ${ticket.draftSuperseded ? `<p class="mute">An earlier draft is withheld because a newer customer message needs review.</p>` : ""}
       ${ticket.readonlyDraft ? `<article class="bubble"><strong>AI draft · not sent · read only</strong><p>${esc(ticket.readonlyDraft)}</p><p class="mute">Source message: ${esc(ticket.draftSourceMessageId || "")} · ${esc(ticket.draftSourceMessageAt || "")}</p><p class="mute">${esc(ticket.draftReason || "")}</p></article>` : ""}</div>
       ${next.capabilities?.summarizeThread === false ? "" : `<div class="summarize-row">
