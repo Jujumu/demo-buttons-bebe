@@ -121,3 +121,56 @@ print('safe-output')
         self.assertEqual(result.returncode,0)
         self.assertEqual(result.stderr,'')
         self.assertEqual(result.stdout.strip(),'safe-output')
+
+
+class CatalogBoundaryTests(unittest.TestCase):
+    def fixture(self):
+        cache={g:{'cache_scope':'private','ttl_ms':0,'tools':[
+            {'name':n,'annotations':{'readOnlyHint':True},
+             'inputSchema':{'type':'object','properties':{'id':{'type':'integer'}}}}
+            for n in sorted(names)]} for g,(_,names) in proof.GROUPS.items()}
+        metadata=proof.cached_metadata(cache)
+        utilities={'mcp__'+g+'__'+n:{'name':'mcp__'+g+'__'+n,'description':'metadata',
+                    'parameters':{'type':'object','properties':{}}}
+                   for g in proof.GROUPS for n in ('list_resources','read_resource','list_prompts','get_prompt')}
+        raw=[{'function':{'name':name,'parameters':schema}} for name,schema in metadata['schemas'].items()]
+        raw += [{'function':row} for row in utilities.values()]
+        hints={g:{n:True for n in names} for g,(_,names) in proof.GROUPS.items()}
+        return cache,metadata,utilities,raw,hints
+
+    def test_exact_business_and_generated_utility_split(self):
+        cache,metadata,utilities,raw,hints=self.fixture()
+        self.assertEqual(proof.registry_metadata(raw,hints,utilities),metadata)
+        for altered in (raw[:-1],raw+[raw[0]],raw[:-1]+[{'function':{'name':'shell'}}]):
+            with self.assertRaises(ValueError):proof.registry_metadata(altered,hints,utilities)
+        altered=json.loads(json.dumps(raw));altered[-1]['function']['parameters']['unexpected']=True
+        with self.assertRaises(ValueError):proof.registry_metadata(altered,hints,utilities)
+
+    def test_cache_never_silently_changes_policy_or_accepts_bad_tools(self):
+        cache,*_=self.fixture()
+        for field,value in [('ttl_ms',1),('ttl_ms',False),('cache_scope','public')]:
+            altered=json.loads(json.dumps(cache));altered['buttonsbebe_kb'][field]=value
+            with self.assertRaises(ValueError):proof.cached_metadata(altered)
+        for change in ('duplicate','hint','properties'):
+            altered=json.loads(json.dumps(cache));row=altered['buttonsbebe_kb']['tools'][0]
+            if change=='duplicate':altered['buttonsbebe_kb']['tools'].append(row)
+            elif change=='hint':row['annotations']['readOnlyHint']=False
+            else:row['inputSchema']['properties']=['invalid']
+            with self.assertRaises(ValueError):proof.cached_metadata(altered)
+
+    def test_empty_metadata_lists_only_and_no_read_or_prompt_execution(self):
+        helper=DiscoveryProofTests()
+        for method in ('resources/list','resources/templates/list','prompts/list'):
+            proof.guard_request(helper.request(method))
+        for method in ('resources/read','prompts/get','tools/call'):
+            with self.assertRaises(PermissionError):proof.guard_request(helper.request(method))
+        proof.require_empty_listing(SimpleNamespace(resources=[],next_cursor=None),'resources','resources')
+        for listing in (SimpleNamespace(resources=[{}],next_cursor=None),SimpleNamespace(resources=[],next_cursor='next')):
+            with self.assertRaises(ValueError):proof.require_empty_listing(listing,'resources','resources')
+        for event in ('os.fork','os.forkpty'):
+            with self.assertRaises(PermissionError):proof.audit(event,())
+
+    def test_endpoint_duplicate_is_rejected_even_when_name_set_matches(self):
+        tool=SimpleNamespace(name='search_kb')
+        with self.assertRaises(ValueError):
+            proof.endpoint_metadata('buttonsbebe_kb',SimpleNamespace(tools=[tool,tool],next_cursor=None))

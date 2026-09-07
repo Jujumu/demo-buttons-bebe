@@ -37,7 +37,8 @@ def mcp_field(value, snake, camel):
 
 def endpoint_metadata(group, listing):
     names = GROUPS[group][1]
-    if mcp_field(listing, 'next_cursor', 'nextCursor') or {t.name for t in listing.tools} != names:
+    if (mcp_field(listing, 'next_cursor', 'nextCursor') or len(listing.tools) != len(names)
+            or {t.name for t in listing.tools} != names):
         raise ValueError('Endpoint tools changed')
     result = {'schemas':{}, 'readonly':{}}
     for tool in listing.tools:
@@ -76,8 +77,51 @@ def validate_metadata(value):
         raise ValueError('Unexpected discovery tool set')
     if any(value['readonly'][n] is not True for n in names): raise ValueError('Readonly hint missing')
     for schema in value['schemas'].values():
-        if not isinstance(schema,dict) or schema.get('type')!='object' or not schema.get('properties'):
+        if not isinstance(schema,dict) or schema.get('type')!='object' or not isinstance(schema.get('properties'),dict) or not schema['properties']:
             raise ValueError('Empty or invalid tool schema')
+
+
+def registry_metadata(raw, hints, utility_schemas):
+    business = {'mcp__'+g+'__'+n for g,(_,ns) in GROUPS.items() for n in ns}
+    expected_utilities = {'mcp__'+g+'__'+n for g in GROUPS
+                          for n in ('list_resources','read_resource','list_prompts','get_prompt')}
+    functions = [row['function'] for row in raw]
+    names = [row['name'] for row in functions]
+    if len(names) != 22 or len(set(names)) != 22 or set(names) != business | expected_utilities:
+        raise ValueError('Unexpected business or utility definitions')
+    if set(utility_schemas) != expected_utilities:
+        raise ValueError('Unexpected generated utility schemas')
+    for row in functions:
+        if row['name'] in expected_utilities and row != utility_schemas[row['name']]:
+            raise ValueError('Generated utility definition changed')
+    value = {'schemas': {row['name']:row['parameters'] for row in functions if row['name'] in business},
+             'readonly': {'mcp__'+g+'__'+n:v is True for g in GROUPS for n,v in hints.get(g,{}).items()}}
+    validate_metadata(value)
+    return value
+
+
+def cached_metadata(cache):
+    if set(cache) != set(GROUPS): raise ValueError('Unexpected cached groups')
+    value = {'schemas':{},'readonly':{}}
+    for group,(_,names) in GROUPS.items():
+        entry = cache[group]
+        if entry.get('cache_scope') != 'private' or type(entry.get('ttl_ms')) not in (int,float) or entry['ttl_ms'] != 0:
+            raise ValueError('Private zero-TTL cache policy changed')
+        rows = entry['tools']
+        if len(rows) != len(names) or {row['name'] for row in rows} != names:
+            raise ValueError('Unexpected cached business tools')
+        for row in rows:
+            key = 'mcp__'+group+'__'+row['name']
+            value['schemas'][key] = mcp_field(row,'input_schema','inputSchema')
+            value['readonly'][key] = mcp_field(row.get('annotations',{}),'read_only_hint','readOnlyHint') is True
+    validate_metadata(value)
+    return value
+
+
+def require_empty_listing(listing, snake, camel):
+    rows = mcp_field(listing,snake,camel)
+    if rows != [] or mcp_field(listing,'next_cursor','nextCursor'):
+        raise ValueError('Unexpected resource or prompt catalog')
 
 
 def audit(event, args):
@@ -85,7 +129,7 @@ def audit(event, args):
         address = args[1]
         if not isinstance(address,tuple) or address[0] not in ('127.0.0.1','::1') or address[1] not in (8077,8078,8079):
             raise PermissionError('Only local MCP discovery connections permitted')
-    if event in ('subprocess.Popen','os.system','os.exec','os.posix_spawn'):
+    if event in ('subprocess.Popen','os.system','os.exec','os.posix_spawn','os.fork','os.forkpty'):
         raise PermissionError('Discovery cannot launch subprocesses')
 
 
@@ -95,7 +139,8 @@ def guard_request(request):
     if request.method == 'POST':
         value = json.loads(request.content)
         if not isinstance(value,dict) or value.get('method') not in (
-                'initialize','notifications/initialized','tools/list','notifications/cancelled'):
+                'initialize','notifications/initialized','tools/list','notifications/cancelled',
+                'resources/list','resources/templates/list','prompts/list'):
             raise PermissionError('Only initialization and tool listing permitted')
     elif request.method not in ('GET','DELETE','HEAD'):
         raise PermissionError('Unexpected discovery HTTP method')
@@ -168,6 +213,9 @@ def child(mode):
                 async with discovery_transport(f'http://127.0.0.1:{port}/mcp') as (read,write):
                     async with ClientSession(read,write) as session:
                         await session.initialize(); listing = await session.list_tools()
+                        require_empty_listing(await session.list_resources(),'resources','resources')
+                        require_empty_listing(await session.list_resource_templates(),'resource_templates','resourceTemplates')
+                        require_empty_listing(await session.list_prompts(),'prompts','prompts')
                         metadata = endpoint_metadata(group, listing)
                         result['schemas'].update(metadata['schemas'])
                         result['readonly'].update(metadata['readonly'])
@@ -188,10 +236,12 @@ def child(mode):
         try:
             discover_mcp_tools()
             raw=get_tool_definitions(enabled_toolsets=list(GROUPS),quiet_mode=True,skip_tool_search_assembly=True)
-            value={'schemas':{t['function']['name']:t['function']['parameters'] for t in raw},
-                   'readonly':{'mcp__'+g+'__'+n:v is True for g in GROUPS for n,v in _tool_read_only_hints.get(g,{}).items()}}
-            if len(raw)!=10: raise ValueError('Unexpected duplicate tool definitions')
-            if mode == 'cache' and cached != set(GROUPS): raise ValueError('Fresh process did not register all groups from cache')
+            utilities = {entry['schema']['name']:entry['schema'] for group in GROUPS
+                         for entry in mcp_tool._build_utility_schemas(group)}
+            value = registry_metadata(raw,_tool_read_only_hints,utilities)
+            cache_value = cached_metadata(json.loads((HOME/'cache/mcp_schema_cache.json').read_text()))
+            if not metadata_equal(value,cache_value): raise ValueError('Cache metadata mismatch')
+            if cached: raise ValueError('Zero-TTL cache unexpectedly reused')
         finally: shutdown_mcp_servers()
     validate_metadata(value)
     print(PREFIX+json.dumps(value,sort_keys=True))
@@ -219,7 +269,11 @@ def verify(profile_sha):
         if any(sha(p)!=h for p,h in expected.items()): raise ValueError('Source/profile changed during proof')
     if not all(metadata_equal(results[0],v) for v in results[1:]): raise ValueError('Endpoint/cache metadata mismatch')
     return {'group_count':3,'tool_count':10,'readonly_verified':True,'endpoint_schemas_verified':True,
-            'fresh_process_cache_verified':True,'model_calls':0,'tool_calls':0,
+            'fresh_process_rediscovery_verified':True,'cache_metadata_verified':True,
+            'cache_reuse_permitted':False,'cache_scope':'private','cache_ttl_ms':0,
+            'generated_metadata_utility_count':12,'resource_prompt_catalogs_empty':True,
+            'containment_scope':'Reviewed Python HTTP clients and audit hooks; not an OS sandbox',
+            'model_calls':0,'tool_calls':0,
             'profile_sha256':profile_sha,'mcp_module_sha256':PATCHED_MCP_SHA,'model_tools_sha256':MODEL_TOOLS_SHA,
             'cache_module_sha256':CACHE_MODULE_SHA,'process_helper_sha256':PROCESS_HELPER_SHA,
             'proof_script_sha256':sha(Path(__file__)),
