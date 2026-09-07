@@ -75,6 +75,7 @@ done
 # helper owns the path exclusions and fails closed on missing roots,
 # traversal/read errors, and an empty production set.
 bash tools/check_python_file_sizes.sh
+"$PYTHON" tools/sync_console_brand.py --check
 
 "$PYTHON" - <<'PY'
 from pathlib import Path
