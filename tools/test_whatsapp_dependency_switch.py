@@ -100,6 +100,24 @@ class WhatsAppSwitchTests(unittest.TestCase):
         backup=next(self.backups.iterdir())
         self.assertEqual(json.loads((backup/'switch.json').read_text())['phase'],'manual-recovery-required')
 
+    def test_unexpected_package_edit_is_not_clobbered_before_rollback(self):
+        for name in ('package.json','package-lock.json'):
+            with self.subTest(name=name):
+                # A separate fixture per variant preserves the atomic rename preconditions.
+                case=WhatsAppSwitchTests(methodName='runTest');case.setUp()
+                self.addCleanup(case.doCleanups)
+                unexpected=b'concurrent manifest edit; preserve'
+                def ready(service,state):
+                    (case.live/name).write_bytes(unexpected)
+                    raise RuntimeError('candidate failed')
+                with self.assertRaisesRegex(RuntimeError,'rollback requires operator review'):case.run_switch(ready)
+                self.assertEqual((case.live/name).read_bytes(),unexpected)
+                self.assertEqual((case.live/'node_modules/identity').read_text(),'6.16.0')
+                self.assertFalse(case.active)
+                self.assertEqual(case.calls.count('start'),1)
+                backup=next(case.backups.iterdir())
+                self.assertEqual(json.loads((backup/'switch.json').read_text())['phase'],'manual-recovery-required')
+
     def test_shared_deploy_lock_prevents_any_switch(self):
         with switch.deployment_lock(self.lock):
             with self.assertRaises(BlockingIOError):self.run_switch()

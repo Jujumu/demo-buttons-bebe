@@ -201,6 +201,9 @@ def apply(plan,live=LIVE,candidate=CANDIDATE,backups=BACKUPS,lock=LOCK,service=s
                 if stop_attempted:service('stop')
                 if digest(live/'server.js') not in {plan['live']['server.js'],plan['patched_server_sha256']}:
                     raise RuntimeError('Unexpected concurrent server edit; manual recovery required')
+                for name in ('package.json','package-lock.json'):
+                    if digest(live/name) not in {plan['live'][name],plan['candidate'][name]}:
+                        raise RuntimeError('Unexpected concurrent package edit; manual recovery required')
                 if new_moved:os.rename(live/'node_modules',private/'failed-node_modules')
                 if old_moved:os.rename(private/'node_modules',live/'node_modules')
                 if stop_attempted:
