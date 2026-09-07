@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import importlib.util
+from contextlib import asynccontextmanager
 import json
 import os
 from pathlib import Path
@@ -96,21 +97,60 @@ def guard_request(request):
         if not isinstance(value,dict) or value.get('method') not in (
                 'initialize','notifications/initialized','tools/list','notifications/cancelled'):
             raise PermissionError('Only initialization and tool listing permitted')
-    elif request.method not in ('GET','DELETE'):
+    elif request.method not in ('GET','DELETE','HEAD'):
         raise PermissionError('Unexpected discovery HTTP method')
 
 
-def child(mode):
-    # Install before Hermes/provider imports; inherited env is separately minimal.
-    sys.addaudithook(audit)
-    import httpx
-    original = httpx.Client.send
-    async_original = httpx.AsyncClient.send
+def guard_http_client(module):
+    """Protect both httpx (SDK1/Hermes) and httpx2 (SDK2) send boundaries."""
+    original = module.Client.send
+    async_original = module.AsyncClient.send
     def send(self, request, *args, **kwargs):
         guard_request(request); return original(self, request, *args, **kwargs)
     async def async_send(self, request, *args, **kwargs):
         guard_request(request); return await async_original(self, request, *args, **kwargs)
-    httpx.Client.send = send; httpx.AsyncClient.send = async_send
+    module.Client.send = send
+    module.AsyncClient.send = async_send
+
+
+@asynccontextmanager
+async def discovery_transport(url):
+    transport = importlib.import_module('mcp.client.streamable_http')
+    legacy = getattr(transport, 'streamablehttp_client', None)
+    if legacy is not None:
+        async with legacy(url, timeout=5, sse_read_timeout=15) as streams:
+            if len(streams) != 3: raise ValueError('Unexpected SDK1 transport streams')
+            yield streams[0], streams[1]
+    else:
+        # SDK2 renamed the entry point, moved timeout configuration into its
+        # httpx2 client, and returns two streams rather than the SDK1 triple.
+        modern = getattr(transport, 'streamable_http_client')
+        http = importlib.import_module('httpx2')
+        async with http.AsyncClient(timeout=http.Timeout(5, read=15),
+                                    trust_env=False, follow_redirects=False) as client:
+            async with modern(url, http_client=client) as streams:
+                if len(streams) != 2: raise ValueError('Unexpected SDK2 transport streams')
+                yield streams[0], streams[1]
+
+
+def silence_stderr():
+    # Keep background-task and interpreter-shutdown errors private for the whole
+    # child lifetime, including after ordinary redirect context managers exit.
+    descriptor = os.open(os.devnull, os.O_WRONLY)
+    try: os.dup2(descriptor, 2)
+    finally: os.close(descriptor)
+
+
+def child(mode):
+    silence_stderr()
+    # Install before Hermes/provider imports; inherited env is separately minimal.
+    sys.addaudithook(audit)
+    for name in ('httpx', 'httpx2'):
+        try: module = importlib.import_module(name)
+        except ModuleNotFoundError as error:
+            if name == 'httpx2' and error.name == 'httpx2': continue
+            raise
+        guard_http_client(module)
     import yaml
     config = yaml.safe_load((HOME / 'config.yaml').read_text())
     servers = config.get('mcp_servers', {})
@@ -122,11 +162,10 @@ def child(mode):
     if mode == 'endpoints':
         import asyncio
         from mcp import ClientSession
-        from mcp.client.streamable_http import streamablehttp_client
         async def inspect():
             result = {'schemas':{},'readonly':{}}
             for group,(port,names) in GROUPS.items():
-                async with streamablehttp_client(f'http://127.0.0.1:{port}/mcp',timeout=5,sse_read_timeout=15) as (read,write,_):
+                async with discovery_transport(f'http://127.0.0.1:{port}/mcp') as (read,write):
                     async with ClientSession(read,write) as session:
                         await session.initialize(); listing = await session.list_tools()
                         metadata = endpoint_metadata(group, listing)

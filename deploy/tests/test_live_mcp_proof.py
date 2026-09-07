@@ -57,3 +57,67 @@ class DiscoveryProofTests(unittest.TestCase):
         self.assertFalse(proof.metadata_equal(original,normalized))
         instance={'default':{'anyOf':[{'type':'string'},{'type':'null'}]}}
         self.assertEqual(proof.canonical_nullable_schema(instance),instance)
+
+    def test_transport_supports_sdk1_triple_and_sdk2_pair_without_unguarded_defaults(self):
+        import asyncio
+        from contextlib import asynccontextmanager
+        from unittest.mock import patch
+        for legacy in (True,False):
+            events=[]
+            class Client:
+                def __init__(self,**kwargs):events.append(('client',kwargs))
+                async def __aenter__(self):return self
+                async def __aexit__(self,*args):events.append(('closed',True))
+            @asynccontextmanager
+            async def connect(url,**kwargs):
+                events.append(('transport',kwargs))
+                yield ('read','write','session') if legacy else ('read','write')
+            transport=SimpleNamespace(**{'streamablehttp_client' if legacy else 'streamable_http_client':connect})
+            http=SimpleNamespace(AsyncClient=Client,Timeout=lambda *a,**k:(a,k))
+            async def run():
+                async with proof.discovery_transport('http://127.0.0.1:8077/mcp') as streams:
+                    self.assertEqual(streams,('read','write'))
+            with patch.object(proof.importlib,'import_module',side_effect=lambda name:transport if name=='mcp.client.streamable_http' else http):
+                asyncio.run(run())
+            if legacy:self.assertEqual(events[0][1],{'timeout':5,'sse_read_timeout':15})
+            else:
+                self.assertEqual(events[0][1],{'timeout':((5,),{'read':15}),'trust_env':False,'follow_redirects':False})
+                self.assertEqual(events[-1],('closed',True))
+                self.assertIn('http_client',events[1][1])
+
+    def test_both_http_client_families_block_tool_calls_before_transport(self):
+        import asyncio
+        for family in ('httpx','httpx2'):
+            events=[]
+            class Sync:
+                def send(self,request,*args,**kwargs):events.append('sync');return 'ok'
+            class Async:
+                async def send(self,request,*args,**kwargs):events.append('async');return 'ok'
+            module=SimpleNamespace(Client=Sync,AsyncClient=Async)
+            proof.guard_http_client(module)
+            self.assertEqual(Sync().send(self.request()),'ok')
+            self.assertEqual(asyncio.run(Async().send(self.request())),'ok')
+            for request in (self.request('tools/call'),self.request('sampling/createMessage'),self.request(host='example.invalid')):
+                with self.assertRaises(PermissionError):Sync().send(request)
+                with self.assertRaises(PermissionError):asyncio.run(Async().send(request))
+            self.assertEqual(events,['sync','async'],family)
+
+    def test_head_is_only_allowed_at_reviewed_local_discovery_endpoints(self):
+        request=self.request();request.method='HEAD';proof.guard_request(request)
+        for host,port in [('example.invalid',8077),('127.0.0.1',8000)]:
+            request=self.request(host=host,port=port);request.method='HEAD'
+            with self.assertRaises(PermissionError):proof.guard_request(request)
+
+    def test_child_stderr_is_suppressed_through_interpreter_shutdown(self):
+        import subprocess,sys
+        code="""import sys,atexit,importlib.util
+spec=importlib.util.spec_from_file_location('proof',sys.argv[1]);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+m.silence_stderr()
+print('synthetic-diagnostic',file=sys.stderr)
+atexit.register(lambda:print('synthetic-late-diagnostic',file=sys.stderr))
+print('safe-output')
+"""
+        result=subprocess.run([sys.executable,'-c',code,str(ROOT/'tools/ops/verify_live_mcp.py')],capture_output=True,text=True,timeout=5)
+        self.assertEqual(result.returncode,0)
+        self.assertEqual(result.stderr,'')
+        self.assertEqual(result.stdout.strip(),'safe-output')
