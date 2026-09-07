@@ -81,11 +81,13 @@ It supplies the isolated QA environment instead of using root's profile.
 
 Hermes startup preflight explicitly discovers MCPs before inspecting schemas and
 preserves the interpreter's venv path (resolving its symlink bypasses that venv).
-It accepts either the exact ten explicit read-only definitions or Hermes' normal
-three progressive-disclosure bridge definitions. For the bridge presentation,
-both the dispatcher catalog and agent executor scope must equal those same ten
-capabilities, and unknown/out-of-scope bridge calls must fail before dispatch.
-No production tool presentation is changed to make this check pass.
+It accepts either the exact ten business definitions plus twelve standard
+metadata helpers, or Hermes' normal three progressive-disclosure bridge definitions. For the bridge presentation,
+both the dispatcher catalog and agent executor scope must equal the ten business
+capabilities plus the twelve standard MCP resource/prompt metadata helpers, and unknown/out-of-scope bridge calls must fail before dispatch.
+The metadata helpers must match Hermes-generated schemas exactly, and all three
+resource, resource-template, and prompt catalogs must be empty. No native tool
+capabilities are enabled. Production tool presentation is unchanged.
 
 Live synced products are runtime data and are not all tracked in Git. Before a
 policy-mode run that includes catalog retrieval, an operator may use
@@ -98,5 +100,8 @@ Pass the immutable snapshot through `--product-manifest PATH` together with
 `--product-manifest-sha256 SHA256`. The loader admits only `products/product-*.md`
 filenames; it cannot admit tickets, learned content, directories, or traversal.
 The QA receipt records this snapshot's hash/count in addition to the merged
-allowlist hash. Unknown result paths still stop the run. A catalog change during
-QA may therefore require a separately reviewed new snapshot and a new run.
+allowlist hash. Unknown result paths still stop the run. Local product files never enter the base allowlist. New product filenames require
+a separately reviewed snapshot and a new run. This is a filename boundary, not
+a snapshot of document contents: edits to an already allowed public product may
+change retrieval. Keep KB writes paused for a reproducible run and retain tool
+evidence; do not claim content immutability from this manifest.

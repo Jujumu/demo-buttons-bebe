@@ -10,7 +10,7 @@ from mcp.client.streamable_http import streamablehttp_client
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 from pydantic import StrictInt
-from qa_safety import GROUPS, audit, filter_policy_results
+from qa_safety import GROUPS, audit, filter_policy_results, validate_fixture
 
 
 def create_server(group: str, port: int, fixture_path: Path, audit_path: Path, allowlist: Path, kb_mode: str):
@@ -19,7 +19,9 @@ def create_server(group: str, port: int, fixture_path: Path, audit_path: Path, a
     server = FastMCP(group, host="127.0.0.1", port=port, log_level="ERROR", stateless_http=True, json_response=True)
 
     def state(tool):
-        value = json.loads(fixture_path.read_text())
+        if fixture_path.is_symlink() or fixture_path.stat().st_size > 100000:
+            raise ValueError("Invalid bounded fixture file")
+        value = validate_fixture(json.loads(fixture_path.read_text()))
         audit(audit_path, group, tool, scenario_id=value["scenario_id"])
         return value
 

@@ -10,7 +10,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from qa_safety import filter_policy_results, redact, scenario_fixture, GROUPS, TOOLS
+from qa_safety import filter_policy_results, redact, scenario_fixture, GROUPS, TOOLS, UTILITY_NAMES
 from qa_harness import Harness, atomic_json, endpoint_preflight, isolated_run, minimal_environment, profile_config, prove_hermes_bindings
 
 SCENARIO={"id":"QA-TEST","subject":"Shipping question","message":"When does order #10312 ship?","email":"qa@example.com","intent":"shipping","cat":"low"}
@@ -38,6 +38,8 @@ class PolicyBoundaryTests(unittest.TestCase):
         profile=profile_config({"default":"test-model","provider":"custom"},{g:19000+i for i,g in enumerate(GROUPS)})
         self.assertEqual(set(profile["mcp_servers"]),set(GROUPS))
         self.assertEqual(profile["platform_toolsets"]["cli"],[])
+        for group in GROUPS:
+            self.assertEqual(profile['mcp_servers'][group]['tools'],{'include':sorted(TOOLS[group]),'resources':True,'prompts':True})
         with patch.dict(os.environ,{"GORGIAS_API_KEY":"not-a-real-secret","HERMES_SKIP_APPROVAL":"1"}):
             env=minimal_environment(Path("/private/qa"))
         self.assertNotIn("GORGIAS_API_KEY",env)
@@ -149,7 +151,7 @@ print('JSON_RESULT['+token+']: '+json.dumps({'priority':'normal','action':'draft
             self.assertFalse(marker.exists())
 
     def test_binding_preflight_discovers_before_exact_allowlist_check(self):
-        names = sorted(f"mcp__{g}__{t}" for g in GROUPS for t in TOOLS[g])
+        names = sorted(f"mcp__{g}__{t}" for g in GROUPS for t in TOOLS[g] | UTILITY_NAMES)
         (self.source / 'tools').mkdir()
         (self.source / 'tools/__init__.py').write_text('')
         (self.source / 'tools/mcp_tool.py').write_text(
@@ -169,7 +171,7 @@ print('JSON_RESULT['+token+']: '+json.dumps({'priority':'normal','action':'draft
     def test_bridge_receipt_requires_exact_catalog_and_rejection_proof(self):
         import copy
         import qa_harness
-        names = sorted(f"mcp__{g}__{t}" for g in GROUPS for t in TOOLS[g])
+        names = sorted(f"mcp__{g}__{t}" for g in GROUPS for t in TOOLS[g] | UTILITY_NAMES)
         receipt = {'raw':names, 'actual':['tool_call','tool_describe','tool_search'],
                    'bridge_scope':{'reachable':names, 'executor_scope':names,
                                    'rejected_outside_without_dispatch':True}}
@@ -218,3 +220,45 @@ print('JSON_RESULT['+token+']: '+json.dumps({'priority':'normal','action':'draft
 
 
 if __name__=="__main__":unittest.main()
+
+class InputBoundaryTests(unittest.TestCase):
+    def test_policy_allowlist_rejects_directory_links_and_never_admits_local_products(self):
+        from qa_safety import policy_files
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp).resolve();repo=root/'repo';(repo/'kb/policies').mkdir(parents=True)
+            (repo/'kb/policies/allowed.md').write_text('policy')
+            (repo/'kb/products').mkdir();(repo/'kb/products/product-unreviewed.md').write_text('catalog')
+            self.assertEqual(policy_files(repo),{'policies/allowed.md'})
+            outside=root/'outside';outside.mkdir();(outside/'secret.md').write_text('synthetic-private')
+            (repo/'kb/faq').symlink_to(outside,target_is_directory=True)
+            with self.assertRaises(ValueError):policy_files(repo)
+            (repo/'kb/faq').unlink()
+            (repo/'kb/policies/link.md').symlink_to(outside/'secret.md')
+            with self.assertRaises(ValueError):policy_files(repo)
+            (repo/'kb/policies/link.md').unlink()
+            (repo/'kb').rename(repo/'original-kb');(repo/'kb').symlink_to(repo/'original-kb',target_is_directory=True)
+            with self.assertRaises(ValueError):policy_files(repo)
+
+    def test_fixture_requires_exact_synthetic_shape_at_server_read_boundary(self):
+        from qa_safety import validate_fixture
+        import copy
+        fixture=scenario_fixture(SCENARIO,1)
+        self.assertEqual(validate_fixture(fixture),fixture)
+        for change in ('marker','real-email','real-id','body-url','extra-customer','order-status','oversized'):
+            value=copy.deepcopy(fixture)
+            if change=='marker':value['ticket']['qa_fixture']=False
+            elif change=='real-email':value['customer']['email']='customer@real.invalid'
+            elif change=='real-id':value['ticket']['id']=123
+            elif change=='body-url':value['messages'][0]['body_url']='https://example.invalid/private'
+            elif change=='extra-customer':value['customer']['phone']='123456789'
+            elif change=='order-status':value['orders'][0]['fulfillment_status']='delivered'
+            else:value['messages'][0]['body_text']='x'*100001
+            with self.subTest(change=change),self.assertRaises(ValueError):validate_fixture(value)
+        from qa_mcp_server import create_server
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);path=root/'fixture.json';path.write_text(json.dumps({'ticket':{'id':123}}))
+            server=create_server('buttonsbebe_gorgias',19079,path,root/'audit',root/'allowlist','fixture')
+            from mcp.server.fastmcp.exceptions import ToolError
+            with self.assertRaisesRegex(ToolError,'Invalid synthetic fixture'):
+                asyncio.run(server.call_tool('list_recent_tickets',{}))
+            self.assertFalse((root/'audit').exists())

@@ -16,7 +16,7 @@ from unittest.mock import patch
 
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
-from qa_safety import GROUPS, TOOLS, policy_files, redact, scenario_fixture
+from qa_safety import GROUPS, TOOLS, UTILITY_NAMES, policy_files, redact, scenario_fixture
 from qa_metadata import prove_metadata
 from qa_catalog import load_manifest
 
@@ -46,7 +46,7 @@ def profile_config(model: dict, ports: dict) -> dict:
         "platform_toolsets":{"cli":[]},
         "memory":{"memory_enabled":False,"user_profile_enabled":False},
         "mcp_servers":{group:{"url":f"http://127.0.0.1:{ports[group]}/mcp","enabled":True,"connect_timeout":15,
-                              "trust":"untrusted","tools":{"include":sorted(TOOLS[group]),"resources":False,"prompts":False}} for group in GROUPS},
+                              "trust":"untrusted","tools":{"include":sorted(TOOLS[group]),"resources":True,"prompts":True}} for group in GROUPS},
     }
 
 
@@ -88,8 +88,13 @@ async def endpoint_preflight(ports, fixture, schemas=None):
             async with ClientSession(read,write) as session:
                 await session.initialize()
                 listing = await session.list_tools()
-                if {tool.name for tool in listing.tools} != TOOLS[group] or any(not tool.annotations or tool.annotations.readOnlyHint is not True for tool in listing.tools):
+                if len(listing.tools) != len(TOOLS[group]) or {tool.name for tool in listing.tools} != TOOLS[group] or any(not tool.annotations or tool.annotations.readOnlyHint is not True for tool in listing.tools):
                     raise ValueError("QA MCP tool contract mismatch")
+                for catalog,field in ((await session.list_resources(),'resources'),
+                                      (await session.list_resource_templates(),'resourceTemplates'),
+                                      (await session.list_prompts(),'prompts')):
+                    if getattr(catalog,field) != [] or catalog.nextCursor:
+                        raise ValueError("QA metadata catalogs must remain empty")
                 if schemas is not None:
                     schemas.update({f"mcp__{group}__{tool.name}": tool.inputSchema for tool in listing.tools})
                 if group == "buttonsbebe_gorgias":
@@ -107,7 +112,7 @@ async def endpoint_preflight(ports, fixture, schemas=None):
 
 
 def prove_hermes_bindings(hermes_python, hermes_source, env, home, timeout):
-    expected = sorted(f"mcp__{group}__{tool}" for group in GROUPS for tool in TOOLS[group])
+    expected = sorted(f"mcp__{group}__{tool}" for group in GROUPS for tool in TOOLS[group] | UTILITY_NAMES)
     code = """
 import sys,json
 sys.path.insert(0,sys.argv[1])

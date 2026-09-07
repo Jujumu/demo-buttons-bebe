@@ -5,14 +5,21 @@ PROBE = '''
 import sys,json
 sys.path.insert(0,sys.argv[1])
 from model_tools import get_tool_definitions
-from tools.mcp_tool import discover_mcp_tools,shutdown_mcp_servers,_tool_read_only_hints
+from tools.mcp_tool import discover_mcp_tools,shutdown_mcp_servers,_tool_read_only_hints,_build_utility_schemas
 try:
  groups=json.loads(sys.argv[2])
  discover_mcp_tools()
  raw=get_tool_definitions(enabled_toolsets=groups,quiet_mode=True,skip_tool_search_assembly=True)
- schemas={item['function']['name']:item['function']['parameters'] for item in raw}
+ utilities={item['schema']['name']:item['schema'] for group in groups for item in _build_utility_schemas(group)}
+ names=[item['function']['name'] for item in raw]
+ expected_utilities={'mcp__'+group+'__'+name for group in groups for name in ('list_resources','read_resource','list_prompts','get_prompt')}
+ if set(utilities)!=expected_utilities or len(names)!=len(set(names)):
+  raise ValueError('Unexpected or duplicate utility definitions')
+ selected={item['function']['name']:item['function'] for item in raw if item['function']['name'] in utilities}
+ if selected!=utilities: raise ValueError('Missing or modified metadata utility')
+ schemas={item['function']['name']:item['function']['parameters'] for item in raw if item['function']['name'] not in utilities}
  hints={'mcp__'+group+'__'+name:value is True for group in groups for name,value in _tool_read_only_hints.get(group,{}).items()}
- print('QA_METADATA='+json.dumps({'schemas':schemas,'readonly':hints},sort_keys=True))
+ print('QA_METADATA='+json.dumps({'schemas':schemas,'readonly':hints,'metadata_utilities_verified':True},sort_keys=True))
 finally:
  shutdown_mcp_servers()
 '''
@@ -63,8 +70,8 @@ def prove_metadata(python, source, env, home, expected_schemas, groups, run):
     if not expected_schemas:
         raise ValueError('QA requires endpoint schema evidence')
     expected = {'schemas': expected_schemas,
-                'readonly': {name: True for name in expected_schemas}}
-    for phase in ('initial', 'fresh-process-cache'):
+                'readonly': {name: True for name in expected_schemas}, 'metadata_utilities_verified':True}
+    for phase in ('initial', 'fresh-process-rediscovery'):
         result = run([str(python), '-c', PROBE, str(source), json.dumps(groups)],
                      timeout=90, env=env, cwd=home)
         rows = [line[len('QA_METADATA='):] for line in result.stdout.splitlines()
@@ -72,4 +79,4 @@ def prove_metadata(python, source, env, home, expected_schemas, groups, run):
         if result.returncode or len(rows) != 1 or not metadata_equal(json.loads(rows[0]), expected):
             raise ValueError('Hermes readonly metadata/schema mismatch during ' + phase + '; no model calls permitted')
     return {'readonly_verified': True, 'endpoint_schemas_verified': True,
-            'fresh_process_cache_verified': True, 'nullable_comparison': 'exact-string-null-union-only', 'tool_count': len(expected_schemas)}
+            'fresh_process_rediscovery_verified': True, 'metadata_utility_count': 4 * len(groups), 'nullable_comparison': 'exact-string-null-union-only', 'tool_count': len(expected_schemas)}
