@@ -80,6 +80,19 @@ class EvidenceDraftTests(unittest.TestCase):
         self.assertIn('READ-ONLY',prompt)
         self.assertIn('JSON_RESULT[0123456789abcdef]',prompt)
 
+    def test_customer_tone_and_service_scope_do_not_erase_financial_uncertainty(self):
+        prompt=_build_prompt(ticket_id=123,message_text='General inquiry',ticket_subject='Question',customer_email='synthetic@example.invalid',intents=[],token='0123456789abcdef')
+        for phrase in ('acknowledgments warm and specific',
+                       "limitations that affect the customer's decision",
+                       'Staff routing belongs in AGENT NOTE',
+                       'explicit financial-uncertainty rules below still apply',
+                       'does not establish a specialist department',
+                       'generic contact page or a product keyword',
+                       'For refunds/chargebacks without a confirmed outcome'):
+            self.assertIn(phrase,prompt)
+        self.assertIn('without claiming it has happened',prompt)
+        self.assertIn("I can't confirm an outcome for this request",prompt)
+
     def test_review_commitment_detector_has_bounded_cpu_on_adversarial_near_matches(self):
         samples=('we '+' '*100000+'are not checking',('we will follow '+'x'*100+' ')*1000,('our team is '+ 'currently '*20)*1000)
         start=time.process_time()
