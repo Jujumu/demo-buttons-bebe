@@ -173,7 +173,7 @@ Do not write, post, tag or send anything anywhere. Do not run any shell command.
         bad "Hermes rejected a toolset name — fix HERMES_TOOLSETS before deploying."
     elif printf '%s' "$SMOKE" | grep -qiE "approve|approval required|\[y/n\]|permission denied for tool"; then
         bad "looks like it stopped on an approval prompt. Investigate before deploying;"
-        bad "HERMES_SKIP_APPROVAL=1 is the temporary unblock."
+        bad "Inspect MCP metadata and configuration; preserve the approval guard."
     elif ! printf '%s' "$SMOKE" | grep -q "KBOK:"; then
         # Require a POSITIVE signal. Checking only for the absence of a few
         # error strings meant any other failure - "connection refused", a
