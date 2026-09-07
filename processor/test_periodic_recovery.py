@@ -62,6 +62,8 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
         clock = 0
         def monotonic():
             return clock
+        def _window_result(job):
+            return [job] if job is not None else []
         async def next_job(**kwargs):
             nonlocal calls, clock
             calls += 1
@@ -69,6 +71,8 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
             if calls >= 3:
                 orchestrator._shutdown = True
             return None
+        async def window_job(**kwargs):
+            return _window_result(await next_job())
         try:
             orchestrator._shutdown = False
             with (
@@ -77,7 +81,7 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
                 patch.object(orchestrator, "_acquire_singleton_lock", return_value=True),
                 patch.object(orchestrator, "_release_lock") as release,
                 patch.object(orchestrator, "time", SimpleNamespace(monotonic=monotonic)),
-                patch.object(orchestrator, "get_next_pending_job", side_effect=next_job),
+                patch.object(orchestrator, "get_pending_job_window", side_effect=window_job),
                 patch.object(orchestrator, "requeue_stale_jobs", new_callable=AsyncMock) as recover,
             ):
                 recover.return_value = 0

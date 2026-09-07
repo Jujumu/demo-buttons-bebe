@@ -215,6 +215,16 @@ class WarehouseSafetyAssetTests(unittest.TestCase):
             self.assertEqual(len(exec_lines), 1, unit)
             self.assertTrue(exec_lines[0].endswith("/sync-products.sh\""), unit)
 
+    def test_kb_sync_timer_copies_use_daily_cadence(self) -> None:
+        for unit in (
+            ROOT / "kb/buttonsbebe-kb-sync.timer",
+            ROOT / "deploy/systemd/buttonsbebe-kb-sync.timer",
+        ):
+            text = unit.read_text(encoding="utf-8")
+            self.assertIn("OnActiveSec=1d", text, unit)
+            self.assertIn("OnUnitActiveSec=1d", text, unit)
+            self.assertNotIn("=3d", text, unit)
+
     def test_deploy_receiver_restores_kb_sync_execute_mode(self) -> None:
         helper = (ROOT / "deploy/cd/source_release.py").read_text()
         self.assertIn("0o755 if path.suffix == '.sh' else 0o644", helper)

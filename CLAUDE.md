@@ -58,7 +58,7 @@ does not write to Gorgias.
 - Sources: `intents/`, `faq/`, `policies/`, `tickets/`, `products/`, and
   lower-trust Shopify platform background in `shopify/`
 - Index: LanceDB hybrid vector + FTS search
-- Product source: active Shopify catalog, refreshed every three days by
+- Product source: active Shopify catalog, refreshed daily by
   `buttonsbebe-kb-sync.timer`
 - Product sync stages and validates the catalog, holds the sync/index locks
   through rebuild, restores the previous corpus on failure, and promotes a new

@@ -46,7 +46,7 @@ from bb_webhook.database import (  # noqa: E402
     get_job_result,
     complete_job,
     fail_job,
-    get_next_pending_job,
+    get_pending_job_window,
     get_job_stats,
     init_db,
     requeue_stale_jobs,
@@ -63,6 +63,51 @@ from shared.review_policy import final_review_result  # noqa: E402
 from whatsapp_notifier import send_whatsapp  # noqa: E402
 
 logger = get_logger(__name__)
+
+# Bounded lookahead for sensitive-ticket priority. A sensitive customer message
+# may jump ahead of at most this many older pending jobs, preserving FIFO
+# fairness when a burst floods the queue.
+_PRIORITY_WINDOW_LIMIT = 25
+_CLASSIFICATION_CACHE_LIMIT = 512
+
+
+# ── Priority-aware selection ────────────────────────────────
+def _select_next_job(window: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Pick the next job from a bounded pending window.
+
+    Oldest customer message first, exactly as before. When several customer jobs
+    are pending, run the deterministic classifier over the window once and take
+    the first IMMEDIATE/HIGH-sensitive customer job, so a chargeback or dispute
+    does not wait behind a long FIFO backlog during a burst. Classification
+    results are cached so the processor does not repeat the work when the
+    selected job is processed. Agent jobs always stay behind customer jobs.
+    """
+    if not window:
+        return None
+    if len(window) == 1:
+        return window[0]
+
+    customer_jobs = [job for job in window if job.get("is_customer_message")]
+    if len(customer_jobs) < 2:
+        return window[0]
+
+    for job in customer_jobs:
+        payload = json.loads(job["payload"])
+        message_id = str(job.get("message_id") or "")
+        result = _classification_cache.get(message_id)
+        if result is None:
+            result = deterministic_classify(payload)
+            if message_id:
+                if len(_classification_cache) >= _CLASSIFICATION_CACHE_LIMIT:
+                    _classification_cache.pop(next(iter(_classification_cache)))
+                _classification_cache[message_id] = result
+        if result["priority"] in (IMMEDIATE, HIGH) and result.get("sensitive"):
+            return job
+    return window[0]
+
+
+_classification_cache: dict[str, dict[str, Any]] = {}
+
 
 # ── Result persistence ──────────────────────────────────────
 def _save_result_to_webhook(
@@ -221,7 +266,16 @@ async def process_customer_message(job: dict[str, Any]) -> dict[str, Any]:
     # classifier flags the ticket as sensitive/urgent, we honor that even
     # if the LLM later misclassifies it. The classifier can only ESCALATE
     # (NORMAL → HIGH/IMMEDIATE), never de-escalate.
-    det_result = deterministic_classify(payload)
+    message_id_for_cache = str(job.get("message_id") or "")
+    cached_classification = _classification_cache.get(message_id_for_cache) if message_id_for_cache else None
+    if cached_classification is not None:
+        det_result = cached_classification
+    else:
+        det_result = deterministic_classify(payload)
+        if message_id_for_cache:
+            if len(_classification_cache) >= _CLASSIFICATION_CACHE_LIMIT:
+                _classification_cache.pop(next(iter(_classification_cache)))
+            _classification_cache[message_id_for_cache] = det_result
     log_event(logger, "INFO", "Deterministic classifier result",
               ticket_id=ticket_id,
               det_priority=det_result["priority"],
@@ -429,10 +483,17 @@ async def run_processor() -> int:
                     log_event(logger, "WARNING", "Resolved abandoned claims; exhausted retries marked failed",
                               count=recovered,
                               max_age_minutes=settings.stale_job_minutes)
-            # One query per pass, with customer messages ordered ahead of
-            # agent feedback work. This avoids a second round trip and keeps
-            # the customer-first policy in the database boundary.
-            job = await get_next_pending_job(db_path=settings.db_path_absolute)
+            # One bounded window query per pass, with customer messages ordered
+            # ahead of agent feedback work. Within that window the processor
+            # may promote a sensitive customer job (IMMEDIATE/HIGH per the
+            # deterministic classifier) ahead of older normal customer jobs; the
+            # window bound keeps that reordering fair during bursts. Claiming
+            # remains the atomic claim_job transition.
+            window = await get_pending_job_window(
+                db_path=settings.db_path_absolute,
+                limit=_PRIORITY_WINDOW_LIMIT,
+            )
+            job = _select_next_job(window)
 
             if job:
                 await _process_one_job(

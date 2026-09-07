@@ -368,6 +368,31 @@ async def get_next_pending_job(db_path: Path | None = None) -> dict | None:
     return dict(rows[0]) if rows else None
 
 
+async def get_pending_job_window(
+    limit: int = 25,
+    db_path: Path | None = None,
+) -> list[dict]:
+    """Fetch a bounded pending-job window for processor-side priority selection.
+
+    Ordering matches get_next_pending_job: customer messages first, then oldest
+    first. The processor uses this window only to pick which already-pending job
+    to claim next; claiming is still the atomic claim_job transition, so races
+    with another worker remain impossible.
+    """
+    if limit <= 0:
+        raise ValueError("pending job window limit must be positive")
+    db = Database(db_path)
+    rows = await db.fetch(
+        """SELECT * FROM job_queue
+           WHERE status = 'pending'
+           ORDER BY is_customer_message DESC, created_at ASC
+           LIMIT ?""",
+        (limit,),
+        operation="get_pending_job_window",
+    )
+    return [dict(row) for row in (rows or [])]
+
+
 async def claim_job(
     job_id: int,
     db_path: Path | None = None,

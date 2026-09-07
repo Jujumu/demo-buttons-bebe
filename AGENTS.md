@@ -102,7 +102,7 @@ Gorgias webhook
 | 8085 | WhatsApp connect (QR + alerts + bridge) | `buttonsbebe-whatsapp-connect` |
 | 8087 | KB admin API | `buttonsbebe-kb-admin` |
 | — | Job processor | `buttonsbebe-processor` |
-| — | Timers: product sync (3d) / notices GC / nightly learn (03:30) | `buttonsbebe-kb-sync` / `-notices-gc` / `-kb-learn` |
+| — | Timers: product sync (1d) / notices GC / nightly learn (03:30) | `buttonsbebe-kb-sync` / `-notices-gc` / `-kb-learn` |
 
 Caddy (`deploy/caddy/Caddyfile.redacted` is the only supported source;
 `webhook/Caddyfile` is marked RETIRED): session-protected console at
@@ -173,7 +173,7 @@ systemctl status buttonsbebe-processor buttonsbebe-kb-mcp buttonsbebe-redo-mcp \
   buttonsbebe-gorgias-mcp buttonsbebe-kb-admin
 journalctl -u buttonsbebe-processor -n 50
 cd "/root/Buttonsbebe Agent/KB" && ./search.sh "do you ship to canada"
-./sync-products.sh                     # manual product refresh (else every 3 days)
+./sync-products.sh                     # manual product refresh (else daily)
 sqlite3 "/root/Buttonsbebe Agent/webhook/data/webhook.db" \
   "select status,count(*) from job_queue group by status"   # table is job_queue, not jobs
 ```
