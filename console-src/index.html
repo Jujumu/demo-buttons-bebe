@@ -334,8 +334,10 @@ body.bb-console .detail .draft.esc,body.bb-console .warn{background:var(--amber-
 body.bb-console .tk .who b,body.bb-console .tk .subj{font-size:15px}
 body.bb-console .badge.low{background:var(--green-s);color:var(--green)}
 body.bb-console .badge.sens{background:var(--amber-s);color:var(--amber)}
-body.bb-console .attention{background:var(--amber-s);border-color:#dfc393;border-radius:12px}
-body.bb-console .attention-btn{background:#fff;border-color:#dfc393;border-radius:8px}
+body.bb-console .warn.owner-alert-warning{background:#f5f6f7;color:#374151;border-color:#d9dde1}
+body.bb-console .attention{background:#f5f6f7;border-color:#d9dde1;border-radius:12px}
+body.bb-console .attention-head p,body.bb-console .attention-btn{color:#4b5563}
+body.bb-console .attention-btn{background:#fff;border-color:#d9dde1;border-radius:8px}
 body.bb-console .kbed textarea{background:#fff;font-family:var(--brand-font);font-size:16px;line-height:1.65}
 body.bb-console .notice-intro h2,body.bb-console .panel h3{color:var(--acc)}
 body.bb-console .notice-card,body.bb-console .notice-review,body.bb-console .notification-row{border-radius:12px}
@@ -518,7 +520,7 @@ function render(){
 function view(){return tab==="overview"?overview():tab==="tickets"?ticketsView():tab==="conns"?conns():tab==="kb"?kbView():tab==="notices"?noticesView():tab==="notif"?notificationsView():settingsView();}
 function errorBanner(){return `<div class="error-banner" role="alert"><div><strong>Could not load ${esc(loadErrors.join(", "))} data.</strong><span>Existing values are shown where available. Refresh to try again.</span></div><button class="btn" id="retry-load">Retry</button></div>`;}
 
-function ownerAlertWarning(count){return Number(count)>0?`<div class="warn" role="alert">${Number(count)} owner alert${Number(count)===1?'':'s'} need review. WhatsApp acknowledgement or delivery is uncertain; inspect the affected ticket. No automatic resend was attempted.</div>`:"";}
+function ownerAlertWarning(count){return Number(count)>0?`<div class="warn owner-alert-warning" role="alert">${Number(count)} owner alert${Number(count)===1?'':'s'} need review. WhatsApp acknowledgement or delivery is uncertain; inspect the affected ticket. No automatic resend was attempted.</div>`:"";}
 function overview(){
  if(loadErrors.includes("stats")||loadErrors.includes("tickets"))return `${opsPanel()}<div class="panel" role="alert"><h3>Overview metrics are unavailable</h3><div class="ph">Refresh to retry. No missing values are being presented as zero.</div></div>${learnPanel()}`;
  const standardDrafts=stats.drafted||0,sensitiveDrafts=stats.sensitive_draft||0,noKbDrafts=stats.no_kb_match||0,legacyEscalated=stats.escalated||0;

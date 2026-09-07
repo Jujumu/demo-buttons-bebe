@@ -45,8 +45,10 @@ body.bb-console .detail .draft.esc,body.bb-console .warn{background:var(--amber-
 body.bb-console .tk .who b,body.bb-console .tk .subj{font-size:15px}
 body.bb-console .badge.low{background:var(--green-s);color:var(--green)}
 body.bb-console .badge.sens{background:var(--amber-s);color:var(--amber)}
-body.bb-console .attention{background:var(--amber-s);border-color:#dfc393;border-radius:12px}
-body.bb-console .attention-btn{background:#fff;border-color:#dfc393;border-radius:8px}
+body.bb-console .warn.owner-alert-warning{background:#f5f6f7;color:#374151;border-color:#d9dde1}
+body.bb-console .attention{background:#f5f6f7;border-color:#d9dde1;border-radius:12px}
+body.bb-console .attention-head p,body.bb-console .attention-btn{color:#4b5563}
+body.bb-console .attention-btn{background:#fff;border-color:#d9dde1;border-radius:8px}
 body.bb-console .kbed textarea{background:#fff;font-family:var(--brand-font);font-size:16px;line-height:1.65}
 body.bb-console .notice-intro h2,body.bb-console .panel h3{color:var(--acc)}
 body.bb-console .notice-card,body.bb-console .notice-review,body.bb-console .notification-row{border-radius:12px}
