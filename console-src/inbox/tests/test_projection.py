@@ -8,7 +8,7 @@ import time
 import unittest
 from unittest.mock import patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-from export_projection import export
+from export_projection import export, identity_context
 from projection import query, connect, ProjectionUnavailable
 
 class ProjectionTests(unittest.TestCase):
@@ -17,10 +17,50 @@ class ProjectionTests(unittest.TestCase):
         self.source=self.root/'source.db';self.dest=self.root/'projection.sqlite3';self.now=time.time()
         with sqlite3.connect(self.source) as db:
             db.execute('CREATE TABLE parsed_messages(ticket_id INTEGER,message_id TEXT,author_type TEXT,author_email TEXT,customer_email TEXT,ticket_subject TEXT,channel TEXT,created_at TEXT,received_at TEXT,is_customer_message INTEGER,message_text TEXT)')
+            db.execute('CREATE TABLE webhook_events(ticket_id INTEGER,message_id TEXT,raw_payload TEXT)')
             db.execute('CREATE TABLE ticket_results(ticket_id INTEGER,message_id TEXT,draft_text TEXT,priority TEXT,action TEXT,reason TEXT,processed_at TEXT)')
             db.execute("INSERT INTO parsed_messages VALUES(1,'m1','customer','qa@example.com','qa@example.com','<script>title</script>','email','2099-01-01','2099-01-01',1,?)",('<img onerror=alert(1)>'+('x'*21000),))
             db.execute("INSERT INTO ticket_results VALUES(1,'m1','Draft only','high','sensitive_draft','Review','2099-01-01')")
     def tearDown(self):self.tmp.cleanup()
+    def test_identity_allowlist_from_same_event_never_exports_other_payload_fields(self):
+        payload={'ticket':{'id':1,'customer':{'id':987,'name':'Synthetic Customer','email':'qa@example.com',
+                  'phone':'+1 synthetic','password':'NEVER-EXPORT','orders':[{'total':999}],
+                  'address':'NEVER-EXPORT'}}}
+        with sqlite3.connect(self.source) as db:
+            db.execute('INSERT INTO webhook_events VALUES(?,?,?)',(1,'m1',json.dumps(payload)))
+        before=self.source.read_bytes();export(self.source,self.dest,now=self.now)
+        self.assertEqual(before,self.source.read_bytes())
+        ticket=query('helpdesk.get_ticket',{'ticketId':'gorgias:1'},self.dest)['ticket']
+        context=ticket['customerContext']
+        self.assertEqual(context['identity'],{'id':'987','name':'Synthetic Customer','email':'qa@example.com','phone':'+1 synthetic'})
+        self.assertEqual(context['source'],'canonical_webhook')
+        self.assertEqual(context['status'],'observed')
+        self.assertEqual(ticket['customerName'],'Synthetic Customer')
+        self.assertNotIn('NEVER-EXPORT',json.dumps(ticket))
+
+    def test_latest_event_does_not_inherit_prior_customer_identity(self):
+        with sqlite3.connect(self.source) as db:
+            db.execute('INSERT INTO webhook_events VALUES(?,?,?)',(1,'m1',json.dumps({'ticket':{'id':1,'customer':{'name':'Earlier customer','email':'qa@example.com'}}})))
+            db.execute("INSERT INTO parsed_messages VALUES(1,'m2','customer','new@example.com','new@example.com','New message','email','2099-02-01','2099-02-01',1,'Hello')")
+        export(self.source,self.dest,now=self.now)
+        context=query('helpdesk.get_ticket',{'ticketId':'gorgias:1'},self.dest)['ticket']['customerContext']
+        self.assertEqual(context['identity']['email'],'new@example.com')
+        self.assertIsNone(context['identity']['name'])
+        self.assertEqual(context['observedAt'],'2099-02-01')
+
+    def test_unknown_conflicting_malformed_and_oversized_identity_fail_closed(self):
+        row={'ticket_id':1,'customer_email':'known@example.com','received_at':'2099-01-01'}
+        for raw in ('invalid','x'*65537,json.dumps({'ticket':{'id':2,'customer':{'name':'Wrong'}}}),
+                    json.dumps({'ticket':{'id':1,'customer':{'name':'Wrong','email':'other@example.com'}}})):
+            context=identity_context(row,raw)
+            self.assertIsNone(context['identity']['name'])
+            self.assertEqual(context['identity']['email'],'known@example.com')
+        conflict=identity_context(row,json.dumps({'ticket':{'id':2}}))
+        self.assertTrue(conflict['conflict']);self.assertEqual(conflict['status'],'conflict')
+        missing=identity_context({'ticket_id':1},None)
+        self.assertEqual(missing['status'],'unknown')
+        self.assertTrue(all(v is None for v in missing['identity'].values()))
+
     def test_readonly_partial_mapping_and_text_limits(self):
         before=self.source.read_bytes();export(self.source,self.dest,now=self.now)
         self.assertEqual(before,self.source.read_bytes())

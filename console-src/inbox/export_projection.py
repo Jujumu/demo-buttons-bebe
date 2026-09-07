@@ -19,6 +19,45 @@ def text(value):
     return value[:20000],len(value)>20000
 
 
+def identity_context(row, raw):
+    """Only explicit customer fields from the same canonical event; no inference."""
+    def field(value, limit):
+        return value.strip() if isinstance(value,str) and 0 < len(value.strip()) <= limit else None
+    email = field(row.get('customer_email'), 320)
+    result = {'source':'canonical_webhook','observedAt':row.get('received_at'),
+              'identity':{'name':None,'email':email,'phone':None,'id':None},
+              'status':'observed' if email else 'unknown','conflict':False}
+    if not isinstance(raw,str) or len(raw.encode('utf-8')) > 65536:
+        return result
+    try:
+        payload=json.loads(raw)
+        if not isinstance(payload,dict): return result
+        data=payload.get('data')
+        ticket=payload.get('ticket',data.get('ticket',{}) if isinstance(data,dict) else {})
+        if not isinstance(ticket,dict): return result
+        if ticket.get('id') is None: return result
+        if str(ticket.get('id')) != str(row['ticket_id']):
+            result.update(status='conflict',conflict=True); return result
+        customer=ticket.get('customer')
+        if not isinstance(customer,dict): return result
+        observed_email=field(customer.get('email'),320)
+        if email and observed_email and email.casefold()!=observed_email.casefold():
+            result.update(status='conflict',conflict=True); return result
+        customer_id=customer.get('id')
+        if isinstance(customer_id,bool) or not isinstance(customer_id,(str,int)):
+            customer_id=None
+        else:
+            customer_id=str(customer_id)
+            if not customer_id.isascii() or not customer_id.isdecimal() or len(customer_id)>20:
+                customer_id=None
+        result['identity'].update(name=field(customer.get('name'),200),
+                                  email=email or observed_email,
+                                  phone=field(customer.get('phone'),80),id=customer_id)
+        result['status']='observed' if any(result['identity'].values()) else 'unknown'
+    except (ValueError,TypeError,RecursionError): pass
+    return result
+
+
 def extract(source, now):
     cutoff=(datetime.fromtimestamp(now,timezone.utc)-timedelta(days=90)).isoformat()
     with closing(connect(source)) as db:
@@ -44,6 +83,19 @@ def extract(source, now):
             record=dict(row);size+=sum(len(v.encode('utf-8')) for v in record.values() if isinstance(v,str))
             if size>32_000_000:raise ValueError('Projection exceeds bounded snapshot size')
             rows.append(record)
+        # Only one bounded identity source per ticket, never whole ticket history.
+        # Optional identity enrichment cannot consume unlimited raw event payloads.
+        seen=set();identity_bytes=0
+        for record in reversed(rows):
+            if record['ticket_id'] in seen: continue
+            seen.add(record['ticket_id'])
+            raw=None
+            if identity_bytes < 8_000_000:
+                event=db.execute('SELECT substr(raw_payload,1,65537) FROM webhook_events WHERE ticket_id=? AND message_id=?',
+                                 (record['ticket_id'],record['message_id'])).fetchone()
+                if event:
+                    raw=event[0];identity_bytes+=len(raw.encode('utf-8')) if isinstance(raw,str) else 0
+            record['customer_context']=identity_context(record,raw)
         return rows,truncated
 
 
@@ -67,12 +119,15 @@ def build(rows):
         reason,reason_cut=text(draft['reason'] if draft else '');truncated|=reason_cut
         subject,subject_cut=text(latest['ticket_subject']);truncated|=subject_cut
         ticket={'id':f'gorgias:{ticket_id}','subject':subject,'customerName':latest['customer_email'] or 'Customer',
+          'customerContext':latest.get('customer_context',identity_context(latest,None)),
           'fromEmail':latest['customer_email'] or '', 'status':'unknown','assignee':None,'updatedAt':latest['received_at'],
           'snippet':messages[-1]['body'][:240], 'messages':messages,'statusEvents':[], 'projectionSource':True,
           'historyIncomplete':True,'truncated':bool(truncated),'observedMessageCount':latest['observed_count'],
           'readonlyDraft':draft_text,'draftReason':reason,'draftSuperseded':superseded,
           'draftSourceMessageId':draft['message_id'] if draft else None,'draftSourceMessageAt':(draft['created_at'] or draft['received_at']) if draft else None,'draftProcessedAt':draft['processed_at'] if draft else None,
           'priority':draft['priority'] if draft else None,'draftAction':draft['action'] if draft else None}
+        if ticket['customerContext']['identity']['name'] and not ticket['customerContext']['conflict']:
+            ticket['customerName']=ticket['customerContext']['identity']['name']
         tickets.append(ticket)
     return tickets
 
