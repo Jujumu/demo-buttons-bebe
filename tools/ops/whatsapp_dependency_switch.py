@@ -180,7 +180,7 @@ def apply(plan,live=LIVE,candidate=CANDIDATE,backups=BACKUPS,lock=LOCK,service=s
                  'rollback_server_variant':'original-with-reviewed-startup-log-redaction',
                  'rollback_server_sha256':plan['patched_server_sha256']}
         journal(private/'switch.json',receipt)
-        stop_attempted=False;old_moved=False;new_moved=False;source_changed=False
+        stop_attempted=False;old_moved=False;new_moved=False
         try:
             stop_attempted=True;service('stop')
             if service('is-active'):raise RuntimeError('WhatsApp unit did not stop')
@@ -189,7 +189,6 @@ def apply(plan,live=LIVE,candidate=CANDIDATE,backups=BACKUPS,lock=LOCK,service=s
             receipt['phase']='stopped';journal(private/'switch.json',receipt)
             os.rename(live/'node_modules',private/'node_modules');old_moved=True
             os.rename(candidate/'node_modules',live/'node_modules');new_moved=True
-            source_changed=True
             atomic_file(live/'server.js',patched_server(originals['server.js']),modes['server.js'])
             for name in ('package.json','package-lock.json'):atomic_file(live/name,(candidate/name).read_bytes(),modes[name])
             sync_directories(live,candidate,private)
@@ -200,6 +199,8 @@ def apply(plan,live=LIVE,candidate=CANDIDATE,backups=BACKUPS,lock=LOCK,service=s
         except Exception:
             try:
                 if stop_attempted:service('stop')
+                if digest(live/'server.js') not in {plan['live']['server.js'],plan['patched_server_sha256']}:
+                    raise RuntimeError('Unexpected concurrent server edit; manual recovery required')
                 if new_moved:os.rename(live/'node_modules',private/'failed-node_modules')
                 if old_moved:os.rename(private/'node_modules',live/'node_modules')
                 if stop_attempted:

@@ -69,6 +69,37 @@ class WhatsAppSwitchTests(unittest.TestCase):
         (self.live/'auth/session').write_text('existing')
         with self.assertRaises(ValueError):self.run_switch()
         self.assertNotIn('stop',self.calls)
+        self.assertEqual((self.live/'server.js').read_bytes(),self.original['server.js'])
+        self.assertNotIn('start',self.calls)
+    def test_auth_arrival_after_stop_retains_redaction_before_any_candidate_changes(self):
+        stops=0
+        def service(action):
+            nonlocal stops
+            result=self.service(action)
+            if action=='stop':
+                stops+=1
+                if stops==1:(self.live/'auth/new-session').write_text('arrived during stop')
+            return result
+        with self.assertRaisesRegex(RuntimeError,'old modules/source restored'):
+            switch.apply(self.plan,self.live,self.candidate,self.backups,self.lock,service,lambda:'qr',lambda service,state:None)
+        self.assertTrue(self.active)
+        self.assertEqual((self.live/'node_modules/identity').read_text(),'6.15.3')
+        self.assertEqual((self.live/'server.js').read_bytes(),switch.patched_server(self.original['server.js']))
+        self.assertEqual((self.live/'auth/new-session').read_text(),'arrived during stop')
+        self.assertTrue((self.candidate/'node_modules').is_dir())
+
+    def test_unexpected_server_edit_is_not_clobbered_or_restarted(self):
+        unexpected=b'operator concurrent edit; preserve for manual review'
+        def ready(service,state):
+            (self.live/'server.js').write_bytes(unexpected)
+            raise RuntimeError('candidate failed')
+        with self.assertRaisesRegex(RuntimeError,'rollback requires operator review'):self.run_switch(ready)
+        self.assertEqual((self.live/'server.js').read_bytes(),unexpected)
+        self.assertFalse(self.active)
+        self.assertEqual(self.calls.count('start'),1)
+        backup=next(self.backups.iterdir())
+        self.assertEqual(json.loads((backup/'switch.json').read_text())['phase'],'manual-recovery-required')
+
     def test_shared_deploy_lock_prevents_any_switch(self):
         with switch.deployment_lock(self.lock):
             with self.assertRaises(BlockingIOError):self.run_switch()
