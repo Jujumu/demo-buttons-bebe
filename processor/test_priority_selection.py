@@ -140,5 +140,63 @@ class PrioritySelectionTests(unittest.TestCase):
 
         orchestrator._classification_cache.clear()
 
+    def test_unclassifiable_job_does_not_block_sensitive_selection(self):
+        self._enqueue(
+            "corrupt",
+            subject="Order status",
+            text="Where is my order?",
+            created_at="2026-01-01T00:00:00+00:00",
+        )
+        asyncio_run(Database(self.path).execute(
+            "UPDATE job_queue SET payload = ? WHERE message_id = ?",
+            ("{not-json", "corrupt"),
+            operation="test_corrupt_payload",
+        ))
+        self._enqueue(
+            "sensitive-new",
+            subject="Chargeback",
+            text="I will dispute this charge",
+            created_at="2026-01-01T00:01:00+00:00",
+        )
+
+        selected = orchestrator._select_next_job(self._window())
+
+        self.assertEqual(selected["message_id"], "sensitive-new")
+        self.assertNotIn("corrupt", orchestrator._classification_cache)
+
+    def test_classify_error_does_not_block_sensitive_selection(self):
+        asyncio_run(database.enqueue_job(
+            tenant_id="test",
+            ticket_id=100,
+            message_id="bad-intent",
+            event_type="ticket.message.created",
+            author_type="customer",
+            is_customer_message=True,
+            payload={
+                "message_id": "bad-intent",
+                "ticket_subject": "Hello",
+                "message_text": "Hi there",
+                "ticket_id": 100,
+                "intents": [{"name": 1}],
+            },
+            db_path=self.path,
+        ))
+        asyncio_run(Database(self.path).execute(
+            "UPDATE job_queue SET created_at = ? WHERE message_id = ?",
+            ("2026-01-01T00:00:00+00:00", "bad-intent"),
+            operation="test_set_bad_intent_created_at",
+        ))
+        self._enqueue(
+            "sensitive-new",
+            subject="Chargeback",
+            text="I will dispute this charge",
+            created_at="2026-01-01T00:01:00+00:00",
+        )
+
+        selected = orchestrator._select_next_job(self._window())
+
+        self.assertEqual(selected["message_id"], "sensitive-new")
+        self.assertNotIn("bad-intent", orchestrator._classification_cache)
+
 if __name__ == "__main__":
     unittest.main()

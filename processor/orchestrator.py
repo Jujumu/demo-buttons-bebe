@@ -69,9 +69,48 @@ logger = get_logger(__name__)
 # fairness when a burst floods the queue.
 _PRIORITY_WINDOW_LIMIT = 25
 _CLASSIFICATION_CACHE_LIMIT = 512
+_classification_cache: dict[str, dict[str, Any]] = {}
 
 
 # ── Priority-aware selection ────────────────────────────────
+def _remember_classification(message_id: str, result: dict[str, Any]) -> None:
+    if not message_id:
+        return
+    if len(_classification_cache) >= _CLASSIFICATION_CACHE_LIMIT:
+        _classification_cache.pop(next(iter(_classification_cache)))
+    _classification_cache[message_id] = result
+
+
+def _classify_for_selection(job: dict[str, Any]) -> dict[str, Any] | None:
+    """Classify a pending job for window ordering without stalling the queue.
+
+    Parse/classify failures stay uncached so the claimed job still fails
+    inside _process_one_job instead of taking down the processor loop.
+    """
+    message_id = str(job.get("message_id") or "")
+    if message_id:
+        cached = _classification_cache.get(message_id)
+        if cached is not None:
+            return cached
+    try:
+        payload = json.loads(job["payload"])
+        if not isinstance(payload, dict):
+            raise ValueError("job payload must be an object")
+        result = deterministic_classify(payload)
+    except Exception as exc:
+        log_event(
+            logger,
+            "WARNING",
+            "Skipping unclassifiable job during priority selection",
+            job_id=job.get("id"),
+            message_id=message_id,
+            error=f"{type(exc).__name__}: {exc}",
+        )
+        return None
+    _remember_classification(message_id, result)
+    return result
+
+
 def _select_next_job(window: list[dict[str, Any]]) -> dict[str, Any] | None:
     """Pick the next job from a bounded pending window.
 
@@ -92,21 +131,12 @@ def _select_next_job(window: list[dict[str, Any]]) -> dict[str, Any] | None:
         return window[0]
 
     for job in customer_jobs:
-        payload = json.loads(job["payload"])
-        message_id = str(job.get("message_id") or "")
-        result = _classification_cache.get(message_id)
+        result = _classify_for_selection(job)
         if result is None:
-            result = deterministic_classify(payload)
-            if message_id:
-                if len(_classification_cache) >= _CLASSIFICATION_CACHE_LIMIT:
-                    _classification_cache.pop(next(iter(_classification_cache)))
-                _classification_cache[message_id] = result
-        if result["priority"] in (IMMEDIATE, HIGH) and result.get("sensitive"):
+            continue
+        if result.get("priority") in (IMMEDIATE, HIGH) and result.get("sensitive"):
             return job
     return window[0]
-
-
-_classification_cache: dict[str, dict[str, Any]] = {}
 
 
 # ── Result persistence ──────────────────────────────────────
@@ -272,10 +302,7 @@ async def process_customer_message(job: dict[str, Any]) -> dict[str, Any]:
         det_result = cached_classification
     else:
         det_result = deterministic_classify(payload)
-        if message_id_for_cache:
-            if len(_classification_cache) >= _CLASSIFICATION_CACHE_LIMIT:
-                _classification_cache.pop(next(iter(_classification_cache)))
-            _classification_cache[message_id_for_cache] = det_result
+        _remember_classification(message_id_for_cache, det_result)
     log_event(logger, "INFO", "Deterministic classifier result",
               ticket_id=ticket_id,
               det_priority=det_result["priority"],

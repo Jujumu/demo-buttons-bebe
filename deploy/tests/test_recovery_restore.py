@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools" / "ops"))
 
 import recovery_restore  # noqa: E402
+import recovery_policy  # noqa: E402
 
 
 class FakePolicy:
@@ -77,13 +78,45 @@ def make_archive(records_payloads):
     return buffer.getvalue()
 
 
+def _nonsymlink_tmpdir() -> str:
+    """Temp root with no symlink path components (private_directory uses O_NOFOLLOW)."""
+    return os.path.realpath(tempfile.gettempdir())
+
+
+def _ustar_header(name, *, typeflag=tarfile.REGTYPE, size=0, linkname=""):
+    info = tarfile.TarInfo(name)
+    info.type = typeflag
+    info.size = size
+    if linkname:
+        info.linkname = linkname
+    header = info.tobuf(format=tarfile.USTAR_FORMAT, encoding="utf-8", errors="strict")
+    if len(header) != 512:
+        raise AssertionError(f"expected 512-byte ustar header, got {len(header)}")
+    return header
+
+
+def _replace_member_header(archive_bytes, member_name, header):
+    data = bytearray(archive_bytes)
+    offset = 0
+    while offset + 512 <= len(data):
+        block = bytes(data[offset:offset + 512])
+        if block == b"\0" * 512:
+            break
+        info = tarfile.TarInfo.frombuf(block, "utf-8", "strict")
+        if info.name == member_name:
+            data[offset:offset + 512] = header
+            return bytes(data)
+        offset += 512 + ((info.size + 511) // 512) * 512
+    raise AssertionError(f"member {member_name} not found")
+
+
 class RecoveryRestoreTests(unittest.TestCase):
     def setUp(self):
         # private_directory() traverses each path component with O_NOFOLLOW
         # from the filesystem root, so the fixture must live under a real
         # (non-symlinked) absolute prefix. On macOS /tmp is a symlink to
         # /private/tmp, which O_NOFOLLOW correctly refuses.
-        self.temp = tempfile.TemporaryDirectory(dir="/private/tmp")
+        self.temp = tempfile.TemporaryDirectory(dir=_nonsymlink_tmpdir())
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
 
@@ -92,8 +125,8 @@ class RecoveryRestoreTests(unittest.TestCase):
         archive.write_bytes(data)
         return archive
 
-    def _destination(self):
-        destination = self.root / "restore-output"
+    def _destination(self, name="restore-output"):
+        destination = self.root / name
         destination.mkdir(mode=0o700)
         return destination
 
@@ -190,6 +223,50 @@ class RecoveryRestoreTests(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             recovery_restore.validate_archive(archive, destination, make_plan(), policy=FakePolicy())
+
+    def test_unsupported_tar_headers_and_size_limits_are_rejected(self):
+        env_data = b"synthetic restore content\n"
+        base = make_archive([self._file_record("/restore/.env", env_data, "payload-000000")])
+        cases = (
+            ("symlink", tarfile.SYMTYPE, 0, "evil-target"),
+            ("pax", tarfile.XHDTYPE, 0, ""),
+            ("gnu", tarfile.GNUTYPE_LONGNAME, 0, ""),
+        )
+        for label, typeflag, size, linkname in cases:
+            with self.subTest(kind=label):
+                header = _ustar_header(
+                    "payload-000000",
+                    typeflag=typeflag,
+                    size=size,
+                    linkname=linkname,
+                )
+                archive = self._write_archive(
+                    _replace_member_header(base, "payload-000000", header),
+                )
+                with self.assertRaises(ValueError):
+                    recovery_restore.validate_archive(
+                        archive,
+                        self._destination(f"restore-{label}"),
+                        make_plan(),
+                        policy=FakePolicy(),
+                    )
+
+        with self.subTest(kind="oversize"):
+            header = _ustar_header(
+                "payload-000000",
+                typeflag=tarfile.REGTYPE,
+                size=recovery_policy.MAX_DATABASE + 1,
+            )
+            archive = self._write_archive(
+                _replace_member_header(base, "payload-000000", header),
+            )
+            with self.assertRaises(ValueError):
+                recovery_restore.validate_archive(
+                    archive,
+                    self._destination("restore-oversize"),
+                    make_plan(),
+                    policy=FakePolicy(),
+                )
 
 
 if __name__ == "__main__":
