@@ -1,6 +1,25 @@
 import { MAILBOX_TOPICS, MARKETING_LOCKED_COPY, PAYMENTS_LOCKED_COPY, PRIVACY_LOCKED_COPY, CUSTOMER_JOIN_LOCKED_COPY, ORDER_LINK_LOCKED_COPY } from "./contracts.js";
 import { ACTIVATE_SEND_MESSAGE } from "./send-access.js";
 import { ticketInView, viewCounts, views } from "./view-model.js";
+// A refresh can atomically publish a new snapshot between pages. Retry once,
+// starting from zero; never combine generations or retry unrelated API errors.
+export async function readObservedTickets(shop) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const rows = [];
+    let generation;
+    let changed = false;
+    for (let offset = 0; offset < 500; offset += 100) {
+      const page = await shop.listTickets({view: "all", limit: 100, offset});
+      const nextGeneration = shop.projection?.generatedAt;
+      if (offset && generation !== nextGeneration) { changed = true; break; }
+      generation = nextGeneration;
+      rows.push(...page);
+      if (page.length < 100) break;
+    }
+    if (!changed) return rows;
+  }
+  throw new Error("Projection refreshed repeatedly during pagination.");
+}
 const SHOP = "";
 const fixtureTickets = [];
 const fixtureMacros = [];
@@ -138,16 +157,7 @@ export function createInboxOrgan(opts = {}) {
     if (typeof shop.listTickets === "function") {
       try {
         if (shop.observedHistory) {
-          const rows = [];
-          let generation;
-          for (let offset = 0; offset < 500; offset += 100) {
-            const page = await shop.listTickets({view:"all",limit:100,offset});
-            const nextGeneration=shop.projection?.generatedAt;
-            if (offset && generation!==nextGeneration) throw new Error("Projection refreshed during pagination; retry.");
-            generation=nextGeneration;
-            rows.push(...page);
-            if (page.length < 100) break;
-          }
+          const rows = await readObservedTickets(shop);
           listRows = rows;
           counts = {all:rows.length};
           projectionNotice = shop.projection?.stale ? "Observed history is stale; refresh is delayed." : "Observed history · last 90 days · up to 500 tickets. Status and assignment are unknown.";
@@ -171,6 +181,10 @@ export function createInboxOrgan(opts = {}) {
         return;
       } catch {
         listError = "Could not load tickets. Refresh to try again.";
+        if (shop.observedHistory) {
+          if (listRows.length) projectionNotice = "Showing previously loaded history. Refresh failed; these tickets may be stale. Refresh to try again.";
+          return;
+        }
       }
     }
     listRows = fixtureTickets.filter((ticket) => ticketInView(ticket, viewId));

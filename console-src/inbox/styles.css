@@ -22,7 +22,7 @@
 * { box-sizing: border-box; margin: 0; }
 html, body, #inbox-root { height: 100%; }
 #inbox-root { overflow: hidden; }
-body {
+body[data-support-page="inbox"] {
   background: var(--ground);
   color: var(--ink);
   font-family: var(--sans);
