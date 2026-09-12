@@ -151,6 +151,30 @@ export function clerkStatusEvents(ticket) {
     }));
 }
 
+let composeSeq = 0;
+
+/** Empty first-party compose ticket. Null GIDs. No inbound message. */
+export function composeTicketRecord(now = new Date().toISOString()) {
+  composeSeq += 1;
+  return {
+    id: `t-new-${composeSeq}`,
+    customerName: "New ticket",
+    subject: "New ticket",
+    snippet: "",
+    status: "open",
+    assignee: "me",
+    updatedAt: now,
+    customerId: null,
+    orderId: null,
+    channel: "compose",
+    fromEmail: "",
+    source: "compose",
+    requestType: null,
+    messages: [],
+    statusEvents: [{ at: now, status: "open", note: "created" }],
+  };
+}
+
 export function clerkTicket(ticket) {
   if (!ticket) return null;
   return {
@@ -161,6 +185,7 @@ export function clerkTicket(ticket) {
     stubSummary: ticket.stubSummary,
     toEmail: ticket.toEmail,
     assignee: ticket.assignee,
+    source: ticket.source || null,
     view: ticket.view,
     escalated: Boolean(ticket.escalated),
     escalationReason: ticket.escalationReason || "",

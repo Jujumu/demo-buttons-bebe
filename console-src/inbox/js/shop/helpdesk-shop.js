@@ -249,6 +249,15 @@ export function createHelpdeskShop(opts = {}) {
       if (record) return record;
       return { ok: false, spam: false, ticketId: null };
     },
+    async createTicket(args = {}) {
+      const record = await read(
+        "helpdesk.create_ticket",
+        args || {},
+        (payload) => payload.ticket || payload,
+      );
+      if (record?.id) return record;
+      return fallback.createTicket(args);
+    },
     async pullMailbox(args = {}) {
       const record = await read(
         "helpdesk.pull_mailbox",

@@ -7,6 +7,7 @@ import { createListTissue, ticketMatchesQuery } from "./tissues/list.js";
 import { createRailOrgan } from "./tissues/rail.js";
 import { createThreadTissue } from "./tissues/thread.js";
 import { applyBulkAction } from "./shop/bulk-tickets.js";
+import { composeTicketRecord } from "./shop/clerk-ticket.js";
 import { forbiddenControlHits, GATE_CONFIRM_LABEL } from "./util.js";
 
 const RAIL_EXPAND_ICON = `<svg class="list-expand-icon" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" focusable="false">
@@ -81,6 +82,7 @@ export function createInboxOrgan(opts = {}) {
   };
   let sendError = "";
   let bridgePollTimer = null;
+  let composeFocus = false;
   let writeGateOpen = false;
   let customerJoinGateOpen = false;
   let orderLinkGateOpen = false;
@@ -279,7 +281,7 @@ export function createInboxOrgan(opts = {}) {
   }
 
   async function loadDraft(ticket) {
-    if (!ticket) return "";
+    if (!ticket || ticket.source === "compose") return "";
     if (typeof shop.draftReply === "function") {
       try {
         const railSnap = rail.snapshot();
@@ -468,6 +470,47 @@ export function createInboxOrgan(opts = {}) {
     return selected;
   }
 
+  async function createTicket() {
+    let ticket = null;
+    if (pinnedCatalog) {
+      ticket = composeTicketRecord();
+      pinnedCatalog.unshift(ticket);
+    } else if (typeof shop.createTicket === "function") {
+      try {
+        ticket = await shop.createTicket();
+      } catch {
+        ticket = null;
+      }
+    }
+    if (!ticket?.id) ticket = composeTicketRecord();
+    if (viewId !== "all" && viewId !== "open" && viewId !== "mine") {
+      viewId = "all";
+    }
+    await refreshList();
+    if (!listRows.some((row) => row.id === ticket.id)) {
+      viewId = "all";
+      if (pinnedCatalog && !pinnedCatalog.some((row) => row.id === ticket.id)) {
+        pinnedCatalog.unshift(ticket);
+      }
+      await refreshList();
+    }
+    selectedId = ticket.id;
+    markRead(selectedId);
+    body = "";
+    strip = "";
+    summarizeText = "";
+    discarded = true;
+    selectedMacroId = "";
+    macrosOpen = false;
+    ticketQuery = "";
+    composeFocus = true;
+    await refreshThread();
+    if (!selected) selected = ticket;
+    await refreshRail();
+    strip = "";
+    return afterUi();
+  }
+
   async function refreshMacros(query = "") {
     macroQuery = query;
     if (typeof shop.searchMacros === "function") {
@@ -542,6 +585,7 @@ export function createInboxOrgan(opts = {}) {
       unreadIds: [...unreadIds],
       checkedIds: [...checkedIds],
       selectedHasInkBar: Boolean(selectedId) && html.includes(`data-ticket="${selectedId}"`) && html.includes("is-selected"),
+      focusCompose: composeFocus,
       sendDisabled: composerTissue.sendDisabled(composerModel),
       hideSendAndClose: composerTissue.hideSendAndClose(composerModel),
       forbidden: forbiddenControlHits(html),
@@ -615,6 +659,9 @@ export function createInboxOrgan(opts = {}) {
       }
       const host = root.querySelector("[data-gate-host]");
       if (host) host.innerHTML = gateSheetHtml();
+      if (composeFocus) {
+        panes.composer?.querySelector?.("[data-body]")?.focus?.();
+      }
     };
 
     mailbox.subscribe(MAILBOX_TOPICS.LIST_COLLAPSED, ({ collapsed }) => {
@@ -628,6 +675,7 @@ export function createInboxOrgan(opts = {}) {
     mailbox.subscribe(MAILBOX_TOPICS.VIEW_SELECTED, ({ viewId: next }) => {
       viewId = next;
       selectedId = null;
+      composeFocus = false;
       clearChecked();
       body = "";
       strip = "";
@@ -666,8 +714,12 @@ export function createInboxOrgan(opts = {}) {
       ticketQuery = String(query ?? "");
       paint();
     });
+    mailbox.subscribe(MAILBOX_TOPICS.LIST_NEW_TICKET, () => {
+      createTicket().then(paint);
+    });
     mailbox.subscribe(MAILBOX_TOPICS.LIST_SELECTED, ({ ticketId }) => {
       selectedId = ticketId;
+      composeFocus = false;
       markRead(ticketId);
       body = "";
       strip = "";
@@ -779,6 +831,13 @@ export function createInboxOrgan(opts = {}) {
       if (ticketId && ticketId !== selectedId) selectedId = ticketId;
       markBugHandled().then(() => refreshRail()).then(paint);
     });
+    root.onkeydown = (event) => {
+      if (event.key !== "n" && event.key !== "N") return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.target?.closest?.("input, textarea, select, [contenteditable='true']")) return;
+      event.preventDefault?.();
+      createTicket().then(paint);
+    };
     root.onclick = (event) => {
       if (event.target.closest("[data-rail-expand]")) {
         railCollapsed = false;
@@ -876,6 +935,7 @@ export function createInboxOrgan(opts = {}) {
     selectView(next) {
       viewId = next;
       selectedId = null;
+      composeFocus = false;
       clearChecked();
       body = "";
       strip = "";
@@ -925,6 +985,7 @@ export function createInboxOrgan(opts = {}) {
     },
     selectTicket(id) {
       selectedId = id;
+      composeFocus = false;
       markRead(id);
       body = "";
       strip = "";
@@ -1098,6 +1159,7 @@ export function createInboxOrgan(opts = {}) {
       await refreshWriteGate();
       return snapshot();
     },
+    createTicket,
     async ingestEmail(args) {
       if (typeof shop.ingestEmail !== "function") return null;
       const result = await shop.ingestEmail(args);

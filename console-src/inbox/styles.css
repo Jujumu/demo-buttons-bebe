@@ -133,6 +133,21 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   min-height: 28px;
 }
 .list-scope { position: relative; min-width: 0; }
+.list-new-ticket {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.list-new-ticket:hover {
+  background: var(--ground);
+}
 .list-scope-btn {
   display: inline-flex;
   align-items: center;

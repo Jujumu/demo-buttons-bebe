@@ -40,6 +40,9 @@ if (params.get("select") === "1" || params.get("bulk") === "1") {
 if (params.get("bulk") === "1") {
   organ.openBulkMenu();
 }
+if (params.get("new") === "1") {
+  await organ.createTicket();
+}
 
 // Demo/review: expose organ for WebMCP verify + headless shots (not a product API).
 globalThis.__inboxOrgan = organ;

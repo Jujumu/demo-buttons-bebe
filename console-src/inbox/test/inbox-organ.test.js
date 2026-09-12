@@ -1377,6 +1377,67 @@ test("clear and Esc restore the view", async () => {
   assert.match(empty.html, /<p class="empty-pane">No tickets in this view\.<\/p>/);
 });
 
+test("new ticket chrome is in the list toolbar", async () => {
+  const organ = createInboxOrgan({ viewId: "all" });
+  const snap = await organ.ready();
+  assert.match(snap.html, /data-list-new-ticket/);
+  assert.match(snap.html, /aria-label="New ticket"/);
+  assert.match(snap.html, />New ticket</);
+  const css = readFileSync(join(here, "../styles.css"), "utf8");
+  assert.match(css, /\.list-new-ticket\s*\{/);
+  const boot = readFileSync(join(here, "../js/boot.js"), "utf8");
+  assert.match(boot, /organ\.createTicket\(\)/);
+});
+
+test("new ticket creates an empty first-party ticket and focuses compose", async () => {
+  const shop = createFixtureShop();
+  const organ = createInboxOrgan({ shop, viewId: "all" });
+  await organ.ready();
+  const snap = await organ.createTicket();
+  assert.match(snap.selectedId, /^t-new-/);
+  assert.match(snap.html, new RegExp(`data-ticket="${snap.selectedId}"`));
+  assert.match(snap.html, /class="ticket-row is-selected"/);
+  assert.match(snap.html, /data-composer/);
+  assert.match(snap.html, /<textarea data-body/);
+  assert.doesNotMatch(snap.html, /data-draft-strip/);
+  assert.equal(snap.body, "");
+  assert.equal(snap.focusCompose, true);
+  const ticket = await shop.getTicket({ ticketId: snap.selectedId });
+  assert.equal(ticket.subject, "New ticket");
+  assert.equal(ticket.customerName, "New ticket");
+  assert.equal(ticket.source, "compose");
+  assert.equal(ticket.customerId, null);
+  assert.equal(ticket.orderId, null);
+  assert.deepEqual(ticket.messages, []);
+});
+
+test("new ticket list click publishes and N is optional", async () => {
+  const mailbox = createMailbox();
+  const events = [];
+  mailbox.subscribe(MAILBOX_TOPICS.LIST_NEW_TICKET, () => events.push("new"));
+  const list = createListTissue({ mailbox });
+  const host = { innerHTML: "", onclick: null, onkeydown: null };
+  list.update({
+    tickets: fixtureTickets.filter((ticket) => ticketInView(ticket, "all")),
+    views,
+    counts: {},
+    selectedViewId: "all",
+  });
+  list.mount(host);
+  assert.match(host.innerHTML, /data-list-new-ticket/);
+  host.onclick({
+    target: { closest: (sel) => (sel === "[data-list-new-ticket]" ? {} : null) },
+    preventDefault() {},
+  });
+  assert.deepEqual(events, ["new"]);
+
+  const organ = createInboxOrgan({ viewId: "spam" });
+  await organ.ready();
+  const snap = await organ.createTicket();
+  assert.equal(snap.viewId, "all");
+  assert.match(snap.selectedId, /^t-new-/);
+});
+
 test("history peek does not swap the open order", async () => {
   const organ = createInboxOrgan({ viewId: "unassigned", ticketId: "t-casey-visor" });
   const snap = await organ.ready();
