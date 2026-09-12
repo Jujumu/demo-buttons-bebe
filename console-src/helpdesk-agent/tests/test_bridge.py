@@ -339,8 +339,8 @@ class SendReplyTests(unittest.TestCase):
 
 
 class LiveToolCountTests(unittest.TestCase):
-    def test_eighteen_live_tools(self) -> None:
-        self.assertEqual(len(TOOL_NAMES), 18)
+    def test_nineteen_live_tools(self) -> None:
+        self.assertEqual(len(TOOL_NAMES), 19)
         self.assertIn(TOOL_BRIDGE_STATUS, TOOL_NAMES)
         self.assertIn(TOOL_SEND_REPLY, TOOL_NAMES)
 

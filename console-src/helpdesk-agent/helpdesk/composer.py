@@ -342,6 +342,8 @@ def _looks_like_canada_ship(asked: str, subject: str = "") -> bool:
 
 def fixture_draft(thread: dict[str, Any], rail: dict[str, Any]) -> str:
     """Merchant-reply draft. Never promises a refund, cancel, or send."""
+    if str(thread.get("source") or "") == "compose":
+        return ""
     customer = rail.get("customer")
     order = rail.get("order")
     returns = rail.get("returns")

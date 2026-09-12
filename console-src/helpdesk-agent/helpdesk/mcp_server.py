@@ -17,6 +17,7 @@ from .names import (
     TOOL_GET_ORDER,
     TOOL_GET_RETURNS,
     TOOL_GET_TICKET,
+    TOOL_CREATE_TICKET,
     TOOL_INGEST_CHAT,
     TOOL_INGEST_EMAIL,
     TOOL_PULL_MAILBOX,
@@ -85,6 +86,7 @@ SCHEMAS = {
         "body": {"type": "string"},
         "receivedAt": {"type": "string"},
     },
+    TOOL_CREATE_TICKET: {},
     TOOL_PULL_MAILBOX: {
         "limit": {"type": "integer", "description": "max unread/new inbound messages to pull"},
     },
@@ -109,6 +111,11 @@ SCHEMAS = {
 
 
 def _description(name: str) -> str:
+    if name == TOOL_CREATE_TICKET:
+        return (
+            "Create an empty first-party ticket for compose. "
+            "No Shopify Customer or Order write. Human still owns Send."
+        )
     if name == TOOL_ESCALATE_TICKET:
         return (
             "First-party helpdesk escalate. Sets escalated/pending on the ticket. "
