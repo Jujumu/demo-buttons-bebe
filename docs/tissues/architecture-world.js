@@ -67,7 +67,7 @@ const ORGANS = [
       {
         name: "View",
         shape: "cards",
-        kid: "Picks which pile of tickets you are looking at: Assigned to me, Unassigned, Open, All, Snoozed, Closed.",
+        kid: "Picks which pile of tickets you are looking at: Assigned to me, Unassigned, Open, Escalated, All, Snoozed, Closed.",
         inn: "{ views, counts, selectedViewId }",
         out: "view/selected → { viewId }",
       },
@@ -1004,7 +1004,7 @@ function drawInboxWireframe() {
   ctx.font = "600 22px Arial";
   ctx.fillText("Inbox", xs[0] + 16, 92);
 
-  const views = ["Assigned to me", "Unassigned", "Open", "All", "Snoozed", "Closed"];
+  const views = ["Assigned to me", "Unassigned", "Open", "Escalated", "All", "Snoozed", "Closed"];
   views.forEach((name, i) => {
     const y = 118 + i * 48;
     if (i === 0) {
