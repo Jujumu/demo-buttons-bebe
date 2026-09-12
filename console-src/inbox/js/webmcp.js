@@ -15,6 +15,8 @@ const VIEW_IDS = Object.freeze([
   "unsubscribe",
   "privacy",
   "bug",
+  "bug_high",
+  "bug_critical",
   "mine",
   "unassigned",
   "all",
@@ -140,7 +142,7 @@ export function buildInboxWebMcpTools(organ) {
       name: "select_view",
       title: "Select inbox view",
       description:
-        "Switch the inbox list filter to a view (open, escalated, unsubscribe, privacy, bug, mine, unassigned, all, snoozed, closed, trash, or spam).",
+        "Switch the inbox list filter to a view (open, escalated, unsubscribe, privacy, bug, bug_high, bug_critical, mine, unassigned, all, snoozed, closed, trash, or spam).",
       inputSchema: {
         type: "object",
         properties: {

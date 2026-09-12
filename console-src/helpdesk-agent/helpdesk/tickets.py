@@ -37,6 +37,8 @@ VIEWS = (
     "unsubscribe",
     "privacy",
     "bug",
+    "bug_high",
+    "bug_critical",
     "closed",
     "all",
     "snoozed",
@@ -308,6 +310,35 @@ SEED_TICKETS = (
         "statusEvents": [
             {"at": "2026-08-28T16:01:00Z", "status": "open", "note": "created"},
             {"at": "2026-08-28T16:02:00Z", "status": "open", "note": "escalated: app crash"},
+        ],
+    },
+    {
+        "id": "t-kit-critical",
+        "customerName": "Kit Rowe",
+        "subject": "Critical Android crash — pay button",
+        "snippet": "Critical crash on Android when I tap pay. The app dies before the order lands.",
+        "status": "open",
+        "assignee": "me",
+        "updatedAt": "2026-08-28T16:10:00Z",
+        "customerId": None,
+        "orderId": None,
+        "requestType": "bug",
+        "severity": "critical",
+        "device": "Android",
+        "bugHandled": False,
+        "messages": [
+            {
+                "id": "m11-critical",
+                "from": "customer",
+                "fromAgent": False,
+                "name": "Kit Rowe",
+                "fromName": "Kit Rowe",
+                "body": "Critical crash on Android when I tap pay. The app dies before the order lands. This inbox does not need a Shopify catalog change.",
+                "at": "2026-08-28T16:10:00Z",
+            }
+        ],
+        "statusEvents": [
+            {"at": "2026-08-28T16:11:00Z", "status": "open", "note": "created"},
         ],
     },
     {
@@ -859,6 +890,16 @@ def ticket_in_view(ticket: dict, view: str) -> bool:
         return ticket.get("requestType") == "privacy_request"
     if view == "bug":
         return ticket.get("requestType") == "bug"
+    if view == "bug_high":
+        return (
+            ticket.get("requestType") == "bug"
+            and _normalize_severity(ticket.get("severity")) == "high"
+        )
+    if view == "bug_critical":
+        return (
+            ticket.get("requestType") == "bug"
+            and _normalize_severity(ticket.get("severity")) == "critical"
+        )
     if view == "open":
         return status == "open"
     if view == "closed":
@@ -895,7 +936,7 @@ def _row(ticket: dict, gid_source: str = "sample") -> dict:
 def list_tickets(view: str = "open", limit: int = 20, gid_source: str = "sample") -> list[dict]:
     if view not in VIEWS:
         raise bad_request(
-            "view must be open, escalated, unsubscribe, privacy, bug, closed, all, snoozed, mine, unassigned, trash, or spam",
+            "view must be open, escalated, unsubscribe, privacy, bug, bug_high, bug_critical, closed, all, snoozed, mine, unassigned, trash, or spam",
             field="view",
         )
     try:

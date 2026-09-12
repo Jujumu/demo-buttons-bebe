@@ -55,11 +55,13 @@ Demo names only (Ada Demo, Casey Sandbox, Jordan Preview). No customer PII.
 
 - **In:** `{ views, counts, selectedViewId }`
 - **Out:** `{ viewId }` on `view/selected`
-- **Default views:** Assigned to me, Unassigned, Open, Escalated, Unsubscribe, Privacy, Bug, All, Snoozed, Closed, Trash, Spam.
+- **Default views:** Assigned to me, Unassigned, Open, Escalated, Unsubscribe, Privacy, Bug, High, Critical, All, Snoozed, Closed, Trash, Spam.
   Default boot is All (`all`). Open is `status === "open"`.
   Escalated is `escalated` true, with no status constraint.
   Unsubscribe / Privacy / Bug are first-party `requestType`
   (`marketing_unsubscribe` / `privacy_request` / `bug`).
+  High / Critical are Bug-scoped first-party `severity` views
+  (`bug_high` / `bug_critical`).
   Trash is `archived` true. Spam is `spam` true. Archived and spam
   tickets stay out of every other view. If both flags are set, spam wins.
 - **Degrade:** empty list; other panes stay
