@@ -255,7 +255,6 @@ export function createListTissue({ mailbox }) {
 
   function paint() {
     if (!host) return;
-    // innerHTML replace drops the caret; restore if the field was focused.
     const active = typeof document !== "undefined" ? document.activeElement : null;
     const keep = Boolean(active?.closest?.("[data-list-search]") && host.contains?.(active));
     const start = keep ? active.selectionStart : null;
