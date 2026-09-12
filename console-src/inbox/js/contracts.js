@@ -184,6 +184,7 @@
  * `list/checked-all`     { checked }
  * `list/clear-checked`   {}
  * `list/bulk`            { action, assignee? } — first-party; never Send
+ * `list/search`          { query }
  * `list/collapsed`       { collapsed: boolean }
  * `rail/collapsed`       { collapsed: boolean }
  * `composer/body`        { text }
@@ -218,6 +219,7 @@ export const MAILBOX_TOPICS = Object.freeze({
   LIST_CHECKED_ALL: "list/checked-all",
   LIST_CLEAR_CHECKED: "list/clear-checked",
   LIST_BULK: "list/bulk",
+  LIST_SEARCH: "list/search",
   LIST_COLLAPSED: "list/collapsed",
   RAIL_COLLAPSED: "rail/collapsed",
   COMPOSER_BODY: "composer/body",

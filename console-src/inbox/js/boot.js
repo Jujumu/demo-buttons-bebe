@@ -28,6 +28,9 @@ if (params.get("pull") === "1") {
   await organ.pullMailbox(pullArgs);
 }
 await organ.mount(root);
+if (params.get("q") != null) {
+  organ.searchTickets(params.get("q"));
+}
 if (params.get("menu") === "1") {
   root.querySelector("[data-list-filter]")?.click();
 }

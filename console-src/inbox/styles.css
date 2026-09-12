@@ -116,7 +116,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 .pane-head h1 { font-size: 18px; font-weight: 600; letter-spacing: -.02em; }
 .pane-head h2 { font-size: 14px; font-weight: 600; }
 
-/* List column chrome: Inbox title + views filter / sort / collapse. */
 .pane-list .list-toolbar {
   padding: 10px 12px 8px;
   background: var(--ground);
@@ -129,6 +128,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 8px;
   min-height: 28px;
 }
@@ -198,7 +198,51 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  flex: 0 0 auto;
+  flex: 1 1 120px;
+  min-width: 0;
+  justify-content: flex-end;
+}
+.list-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 96px;
+  min-width: 72px;
+}
+.list-search {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 32px 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+}
+.list-search::placeholder {
+  color: var(--mute);
+}
+.list-search::-webkit-search-decoration,
+.list-search::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+.list-search-clear {
+  position: absolute;
+  right: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--mute);
+}
+.list-search-clear:hover {
+  color: var(--ink);
+  background: var(--ground);
 }
 .list-tool-btn {
   display: inline-flex;

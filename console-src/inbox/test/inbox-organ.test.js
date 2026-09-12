@@ -9,6 +9,7 @@ import { createInboxOrgan } from "../js/inbox.js";
 import { createMailbox } from "../js/mailbox.js";
 import { createFixtureShop } from "../js/shop/fixture-shop.js";
 import { createComposerTissue } from "../js/tissues/composer.js";
+import { createListTissue } from "../js/tissues/list.js";
 import { MAILBOX_TOPICS } from "../js/contracts.js";
 import { railWriteControlHits } from "../js/util.js";
 
@@ -1302,6 +1303,78 @@ test("composer macro Insert and Append never publish send", () => {
   assert.deepEqual(events.map((row) => row[0]), ["insert", "insert"]);
   assert.equal(events[1][1].mode, "append");
   assert.ok(events.every((row) => row[0] !== "send"));
+});
+
+test("search tickets matches name subject snippet and id", async () => {
+  const organ = createInboxOrgan({ viewId: "all" });
+  await organ.ready();
+  let snap = organ.searchTickets("ADA");
+  assert.match(snap.html, /data-ticket="t-ada-track"/);
+  assert.match(snap.html, /placeholder="Search tickets"/);
+  assert.match(snap.html, /aria-label="Search tickets"/);
+  assert.match(snap.html, /data-list-search/);
+  assert.match(snap.html, /data-list-search-clear/);
+  snap = organ.searchTickets("unsubscribe");
+  assert.match(snap.html, /data-ticket="t-priya-unsub"/);
+  snap = organ.searchTickets("has not updated");
+  assert.match(snap.html, /data-ticket="t-ada-track"/);
+  snap = organ.searchTickets("t-ada-track");
+  assert.match(snap.html, /data-ticket="t-ada-track"/);
+  const css = readFileSync(join(here, "../styles.css"), "utf8");
+  assert.match(css, /\.list-search\s*\{[^}]*min-height:\s*40px/);
+  const boot = readFileSync(join(here, "../js/boot.js"), "utf8");
+  assert.match(boot, /organ\.searchTickets\(params\.get\("q"\)\)/);
+});
+
+test("search tickets stays inside the current view", async () => {
+  const open = createInboxOrgan({ viewId: "open" });
+  await open.ready();
+  let snap = open.searchTickets("ada");
+  assert.match(snap.html, /data-ticket="t-ada-track"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-ada-closed"/);
+  const closed = createInboxOrgan({ viewId: "closed" });
+  await closed.ready();
+  snap = closed.searchTickets("ada");
+  assert.match(snap.html, /data-ticket="t-ada-closed"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-ada-track"/);
+});
+
+test("search tickets empty copy is No matches", async () => {
+  const organ = createInboxOrgan({ viewId: "all" });
+  await organ.ready();
+  const snap = organ.searchTickets("zzzz-no-hit");
+  assert.match(snap.html, /<p class="empty-pane">No matches\.<\/p>/);
+  assert.doesNotMatch(snap.html, /data-ticket="/);
+});
+
+test("clear and Esc restore the view", async () => {
+  const organ = createInboxOrgan({ viewId: "all" });
+  await organ.ready();
+  let snap = organ.searchTickets("ADA");
+  assert.match(snap.html, /data-list-search-clear/);
+  snap = organ.clearTicketSearch();
+  assert.doesNotMatch(snap.html, /data-list-search-clear/);
+  assert.match(snap.html, /data-ticket="t-ada-track"/);
+
+  const mailbox = createMailbox();
+  const list = createListTissue({ mailbox });
+  const host = { innerHTML: "", onclick: null, onkeydown: null };
+  list.update({
+    tickets: fixtureTickets.filter((ticket) => ticketInView(ticket, "all")),
+    views,
+    counts: {},
+    selectedViewId: "all",
+    query: "ada",
+  });
+  list.mount(host);
+  assert.match(host.innerHTML, /data-list-search-clear/);
+  const field = { closest: (sel) => (sel === "[data-list-search]" ? field : null) };
+  host.onkeydown({ key: "Escape", target: field, preventDefault() {} });
+  assert.doesNotMatch(host.innerHTML, /data-list-search-clear/);
+  assert.match(host.innerHTML, /data-ticket="t-ada-track"/);
+
+  const empty = await createInboxOrgan({ viewId: "all", tickets: [] }).ready();
+  assert.match(empty.html, /<p class="empty-pane">No tickets in this view\.<\/p>/);
 });
 
 test("history peek does not swap the open order", async () => {

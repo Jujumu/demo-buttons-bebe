@@ -39,6 +39,7 @@ Empty-copy voice is short and parallel:
 - No ETA
 - No customer
 - No order
+- No matches
 - No Shopify write
 
 Empty Customer / This order bodies stay compact (one short line). Peek
