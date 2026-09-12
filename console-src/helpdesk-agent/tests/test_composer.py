@@ -406,6 +406,41 @@ class ComposerTissueTests(unittest.TestCase):
         for snippet in FORBIDDEN_DRAFT:
             self.assertNotIn(snippet, lower, snippet)
 
+    def test_sample_rail_is_derived_from_sample_gids(self) -> None:
+        from helpdesk.composer import SAMPLE_RAIL
+        from helpdesk.tickets import SAMPLE_GIDS, sample_rail
+
+        self.assertEqual(set(SAMPLE_RAIL), set(SAMPLE_GIDS))
+        for ticket_id, (customer_id, order_id) in SAMPLE_GIDS.items():
+            self.assertEqual(SAMPLE_RAIL[ticket_id]["customerId"], customer_id)
+            self.assertEqual(SAMPLE_RAIL[ticket_id]["orderId"], order_id)
+            self.assertEqual(sample_rail(ticket_id), SAMPLE_RAIL[ticket_id])
+        for numeric in ("1001", "1002", "1003", "#1003"):
+            self.assertNotIn(numeric, SAMPLE_RAIL)
+        jordan = sample_rail("1003")
+        self.assertEqual(jordan, SAMPLE_RAIL["t-jordan-ship"])
+        self.assertIsNone(jordan["orderId"])
+        self.assertNotEqual(sample_rail("1003"), sample_rail("t-casey-throw"))
+
+    def test_draft_ticket_1003_is_jordan_not_casey(self) -> None:
+        from helpdesk.tickets import reset as reset_tickets
+
+        reset_tickets()
+        for ticket_id in ("1003", "#1003"):
+            with self.subTest(ticket_id=ticket_id):
+                payload = dispatch("helpdesk.draft_reply", {"ticketId": ticket_id, "shop": SAMPLE_SHOP})
+                self.assertTrue(payload["ok"], ticket_id)
+                self.assertEqual(payload["source"], "fixture")
+                draft = payload["draft"]
+                lower = draft.lower()
+                self.assertIn("Hi Jordan", draft)
+                self.assertIn("canada", lower)
+                self.assertNotIn("casey", lower)
+                self.assertNotIn("throw", lower)
+                self.assertNotIn("visor", lower)
+                for snippet in FORBIDDEN_DRAFT:
+                    self.assertNotIn(snippet, lower, snippet)
+
     def test_null_request_type_keeps_existing_draft(self) -> None:
         payload = dispatch("helpdesk.draft_reply", {"ticketId": "1001", "shop": SAMPLE_SHOP})
         self.assertTrue(payload["ok"])

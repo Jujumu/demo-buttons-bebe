@@ -80,6 +80,30 @@ class TicketContractTests(unittest.TestCase):
         self.assertEqual(agent["fromName"], "Demo Shop")
         self.assertNotEqual(agent["fromName"], inbound["fromName"])
 
+    def test_alias_1003_resolves_to_jordan_not_casey(self) -> None:
+        """S3: numeric / #1003 is Jordan's ticket, not Casey's throw."""
+        from helpdesk.tickets import ALIASES, resolve_id, sample_rail
+        from helpdesk.fixtures_sample import JORDAN
+
+        self.assertEqual(ALIASES["1003"], "t-jordan-ship")
+        self.assertNotEqual(ALIASES["1003"], "t-casey-throw")
+        for ticket_id in ("1003", "#1003"):
+            with self.subTest(ticket_id=ticket_id):
+                self.assertEqual(resolve_id(ticket_id), "t-jordan-ship")
+                self.assertNotEqual(resolve_id(ticket_id), "t-casey-throw")
+                payload = dispatch("helpdesk.get_ticket", {"ticketId": ticket_id})
+                self.assertTrue(payload["ok"], ticket_id)
+                ticket = payload["ticket"]
+                self.assertEqual(ticket["id"], "t-jordan-ship")
+                self.assertEqual(ticket["customerName"], "Jordan Preview")
+                self.assertNotEqual(ticket["id"], "t-casey-throw")
+                self.assertNotIn("Casey", ticket["customerName"])
+                self.assertIsNone(ticket["orderId"])
+                rail = sample_rail(ticket_id)
+                self.assertIsNotNone(rail)
+                self.assertEqual(rail["customerId"], JORDAN)
+                self.assertIsNone(rail["orderId"])
+
     def test_closed_ada_has_a_closed_status_event(self) -> None:
         ticket = dispatch("helpdesk.get_ticket", {"ticketId": "t-ada-closed"})["ticket"]
         self.assertEqual(ticket["status"], "closed")
