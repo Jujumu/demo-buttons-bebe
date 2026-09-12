@@ -11,7 +11,8 @@ thread message header and the list tooltip.
 Unread is session-local (no Shopify field): unread names bold; selecting
 a ticket marks it read. Omit repeating **Open** in open queues; omit
 repeating **Escalated** in escalated queues if any; keep
-Closed / Snoozed. Privacy / Unsubscribe / Bug / severity are small mute
+Closed / Snoozed. Trash is archived tickets only, not Closed.
+Privacy / Unsubscribe / Bug / severity are small mute
 badges — not purple.
 Palette: ground `#F4F0EA`, surface `#FFFDF9`, ink `#1C1916`, mute `#5C564F`,
 accent `#B5471D`. Corners use a small shared radius (chips/thumbs 4px,

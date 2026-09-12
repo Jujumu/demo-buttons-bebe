@@ -5,8 +5,8 @@ writes. Mute words, never color-alone. Four panes / three chrome stay.
 Human Send. `WRITE_TOOLS` untouched. Gorgias off.
 
 This file is the thin addendum for list-toolbar filters. Do not ship
-request-type, severity, Trash, Spam, or Search from this document —
-those wait for later slices.
+request-type, severity, Spam, or Search from this document — those
+wait for later slices.
 
 ## Open (shipped)
 
@@ -16,7 +16,7 @@ those wait for later slices.
 1. **Open** list view filters tickets where first-party
    `status === "open"`. Snoozed and Closed stay out.
 2. Menu order starts Assigned to me · Unassigned · Open · Escalated ·
-   All · Snoozed · Closed.
+   All · Snoozed · Closed · Trash.
 3. Default boot stays **Assigned to me** (`mine`). `?view=open` is the
    Open queue.
 4. In the Open queue, omit the repeating Open status chip on rows
@@ -29,7 +29,7 @@ those wait for later slices.
    CLI: `helpdesk list-tickets --view open`. WebMCP `select_view` lists
    `open`.
 
-## Escalated (this slice)
+## Escalated (shipped)
 
 Ticket already has first-party `escalated` and optional `escalationReason`
 from `helpdesk.escalate_ticket`. `get_ticket` already projects both.
@@ -53,6 +53,29 @@ Seed `t-remy-bug` is escalated in both the Python sample store and the
 JS demo fixtures so the queue is reviewable. `t-ada-track` stays
 unescalated until `escalate_ticket` runs.
 
+## Trash (this slice)
+
+Ticket gains first-party `archived` (soft-archive). This is not Closed
+status and not a Shopify delete. List `_row` stays thin and omits
+`archived`. `get_ticket` projects it.
+
+1. **Trash** list view id is `trash`. `ticket_in_view` is true when
+   `bool(ticket.get("archived"))`.
+2. Archived tickets stay out of All, Assigned to me, Unassigned, Open,
+   Escalated, Snoozed, and Closed. They appear only under Trash.
+3. Add **Trash** to the list toolbar filter menu after Closed.
+4. Default boot stays **Assigned to me** (`mine`). `?view=trash` is the
+   Trash queue. `?view=trash&empty=1` pins an empty catalog.
+5. Rows have no Trash chip. Empty copy stays `No tickets in this view.`
+6. Agent-native: `list_tickets({ view: "trash" })` on the same
+   `dispatch()` path. CLI: `helpdesk list-tickets --view trash`.
+   WebMCP `select_view` lists `trash`.
+
+Seed `t-nora-old` is archived in both the Python sample store and the
+JS demo fixtures so the queue is reviewable. Status stays `open` so
+the hide from Open / Assigned to me is visible.
+
 ## Out of this PR
 
-Do not add request-type, severity, Trash, Spam, or Search chrome here.
+Do not add request-type, severity, Spam, or Search chrome here.
+Bulk Delete into Trash comes later.
