@@ -180,6 +180,10 @@
  *
  * `view/selected`        { viewId }
  * `list/selected`        { ticketId }
+ * `list/checked`         { ticketId, checked }
+ * `list/checked-all`     { checked }
+ * `list/clear-checked`   {}
+ * `list/bulk`            { action, assignee? } — first-party; never Send
  * `list/collapsed`       { collapsed: boolean }
  * `rail/collapsed`       { collapsed: boolean }
  * `composer/body`        { text }
@@ -210,6 +214,10 @@
 export const MAILBOX_TOPICS = Object.freeze({
   VIEW_SELECTED: "view/selected",
   LIST_SELECTED: "list/selected",
+  LIST_CHECKED: "list/checked",
+  LIST_CHECKED_ALL: "list/checked-all",
+  LIST_CLEAR_CHECKED: "list/clear-checked",
+  LIST_BULK: "list/bulk",
   LIST_COLLAPSED: "list/collapsed",
   RAIL_COLLAPSED: "rail/collapsed",
   COMPOSER_BODY: "composer/body",

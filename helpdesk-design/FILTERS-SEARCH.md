@@ -120,8 +120,25 @@ First-party list chrome only. Not a view. No Shopify Admin field.
 5. Review unread vs read rows on default All (`/`). Opening a second
    ticket is `/?ticket=t-priya-unsub`.
 
+## Multi-select + bulk (this slice)
+
+First-party list chrome. No Shopify Admin field. No Cute Things write.
+
+1. Row checkboxes plus a selection bar. Copy is **All selected** when every
+   visible row is checked, else `N selected`. Ink / accent only. Not purple.
+2. V1 bulk menu on the bar: Mark as read · Mark as unread · Assign
+   (Agent / Unassigned) · Snooze · Delete. Delete sets first-party
+   `archived` (Trash). It does not hard-delete and does not write Shopify.
+3. Read / unread stay session-local from Unread. Assign writes first-party
+   `assignee` (`me` or unassigned). Snooze sets helpdesk `status` to
+   `snoozed`. Same `dispatch()` path as MCP + CLI:
+   `helpdesk.bulk_update_tickets`.
+4. Do not ship Add tag, Assign to team, Change priority, Export tickets,
+   or Apply macro.
+5. Review selection + menu with `/?select=1&bulk=1`.
+
 ## Out of this PR
 
 Do not add request-type, severity, or Search chrome here.
-Bulk Delete into Trash and mark-spam actions come later.
 Do not ship Unread as a Views menu item.
+Do not ship Add tag, Assign to team, Change priority, Export, or Apply macro.

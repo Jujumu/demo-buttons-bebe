@@ -14,6 +14,7 @@ export const TOOL_NAMES = Object.freeze([
   "helpdesk.ingest_chat",
   "helpdesk.pull_mailbox",
   "helpdesk.escalate_ticket",
+  "helpdesk.bulk_update_tickets",
   "helpdesk.write_gate_status",
   "helpdesk.bridge_status",
   "helpdesk.send_reply",
@@ -57,6 +58,7 @@ export const INTAKE_TOOLS = Object.freeze({
 
 export const TICKET_TOOLS = Object.freeze({
   escalate: "helpdesk.escalate_ticket",
+  bulkUpdate: "helpdesk.bulk_update_tickets",
   writeGate: "helpdesk.write_gate_status",
   bridgeStatus: "helpdesk.bridge_status",
 });

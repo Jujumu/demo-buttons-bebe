@@ -77,6 +77,8 @@ test("selected list row CSS is pale accent wash + narrow accent edge", () => {
   assert.match(css, /--accent:\s*#B5471D/);
   assert.match(css, /\.ticket-row \.ticket-bar[\s\S]*width:\s*3px/);
   assert.match(css, /\.ticket-row\.is-selected\s*\{[^}]*color-mix\([^)]*var\(--accent\)/);
+  assert.match(css, /\.ticket-check input\s*\{[^}]*accent-color:\s*var\(--ink\)/);
+  assert.match(css, /\.list-select-bar\s*\{[^}]*color:\s*var\(--ink\)/);
   assert.match(css, /Pale accent wash \+ narrow accent edge on the selected ticket/);
   assert.match(css, /\.track-link\s*\{[^}]*color:\s*var\(--accent\)/);
   assert.match(css, /\.invoice-link\s*\{[^}]*color:\s*var\(--accent\)/);
@@ -1063,6 +1065,69 @@ test("unread row has ink mark; opening marks read", async () => {
   assert.match(priyaOpen, /class="ticket-row is-selected"/);
   assert.doesNotMatch(priyaOpen, /is-unread/);
   assert.doesNotMatch(priyaOpen, /ticket-unread-mark/);
+});
+
+test("selection bar and bulk menu use ink chrome", async () => {
+  const organ = createInboxOrgan({ viewId: "all", ticketId: "t-ada-track" });
+  let snap = await organ.ready();
+  assert.doesNotMatch(snap.html, /data-select-bar/);
+  snap = organ.checkTickets(["t-ada-track", "t-priya-unsub"]);
+  assert.deepEqual([...snap.checkedIds].sort(), ["t-ada-track", "t-priya-unsub"]);
+  assert.match(snap.html, /data-select-bar/);
+  assert.match(snap.html, /2 selected/);
+  assert.match(snap.html, /data-ticket-select="t-ada-track"/);
+  assert.match(snap.html, /accent-color|ticket-check/);
+  snap = organ.checkVisible(true);
+  assert.match(snap.html, /All selected/);
+  snap = organ.openBulkMenu();
+  assert.match(snap.html, /list-bulk-menu is-open/);
+  assert.match(snap.html, /Mark as read/);
+  assert.match(snap.html, /Mark as unread/);
+  assert.match(snap.html, /Assign/);
+  assert.match(snap.html, /Snooze/);
+  assert.match(snap.html, />Delete</);
+  assert.doesNotMatch(snap.html, /Add tag|Assign to team|Change priority|Export tickets|Apply macro/);
+  assert.doesNotMatch(snap.html, /#6B46C1|#7C3AED|#5B21B6|purple/i);
+});
+
+test("bulk mark read and unread stay session-local", async () => {
+  const organ = createInboxOrgan({ viewId: "all", ticketId: "t-ada-track" });
+  let snap = await organ.ready();
+  assert.ok(snap.unreadIds.includes("t-priya-unsub"));
+  organ.checkTickets(["t-priya-unsub"]);
+  snap = await organ.applyBulk({ action: "mark_read" });
+  assert.ok(!snap.unreadIds.includes("t-priya-unsub"));
+  assert.deepEqual(snap.checkedIds, []);
+  organ.checkTickets(["t-priya-unsub"]);
+  snap = await organ.applyBulk({ action: "mark_unread" });
+  assert.ok(snap.unreadIds.includes("t-priya-unsub"));
+});
+
+test("bulk assign snooze and trash are first-party", async () => {
+  const organ = createInboxOrgan({ viewId: "all", ticketId: "t-casey-visor" });
+  await organ.ready();
+  organ.checkTickets(["t-casey-visor"]);
+  await organ.applyBulk({ action: "assign", assignee: "me" });
+  const assigned = await organ.shop.getTicket({ ticketId: "t-casey-visor" });
+  assert.equal(assigned.assignee, "me");
+
+  organ.checkTickets(["t-casey-throw"]);
+  await organ.applyBulk({ action: "snooze" });
+  const snoozed = await organ.shop.getTicket({ ticketId: "t-casey-throw" });
+  assert.equal(snoozed.status, "snoozed");
+  let snap = await organ.selectView("snoozed");
+  assert.match(snap.html, /data-ticket="t-casey-throw"/);
+
+  organ.checkTickets(["t-priya-unsub"]);
+  snap = await organ.applyBulk({ action: "trash" });
+  const trashed = await organ.shop.getTicket({ ticketId: "t-priya-unsub" });
+  assert.equal(trashed.archived, true);
+  assert.equal(trashed.status, "open");
+  snap = await organ.selectView("all");
+  assert.doesNotMatch(snap.html, /data-ticket="t-priya-unsub"/);
+  snap = await organ.selectView("trash");
+  assert.match(snap.html, /data-ticket="t-priya-unsub"/);
+  assert.doesNotMatch(snap.html, /#6B46C1|#7C3AED|#5B21B6/);
 });
 
 test("Summarize fills a mute peek and does not enable Send", async () => {

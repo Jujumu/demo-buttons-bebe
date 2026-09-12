@@ -4,8 +4,9 @@ import { esc, formatWhen, requestTypeLabel, screenStatus, severityLabel } from "
 
 /**
  * List tissue. Client of helpdesk.list_tickets + view switcher.
- * In: `{ tickets, selectedTicketId, views, counts, selectedViewId, collapsed, unreadIds }`
+ * In: `{ tickets, selectedTicketId, views, counts, selectedViewId, collapsed, unreadIds, checkedIds }`
  * Out: `{ ticketId }` on `list/selected`, `{ viewId }` on `view/selected`,
+ *      `{ ticketId, checked }` on `list/checked`, `{ action }` on `list/bulk`,
  *      `{ collapsed }` on `list/collapsed`
  * Selected row: pale accent wash + narrow accent edge. Uses first-party
  * customerName, snippet, and helpdesk status (open / closed / snoozed) —
@@ -39,6 +40,11 @@ const ICON_EXPAND = `<svg class="list-expand-icon" width="14" height="14" viewBo
   <path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M5 2.5 9.5 7 5 11.5"/>
 </svg>`;
 
+const ICON_CLOCK = `<svg class="list-bulk-icon" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" focusable="false">
+  <circle fill="none" stroke="currentColor" stroke-width="1.4" cx="7" cy="7" r="5"/>
+  <path fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" d="M7 4.25V7l1.85 1.35"/>
+</svg>`;
+
 export function createListTissue({ mailbox }) {
   let model = {
     tickets: [],
@@ -48,8 +54,9 @@ export function createListTissue({ mailbox }) {
     selectedViewId: "mine",
     collapsed: false,
     unreadIds: [],
+    checkedIds: [],
   };
-  let ui = { sort: "default", filterOpen: false };
+  let ui = { sort: "default", filterOpen: false, bulkOpen: false, assignOpen: false };
   let host = null;
 
   function project(input) {
@@ -61,6 +68,7 @@ export function createListTissue({ mailbox }) {
       selectedViewId: input.selectedViewId || "mine",
       collapsed: Boolean(input.collapsed),
       unreadIds: Array.isArray(input.unreadIds) ? input.unreadIds : [],
+      checkedIds: Array.isArray(input.checkedIds) ? input.checkedIds : [],
     };
   }
 
@@ -112,9 +120,43 @@ export function createListTissue({ mailbox }) {
     </header>`;
   }
 
-  function renderRow(ticket, selectedId, unreadIds) {
+  function renderSelectionBar(next, tickets) {
+    const checked = new Set(next.checkedIds || []);
+    const total = tickets.length;
+    const count = tickets.filter((ticket) => checked.has(ticket.id)).length;
+    if (!count) return "";
+    const allOn = total > 0 && count === total;
+    const label = allOn ? "All selected" : `${count} selected`;
+    const assignMenu = ui.assignOpen
+      ? `<div class="list-assign-menu" role="menu">
+          <button type="button" class="list-menu-item" data-bulk-action="assign" data-assignee="me">Agent</button>
+          <button type="button" class="list-menu-item" data-bulk-action="assign" data-assignee="">Unassigned</button>
+        </div>`
+      : "";
+    return `<div class="list-select-bar" data-select-bar>
+      <label class="ticket-check list-select-all">
+        <input type="checkbox" data-select-all ${allOn ? "checked" : ""} aria-label="Select all visible tickets">
+      </label>
+      <span class="list-select-label">${esc(label)}</span>
+      <div class="list-bulk">
+        <button type="button" class="list-bulk-btn" data-bulk-menu aria-haspopup="menu" aria-expanded="${ui.bulkOpen ? "true" : "false"}">Actions</button>
+        <div class="list-bulk-menu${ui.bulkOpen ? " is-open" : ""}" role="menu" ${ui.bulkOpen ? "" : "hidden"}>
+          <button type="button" class="list-menu-item" data-bulk-action="mark_read">Mark as read</button>
+          <button type="button" class="list-menu-item" data-bulk-action="mark_unread">Mark as unread</button>
+          <button type="button" class="list-menu-item" data-bulk-action="assign-open" aria-expanded="${ui.assignOpen ? "true" : "false"}">Assign</button>
+          ${assignMenu}
+          <button type="button" class="list-menu-item" data-bulk-action="snooze">${ICON_CLOCK} Snooze</button>
+          <button type="button" class="list-menu-item" data-bulk-action="trash">Delete</button>
+        </div>
+      </div>
+      <button type="button" class="list-tool-btn" data-select-clear title="Clear selection" aria-label="Clear selection">${ICON_CLOSE}</button>
+    </div>`;
+  }
+
+  function renderRow(ticket, selectedId, unreadIds, checkedIds) {
     const on = ticket.id === selectedId;
     const unread = unreadIds.includes(ticket.id);
+    const checked = checkedIds.includes(ticket.id);
     const status = ticket.status || "";
     const statusWord = status === "open" ? "" : screenStatus(status);
     const typeWord = requestTypeLabel(ticket.requestType);
@@ -135,20 +177,26 @@ export function createListTissue({ mailbox }) {
     const unreadMark = unread
       ? `<span class="ticket-unread-mark" aria-hidden="true"></span>`
       : "";
-    return `<button type="button" class="ticket-row${on ? " is-selected" : ""}${unreadClass}" data-ticket="${esc(ticket.id)}" data-status="${esc(status)}"${typeAttr}${severityAttr}${deviceAttr} aria-current="${on ? "true" : "false"}">
-      <span class="ticket-bar" aria-hidden="true"></span>
-      <span class="ticket-top">
-        <span class="ticket-who">${unreadMark}<span class="ticket-name">${esc(listCustomerName(ticket))}</span></span>
-        <span class="ticket-meta">
-          ${typeHtml}
-          ${severityHtml}
-          ${statusHtml}
-          <time class="ticket-time" datetime="${esc(ticket.updatedAt || "")}" title="${esc(formatWhen(ticket.updatedAt))}">${esc(formatWhen(ticket.updatedAt, { relative: true }))}</time>
+    const name = listCustomerName(ticket);
+    return `<div class="ticket-item${checked ? " is-checked" : ""}">
+      <label class="ticket-check">
+        <input type="checkbox" data-ticket-select="${esc(ticket.id)}" ${checked ? "checked" : ""} aria-label="Select ${esc(name)}">
+      </label>
+      <button type="button" class="ticket-row${on ? " is-selected" : ""}${unreadClass}" data-ticket="${esc(ticket.id)}" data-status="${esc(status)}"${typeAttr}${severityAttr}${deviceAttr} aria-current="${on ? "true" : "false"}">
+        <span class="ticket-bar" aria-hidden="true"></span>
+        <span class="ticket-top">
+          <span class="ticket-who">${unreadMark}<span class="ticket-name">${esc(name)}</span></span>
+          <span class="ticket-meta">
+            ${typeHtml}
+            ${severityHtml}
+            ${statusHtml}
+            <time class="ticket-time" datetime="${esc(ticket.updatedAt || "")}" title="${esc(formatWhen(ticket.updatedAt))}">${esc(formatWhen(ticket.updatedAt, { relative: true }))}</time>
+          </span>
         </span>
-      </span>
-      <span class="ticket-subject">${esc(ticket.subject)}</span>
-      <span class="ticket-snippet">${esc(ticket.snippet || "")}</span>
-    </button>`;
+        <span class="ticket-subject">${esc(ticket.subject)}</span>
+        <span class="ticket-snippet">${esc(ticket.snippet || "")}</span>
+      </button>
+    </div>`;
   }
 
   function render(next = model) {
@@ -162,11 +210,13 @@ export function createListTissue({ mailbox }) {
     }
     const tickets = sortedTickets(next.tickets);
     const unreadIds = next.unreadIds || [];
+    const checkedIds = next.checkedIds || [];
     const rows = tickets.length
-      ? tickets.map((ticket) => renderRow(ticket, next.selectedTicketId, unreadIds)).join("")
+      ? tickets.map((ticket) => renderRow(ticket, next.selectedTicketId, unreadIds, checkedIds)).join("")
       : `<p class="empty-pane">No tickets in this view.</p>`;
     return `<div class="pane-inner">
       ${renderToolbar(next)}
+      ${renderSelectionBar(next, tickets)}
       <div class="ticket-list" role="list">${rows}</div>
     </div>`;
   }
@@ -180,6 +230,49 @@ export function createListTissue({ mailbox }) {
     host = el;
     paint();
     el.onclick = (event) => {
+      const selectOne = event.target.closest("[data-ticket-select]");
+      if (selectOne) {
+        event.preventDefault();
+        event.stopPropagation();
+        const ticketId = selectOne.dataset.ticketSelect;
+        const on = !(model.checkedIds || []).includes(ticketId);
+        mailbox.publish(MAILBOX_TOPICS.LIST_CHECKED, { ticketId, checked: on });
+        return;
+      }
+      if (event.target.closest("[data-select-all]")) {
+        event.preventDefault();
+        const visible = sortedTickets(model.tickets).map((ticket) => ticket.id);
+        const allOn = visible.length > 0 && visible.every((id) => (model.checkedIds || []).includes(id));
+        mailbox.publish(MAILBOX_TOPICS.LIST_CHECKED_ALL, { checked: !allOn });
+        return;
+      }
+      if (event.target.closest("[data-select-clear]")) {
+        mailbox.publish(MAILBOX_TOPICS.LIST_CLEAR_CHECKED, {});
+        ui = { ...ui, bulkOpen: false, assignOpen: false };
+        paint();
+        return;
+      }
+      if (event.target.closest("[data-bulk-menu]")) {
+        ui = { ...ui, bulkOpen: !ui.bulkOpen, assignOpen: false, filterOpen: false };
+        paint();
+        return;
+      }
+      const bulk = event.target.closest("[data-bulk-action]");
+      if (bulk) {
+        const action = bulk.dataset.bulkAction;
+        if (action === "assign-open") {
+          ui = { ...ui, assignOpen: !ui.assignOpen, bulkOpen: true };
+          paint();
+          return;
+        }
+        ui = { ...ui, bulkOpen: false, assignOpen: false };
+        paint();
+        mailbox.publish(MAILBOX_TOPICS.LIST_BULK, {
+          action,
+          assignee: bulk.dataset.assignee,
+        });
+        return;
+      }
       const viewPick = event.target.closest("[data-view]");
       if (viewPick) {
         ui = { ...ui, filterOpen: false };
@@ -226,6 +319,10 @@ export function createListTissue({ mailbox }) {
     update(input) {
       model = project(input);
       return model;
+    },
+    openBulk(open = true) {
+      ui = { ...ui, bulkOpen: Boolean(open), assignOpen: false, filterOpen: false };
+      paint();
     },
     mount,
   };

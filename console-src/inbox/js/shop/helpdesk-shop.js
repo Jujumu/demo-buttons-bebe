@@ -267,6 +267,23 @@ export function createHelpdeskShop(opts = {}) {
       if (record) return record;
       return fallback.escalateTicket(args);
     },
+    async bulkUpdateTickets(args = {}) {
+      const record = await read(
+        "helpdesk.bulk_update_tickets",
+        {
+          ticketIds: args.ticketIds,
+          action: args.action,
+          assignee: args.assignee,
+        },
+        (payload) => ({
+          action: payload.action,
+          updated: payload.updated,
+          tickets: payload.tickets || [],
+        }),
+      );
+      if (record) return record;
+      return fallback.bulkUpdateTickets(args);
+    },
     async markPrivacyHandled(args = {}) {
       // First-party flag only. No MCP write tool — never a Shopify privacy mutation.
       return fallback.markPrivacyHandled(args);

@@ -71,6 +71,11 @@ function pythonInvoke(tool, args) {
   } else if (tool === "helpdesk.escalate_ticket") {
     argv.push("escalate-ticket", "--ticket-id", String(args.ticketId));
     if (args.reason) argv.push("--reason", String(args.reason));
+  } else if (tool === "helpdesk.bulk_update_tickets") {
+    argv.push("bulk-update-tickets", "--action", String(args.action));
+    const ids = Array.isArray(args.ticketIds) ? args.ticketIds : [args.ticketIds];
+    for (const id of ids) argv.push("--ticket-id", String(id));
+    if (args.assignee != null && args.assignee !== "") argv.push("--assignee", String(args.assignee));
   } else if (tool === "helpdesk.write_gate_status") {
     argv.push("write-gate-status");
   } else if (tool === "helpdesk.bridge_status") {
@@ -105,10 +110,10 @@ function clientFromPython(source = "sample") {
   });
 }
 
-test("client exposes exactly the seventeen helpdesk tools", () => {
+test("client exposes exactly the eighteen helpdesk tools", () => {
   const client = createHelpdeskClient({ invoke: async () => ({ ok: true }) });
   assert.deepEqual(client.tools, TOOL_NAMES);
-  assert.equal(TOOL_NAMES.length, 17);
+  assert.equal(TOOL_NAMES.length, 18);
   assert.ok(TOOL_NAMES.includes("helpdesk.list_tickets"));
   assert.ok(TOOL_NAMES.includes("helpdesk.get_ticket"));
   assert.ok(TOOL_NAMES.includes("helpdesk.draft_reply"));
@@ -119,6 +124,7 @@ test("client exposes exactly the seventeen helpdesk tools", () => {
   assert.ok(TOOL_NAMES.includes("helpdesk.ingest_chat"));
   assert.ok(TOOL_NAMES.includes("helpdesk.pull_mailbox"));
   assert.ok(TOOL_NAMES.includes("helpdesk.escalate_ticket"));
+  assert.ok(TOOL_NAMES.includes("helpdesk.bulk_update_tickets"));
   assert.ok(TOOL_NAMES.includes("helpdesk.write_gate_status"));
   assert.ok(TOOL_NAMES.includes("helpdesk.bridge_status"));
   assert.ok(TOOL_NAMES.includes("helpdesk.send_reply"));
@@ -446,6 +452,7 @@ test("all live CLI tools return ok on the same handler path", () => {
     }],
     ["helpdesk.pull_mailbox", { limit: 5 }],
     ["helpdesk.escalate_ticket", { ticketId: "t-ada-track" }],
+    ["helpdesk.bulk_update_tickets", { ticketIds: ["t-casey-visor"], action: "assign", assignee: "me" }],
     ["helpdesk.write_gate_status", {}],
     ["helpdesk.bridge_status", {}],
   ];
@@ -915,6 +922,14 @@ test("escalate_ticket and write_gate_status share the CLI dispatch path", () => 
   assert.ok(!WRITE_TOOLS.includes("helpdesk.escalate_ticket"));
   assert.ok(!WRITE_TOOLS.includes("helpdesk.mark_privacy_handled"));
   assert.ok(!WRITE_TOOLS.includes("helpdesk.mark_unsubscribed"));
+  const bulk = pythonInvoke("helpdesk.bulk_update_tickets", {
+    ticketIds: ["t-casey-throw"],
+    action: "trash",
+  });
+  assert.equal(bulk.ok, true);
+  assert.equal(bulk.action, "trash");
+  assert.equal(bulk.tickets[0].archived, true);
+  assert.ok(!WRITE_TOOLS.includes("helpdesk.bulk_update_tickets"));
   const gate = pythonInvoke("helpdesk.write_gate_status", {});
   assert.equal(gate.ok, true);
   assert.equal(gate.mutationsEnabled, false);
