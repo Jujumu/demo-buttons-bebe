@@ -11,6 +11,7 @@
 
 const VIEW_IDS = Object.freeze([
   "open",
+  "escalated",
   "mine",
   "unassigned",
   "all",
@@ -134,7 +135,7 @@ export function buildInboxWebMcpTools(organ) {
       name: "select_view",
       title: "Select inbox view",
       description:
-        "Switch the inbox list filter to a view (open, mine, unassigned, all, snoozed, or closed).",
+        "Switch the inbox list filter to a view (open, escalated, mine, unassigned, all, snoozed, or closed).",
       inputSchema: {
         type: "object",
         properties: {

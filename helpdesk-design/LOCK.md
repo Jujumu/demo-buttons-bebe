@@ -9,7 +9,8 @@ wash. No ink-only bar. IBM Plex.
 List row time is relative (`2h`, `Yesterday`). Absolute stays in the
 thread message header and the list tooltip.
 Unread is session-local (no Shopify field): unread names bold; selecting
-a ticket marks it read. Omit repeating **Open** in open queues; keep
+a ticket marks it read. Omit repeating **Open** in open queues; omit
+repeating **Escalated** in escalated queues if any; keep
 Closed / Snoozed. Privacy / Unsubscribe / Bug / severity are small mute
 badges — not purple.
 Palette: ground `#F4F0EA`, surface `#FFFDF9`, ink `#1C1916`, mute `#5C564F`,

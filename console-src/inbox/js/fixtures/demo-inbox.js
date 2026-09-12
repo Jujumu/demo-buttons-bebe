@@ -343,6 +343,7 @@ export const views = [
   { id: "mine", label: "Assigned to me" },
   { id: "unassigned", label: "Unassigned" },
   { id: "open", label: "Open" },
+  { id: "escalated", label: "Escalated" },
   { id: "all", label: "All" },
   { id: "snoozed", label: "Snoozed" },
   { id: "closed", label: "Closed" },
@@ -474,6 +475,8 @@ export const tickets = [
     severity: "high",
     device: "iOS",
     bugHandled: false,
+    escalated: true,
+    escalationReason: "app crash",
     updatedAt: "2026-08-28T16:00:00Z",
     stubDraft: "Hi Remy — I have the iOS checkout crash. I will log the bug out of band. This inbox does not change the Shopify catalog.",
     stubSummary: "Remy reported a high-severity iOS checkout crash. No Shopify product write from this inbox.",
@@ -488,6 +491,7 @@ export const tickets = [
     ],
     statusEvents: [
       { at: "2026-08-28T16:01:00Z", status: "open", note: "created" },
+      { at: "2026-08-28T16:02:00Z", status: "open", note: "escalated: app crash" },
     ],
   },
   {
@@ -636,6 +640,7 @@ export const IDS = {
 
 export function ticketInView(ticket, viewId) {
   if (viewId === "all") return true;
+  if (viewId === "escalated") return Boolean(ticket.escalated);
   if (viewId === "open") return ticket.status === "open";
   if (viewId === "mine") return ticket.assignee === "me" && ticket.status === "open";
   if (viewId === "unassigned") return ticket.assignee == null && ticket.status === "open";

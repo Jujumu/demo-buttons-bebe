@@ -513,6 +513,7 @@ test("list toolbar menu includes Open and keeps existing views", async () => {
     "mine",
     "unassigned",
     "open",
+    "escalated",
     "all",
     "snoozed",
     "closed",
@@ -523,11 +524,13 @@ test("list toolbar menu includes Open and keeps existing views", async () => {
   assert.match(snap.html, /data-view="unassigned"/);
   assert.match(snap.html, /data-view="open"/);
   assert.match(snap.html, /list-menu-label">Open</);
+  assert.match(snap.html, /data-view="escalated"/);
+  assert.match(snap.html, /list-menu-label">Escalated</);
   assert.match(snap.html, /data-view="all"/);
   assert.match(snap.html, /data-view="snoozed"/);
   assert.match(snap.html, /data-view="closed"/);
   assert.match(snap.html, /class="list-menu-item is-selected" data-view="open"[^>]*aria-selected="true"/);
-  assert.doesNotMatch(snap.html, /data-view="escalated"|data-view="trash"|data-view="spam"/);
+  assert.doesNotMatch(snap.html, /data-view="trash"|data-view="spam"/);
 });
 
 test("Open view returns only open tickets and omits the Open chip", async () => {
@@ -567,6 +570,49 @@ test("selectView open uses the same list_tickets view path", async () => {
   assert.match(snap.html, /class="list-menu-item is-selected" data-view="open"[^>]*aria-selected="true"/);
   assert.match(snap.html, /data-ticket="t-casey-visor"/);
   assert.doesNotMatch(snap.html, /data-ticket="t-ada-closed"/);
+});
+
+test("list toolbar menu includes Escalated after Open", async () => {
+  const snap = await createInboxOrgan({ viewId: "escalated" }).ready();
+  assert.match(snap.html, /class="list-menu-item is-selected" data-view="escalated"[^>]*aria-selected="true"/);
+  assert.match(snap.html, /list-menu-label">Escalated</);
+});
+
+test("Escalated view returns only escalated tickets and omits Escalated chrome", async () => {
+  const snap = await createInboxOrgan({ viewId: "escalated" }).ready();
+  assert.equal(snap.viewId, "escalated");
+  assert.match(snap.html, /data-ticket="t-remy-bug"[^>]*data-status="open"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-ada-track"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-ada-closed"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-jordan-ship"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-casey-visor"/);
+  assert.doesNotMatch(snap.html, /class="ticket-status">Escalated</);
+  assert.doesNotMatch(snap.html, /status-badge[^>]*>Escalated</);
+  const pinned = await createInboxOrgan({ viewId: "escalated", tickets: fixtureTickets }).ready();
+  for (const ticket of fixtureTickets) {
+    const inView = ticketInView(ticket, "escalated");
+    assert.equal(inView, Boolean(ticket.escalated));
+    if (inView) assert.match(pinned.html, new RegExp(`data-ticket="${ticket.id}"`));
+    else assert.doesNotMatch(pinned.html, new RegExp(`data-ticket="${ticket.id}"`));
+  }
+});
+
+test("empty Escalated view keeps mute empty copy", async () => {
+  const snap = await createInboxOrgan({ viewId: "escalated", tickets: [] }).ready();
+  assert.equal(snap.viewId, "escalated");
+  assert.match(snap.html, /<p class="empty-pane">No tickets in this view\.<\/p>/);
+  assert.match(snap.html, /class="list-menu-item is-selected" data-view="escalated"[^>]*aria-selected="true"/);
+  assert.doesNotMatch(snap.html, /data-ticket="/);
+});
+
+test("selectView escalated uses the same list_tickets view path", async () => {
+  const organ = createInboxOrgan({ viewId: "mine" });
+  await organ.ready();
+  const snap = await organ.selectView("escalated");
+  assert.equal(snap.viewId, "escalated");
+  assert.match(snap.html, /class="list-menu-item is-selected" data-view="escalated"[^>]*aria-selected="true"/);
+  assert.match(snap.html, /data-ticket="t-remy-bug"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-ada-track"/);
 });
 
 test("one rail tissue error leaves thread and other rail sections up", async () => {
