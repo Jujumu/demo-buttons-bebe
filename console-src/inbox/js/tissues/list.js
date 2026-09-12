@@ -12,7 +12,7 @@ import { esc, formatWhen, requestTypeLabel, screenStatus, severityLabel } from "
  * never Return.status. Unread is session-local (bold name).
  * Chrome: Inbox title + filter (views) / sort / collapse — no separate views pane.
  * Filter menu includes Open (`status === "open"`), Escalated (`escalated`),
- * and Trash (`archived`). Archived tickets stay out of every other view.
+ * and Trash (`archived`).
  * Open queues omit the Open chip. Escalated queues omit an Escalated chip.
  */
 

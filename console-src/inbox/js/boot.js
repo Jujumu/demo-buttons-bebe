@@ -13,7 +13,6 @@ const params = new URLSearchParams(location.search);
 // pins the shop host — do not replace the catalog with the 5-row live stub.
 // Default chrome is Assigned to me. ?view=open is the Open queue.
 // ?view=escalated is the Escalated queue.
-// ?view=trash is the Trash queue.
 // ?empty=1 pins an empty catalog so filtered empty copy can be reviewed.
 const emptyList = params.get("empty") === "1";
 const organ = createInboxOrgan({
