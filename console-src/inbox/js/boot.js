@@ -27,7 +27,10 @@ if (params.get("pull") === "1") {
   if (params.get("force") === "1") pullArgs.force = true;
   await organ.pullMailbox(pullArgs);
 }
-organ.mount(root);
+await organ.mount(root);
+if (params.get("menu") === "1") {
+  root.querySelector("[data-list-filter]")?.click();
+}
 
 // Demo/review: expose organ for WebMCP verify + headless shots (not a product API).
 globalThis.__inboxOrgan = organ;

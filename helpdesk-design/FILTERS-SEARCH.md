@@ -26,7 +26,8 @@ The list toolbar menu was missing **Open**.
    (main `LOCK.md`). Keep Closed / Snoozed chips in those queues.
 5. Empty filtered list copy stays the existing mute line:
    `No tickets in this view.` Review empty Open with `?view=open&empty=1`
-   (pins an empty catalog; not a product toggle).
+   (pins an empty catalog; not a product toggle). Open the filter menu
+   for shots with `?menu=1` (clicks the existing Views control).
 6. Agent-native: wire Open through `list_tickets({ view })` on the same
    `dispatch()` path. CLI: `helpdesk list-tickets --view open`. WebMCP
    `select_view` already lists `open`.

@@ -504,6 +504,8 @@ test("boot defaults to Assigned to me and offers empty Open review", () => {
   assert.match(boot, /params\.get\("view"\) \|\| "mine"/);
   assert.doesNotMatch(boot, /params\.get\("view"\) \|\| "open"/);
   assert.match(boot, /params\.get\("empty"\)\s*===\s*"1"/);
+  assert.match(boot, /params\.get\("menu"\)\s*===\s*"1"/);
+  assert.match(boot, /await organ\.mount\(root\)/);
 });
 
 test("list toolbar menu includes Open and keeps existing views", async () => {
