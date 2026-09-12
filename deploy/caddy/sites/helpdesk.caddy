@@ -1,9 +1,9 @@
-# helpdesk.teddyonfriday.com — example Caddyfile fragment
+# helpdesk.example.com — example Caddyfile fragment
 
 # Gorgias webhook is public but secret-gated in the app.
 # Console API stays behind the same session cookie as the support console.
 
-helpdesk.teddyonfriday.com {
+helpdesk.example.com {
 	encode gzip
 
 	# Detachable Gorgias inbound door (secret checked in review_server / app).

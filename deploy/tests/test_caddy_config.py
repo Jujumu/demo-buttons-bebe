@@ -23,7 +23,12 @@ class CaddyConfigTests(unittest.TestCase):
         imports = re.findall(r"^import (.+)$", self.root_text, re.MULTILINE)
         self.assertEqual(
             imports,
-            ["sites/support.caddy", "sites/exchange.caddy", "sites/warehouse.caddy"],
+            [
+                "sites/support.caddy",
+                "sites/exchange.caddy",
+                "sites/warehouse.caddy",
+                "sites/helpdesk.caddy",
+            ],
         )
         non_comment = "\n".join(
             line
@@ -46,7 +51,7 @@ class CaddyConfigTests(unittest.TestCase):
             },
             "exchange": {"exchange.example.com"},
             "warehouse": {"warehouse.example.com"},
-            "helpdesk": {"helpdesk.teddyonfriday.com"},
+            "helpdesk": {"helpdesk.example.com"},
         }
         self.assertEqual(set(self.fragments), set(expected))
         declared: dict[str, str] = {}
@@ -123,6 +128,7 @@ class CaddyConfigTests(unittest.TestCase):
             "127.0.0.1:9119",
             "127.0.0.1:4100",
             "127.0.0.1:4000",
+            "127.0.0.1:8766",
         ):
             self.assertIn(target, all_text)
 
@@ -163,10 +169,7 @@ class CaddyConfigTests(unittest.TestCase):
 
     def test_legacy_component_caddyfiles_are_retired_not_deployable(self) -> None:
         for relative in ("webhook/Caddyfile", "whatsapp-connect/Caddyfile"):
-            path = ROOT / relative
-            if not path.is_file():
-                continue
-            text = path.read_text(encoding="utf-8")
+            text = (ROOT / relative).read_text(encoding="utf-8")
             self.assertIn("RETIRED — DO NOT DEPLOY", text)
             self.assertNotIn("reverse_proxy", text)
 

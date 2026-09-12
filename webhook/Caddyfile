@@ -1,0 +1,5 @@
+# RETIRED — DO NOT DEPLOY
+#
+# This component-local file predated the authenticated management console and
+# proxied unmatched public requests to FastAPI. That exposed the internal
+# /dashboard/api namespace. Use ../deploy/caddy/Caddyfile.redacted only.
