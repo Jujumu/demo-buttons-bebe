@@ -372,6 +372,14 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   background: var(--accent);
 }
 .ticket-top { display: flex; justify-content: space-between; gap: 8px; }
+.ticket-who { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.ticket-unread-mark {
+  flex: 0 0 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ink);
+}
 .ticket-name { font-weight: 400; font-size: 14px; min-width: 0; }
 .ticket-row.is-unread:not(.is-selected) .ticket-name { font-weight: 600; }
 .ticket-row.is-selected .ticket-name,

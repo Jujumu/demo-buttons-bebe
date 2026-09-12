@@ -9,7 +9,7 @@ import { esc, formatWhen, requestTypeLabel, screenStatus, severityLabel } from "
  *      `{ collapsed }` on `list/collapsed`
  * Selected row: pale accent wash + narrow accent edge. Uses first-party
  * customerName, snippet, and helpdesk status (open / closed / snoozed) —
- * never Return.status. Unread is session-local (bold name).
+ * never Return.status.
  * Chrome: Inbox title + filter (views) / sort / collapse — no separate views pane.
  * Filter menu includes Open (`status === "open"`), Escalated (`escalated`),
  * Trash (`archived`), and Spam (`spam`).
@@ -132,10 +132,13 @@ export function createListTissue({ mailbox }) {
     const severityAttr = severityWord ? ` data-severity="${esc(ticket.severity)}"` : "";
     const deviceAttr = ticket.device ? ` data-device="${esc(ticket.device)}"` : "";
     const unreadClass = unread ? " is-unread" : "";
+    const unreadMark = unread
+      ? `<span class="ticket-unread-mark" aria-hidden="true"></span>`
+      : "";
     return `<button type="button" class="ticket-row${on ? " is-selected" : ""}${unreadClass}" data-ticket="${esc(ticket.id)}" data-status="${esc(status)}"${typeAttr}${severityAttr}${deviceAttr} aria-current="${on ? "true" : "false"}">
       <span class="ticket-bar" aria-hidden="true"></span>
       <span class="ticket-top">
-        <span class="ticket-name">${esc(listCustomerName(ticket))}</span>
+        <span class="ticket-who">${unreadMark}<span class="ticket-name">${esc(listCustomerName(ticket))}</span></span>
         <span class="ticket-meta">
           ${typeHtml}
           ${severityHtml}

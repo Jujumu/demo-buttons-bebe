@@ -546,6 +546,8 @@ test("list toolbar menu includes Open and keeps existing views", async () => {
   assert.match(snap.html, /list-menu-label">Spam</);
   assert.match(snap.html, /class="list-menu-item is-selected" data-view="open"[^>]*aria-selected="true"/);
   assert.doesNotMatch(snap.html, /data-view="search"/);
+  assert.doesNotMatch(snap.html, /data-view="unread"/);
+  assert.doesNotMatch(snap.html, /list-menu-label">Unread</);
 });
 
 test("Open view returns only open tickets and omits the Open chip", async () => {
@@ -1043,13 +1045,24 @@ test("Find customer and Link order open gated lock sheets", async () => {
   assert.match(link.html, /Order link stays locked\. No live link yet\./);
 });
 
-test("session-local unread bold clears on select", async () => {
-  const organ = createInboxOrgan({ viewId: "mine", ticketId: "t-ada-track" });
-  const snap = await organ.ready();
+test("unread row has ink mark; opening marks read", async () => {
+  const organ = createInboxOrgan({ viewId: "all", ticketId: "t-ada-track" });
+  let snap = await organ.ready();
+  const ada = snap.html.match(/<button[^>]*data-ticket="t-ada-track"[^>]*>[\s\S]*?<\/button>/)?.[0] || "";
+  const priya = snap.html.match(/<button[^>]*data-ticket="t-priya-unsub"[^>]*>[\s\S]*?<\/button>/)?.[0] || "";
   assert.ok(!snap.unreadIds.includes("t-ada-track"));
-  assert.match(snap.html, /class="ticket-row is-selected"[^>]*data-ticket="t-ada-track"/);
-  assert.doesNotMatch(snap.html, /class="ticket-row[^"]*is-unread[^"]*"[^>]*data-ticket="t-ada-track"/);
-  assert.match(snap.html, /class="ticket-row is-unread"[^>]*data-ticket="t-priya-unsub"/);
+  assert.match(ada, /class="ticket-row is-selected"/);
+  assert.doesNotMatch(ada, /is-unread/);
+  assert.doesNotMatch(ada, /ticket-unread-mark/);
+  assert.ok(snap.unreadIds.includes("t-priya-unsub"));
+  assert.match(priya, /class="ticket-row is-unread"/);
+  assert.match(priya, /ticket-unread-mark/);
+  snap = await organ.selectTicket("t-priya-unsub");
+  const priyaOpen = snap.html.match(/<button[^>]*data-ticket="t-priya-unsub"[^>]*>[\s\S]*?<\/button>/)?.[0] || "";
+  assert.ok(!snap.unreadIds.includes("t-priya-unsub"));
+  assert.match(priyaOpen, /class="ticket-row is-selected"/);
+  assert.doesNotMatch(priyaOpen, /is-unread/);
+  assert.doesNotMatch(priyaOpen, /ticket-unread-mark/);
 });
 
 test("Summarize fills a mute peek and does not enable Send", async () => {

@@ -8,8 +8,8 @@ Selected list row is a **narrow accent edge** (`3–4px` `#B5471D`) plus a
 wash. No ink-only bar. IBM Plex.
 List row time is relative (`2h`, `Yesterday`). Absolute stays in the
 thread message header and the list tooltip.
-Unread is session-local (no Shopify field): unread names bold; selecting
-a ticket marks it read. Omit repeating **Open** in open queues; omit
+Unread is session-local (no Shopify field): unread names bold plus a small
+ink mark; selecting a ticket marks it read. Not an Unread view. Omit repeating **Open** in open queues; omit
 repeating **Escalated** in escalated queues if any; keep
 Closed / Snoozed. Trash is archived tickets only, not Closed.
 Spam is a first-party soft-hide pile, not Trash and not a Shopify
