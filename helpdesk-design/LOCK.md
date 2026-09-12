@@ -12,6 +12,8 @@ Unread is session-local (no Shopify field): unread names bold; selecting
 a ticket marks it read. Omit repeating **Open** in open queues; omit
 repeating **Escalated** in escalated queues if any; keep
 Closed / Snoozed. Trash is archived tickets only, not Closed.
+Spam is a first-party soft-hide pile, not Trash and not a Shopify
+Admin spam API.
 Privacy / Unsubscribe / Bug / severity are small mute
 badges — not purple.
 Palette: ground `#F4F0EA`, surface `#FFFDF9`, ink `#1C1916`, mute `#5C564F`,

@@ -152,6 +152,7 @@
  * @property {boolean} [escalated]
  * @property {string} [escalationReason]
  * @property {boolean} [archived]
+ * @property {boolean} [spam]
  */
 
 /**

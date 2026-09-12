@@ -165,5 +165,6 @@ export function clerkTicket(ticket) {
     escalated: Boolean(ticket.escalated),
     escalationReason: ticket.escalationReason || "",
     archived: Boolean(ticket.archived),
+    spam: Boolean(ticket.spam),
   };
 }

@@ -2,7 +2,9 @@
 
 Ticket status is ours: open / closed / snoozed.
 Never Return.status OPEN and never Customer.displayName.
-Spam never becomes a ticket and never appears in list_tickets.
+Intake prize / lottery still returns {spam: true, ticketId: null} and
+never becomes a ticket. Soft-hide ticket.spam is a first-party flag.
+Those tickets appear only in list_tickets view=spam.
 """
 
 from __future__ import annotations
@@ -29,7 +31,7 @@ from .fixtures_live_holes import (
 from .fixtures_demo_tickets import DEMO_SEED_TICKETS
 from .fixtures_sample import ADA, CASEY, JORDAN, ORDER_ADA, ORDER_CASEY_A, ORDER_CASEY_B
 
-VIEWS = ("open", "escalated", "closed", "all", "snoozed", "mine", "unassigned", "trash")
+VIEWS = ("open", "escalated", "closed", "all", "snoozed", "mine", "unassigned", "trash", "spam")
 TICKET_STATUSES = ("open", "closed", "snoozed")
 REQUEST_TYPES = ("marketing_unsubscribe", "privacy_request", "bug")
 PRIVACY_SUBTYPES = ("access", "delete", "export")
@@ -317,6 +319,31 @@ SEED_TICKETS = (
         "statusEvents": [
             {"at": "2026-08-20T12:01:00Z", "status": "open", "note": "created"},
             {"at": "2026-08-20T12:02:00Z", "status": "open", "note": "archived"},
+        ],
+    },
+    {
+        "id": "t-pix-spam",
+        "customerName": "Pix Lane",
+        "subject": "You have been selected for a store credit",
+        "snippet": "Congratulations. Claim your exclusive store credit before it expires.",
+        "status": "open",
+        "assignee": "me",
+        "updatedAt": "2026-08-18T09:00:00Z",
+        "spam": True,
+        "messages": [
+            {
+                "id": "m12-spam",
+                "from": "customer",
+                "fromAgent": False,
+                "name": "Pix Lane",
+                "fromName": "Pix Lane",
+                "body": "Congratulations. Claim your exclusive store credit before it expires.",
+                "at": "2026-08-18T09:00:00Z",
+            }
+        ],
+        "statusEvents": [
+            {"at": "2026-08-18T09:01:00Z", "status": "open", "note": "created"},
+            {"at": "2026-08-18T09:02:00Z", "status": "open", "note": "spam"},
         ],
     },
 ) + tuple(DEMO_SEED_TICKETS)
@@ -759,6 +786,11 @@ def _gids_for(ticket: dict, gid_source: str = "sample") -> tuple[str | None, str
 
 
 def ticket_in_view(ticket: dict, view: str) -> bool:
+    spam = bool(ticket.get("spam"))
+    if view == "spam":
+        return spam
+    if spam:
+        return False
     archived = bool(ticket.get("archived"))
     if view == "trash":
         return archived
@@ -805,7 +837,7 @@ def _row(ticket: dict, gid_source: str = "sample") -> dict:
 def list_tickets(view: str = "open", limit: int = 20, gid_source: str = "sample") -> list[dict]:
     if view not in VIEWS:
         raise bad_request(
-            "view must be open, escalated, closed, all, snoozed, mine, unassigned, or trash",
+            "view must be open, escalated, closed, all, snoozed, mine, unassigned, trash, or spam",
             field="view",
         )
     try:
@@ -829,6 +861,7 @@ def get_ticket(ticket_id: str, gid_source: str = "sample") -> dict:
             row["statusEvents"] = [dict(event) for event in ticket["statusEvents"]]
             row["escalated"] = bool(ticket.get("escalated"))
             row["archived"] = bool(ticket.get("archived"))
+            row["spam"] = bool(ticket.get("spam"))
             reason = ticket.get("escalationReason")
             if reason:
                 row["escalationReason"] = str(reason)

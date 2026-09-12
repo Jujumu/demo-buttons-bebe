@@ -156,7 +156,11 @@ class MailboxPullTests(unittest.TestCase):
         listed = dispatch("helpdesk.list_tickets", {"view": "all", "limit": 100})["tickets"]
         from helpdesk.tickets import SEED_TICKETS
 
-        visible = [ticket for ticket in SEED_TICKETS if not ticket.get("archived")]
+        visible = [
+            ticket
+            for ticket in SEED_TICKETS
+            if not ticket.get("archived") and not ticket.get("spam")
+        ]
         self.assertEqual(len(listed), len(visible))
         self.assertFalse(any(row["id"].startswith("t-in-") for row in listed))
 
@@ -176,7 +180,11 @@ class MailboxPullTests(unittest.TestCase):
             listed = dispatch("helpdesk.list_tickets", {"view": "all", "limit": 100})["tickets"]
             from helpdesk.tickets import SEED_TICKETS
 
-            visible = [ticket for ticket in SEED_TICKETS if not ticket.get("archived")]
+            visible = [
+                ticket
+                for ticket in SEED_TICKETS
+                if not ticket.get("archived") and not ticket.get("spam")
+            ]
             self.assertEqual(len(listed), len(visible))
             self.assertFalse(any(row["id"].startswith("t-in-") for row in listed))
             self.assertIn(ADA_MESSAGE_ID, seen_path.read_text(encoding="utf-8"))

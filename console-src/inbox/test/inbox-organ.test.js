@@ -191,6 +191,7 @@ test("list rows show helpdesk status closed snoozed and omit Open chip", async (
   assert.match(snap.html, /data-ticket="t-ada-closed"[^>]*data-status="closed"/);
   assert.match(snap.html, /data-ticket="t-jordan-ship"[^>]*data-status="snoozed"/);
   assert.doesNotMatch(snap.html, /data-ticket="t-nora-old"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-pix-spam"/);
   assert.doesNotMatch(snap.html, /class="ticket-status">Open</);
   assert.match(snap.html, /class="ticket-status">Closed</);
   assert.match(snap.html, /class="ticket-status">Snoozed</);
@@ -519,6 +520,7 @@ test("list toolbar menu includes Open and keeps existing views", async () => {
     "snoozed",
     "closed",
     "trash",
+    "spam",
   ]);
   const snap = await createInboxOrgan({ viewId: "open" }).ready();
   assert.match(snap.html, /data-view="mine"/);
@@ -533,8 +535,10 @@ test("list toolbar menu includes Open and keeps existing views", async () => {
   assert.match(snap.html, /data-view="closed"/);
   assert.match(snap.html, /data-view="trash"/);
   assert.match(snap.html, /list-menu-label">Trash</);
+  assert.match(snap.html, /data-view="spam"/);
+  assert.match(snap.html, /list-menu-label">Spam</);
   assert.match(snap.html, /class="list-menu-item is-selected" data-view="open"[^>]*aria-selected="true"/);
-  assert.doesNotMatch(snap.html, /data-view="spam"/);
+  assert.doesNotMatch(snap.html, /data-view="search"/);
 });
 
 test("Open view returns only open tickets and omits the Open chip", async () => {
@@ -552,7 +556,7 @@ test("Open view returns only open tickets and omits the Open chip", async () => 
   const pinned = await createInboxOrgan({ viewId: "open", tickets: fixtureTickets }).ready();
   for (const ticket of fixtureTickets) {
     const inOpen = ticketInView(ticket, "open");
-    assert.equal(inOpen, ticket.status === "open" && !ticket.archived);
+    assert.equal(inOpen, ticket.status === "open" && !ticket.archived && !ticket.spam);
     if (inOpen) assert.match(pinned.html, new RegExp(`data-ticket="${ticket.id}"`));
     else assert.doesNotMatch(pinned.html, new RegExp(`data-ticket="${ticket.id}"`));
   }
@@ -595,7 +599,7 @@ test("Escalated view returns only escalated tickets and omits Escalated chrome",
   const pinned = await createInboxOrgan({ viewId: "escalated", tickets: fixtureTickets }).ready();
   for (const ticket of fixtureTickets) {
     const inView = ticketInView(ticket, "escalated");
-    assert.equal(inView, Boolean(ticket.escalated) && !ticket.archived);
+    assert.equal(inView, Boolean(ticket.escalated) && !ticket.archived && !ticket.spam);
     if (inView) assert.match(pinned.html, new RegExp(`data-ticket="${ticket.id}"`));
     else assert.doesNotMatch(pinned.html, new RegExp(`data-ticket="${ticket.id}"`));
   }
@@ -633,15 +637,16 @@ test("Trash view returns only archived tickets and hides them elsewhere", async 
   assert.doesNotMatch(snap.html, /data-ticket="t-ada-closed"/);
   assert.doesNotMatch(snap.html, /data-ticket="t-jordan-ship"/);
   assert.doesNotMatch(snap.html, /data-ticket="t-remy-bug"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-pix-spam"/);
   assert.doesNotMatch(snap.html, /class="ticket-status">Trash</);
   const pinned = await createInboxOrgan({ viewId: "trash", tickets: fixtureTickets }).ready();
   for (const ticket of fixtureTickets) {
     const inTrash = ticketInView(ticket, "trash");
-    assert.equal(inTrash, Boolean(ticket.archived));
+    assert.equal(inTrash, Boolean(ticket.archived) && !ticket.spam);
     if (inTrash) assert.match(pinned.html, new RegExp(`data-ticket="${ticket.id}"`));
     else assert.doesNotMatch(pinned.html, new RegExp(`data-ticket="${ticket.id}"`));
-    if (ticket.archived) {
-      for (const viewId of ["mine", "unassigned", "open", "escalated", "all", "snoozed", "closed"]) {
+    if (ticket.archived && !ticket.spam) {
+      for (const viewId of ["mine", "unassigned", "open", "escalated", "all", "snoozed", "closed", "spam"]) {
         assert.equal(ticketInView(ticket, viewId), false, viewId);
       }
     }
@@ -663,6 +668,57 @@ test("selectView trash uses the same list_tickets view path", async () => {
   assert.equal(snap.viewId, "trash");
   assert.match(snap.html, /class="list-menu-item is-selected" data-view="trash"[^>]*aria-selected="true"/);
   assert.match(snap.html, /data-ticket="t-nora-old"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-ada-track"/);
+});
+
+test("list toolbar menu includes Spam after Trash", async () => {
+  const snap = await createInboxOrgan({ viewId: "spam" }).ready();
+  assert.match(snap.html, /class="list-menu-item is-selected" data-view="spam"[^>]*aria-selected="true"/);
+  assert.match(snap.html, /list-menu-label">Spam</);
+});
+
+test("Spam view returns only spam tickets and hides them elsewhere", async () => {
+  const snap = await createInboxOrgan({ viewId: "spam" }).ready();
+  assert.equal(snap.viewId, "spam");
+  assert.match(snap.html, /data-ticket="t-pix-spam"[^>]*data-status="open"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-ada-track"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-ada-closed"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-jordan-ship"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-remy-bug"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-nora-old"/);
+  assert.doesNotMatch(snap.html, /class="ticket-status">Spam</);
+  const pinned = await createInboxOrgan({ viewId: "spam", tickets: fixtureTickets }).ready();
+  for (const ticket of fixtureTickets) {
+    const inSpam = ticketInView(ticket, "spam");
+    assert.equal(inSpam, Boolean(ticket.spam));
+    if (inSpam) assert.match(pinned.html, new RegExp(`data-ticket="${ticket.id}"`));
+    else assert.doesNotMatch(pinned.html, new RegExp(`data-ticket="${ticket.id}"`));
+    if (ticket.spam) {
+      for (const viewId of ["mine", "unassigned", "open", "escalated", "all", "snoozed", "closed", "trash"]) {
+        assert.equal(ticketInView(ticket, viewId), false, viewId);
+      }
+    }
+  }
+  const both = { ...fixtureTickets.find((ticket) => ticket.id === "t-pix-spam"), archived: true };
+  assert.equal(ticketInView(both, "spam"), true);
+  assert.equal(ticketInView(both, "trash"), false);
+});
+
+test("empty Spam view keeps mute empty copy", async () => {
+  const snap = await createInboxOrgan({ viewId: "spam", tickets: [] }).ready();
+  assert.equal(snap.viewId, "spam");
+  assert.match(snap.html, /<p class="empty-pane">No tickets in this view\.<\/p>/);
+  assert.match(snap.html, /class="list-menu-item is-selected" data-view="spam"[^>]*aria-selected="true"/);
+  assert.doesNotMatch(snap.html, /data-ticket="/);
+});
+
+test("selectView spam uses the same list_tickets view path", async () => {
+  const organ = createInboxOrgan({ viewId: "mine" });
+  await organ.ready();
+  const snap = await organ.selectView("spam");
+  assert.equal(snap.viewId, "spam");
+  assert.match(snap.html, /class="list-menu-item is-selected" data-view="spam"[^>]*aria-selected="true"/);
+  assert.match(snap.html, /data-ticket="t-pix-spam"/);
   assert.doesNotMatch(snap.html, /data-ticket="t-ada-track"/);
 });
 

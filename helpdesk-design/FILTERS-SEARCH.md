@@ -5,8 +5,8 @@ writes. Mute words, never color-alone. Four panes / three chrome stay.
 Human Send. `WRITE_TOOLS` untouched. Gorgias off.
 
 This file is the thin addendum for list-toolbar filters. Do not ship
-request-type, severity, Spam, or Search from this document — those
-wait for later slices.
+request-type, severity, or Search from this document — those wait for
+later slices.
 
 ## Open (shipped)
 
@@ -16,7 +16,7 @@ wait for later slices.
 1. **Open** list view filters tickets where first-party
    `status === "open"`. Snoozed and Closed stay out.
 2. Menu order starts Assigned to me · Unassigned · Open · Escalated ·
-   All · Snoozed · Closed · Trash.
+   All · Snoozed · Closed · Trash · Spam.
 3. Default boot stays **Assigned to me** (`mine`). `?view=open` is the
    Open queue.
 4. In the Open queue, omit the repeating Open status chip on rows
@@ -53,7 +53,7 @@ Seed `t-remy-bug` is escalated in both the Python sample store and the
 JS demo fixtures so the queue is reviewable. `t-ada-track` stays
 unescalated until `escalate_ticket` runs.
 
-## Trash (this slice)
+## Trash (shipped)
 
 Ticket gains first-party `archived` (soft-archive). This is not Closed
 status and not a Shopify delete. List `_row` stays thin and omits
@@ -75,7 +75,34 @@ Seed `t-nora-old` is archived in both the Python sample store and the
 JS demo fixtures so the queue is reviewable. Status stays `open` so
 the hide from Open / Assigned to me is visible.
 
+## Spam (this slice)
+
+Ticket gains first-party `spam` (Gorgias-like soft-hide). This is not a
+Shopify Admin spam API, not a hard delete, and not the intake prize
+reject (`{ spam: true, ticketId: null }`, no ticket). List `_row` stays
+thin and omits `spam`. `get_ticket` projects it.
+
+1. **Spam** list view id is `spam`. `ticket_in_view` is true when
+   `bool(ticket.get("spam"))`.
+2. Spam tickets stay out of All, Assigned to me, Unassigned, Open,
+   Escalated, Snoozed, Closed, and Trash. They appear only under Spam.
+3. Trash and Spam are separate piles. If both flags are set, spam wins:
+   the ticket is in Spam and out of Trash.
+4. Add **Spam** to the list toolbar filter menu after Trash. Mute word
+   only. No purple badge.
+5. Default boot stays **Assigned to me** (`mine`). `?view=spam` is the
+   Spam queue. `?view=spam&empty=1` pins an empty catalog.
+6. Rows have no Spam chip. Empty copy stays `No tickets in this view.`
+7. Agent-native: `list_tickets({ view: "spam" })` on the same
+   `dispatch()` path. CLI: `helpdesk list-tickets --view spam`.
+   WebMCP `select_view` lists `spam`.
+
+Seed `t-pix-spam` is soft-hidden in both the Python sample store and the
+JS demo fixtures so the queue is reviewable. Status stays `open` so the
+hide from Open / Assigned to me is visible. Intake still drops prize /
+lottery mail before a ticket exists.
+
 ## Out of this PR
 
-Do not add request-type, severity, Spam, or Search chrome here.
-Bulk Delete into Trash comes later.
+Do not add request-type, severity, or Search chrome here.
+Bulk Delete into Trash and mark-spam actions come later.
