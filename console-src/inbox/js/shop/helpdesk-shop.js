@@ -1,4 +1,4 @@
-import { tickets as fixtureTickets, SHOP as FIXTURE_SHOP, customers as fixtureCustomers, orders as fixtureOrders } from "../fixtures/demo-inbox.js";
+import { SHOP as FIXTURE_SHOP, customers as fixtureCustomers, orders as fixtureOrders } from "../fixtures/demo-inbox.js";
 import { createHelpdeskClient } from "./helpdesk-client.js";
 import { createFixtureShop } from "./fixture-shop.js";
 import { LIVE_IDS, LIVE_PROBE_CUSTOMER, LIVE_SHOP, liveTickets } from "./live-catalog.js";
@@ -353,10 +353,6 @@ export async function resolveLiveInbox(client) {
     // fixtures
   }
   return null;
-}
-
-export function fixtureInboxCatalog() {
-  return { shop: FIXTURE_SHOP, tickets: fixtureTickets, source: "sample" };
 }
 
 /** Test/helper export: sample GIDs must resolve to the fixture shop. */

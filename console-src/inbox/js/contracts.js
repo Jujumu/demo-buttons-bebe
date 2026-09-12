@@ -254,15 +254,3 @@ export const CUSTOMER_JOIN_LOCKED_COPY =
 /** LOCK voice. Link order — gated only. No live link tool. */
 export const ORDER_LINK_LOCKED_COPY =
   "Order link stays locked. No live link yet.";
-
-export const FORBIDDEN_CONTROLS = Object.freeze([
-  "gaia",
-  "refund",
-  "cancel",
-  "edit",
-  "edit order",
-  "edit-order",
-  "duplicate",
-  "create order",
-  "customerupdate",
-]);
