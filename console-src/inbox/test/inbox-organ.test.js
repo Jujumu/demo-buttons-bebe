@@ -1541,6 +1541,43 @@ test("search tickets empty copy is No matches", async () => {
   assert.doesNotMatch(snap.html, /data-ticket="/);
 });
 
+test("empty search hides the stale selected thread", async () => {
+  const organ = createInboxOrgan({ viewId: "all" });
+  const ready = await organ.ready();
+  assert.match(ready.html, /<h2>Ada Demo<\/h2>/);
+  assert.match(ready.html, /Where is my order #1001/);
+  const snap = organ.searchTickets("zzzz-no-hit");
+  assert.match(snap.html, /<p class="empty-pane">No matches\.<\/p>/);
+  assert.match(snap.html, /<p class="empty-pane">Select a ticket\.<\/p>/);
+  assert.match(snap.html, /Select a ticket to reply/);
+  assert.doesNotMatch(snap.html, /<h2>Ada Demo<\/h2>/);
+  assert.doesNotMatch(snap.html, /Where is my order #1001/);
+  assert.equal(snap.selectedId, "t-ada-track");
+});
+
+test("empty search paint clears the mounted thread slot", async () => {
+  const organ = createInboxOrgan({ viewId: "all" });
+  const root = fakeRoot();
+  await organ.mount(root);
+  assert.match(root._node("[data-slot=thread]").innerHTML, /Ada Demo/);
+  organ.searchTickets("zzzz-no-hit");
+  assert.match(root._node("[data-slot=thread]").innerHTML, /Select a ticket\./);
+  assert.doesNotMatch(root._node("[data-slot=thread]").innerHTML, /Ada Demo/);
+  assert.match(root._node("[data-slot=composer]").innerHTML, /Select a ticket to reply/);
+});
+
+test("clearing search restores the held thread", async () => {
+  const organ = createInboxOrgan({ viewId: "all" });
+  await organ.ready();
+  await organ.selectTicket("t-priya-unsub");
+  let snap = organ.searchTickets("zzzz-no-hit");
+  assert.equal(snap.selectedId, "t-priya-unsub");
+  assert.doesNotMatch(snap.html, /<h2>Priya Lane<\/h2>/);
+  snap = organ.clearTicketSearch();
+  assert.equal(snap.selectedId, "t-priya-unsub");
+  assert.match(snap.html, /<h2>Priya Lane<\/h2>/);
+});
+
 test("clear and Esc restore the view", async () => {
   const organ = createInboxOrgan({ viewId: "all" });
   await organ.ready();

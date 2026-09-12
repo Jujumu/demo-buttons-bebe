@@ -217,9 +217,13 @@ First-party list chrome only. Not a view. No Shopify Admin field.
    name, subject, snippet, and id. Empty query shows the view.
 3. Empty copy is **No matches.** when the query has no hits. Empty
    view copy stays `No tickets in this view.`
-4. Do not add Search to the filter menu. No `data-view="search"`.
+4. When the filtered list is empty, hide the previously selected
+   thread and composer. Thread copy stays `Select a ticket.`
+   Composer copy stays `Select a ticket to reply.` Keep the held
+   `selectedId`. Clearing the query restores that ticket.
+5. Do not add Search to the filter menu. No `data-view="search"`.
    No `list_tickets` `q`.
-5. Review hits with `/?q=ada`. Empty with `/?q=zzzz`.
+6. Review hits with `/?q=ada`. Empty with `/?q=zzzz`.
 
 ## Out of this PR
 
@@ -227,4 +231,4 @@ Do not add Low or Medium severity menu items.
 Do not ship a global Priority view.
 Do not ship Unread as a Views menu item.
 Do not ship Add tag, Assign to team, Change priority, Export, or Apply macro.
-Do not clear a selected thread when Search is emptied. That is a later PR.
+Do not fold Bug severity into this search-empty slice.
