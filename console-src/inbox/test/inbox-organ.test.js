@@ -21,7 +21,6 @@ function sourceTree() {
     "../js/boot.js",
     "../js/inbox.js",
     "../js/webmcp.js",
-    "../js/tissues/view.js",
     "../js/tissues/list.js",
     "../js/tissues/thread.js",
     "../js/tissues/composer.js",

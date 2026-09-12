@@ -1,4 +1,3 @@
-import { MAILBOX_TOPICS } from "../contracts.js";
 import { esc, formatOrderCount, formatWhen, statusLabel } from "../util.js";
 
 /** Project a helpdesk.list_past_orders Clerk row (or a legacy view row) for render. */
@@ -52,7 +51,7 @@ export function renderOrderHistory(model, { open = false, peekedId = null } = {}
   </section>`;
 }
 
-export function createOrderHistoryTissue({ shop, mailbox }) {
+export function createOrderHistoryTissue({ shop }) {
   return {
     id: "order-history",
     async load({ shop: shopId, customerId }) {
@@ -65,12 +64,5 @@ export function createOrderHistoryTissue({ shop, mailbox }) {
     },
     project: projectOrderHistory,
     render: renderOrderHistory,
-    bind(el) {
-      el.onclick = (event) => {
-        const row = event.target.closest("[data-history]");
-        if (!row) return;
-        mailbox.publish(MAILBOX_TOPICS.HISTORY_PEEK, { orderId: row.dataset.history });
-      };
-    },
   };
 }
