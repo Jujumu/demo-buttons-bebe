@@ -102,10 +102,59 @@ class TicketContractTests(unittest.TestCase):
         self.assertIn("t-remy-bug", [row["id"] for row in restored])
 
     def test_list_tickets_invalid_view_names_escalated(self) -> None:
-        payload = invoke("helpdesk.list_tickets", {"view": "trash", "limit": 20})
+        payload = invoke("helpdesk.list_tickets", {"view": "spam", "limit": 20})
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["error"], "bad_request")
         self.assertIn("escalated", payload["message"])
+        self.assertEqual(payload["details"]["field"], "view")
+
+    def test_list_tickets_trash_view(self) -> None:
+        payload = dispatch("helpdesk.list_tickets", {"view": "trash", "limit": 100})
+        self.assertTrue(payload["ok"])
+        rows = payload["tickets"]
+        ids = [row["id"] for row in rows]
+        self.assertIn("t-nora-old", ids)
+        self.assertNotIn("t-ada-track", ids)
+        self.assertNotIn("t-ada-closed", ids)
+        self.assertNotIn("t-jordan-ship", ids)
+        self.assertNotIn("t-remy-bug", ids)
+        nora = next(row for row in rows if row["id"] == "t-nora-old")
+        self.assertNotIn("archived", nora)
+        for row in rows:
+            ticket = dispatch("helpdesk.get_ticket", {"ticketId": row["id"]})["ticket"]
+            self.assertTrue(ticket["archived"])
+        ada = dispatch("helpdesk.get_ticket", {"ticketId": "t-ada-track"})["ticket"]
+        self.assertFalse(ada.get("archived"))
+        self.assertEqual(ada["status"], "open")
+        via_invoke = invoke("helpdesk.list_tickets", {"view": "trash", "limit": 100})
+        self.assertTrue(via_invoke["ok"])
+        self.assertEqual([row["id"] for row in via_invoke["tickets"]], ids)
+
+    def test_list_tickets_other_views_exclude_archived(self) -> None:
+        hidden = "t-nora-old"
+        for view in ("open", "escalated", "closed", "all", "snoozed", "mine", "unassigned"):
+            ids = [
+                row["id"]
+                for row in dispatch("helpdesk.list_tickets", {"view": view, "limit": 100})["tickets"]
+            ]
+            self.assertNotIn(hidden, ids, view)
+
+    def test_list_tickets_trash_empty_when_none(self) -> None:
+        from helpdesk import tickets as tickets_mod
+
+        nora = next(ticket for ticket in tickets_mod._store if ticket["id"] == "t-nora-old")
+        nora["archived"] = False
+        rows = dispatch("helpdesk.list_tickets", {"view": "trash", "limit": 100})["tickets"]
+        self.assertEqual(rows, [])
+        reset_tickets()
+        restored = dispatch("helpdesk.list_tickets", {"view": "trash", "limit": 100})["tickets"]
+        self.assertIn("t-nora-old", [row["id"] for row in restored])
+
+    def test_list_tickets_invalid_view_names_trash(self) -> None:
+        payload = invoke("helpdesk.list_tickets", {"view": "spam", "limit": 20})
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["error"], "bad_request")
+        self.assertIn("trash", payload["message"])
         self.assertEqual(payload["details"]["field"], "view")
 
     def test_get_ticket_returns_messages_and_status_events(self) -> None:

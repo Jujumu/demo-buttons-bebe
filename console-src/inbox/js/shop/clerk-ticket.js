@@ -164,5 +164,6 @@ export function clerkTicket(ticket) {
     view: ticket.view,
     escalated: Boolean(ticket.escalated),
     escalationReason: ticket.escalationReason || "",
+    archived: Boolean(ticket.archived),
   };
 }

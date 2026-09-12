@@ -156,7 +156,8 @@ class MailboxPullTests(unittest.TestCase):
         listed = dispatch("helpdesk.list_tickets", {"view": "all", "limit": 100})["tickets"]
         from helpdesk.tickets import SEED_TICKETS
 
-        self.assertEqual(len(listed), len(SEED_TICKETS))
+        visible = [ticket for ticket in SEED_TICKETS if not ticket.get("archived")]
+        self.assertEqual(len(listed), len(visible))
         self.assertFalse(any(row["id"].startswith("t-in-") for row in listed))
 
     def test_persisted_seen_survives_reset(self) -> None:
@@ -175,7 +176,8 @@ class MailboxPullTests(unittest.TestCase):
             listed = dispatch("helpdesk.list_tickets", {"view": "all", "limit": 100})["tickets"]
             from helpdesk.tickets import SEED_TICKETS
 
-            self.assertEqual(len(listed), len(SEED_TICKETS))
+            visible = [ticket for ticket in SEED_TICKETS if not ticket.get("archived")]
+            self.assertEqual(len(listed), len(visible))
             self.assertFalse(any(row["id"].startswith("t-in-") for row in listed))
             self.assertIn(ADA_MESSAGE_ID, seen_path.read_text(encoding="utf-8"))
         finally:

@@ -29,7 +29,7 @@ from .fixtures_live_holes import (
 from .fixtures_demo_tickets import DEMO_SEED_TICKETS
 from .fixtures_sample import ADA, CASEY, JORDAN, ORDER_ADA, ORDER_CASEY_A, ORDER_CASEY_B
 
-VIEWS = ("open", "escalated", "closed", "all", "snoozed", "mine", "unassigned")
+VIEWS = ("open", "escalated", "closed", "all", "snoozed", "mine", "unassigned", "trash")
 TICKET_STATUSES = ("open", "closed", "snoozed")
 REQUEST_TYPES = ("marketing_unsubscribe", "privacy_request", "bug")
 PRIVACY_SUBTYPES = ("access", "delete", "export")
@@ -292,6 +292,31 @@ SEED_TICKETS = (
         "statusEvents": [
             {"at": "2026-08-28T16:01:00Z", "status": "open", "note": "created"},
             {"at": "2026-08-28T16:02:00Z", "status": "open", "note": "escalated: app crash"},
+        ],
+    },
+    {
+        "id": "t-nora-old",
+        "customerName": "Nora Vale",
+        "subject": "Old wrap question from last season",
+        "snippet": "You can close this wrap question. I found last year's note.",
+        "status": "open",
+        "assignee": "me",
+        "updatedAt": "2026-08-20T12:00:00Z",
+        "archived": True,
+        "messages": [
+            {
+                "id": "m11-old",
+                "from": "customer",
+                "fromAgent": False,
+                "name": "Nora Vale",
+                "fromName": "Nora Vale",
+                "body": "You can close this wrap question. I found last year's note.",
+                "at": "2026-08-20T12:00:00Z",
+            }
+        ],
+        "statusEvents": [
+            {"at": "2026-08-20T12:01:00Z", "status": "open", "note": "created"},
+            {"at": "2026-08-20T12:02:00Z", "status": "open", "note": "archived"},
         ],
     },
 ) + tuple(DEMO_SEED_TICKETS)
@@ -734,6 +759,11 @@ def _gids_for(ticket: dict, gid_source: str = "sample") -> tuple[str | None, str
 
 
 def ticket_in_view(ticket: dict, view: str) -> bool:
+    archived = bool(ticket.get("archived"))
+    if view == "trash":
+        return archived
+    if archived:
+        return False
     status = ticket["status"]
     if view == "all":
         return True
@@ -774,7 +804,10 @@ def _row(ticket: dict, gid_source: str = "sample") -> dict:
 
 def list_tickets(view: str = "open", limit: int = 20, gid_source: str = "sample") -> list[dict]:
     if view not in VIEWS:
-        raise bad_request("view must be open, escalated, closed, all, snoozed, mine, or unassigned", field="view")
+        raise bad_request(
+            "view must be open, escalated, closed, all, snoozed, mine, unassigned, or trash",
+            field="view",
+        )
     try:
         cap = int(limit)
     except (TypeError, ValueError) as exc:
@@ -795,6 +828,7 @@ def get_ticket(ticket_id: str, gid_source: str = "sample") -> dict:
             row["messages"] = [project_message(ticket, message) for message in ticket["messages"]]
             row["statusEvents"] = [dict(event) for event in ticket["statusEvents"]]
             row["escalated"] = bool(ticket.get("escalated"))
+            row["archived"] = bool(ticket.get("archived"))
             reason = ticket.get("escalationReason")
             if reason:
                 row["escalationReason"] = str(reason)
