@@ -74,7 +74,7 @@ Demo names only (Ada Demo, Casey Sandbox, Jordan Preview). No customer PII.
 - **Selected row:** Pale accent wash + narrow accent edge (`3–4px` `#B5471D`). No grey wash, no purple, no ink-only bar.
 - **Unread:** Session-local set (no Shopify field). Fixtures start unread; selecting marks read. Unread name is bold plus a small ink mark. Not an Unread view.
 - **Multi-select:** Ink checkboxes + selection bar (`All selected` / `N selected`). Bulk v1: mark read/unread, assign (`me` / unassigned), snooze, Delete→Trash (`archived`). `helpdesk.bulk_update_tickets` on the same `dispatch()` path. Never purple. Never Shopify delete.
-- **Search:** Toolbar field narrows the current view (name, subject, snippet, id). Not a view. Empty hits say `No matches.`
+- **Search:** Toolbar field narrows the current view (name, subject, snippet, id). Not a view. Empty hits say `No matches.` and hide the stale thread (`Select a ticket.`). Clearing the query restores the held ticket.
 - **Degrade:** “No tickets in this view”
 
 ### thread

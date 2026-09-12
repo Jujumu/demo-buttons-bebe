@@ -132,11 +132,18 @@ export function createInboxOrgan(opts = {}) {
     return listRows.filter((ticket) => ticketMatchesQuery(ticket, ticketQuery));
   }
 
+  function searchMiss() {
+    return Boolean(String(ticketQuery).trim()) && visibleTickets().length === 0;
+  }
+
   function selectedTicket() {
-    return selected || listRows.find((ticket) => ticket.id === selectedId) || null;
+    if (searchMiss() || !selectedId) return null;
+    if (selected?.id === selectedId) return selected;
+    return listRows.find((ticket) => ticket.id === selectedId) || null;
   }
 
   function ensureSelection() {
+    if (searchMiss()) return;
     const visible = visibleTickets();
     if (!visible.some((ticket) => ticket.id === selectedId)) {
       selectedId = visible[0]?.id || null;
