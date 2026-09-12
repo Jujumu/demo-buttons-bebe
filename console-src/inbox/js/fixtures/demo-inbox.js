@@ -348,6 +348,7 @@ export const views = [
   { id: "snoozed", label: "Snoozed" },
   { id: "closed", label: "Closed" },
   { id: "trash", label: "Trash" },
+  { id: "spam", label: "Spam" },
 ];
 
 export const macros = [
@@ -524,6 +525,34 @@ export const tickets = [
     ],
   },
   {
+    id: "t-pix-spam",
+    customerName: "Pix Lane",
+    subject: "You have been selected for a store credit",
+    snippet: "Congratulations. Claim your exclusive store credit before it expires.",
+    status: "open",
+    view: "mine",
+    assignee: "me",
+    customerId: null,
+    orderId: null,
+    spam: true,
+    updatedAt: "2026-08-18T09:00:00Z",
+    stubDraft: "Hi Pix — I have the store-credit note. This inbox does not change the Shopify catalog.",
+    stubSummary: "Pix sent a store-credit giveaway. Soft-hidden as spam. No Shopify write from this inbox.",
+    messages: [
+      {
+        id: "m-spam",
+        fromAgent: false,
+        name: "Pix Lane",
+        at: "2026-08-18T09:00:00Z",
+        body: "Congratulations. Claim your exclusive store credit before it expires.",
+      },
+    ],
+    statusEvents: [
+      { at: "2026-08-18T09:01:00Z", status: "open", note: "created" },
+      { at: "2026-08-18T09:02:00Z", status: "open", note: "spam" },
+    ],
+  },
+  {
     id: "t-casey-visor",
     customerName: "Casey Sandbox",
     subject: "When will order #1002 ship?",
@@ -668,6 +697,9 @@ export const IDS = {
 };
 
 export function ticketInView(ticket, viewId) {
+  const spam = Boolean(ticket.spam);
+  if (viewId === "spam") return spam;
+  if (spam) return false;
   const archived = Boolean(ticket.archived);
   if (viewId === "trash") return archived;
   if (archived) return false;
