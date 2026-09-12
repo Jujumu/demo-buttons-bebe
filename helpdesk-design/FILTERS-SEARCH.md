@@ -107,7 +107,21 @@ JS demo fixtures so the queue is reviewable. Status stays `open` so the
 hide from Open / Assigned to me is visible. Intake still drops prize /
 lottery mail before a ticket exists.
 
+## Unread (this slice)
+
+First-party list chrome only. Not a view. No Shopify Admin field.
+
+1. Distinguish read vs unread in the ticket list (Gorgias red-dot intent,
+   our chrome). Unread: **bold** customer name plus a small **ink** mark.
+   Not purple. Not red-alone. Never color-alone.
+2. Read: regular weight, no mark.
+3. Opening a ticket marks it read for this session.
+4. Do not add Unread to the filter menu.
+5. Review unread vs read rows on default All (`/`). Opening a second
+   ticket is `/?ticket=t-priya-unsub`.
+
 ## Out of this PR
 
 Do not add request-type, severity, or Search chrome here.
 Bulk Delete into Trash and mark-spam actions come later.
+Do not ship Unread as a Views menu item.

@@ -63,7 +63,7 @@ Demo names only (Ada Demo, Casey Sandbox, Jordan Preview). No customer PII.
 - **Out:** `{ ticketId }` on `list/selected`
 - Row copy uses first-party `customerName` (never the AgentMail/shop mailbox login), `snippet`, and title-case helpdesk `status` (`Closed` / `Snoozed`; omit repeating `Open`). Row time is relative (`2h`, `Yesterday`) from `updatedAt`. Absolute stays in the thread message header and the list tooltip. Small mute badges for `Unsubscribe` / `Privacy` / `Bug` / severity. Never `Return.status`. Never `Order.displayFulfillmentStatus`.
 - **Selected row:** Pale accent wash + narrow accent edge (`3–4px` `#B5471D`). No grey wash, no purple, no ink-only bar.
-- **Unread:** Session-local set (no Shopify field). Fixtures start unread; selecting marks read. Unread name is bold.
+- **Unread:** Session-local set (no Shopify field). Fixtures start unread; selecting marks read. Unread name is bold plus a small ink mark. Not an Unread view.
 - **Degrade:** “No tickets in this view”
 
 ### thread
