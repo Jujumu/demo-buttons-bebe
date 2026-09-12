@@ -11,8 +11,6 @@ import { esc, formatWhen, requestTypeLabel, screenStatus, severityLabel } from "
  * Selected row: pale accent wash + narrow accent edge. Uses first-party
  * customerName, snippet, and helpdesk status (open / closed / snoozed) —
  * never Return.status.
- * Chrome: Inbox title + filter (views) / sort / search / collapse — no separate views pane.
- * Search narrows the current view. It is not a view.
  * Filter menu includes Open (`status === "open"`), Escalated (`escalated`),
  * Trash (`archived`), and Spam (`spam`).
  * Open queues omit the Open chip. Escalated queues omit an Escalated chip.

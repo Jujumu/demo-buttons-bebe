@@ -184,7 +184,7 @@
  * `list/checked-all`     { checked }
  * `list/clear-checked`   {}
  * `list/bulk`            { action, assignee? } — first-party; never Send
- * `list/search`          { query } — toolbar search-within-view; not a view
+ * `list/search`          { query }
  * `list/collapsed`       { collapsed: boolean }
  * `rail/collapsed`       { collapsed: boolean }
  * `composer/body`        { text }

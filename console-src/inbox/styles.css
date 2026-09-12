@@ -116,7 +116,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 .pane-head h1 { font-size: 18px; font-weight: 600; letter-spacing: -.02em; }
 .pane-head h2 { font-size: 14px; font-weight: 600; }
 
-/* List column chrome: Inbox title + views filter / sort / collapse. */
 .pane-list .list-toolbar {
   padding: 10px 12px 8px;
   background: var(--ground);
