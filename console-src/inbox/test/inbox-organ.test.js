@@ -526,6 +526,9 @@ test("list toolbar menu includes Open and keeps existing views", async () => {
     "unassigned",
     "open",
     "escalated",
+    "unsubscribe",
+    "privacy",
+    "bug",
     "all",
     "snoozed",
     "closed",
@@ -540,6 +543,12 @@ test("list toolbar menu includes Open and keeps existing views", async () => {
   assert.match(snap.html, /list-menu-label">Open</);
   assert.match(snap.html, /data-view="escalated"/);
   assert.match(snap.html, /list-menu-label">Escalated</);
+  assert.match(snap.html, /data-view="unsubscribe"/);
+  assert.match(snap.html, /list-menu-label">Unsubscribe</);
+  assert.match(snap.html, /data-view="privacy"/);
+  assert.match(snap.html, /list-menu-label">Privacy</);
+  assert.match(snap.html, /data-view="bug"/);
+  assert.match(snap.html, /list-menu-label">Bug</);
   assert.match(snap.html, /data-view="all"/);
   assert.match(snap.html, /data-view="snoozed"/);
   assert.match(snap.html, /data-view="closed"/);
@@ -658,7 +667,7 @@ test("Trash view returns only archived tickets and hides them elsewhere", async 
     if (inTrash) assert.match(pinned.html, new RegExp(`data-ticket="${ticket.id}"`));
     else assert.doesNotMatch(pinned.html, new RegExp(`data-ticket="${ticket.id}"`));
     if (ticket.archived && !ticket.spam) {
-      for (const viewId of ["mine", "unassigned", "open", "escalated", "all", "snoozed", "closed", "spam"]) {
+      for (const viewId of ["mine", "unassigned", "open", "escalated", "unsubscribe", "privacy", "bug", "all", "snoozed", "closed", "spam"]) {
         assert.equal(ticketInView(ticket, viewId), false, viewId);
       }
     }
@@ -706,7 +715,7 @@ test("Spam view returns only spam tickets and hides them elsewhere", async () =>
     if (inSpam) assert.match(pinned.html, new RegExp(`data-ticket="${ticket.id}"`));
     else assert.doesNotMatch(pinned.html, new RegExp(`data-ticket="${ticket.id}"`));
     if (ticket.spam) {
-      for (const viewId of ["mine", "unassigned", "open", "escalated", "all", "snoozed", "closed", "trash"]) {
+      for (const viewId of ["mine", "unassigned", "open", "escalated", "unsubscribe", "privacy", "bug", "all", "snoozed", "closed", "trash"]) {
         assert.equal(ticketInView(ticket, viewId), false, viewId);
       }
     }
@@ -732,6 +741,115 @@ test("selectView spam uses the same list_tickets view path", async () => {
   assert.match(snap.html, /class="list-menu-item is-selected" data-view="spam"[^>]*aria-selected="true"/);
   assert.match(snap.html, /data-ticket="t-pix-spam"/);
   assert.doesNotMatch(snap.html, /data-ticket="t-ada-track"/);
+});
+
+test("list toolbar menu includes Unsubscribe Privacy and Bug after Escalated", async () => {
+  const unsub = await createInboxOrgan({ viewId: "unsubscribe" }).ready();
+  assert.match(unsub.html, /class="list-menu-item is-selected" data-view="unsubscribe"[^>]*aria-selected="true"/);
+  assert.match(unsub.html, /list-menu-label">Unsubscribe</);
+  const privacy = await createInboxOrgan({ viewId: "privacy" }).ready();
+  assert.match(privacy.html, /class="list-menu-item is-selected" data-view="privacy"[^>]*aria-selected="true"/);
+  assert.match(privacy.html, /list-menu-label">Privacy</);
+  const bug = await createInboxOrgan({ viewId: "bug" }).ready();
+  assert.match(bug.html, /class="list-menu-item is-selected" data-view="bug"[^>]*aria-selected="true"/);
+  assert.match(bug.html, /list-menu-label">Bug</);
+});
+
+test("Unsubscribe view returns only marketing_unsubscribe tickets", async () => {
+  const snap = await createInboxOrgan({ viewId: "unsubscribe" }).ready();
+  assert.equal(snap.viewId, "unsubscribe");
+  assert.match(snap.html, /data-ticket="t-priya-unsub"[^>]*data-request-type="marketing_unsubscribe"/);
+  assert.match(snap.html, /class="ticket-badge ticket-request"[^>]*>Unsubscribe</);
+  assert.doesNotMatch(snap.html, /data-ticket="t-lee-privacy"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-remy-bug"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-ada-track"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-ada-closed"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-nora-old"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-pix-spam"/);
+  const pinned = await createInboxOrgan({ viewId: "unsubscribe", tickets: fixtureTickets }).ready();
+  for (const ticket of fixtureTickets) {
+    const inView = ticketInView(ticket, "unsubscribe");
+    assert.equal(
+      inView,
+      ticket.requestType === "marketing_unsubscribe" && !ticket.archived && !ticket.spam,
+    );
+    if (inView) assert.match(pinned.html, new RegExp(`data-ticket="${ticket.id}"`));
+    else assert.doesNotMatch(pinned.html, new RegExp(`data-ticket="${ticket.id}"`));
+  }
+});
+
+test("Privacy view returns only privacy_request tickets", async () => {
+  const snap = await createInboxOrgan({ viewId: "privacy" }).ready();
+  assert.equal(snap.viewId, "privacy");
+  assert.match(snap.html, /data-ticket="t-lee-privacy"[^>]*data-request-type="privacy_request"/);
+  assert.match(snap.html, /class="ticket-badge ticket-request"[^>]*>Privacy</);
+  assert.doesNotMatch(snap.html, /data-ticket="t-priya-unsub"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-remy-bug"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-ada-track"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-nora-old"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-pix-spam"/);
+  const pinned = await createInboxOrgan({ viewId: "privacy", tickets: fixtureTickets }).ready();
+  for (const ticket of fixtureTickets) {
+    const inView = ticketInView(ticket, "privacy");
+    assert.equal(
+      inView,
+      ticket.requestType === "privacy_request" && !ticket.archived && !ticket.spam,
+    );
+    if (inView) assert.match(pinned.html, new RegExp(`data-ticket="${ticket.id}"`));
+    else assert.doesNotMatch(pinned.html, new RegExp(`data-ticket="${ticket.id}"`));
+  }
+});
+
+test("Bug view returns only bug tickets and keeps mute severity", async () => {
+  const snap = await createInboxOrgan({ viewId: "bug" }).ready();
+  assert.equal(snap.viewId, "bug");
+  assert.match(snap.html, /data-ticket="t-remy-bug"[^>]*data-request-type="bug"/);
+  assert.match(snap.html, /data-ticket="t-remy-bug"[^>]*data-severity="high"/);
+  assert.match(snap.html, /class="ticket-badge ticket-request"[^>]*>Bug</);
+  assert.match(snap.html, /class="ticket-badge ticket-severity"[^>]*>High</);
+  assert.doesNotMatch(snap.html, /data-ticket="t-priya-unsub"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-lee-privacy"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-ada-track"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-nora-old"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-pix-spam"/);
+  const pinned = await createInboxOrgan({ viewId: "bug", tickets: fixtureTickets }).ready();
+  for (const ticket of fixtureTickets) {
+    const inView = ticketInView(ticket, "bug");
+    assert.equal(inView, ticket.requestType === "bug" && !ticket.archived && !ticket.spam);
+    if (inView) assert.match(pinned.html, new RegExp(`data-ticket="${ticket.id}"`));
+    else assert.doesNotMatch(pinned.html, new RegExp(`data-ticket="${ticket.id}"`));
+  }
+});
+
+test("empty request-type views keep mute empty copy", async () => {
+  for (const viewId of ["unsubscribe", "privacy", "bug"]) {
+    const snap = await createInboxOrgan({ viewId, tickets: [] }).ready();
+    assert.equal(snap.viewId, viewId);
+    assert.match(snap.html, /<p class="empty-pane">No tickets in this view\.<\/p>/);
+    assert.match(
+      snap.html,
+      new RegExp(`class="list-menu-item is-selected" data-view="${viewId}"[^>]*aria-selected="true"`),
+    );
+    assert.doesNotMatch(snap.html, /data-ticket="/);
+  }
+});
+
+test("selectView request-type filters use the same list_tickets view path", async () => {
+  const organ = createInboxOrgan({ viewId: "mine" });
+  await organ.ready();
+  const unsub = await organ.selectView("unsubscribe");
+  assert.equal(unsub.viewId, "unsubscribe");
+  assert.match(unsub.html, /class="list-menu-item is-selected" data-view="unsubscribe"[^>]*aria-selected="true"/);
+  assert.match(unsub.html, /data-ticket="t-priya-unsub"/);
+  assert.doesNotMatch(unsub.html, /data-ticket="t-ada-track"/);
+  const privacy = await organ.selectView("privacy");
+  assert.equal(privacy.viewId, "privacy");
+  assert.match(privacy.html, /data-ticket="t-lee-privacy"/);
+  assert.doesNotMatch(privacy.html, /data-ticket="t-priya-unsub"/);
+  const bug = await organ.selectView("bug");
+  assert.equal(bug.viewId, "bug");
+  assert.match(bug.html, /data-ticket="t-remy-bug"/);
+  assert.doesNotMatch(bug.html, /data-ticket="t-lee-privacy"/);
 });
 
 test("one rail tissue error leaves thread and other rail sections up", async () => {
