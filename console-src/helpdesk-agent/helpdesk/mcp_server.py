@@ -31,7 +31,7 @@ from .names import (
 
 SCHEMAS = {
     TOOL_LIST_TICKETS: {
-        "view": {"type": "string", "description": "open | escalated | unsubscribe | privacy | bug | closed | all | snoozed | mine | unassigned | trash | spam"},
+        "view": {"type": "string", "description": "open | escalated | unsubscribe | privacy | bug | bug_high | bug_critical | closed | all | snoozed | mine | unassigned | trash | spam"},
         "limit": {"type": "integer"},
     },
     TOOL_GET_TICKET: {"ticketId": {"type": "string"}},

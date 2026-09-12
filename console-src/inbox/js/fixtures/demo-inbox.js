@@ -347,6 +347,8 @@ export const views = [
   { id: "unsubscribe", label: "Unsubscribe" },
   { id: "privacy", label: "Privacy" },
   { id: "bug", label: "Bug" },
+  { id: "bug_high", label: "High" },
+  { id: "bug_critical", label: "Critical" },
   { id: "all", label: "All" },
   { id: "snoozed", label: "Snoozed" },
   { id: "closed", label: "Closed" },
@@ -497,6 +499,36 @@ export const tickets = [
     statusEvents: [
       { at: "2026-08-28T16:01:00Z", status: "open", note: "created" },
       { at: "2026-08-28T16:02:00Z", status: "open", note: "escalated: app crash" },
+    ],
+  },
+  {
+    id: "t-kit-critical",
+    customerName: "Kit Rowe",
+    subject: "Critical Android crash — pay button",
+    snippet: "Critical crash on Android when I tap pay. The app dies before the order lands.",
+    status: "open",
+    view: "mine",
+    assignee: "me",
+    customerId: null,
+    orderId: null,
+    requestType: "bug",
+    severity: "critical",
+    device: "Android",
+    bugHandled: false,
+    updatedAt: "2026-08-28T16:10:00Z",
+    stubDraft: "Hi Kit — I have the critical Android pay crash. I will log the bug out of band. This inbox does not change the Shopify catalog.",
+    stubSummary: "Kit reported a critical Android pay crash. No Shopify product write from this inbox.",
+    messages: [
+      {
+        id: "m-critical",
+        fromAgent: false,
+        name: "Kit Rowe",
+        at: "2026-08-28T16:10:00Z",
+        body: "Critical crash on Android when I tap pay. The app dies before the order lands. This inbox does not need a Shopify catalog change.",
+      },
+    ],
+    statusEvents: [
+      { at: "2026-08-28T16:11:00Z", status: "open", note: "created" },
     ],
   },
   {
@@ -711,6 +743,12 @@ export function ticketInView(ticket, viewId) {
   if (viewId === "unsubscribe") return ticket.requestType === "marketing_unsubscribe";
   if (viewId === "privacy") return ticket.requestType === "privacy_request";
   if (viewId === "bug") return ticket.requestType === "bug";
+  if (viewId === "bug_high") {
+    return ticket.requestType === "bug" && String(ticket.severity || "").trim().toLowerCase() === "high";
+  }
+  if (viewId === "bug_critical") {
+    return ticket.requestType === "bug" && String(ticket.severity || "").trim().toLowerCase() === "critical";
+  }
   if (viewId === "open") return ticket.status === "open";
   if (viewId === "mine") return ticket.assignee === "me" && ticket.status === "open";
   if (viewId === "unassigned") return ticket.assignee == null && ticket.status === "open";

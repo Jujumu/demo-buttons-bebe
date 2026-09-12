@@ -4,14 +4,14 @@ First-party list filters only. No new Shopify Admin fields. No Cute Things
 writes. Mute words, never color-alone. Four panes / three chrome stay.
 Human Send. `WRITE_TOOLS` untouched. Gorgias off.
 
-This file is the thin addendum for list-toolbar filters. Severity
-sub-filters (High / Critical) wait for a later slice.
+This file is the thin addendum for list-toolbar filters. Bug severity
+sub-filters (High / Critical) are first-party view ids on the Bug pile.
 
 ## Default boot (this slice)
 
 Default chrome is **All** (`all`). `?view=` still overrides
 (`mine` / `open` / `escalated` / `unsubscribe` / `privacy` / `bug` /
-`trash` / `spam` / other view ids).
+`bug_high` / `bug_critical` / `trash` / `spam` / other view ids).
 
 ## Open (shipped)
 
@@ -21,7 +21,8 @@ Default chrome is **All** (`all`). `?view=` still overrides
 1. **Open** list view filters tickets where first-party
    `status === "open"`. Snoozed and Closed stay out.
 2. Menu order starts Assigned to me · Unassigned · Open · Escalated ·
-   Unsubscribe · Privacy · Bug · All · Snoozed · Closed · Trash · Spam.
+   Unsubscribe · Privacy · Bug · High · Critical · All · Snoozed ·
+   Closed · Trash · Spam.
 3. Default boot is **All** (`all`). `?view=open` is the
    Open queue.
 4. In the Open queue, omit the repeating Open status chip on rows
@@ -62,7 +63,6 @@ unescalated until `escalate_ticket` runs.
 
 First-party ticket `requestType` only. Not a Shopify Marketing,
 Customer Privacy / GDPR, or catalog write. Mute badges stay mute.
-No purple. No severity sub-filters in this PR.
 
 1. **Unsubscribe** view id is `unsubscribe`. `ticket_in_view` is true
    when `requestType === "marketing_unsubscribe"`. Status is not a
@@ -70,7 +70,7 @@ No purple. No severity sub-filters in this PR.
 2. **Privacy** view id is `privacy`. Match `requestType ===
    "privacy_request"`.
 3. **Bug** view id is `bug`. Match `requestType === "bug"`. Keep the
-   mute Bug + severity chips. Do not add High / Critical menu items.
+   mute Bug + severity chips.
 4. Add the three labels to the list toolbar filter menu after
    Escalated. Archived and spam tickets stay out (same as Escalated).
 5. Default boot is **All** (`all`). Review URLs:
@@ -84,6 +84,33 @@ No purple. No severity sub-filters in this PR.
 
 Seeds: Priya `t-priya-unsub`, Lee `t-lee-privacy`, Remy `t-remy-bug`.
 
+## Bug High / Critical (this slice)
+
+First-party ticket `severity` on `requestType === "bug"` only. Not a
+global Priority view. Not a Shopify Admin priority field.
+
+1. **High** view id is `bug_high`. `ticket_in_view` is true when
+   `requestType === "bug"` and `_normalize_severity(severity) ===
+   "high"`. Status is not a constraint. Archived and spam tickets stay
+   out.
+2. **Critical** view id is `bug_critical`. Match `requestType ===
+   "bug"` and `_normalize_severity(severity) === "critical"`.
+3. Add **High** and **Critical** to the list toolbar filter menu after
+   Bug. Labels are the severity words. Mute selected ink edge, same as
+   siblings. Do not add Low or Medium menu items.
+4. Default boot is **All** (`all`). Review URLs:
+   `/?view=bug_high&menu=1`, `/?view=bug_critical&menu=1`. Empty
+   catalogs use `?empty=1`.
+5. Empty copy stays `No tickets in this view.`
+6. Agent-native: `list_tickets({ view: "bug_high" | "bug_critical" })`
+   on the same `dispatch()` path. CLI:
+   `helpdesk list-tickets --view bug_high`. WebMCP `select_view` lists
+   both ids.
+7. The Bug view still lists every non-archived, non-spam bug.
+
+Seeds: Remy `t-remy-bug` (high, escalated), Kit `t-kit-critical`
+(critical, not escalated). Escalated stays Remy-only.
+
 ## Trash (shipped)
 
 Ticket gains first-party `archived` (soft-archive). This is not Closed
@@ -93,8 +120,8 @@ status and not a Shopify delete. List `_row` stays thin and omits
 1. **Trash** list view id is `trash`. `ticket_in_view` is true when
    `bool(ticket.get("archived"))`.
 2. Archived tickets stay out of All, Assigned to me, Unassigned, Open,
-   Escalated, Unsubscribe, Privacy, Bug, Snoozed, and Closed. They
-   appear only under Trash.
+   Escalated, Unsubscribe, Privacy, Bug, High, Critical, Snoozed, and
+   Closed. They appear only under Trash.
 3. Add **Trash** to the list toolbar filter menu after Closed.
 4. Default boot is **All** (`all`). `?view=trash` is the
    Trash queue. `?view=trash&empty=1` pins an empty catalog.
@@ -117,7 +144,8 @@ thin and omits `spam`. `get_ticket` projects it.
 1. **Spam** list view id is `spam`. `ticket_in_view` is true when
    `bool(ticket.get("spam"))`.
 2. Spam tickets stay out of All, Assigned to me, Unassigned, Open,
-   Escalated, Unsubscribe, Privacy, Bug, Snoozed, Closed, and Trash.
+   Escalated, Unsubscribe, Privacy, Bug, High, Critical, Snoozed,
+   Closed, and Trash.
    They appear only under Spam.
 3. Trash and Spam are separate piles. If both flags are set, spam wins:
    the ticket is in Spam and out of Trash.
@@ -195,7 +223,8 @@ First-party list chrome only. Not a view. No Shopify Admin field.
 
 ## Out of this PR
 
-Do not add Bug severity sub-filters (High / Critical) here.
+Do not add Low or Medium severity menu items.
+Do not ship a global Priority view.
 Do not ship Unread as a Views menu item.
 Do not ship Add tag, Assign to team, Change priority, Export, or Apply macro.
 Do not clear a selected thread when Search is emptied. That is a later PR.

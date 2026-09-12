@@ -529,6 +529,8 @@ test("list toolbar menu includes Open and keeps existing views", async () => {
     "unsubscribe",
     "privacy",
     "bug",
+    "bug_high",
+    "bug_critical",
     "all",
     "snoozed",
     "closed",
@@ -549,6 +551,10 @@ test("list toolbar menu includes Open and keeps existing views", async () => {
   assert.match(snap.html, /list-menu-label">Privacy</);
   assert.match(snap.html, /data-view="bug"/);
   assert.match(snap.html, /list-menu-label">Bug</);
+  assert.match(snap.html, /data-view="bug_high"/);
+  assert.match(snap.html, /list-menu-label">High</);
+  assert.match(snap.html, /data-view="bug_critical"/);
+  assert.match(snap.html, /list-menu-label">Critical</);
   assert.match(snap.html, /data-view="all"/);
   assert.match(snap.html, /data-view="snoozed"/);
   assert.match(snap.html, /data-view="closed"/);
@@ -667,7 +673,7 @@ test("Trash view returns only archived tickets and hides them elsewhere", async 
     if (inTrash) assert.match(pinned.html, new RegExp(`data-ticket="${ticket.id}"`));
     else assert.doesNotMatch(pinned.html, new RegExp(`data-ticket="${ticket.id}"`));
     if (ticket.archived && !ticket.spam) {
-      for (const viewId of ["mine", "unassigned", "open", "escalated", "unsubscribe", "privacy", "bug", "all", "snoozed", "closed", "spam"]) {
+      for (const viewId of ["mine", "unassigned", "open", "escalated", "unsubscribe", "privacy", "bug", "bug_high", "bug_critical", "all", "snoozed", "closed", "spam"]) {
         assert.equal(ticketInView(ticket, viewId), false, viewId);
       }
     }
@@ -715,7 +721,7 @@ test("Spam view returns only spam tickets and hides them elsewhere", async () =>
     if (inSpam) assert.match(pinned.html, new RegExp(`data-ticket="${ticket.id}"`));
     else assert.doesNotMatch(pinned.html, new RegExp(`data-ticket="${ticket.id}"`));
     if (ticket.spam) {
-      for (const viewId of ["mine", "unassigned", "open", "escalated", "unsubscribe", "privacy", "bug", "all", "snoozed", "closed", "trash"]) {
+      for (const viewId of ["mine", "unassigned", "open", "escalated", "unsubscribe", "privacy", "bug", "bug_high", "bug_critical", "all", "snoozed", "closed", "trash"]) {
         assert.equal(ticketInView(ticket, viewId), false, viewId);
       }
     }
@@ -753,6 +759,12 @@ test("list toolbar menu includes Unsubscribe Privacy and Bug after Escalated", a
   const bug = await createInboxOrgan({ viewId: "bug" }).ready();
   assert.match(bug.html, /class="list-menu-item is-selected" data-view="bug"[^>]*aria-selected="true"/);
   assert.match(bug.html, /list-menu-label">Bug</);
+  const high = await createInboxOrgan({ viewId: "bug_high" }).ready();
+  assert.match(high.html, /class="list-menu-item is-selected" data-view="bug_high"[^>]*aria-selected="true"/);
+  assert.match(high.html, /list-menu-label">High</);
+  const critical = await createInboxOrgan({ viewId: "bug_critical" }).ready();
+  assert.match(critical.html, /class="list-menu-item is-selected" data-view="bug_critical"[^>]*aria-selected="true"/);
+  assert.match(critical.html, /list-menu-label">Critical</);
 });
 
 test("Unsubscribe view returns only marketing_unsubscribe tickets", async () => {
@@ -805,8 +817,11 @@ test("Bug view returns only bug tickets and keeps mute severity", async () => {
   assert.equal(snap.viewId, "bug");
   assert.match(snap.html, /data-ticket="t-remy-bug"[^>]*data-request-type="bug"/);
   assert.match(snap.html, /data-ticket="t-remy-bug"[^>]*data-severity="high"/);
+  assert.match(snap.html, /data-ticket="t-kit-critical"[^>]*data-request-type="bug"/);
+  assert.match(snap.html, /data-ticket="t-kit-critical"[^>]*data-severity="critical"/);
   assert.match(snap.html, /class="ticket-badge ticket-request"[^>]*>Bug</);
   assert.match(snap.html, /class="ticket-badge ticket-severity"[^>]*>High</);
+  assert.match(snap.html, /class="ticket-badge ticket-severity"[^>]*>Critical</);
   assert.doesNotMatch(snap.html, /data-ticket="t-priya-unsub"/);
   assert.doesNotMatch(snap.html, /data-ticket="t-lee-privacy"/);
   assert.doesNotMatch(snap.html, /data-ticket="t-ada-track"/);
@@ -821,8 +836,58 @@ test("Bug view returns only bug tickets and keeps mute severity", async () => {
   }
 });
 
+test("High view returns only high-severity bug tickets", async () => {
+  const snap = await createInboxOrgan({ viewId: "bug_high" }).ready();
+  assert.equal(snap.viewId, "bug_high");
+  assert.match(snap.html, /data-ticket="t-remy-bug"[^>]*data-request-type="bug"/);
+  assert.match(snap.html, /data-ticket="t-remy-bug"[^>]*data-severity="high"/);
+  assert.match(snap.html, /class="ticket-badge ticket-request"[^>]*>Bug</);
+  assert.match(snap.html, /class="ticket-badge ticket-severity"[^>]*>High</);
+  assert.doesNotMatch(snap.html, /data-ticket="t-kit-critical"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-priya-unsub"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-lee-privacy"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-ada-track"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-nora-old"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-pix-spam"/);
+  const pinned = await createInboxOrgan({ viewId: "bug_high", tickets: fixtureTickets }).ready();
+  for (const ticket of fixtureTickets) {
+    const inView = ticketInView(ticket, "bug_high");
+    assert.equal(
+      inView,
+      ticket.requestType === "bug" && ticket.severity === "high" && !ticket.archived && !ticket.spam,
+    );
+    if (inView) assert.match(pinned.html, new RegExp(`data-ticket="${ticket.id}"`));
+    else assert.doesNotMatch(pinned.html, new RegExp(`data-ticket="${ticket.id}"`));
+  }
+});
+
+test("Critical view returns only critical-severity bug tickets", async () => {
+  const snap = await createInboxOrgan({ viewId: "bug_critical" }).ready();
+  assert.equal(snap.viewId, "bug_critical");
+  assert.match(snap.html, /data-ticket="t-kit-critical"[^>]*data-request-type="bug"/);
+  assert.match(snap.html, /data-ticket="t-kit-critical"[^>]*data-severity="critical"/);
+  assert.match(snap.html, /class="ticket-badge ticket-request"[^>]*>Bug</);
+  assert.match(snap.html, /class="ticket-badge ticket-severity"[^>]*>Critical</);
+  assert.doesNotMatch(snap.html, /data-ticket="t-remy-bug"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-priya-unsub"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-lee-privacy"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-ada-track"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-nora-old"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-pix-spam"/);
+  const pinned = await createInboxOrgan({ viewId: "bug_critical", tickets: fixtureTickets }).ready();
+  for (const ticket of fixtureTickets) {
+    const inView = ticketInView(ticket, "bug_critical");
+    assert.equal(
+      inView,
+      ticket.requestType === "bug" && ticket.severity === "critical" && !ticket.archived && !ticket.spam,
+    );
+    if (inView) assert.match(pinned.html, new RegExp(`data-ticket="${ticket.id}"`));
+    else assert.doesNotMatch(pinned.html, new RegExp(`data-ticket="${ticket.id}"`));
+  }
+});
+
 test("empty request-type views keep mute empty copy", async () => {
-  for (const viewId of ["unsubscribe", "privacy", "bug"]) {
+  for (const viewId of ["unsubscribe", "privacy", "bug", "bug_high", "bug_critical"]) {
     const snap = await createInboxOrgan({ viewId, tickets: [] }).ready();
     assert.equal(snap.viewId, viewId);
     assert.match(snap.html, /<p class="empty-pane">No tickets in this view\.<\/p>/);
@@ -849,7 +914,18 @@ test("selectView request-type filters use the same list_tickets view path", asyn
   const bug = await organ.selectView("bug");
   assert.equal(bug.viewId, "bug");
   assert.match(bug.html, /data-ticket="t-remy-bug"/);
+  assert.match(bug.html, /data-ticket="t-kit-critical"/);
   assert.doesNotMatch(bug.html, /data-ticket="t-lee-privacy"/);
+  const high = await organ.selectView("bug_high");
+  assert.equal(high.viewId, "bug_high");
+  assert.match(high.html, /class="list-menu-item is-selected" data-view="bug_high"[^>]*aria-selected="true"/);
+  assert.match(high.html, /data-ticket="t-remy-bug"/);
+  assert.doesNotMatch(high.html, /data-ticket="t-kit-critical"/);
+  const critical = await organ.selectView("bug_critical");
+  assert.equal(critical.viewId, "bug_critical");
+  assert.match(critical.html, /class="list-menu-item is-selected" data-view="bug_critical"[^>]*aria-selected="true"/);
+  assert.match(critical.html, /data-ticket="t-kit-critical"/);
+  assert.doesNotMatch(critical.html, /data-ticket="t-remy-bug"/);
 });
 
 test("one rail tissue error leaves thread and other rail sections up", async () => {

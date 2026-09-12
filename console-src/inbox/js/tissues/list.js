@@ -13,8 +13,8 @@ import { esc, formatWhen, requestTypeLabel, screenStatus, severityLabel } from "
  * customerName, snippet, and helpdesk status (open / closed / snoozed) —
  * never Return.status.
  * Filter menu includes Open (`status === "open"`), Escalated (`escalated`),
- * Unsubscribe / Privacy / Bug (`requestType`), Trash (`archived`), and Spam
- * (`spam`).
+ * Unsubscribe / Privacy / Bug (`requestType`), High / Critical (Bug
+ * `severity`), Trash (`archived`), and Spam (`spam`).
  * Open queues omit the Open chip. Escalated queues omit an Escalated chip.
  */
 
