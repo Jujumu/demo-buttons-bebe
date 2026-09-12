@@ -347,6 +347,7 @@ export const views = [
   { id: "all", label: "All" },
   { id: "snoozed", label: "Snoozed" },
   { id: "closed", label: "Closed" },
+  { id: "trash", label: "Trash" },
 ];
 
 export const macros = [
@@ -495,6 +496,34 @@ export const tickets = [
     ],
   },
   {
+    id: "t-nora-old",
+    customerName: "Nora Vale",
+    subject: "Old wrap question from last season",
+    snippet: "You can close this wrap question. I found last year's note.",
+    status: "open",
+    view: "mine",
+    assignee: "me",
+    customerId: null,
+    orderId: null,
+    archived: true,
+    updatedAt: "2026-08-20T12:00:00Z",
+    stubDraft: "Hi Nora — I have the old wrap question. This inbox does not change the Shopify catalog.",
+    stubSummary: "Nora said the last-season wrap question can be closed. No Shopify write from this inbox.",
+    messages: [
+      {
+        id: "m-old",
+        fromAgent: false,
+        name: "Nora Vale",
+        at: "2026-08-20T12:00:00Z",
+        body: "You can close this wrap question. I found last year's note.",
+      },
+    ],
+    statusEvents: [
+      { at: "2026-08-20T12:01:00Z", status: "open", note: "created" },
+      { at: "2026-08-20T12:02:00Z", status: "open", note: "archived" },
+    ],
+  },
+  {
     id: "t-casey-visor",
     customerName: "Casey Sandbox",
     subject: "When will order #1002 ship?",
@@ -639,6 +668,9 @@ export const IDS = {
 };
 
 export function ticketInView(ticket, viewId) {
+  const archived = Boolean(ticket.archived);
+  if (viewId === "trash") return archived;
+  if (archived) return false;
   if (viewId === "all") return true;
   if (viewId === "escalated") return Boolean(ticket.escalated);
   if (viewId === "open") return ticket.status === "open";

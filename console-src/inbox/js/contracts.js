@@ -151,6 +151,7 @@
  * @property {{ at: string, status: string, note?: string }[]} statusEvents
  * @property {boolean} [escalated]
  * @property {string} [escalationReason]
+ * @property {boolean} [archived]
  */
 
 /**
