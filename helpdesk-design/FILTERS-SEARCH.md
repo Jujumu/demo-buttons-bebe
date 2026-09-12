@@ -137,6 +137,20 @@ First-party list chrome. No Shopify Admin field. No Cute Things write.
    or Apply macro.
 5. Review selection + menu with `/?select=1&bulk=1`.
 
+## New ticket (this slice)
+
+First-party list chrome. No Shopify Customer or Order create.
+
+1. **New ticket** control in the list toolbar next to Inbox / Search /
+   filter. Mute / ink / line only. Not purple.
+2. Click (or optional `N` when not typing) creates an empty first-party
+   ticket and selects it. Compose focuses. Thread has no inbound
+   messages. Rail stays `No customer` / `No order`.
+3. `helpdesk.create_ticket` on the same `dispatch()` path as MCP + CLI.
+   In `{}`. Out is a Clerk ticket with null GIDs and `source: compose`.
+   Human still sends.
+4. Review with `/?new=1`.
+
 ## Search (this slice)
 
 First-party list chrome only. Not a view. No Shopify Admin field.
@@ -155,5 +169,5 @@ First-party list chrome only. Not a view. No Shopify Admin field.
 
 Do not add request-type or severity chrome here.
 Do not ship Unread as a Views menu item.
-Do not ship New ticket.
 Do not ship Add tag, Assign to team, Change priority, Export, or Apply macro.
+Do not clear a selected thread when Search is emptied. That is a later PR.

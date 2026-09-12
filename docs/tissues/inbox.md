@@ -11,8 +11,10 @@ selected. Composer Use draft / Regenerate / Dismiss and the mute summarize peek 
 `helpdesk.draft_reply` and `helpdesk.summarize_thread`. In-box macro search is
 a client of `helpdesk.search_macros`; Replace/Append call `helpdesk.apply_macro`
 (`replace` or `append`) and never send. Email/chat intake is a client of
-`helpdesk.ingest_email` / `helpdesk.ingest_chat` / `helpdesk.pull_mailbox`
-on that same path. `pull_mailbox` is the AgentMail bridge: it maps unread
+`helpdesk.ingest_email` / `helpdesk.ingest_chat` / `helpdesk.create_ticket`
+/ `helpdesk.pull_mailbox`
+on that same path. `create_ticket` opens an empty first-party compose
+ticket (null GIDs, no inbound message). `pull_mailbox` is the AgentMail bridge: it maps unread
 inbound mail onto `ingest_email`. Live reads target Cute Things
 (`SHOPIFY_SHOP` pinned to `yznyc1-ez.myshopify.com`) when mint works.
 Mint/Admin failure falls back to `demo-inbox.example` fixtures.
@@ -32,6 +34,7 @@ Demo names only (Ada Demo, Casey Sandbox, Jordan Preview). No customer PII.
 | `list/selected` | `{ ticketId }` | list |
 | `list/checked` | `{ ticketId, checked }` | list |
 | `list/bulk` | `{ action, assignee? }` | list |
+| `list/new-ticket` | `{}` | list |
 | `list/collapsed` | `{ collapsed }` | list |
 | `rail/collapsed` | `{ collapsed }` | rail |
 | `composer/body` | `{ text }` | composer |

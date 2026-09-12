@@ -25,17 +25,18 @@ class ContractTests(unittest.TestCase):
     def setUp(self) -> None:
         reset_tickets()
 
-    def test_eighteen_tools(self) -> None:
+    def test_nineteen_tools(self) -> None:
         self.assertEqual(tuple(list_tools()), TOOL_NAMES)
-        self.assertEqual(len(TOOLS), 18)
+        self.assertEqual(len(TOOLS), 19)
         names = [item["name"] for item in tool_descriptors()]
-        self.assertEqual(names[:18], list(TOOL_NAMES))
+        self.assertEqual(names[:19], list(TOOL_NAMES))
         self.assertIn("helpdesk.draft_reply", TOOL_NAMES)
         self.assertIn("helpdesk.summarize_thread", TOOL_NAMES)
         self.assertIn("helpdesk.search_macros", TOOL_NAMES)
         self.assertIn("helpdesk.apply_macro", TOOL_NAMES)
         self.assertIn("helpdesk.ingest_email", TOOL_NAMES)
         self.assertIn("helpdesk.ingest_chat", TOOL_NAMES)
+        self.assertIn("helpdesk.create_ticket", TOOL_NAMES)
         self.assertIn("helpdesk.pull_mailbox", TOOL_NAMES)
         self.assertIn("helpdesk.escalate_ticket", TOOL_NAMES)
         self.assertIn("helpdesk.bulk_update_tickets", TOOL_NAMES)
@@ -46,8 +47,8 @@ class ContractTests(unittest.TestCase):
     def test_mcp_lists_live_tools_and_refused_writes(self) -> None:
         reply = handle_rpc({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
         names = [tool["name"] for tool in reply["result"]["tools"]]
-        self.assertEqual(names[:18], list(TOOL_NAMES))
-        self.assertEqual(len(list_tools()), 18)
+        self.assertEqual(names[:19], list(TOOL_NAMES))
+        self.assertEqual(len(list_tools()), 19)
         self.assertIn("helpdesk.send", names)
         self.assertIn("helpdesk.refund", names)
         self.assertIn("helpdesk.cancel", names)
@@ -133,6 +134,11 @@ class ContractTests(unittest.TestCase):
                     CHAT_WITH_1001["receivedAt"],
                 ],
                 dict(CHAT_WITH_1001),
+            ),
+            (
+                "helpdesk.create_ticket",
+                ["create-ticket"],
+                {},
             ),
             (
                 "helpdesk.pull_mailbox",

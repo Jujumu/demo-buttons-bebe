@@ -18,6 +18,7 @@ from .names import (
     TOOL_GET_RETURNS,
     TOOL_GET_TICKET,
     TOOL_INGEST_CHAT,
+    TOOL_CREATE_TICKET,
     TOOL_INGEST_EMAIL,
     TOOL_PULL_MAILBOX,
     TOOL_LIST_PAST_ORDERS,
@@ -77,6 +78,7 @@ def build_parser() -> argparse.ArgumentParser:
     ingest_chat.add_argument("--from-name", dest="fromName", required=True)
     ingest_chat.add_argument("--body", dest="body", required=True)
     ingest_chat.add_argument("--received-at", dest="receivedAt", required=True)
+    sub.add_parser(CLI_COMMANDS[TOOL_CREATE_TICKET])
     pull = sub.add_parser(CLI_COMMANDS[TOOL_PULL_MAILBOX])
     pull.add_argument("--limit", type=int, default=20)
     escalate = sub.add_parser(CLI_COMMANDS[TOOL_ESCALATE_TICKET])

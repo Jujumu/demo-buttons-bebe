@@ -356,7 +356,7 @@ _seen_messages: set[str] = set()
 _next_seq = 1
 _store_lock = threading.Lock()
 
-INTAKE_SOURCES = frozenset({"agentmail", "gorgias", "chat", "seed"})
+INTAKE_SOURCES = frozenset({"agentmail", "gorgias", "chat", "seed", "compose"})
 
 
 def _seen_file() -> Path | None:
@@ -711,6 +711,44 @@ def add_ticket(
     _by_dedupe[dedupe_key] = ticket
     _persist_store()
     return _row(ticket, gid_source="joined")
+
+
+def create_ticket(gid_source: str = "sample") -> dict:
+    """Empty first-party compose ticket. No Shopify join. No inbound message."""
+    global _next_seq
+    now = _now_iso()
+    ticket_id = f"t-in-{_next_seq}"
+    _next_seq += 1
+    ticket = {
+        "id": ticket_id,
+        "customerName": "New ticket",
+        "subject": "New ticket",
+        "snippet": "",
+        "status": "open",
+        "assignee": "me",
+        "updatedAt": now,
+        "joined": True,
+        "customerId": None,
+        "orderId": None,
+        "channel": "compose",
+        "fromEmail": None,
+        "source": "compose",
+        "external": None,
+        "requestType": None,
+        "privacySubtype": None,
+        "privacyHandled": False,
+        "unsubscribeHandled": False,
+        "bugHandled": False,
+        "severity": None,
+        "device": None,
+        "messages": [],
+        "statusEvents": [
+            {"at": now, "status": "open", "note": "created"},
+        ],
+    }
+    _store.insert(0, ticket)
+    _persist_store()
+    return get_ticket(ticket_id, gid_source)
 
 
 def append_agent_message(

@@ -71,6 +71,9 @@ export function createHelpdeskClient(opts = {}) {
     ingestChat(args) {
       return invoke("helpdesk.ingest_chat", args);
     },
+    createTicket(args) {
+      return invoke("helpdesk.create_ticket", args || {});
+    },
     pullMailbox(args) {
       return invoke("helpdesk.pull_mailbox", args);
     },

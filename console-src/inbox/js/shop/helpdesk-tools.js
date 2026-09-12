@@ -12,6 +12,7 @@ export const TOOL_NAMES = Object.freeze([
   "helpdesk.apply_macro",
   "helpdesk.ingest_email",
   "helpdesk.ingest_chat",
+  "helpdesk.create_ticket",
   "helpdesk.pull_mailbox",
   "helpdesk.escalate_ticket",
   "helpdesk.bulk_update_tickets",
@@ -53,6 +54,7 @@ export const INBOX_TOOLS = Object.freeze({
 export const INTAKE_TOOLS = Object.freeze({
   email: "helpdesk.ingest_email",
   chat: "helpdesk.ingest_chat",
+  create: "helpdesk.create_ticket",
   mailbox: "helpdesk.pull_mailbox",
 });
 

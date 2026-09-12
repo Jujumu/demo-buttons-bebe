@@ -15,7 +15,8 @@ intake tools, one AgentMail pull, first-party `escalate_ticket`,
 `write_gate_status`, `bridge_status`, and human-only `send_reply`.
 Composer and macro tools return text. They never send, refund, or cancel.
 Intake writes a first-party ticket (or drops spam). It never creates a
-Shopify customer. `pull_mailbox` reads the AgentMail inbox and calls
+Shopify customer. `create_ticket` opens an empty first-party compose
+ticket with null GIDs. `pull_mailbox` reads the AgentMail inbox and calls
 `ingest_email`. It never sends. `escalate_ticket` is first-party helpdesk
 state (escalated/pending). It is not a Shopify mutation.
 
@@ -33,6 +34,7 @@ state (escalated/pending). It is not a Shopify mutation.
 | `helpdesk.apply_macro` | composer insert | `helpdesk apply-macro --macro-id … --mode replace\|append` | `{ macroId, mode?, currentBody? }` | `{ text, title, mode, body }` for the textarea |
 | `helpdesk.ingest_email` | intake | `helpdesk ingest-email` | `{ from, subject, body, receivedAt }` | signed ticket row, or `{ spam: true, ticketId: null }` |
 | `helpdesk.ingest_chat` | intake | `helpdesk ingest-chat` | `{ fromName, body, receivedAt }` | signed ticket row, or `{ spam: true, ticketId: null }` |
+| `helpdesk.create_ticket` | compose | `helpdesk create-ticket` | `{}` | empty first-party ticket (`source: compose`, null GIDs, no inbound messages) |
 | `helpdesk.pull_mailbox` | mailbox | `helpdesk pull-mailbox` | `{ limit? }` | `{ ingested: [ticket rows], spam: [{ from, subject }], skipped: n }` |
 | `helpdesk.escalate_ticket` | thread escalate | `helpdesk escalate-ticket` | `{ ticketId, reason? }` | ticket + `escalated: true` (status stays open/closed/snoozed) |
 | `helpdesk.write_gate_status` | write gate | `helpdesk write-gate-status` | `{}` | `{ mutationsEnabled, refused: ["send","refund","cancel"], tools }` |

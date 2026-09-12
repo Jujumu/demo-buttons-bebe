@@ -66,6 +66,8 @@ function pythonInvoke(tool, args) {
       "--body", String(args.body),
       "--received-at", String(args.receivedAt),
     );
+  } else if (tool === "helpdesk.create_ticket") {
+    argv.push("create-ticket");
   } else if (tool === "helpdesk.pull_mailbox") {
     argv.push("pull-mailbox", "--limit", String(args.limit || 20));
   } else if (tool === "helpdesk.escalate_ticket") {
@@ -110,10 +112,10 @@ function clientFromPython(source = "sample") {
   });
 }
 
-test("client exposes exactly the eighteen helpdesk tools", () => {
+test("client exposes exactly the nineteen helpdesk tools", () => {
   const client = createHelpdeskClient({ invoke: async () => ({ ok: true }) });
   assert.deepEqual(client.tools, TOOL_NAMES);
-  assert.equal(TOOL_NAMES.length, 18);
+  assert.equal(TOOL_NAMES.length, 19);
   assert.ok(TOOL_NAMES.includes("helpdesk.list_tickets"));
   assert.ok(TOOL_NAMES.includes("helpdesk.get_ticket"));
   assert.ok(TOOL_NAMES.includes("helpdesk.draft_reply"));
@@ -122,6 +124,7 @@ test("client exposes exactly the eighteen helpdesk tools", () => {
   assert.ok(TOOL_NAMES.includes("helpdesk.apply_macro"));
   assert.ok(TOOL_NAMES.includes("helpdesk.ingest_email"));
   assert.ok(TOOL_NAMES.includes("helpdesk.ingest_chat"));
+  assert.ok(TOOL_NAMES.includes("helpdesk.create_ticket"));
   assert.ok(TOOL_NAMES.includes("helpdesk.pull_mailbox"));
   assert.ok(TOOL_NAMES.includes("helpdesk.escalate_ticket"));
   assert.ok(TOOL_NAMES.includes("helpdesk.bulk_update_tickets"));
@@ -450,6 +453,7 @@ test("all live CLI tools return ok on the same handler path", () => {
       body: "Any update on #1001? Tracking looks stuck.",
       receivedAt: "2026-08-30T15:02:00Z",
     }],
+    ["helpdesk.create_ticket", {}],
     ["helpdesk.pull_mailbox", { limit: 5 }],
     ["helpdesk.escalate_ticket", { ticketId: "t-ada-track" }],
     ["helpdesk.bulk_update_tickets", { ticketIds: ["t-casey-visor"], action: "assign", assignee: "me" }],

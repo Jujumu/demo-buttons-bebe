@@ -9,7 +9,9 @@ wash. No ink-only bar. IBM Plex.
 List row time is relative (`2h`, `Yesterday`). Absolute stays in the
 thread message header and the list tooltip.
 Unread is session-local (no Shopify field): unread names bold plus a small
-ink mark; selecting a ticket marks it read. Not an Unread view. Multi-select
+ink mark; selecting a ticket marks it read. Not an Unread view.
+**New ticket** in the list toolbar opens an empty first-party compose
+ticket. No Shopify Customer or Order create. Human Send only. Multi-select
 uses ink checkboxes and an ink **All selected** bar. Bulk v1 is mark read /
 unread, assign (agent or unassigned), snooze, and Delete into Trash
 (`archived`). No purple. Omit repeating **Open** in open queues; omit

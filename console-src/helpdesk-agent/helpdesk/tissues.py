@@ -22,6 +22,7 @@ from .macros import handle_apply_macro, handle_search_macros
 from .names import (
     TOOL_APPLY_MACRO,
     TOOL_BRIDGE_STATUS,
+    TOOL_CREATE_TICKET,
     TOOL_DRAFT_REPLY,
     TOOL_BULK_UPDATE_TICKETS,
     TOOL_ESCALATE_TICKET,
@@ -65,6 +66,11 @@ def handle_get_ticket(args: dict[str, Any]) -> dict[str, Any]:
         "source": "sample",
         "ticket": tickets.get_ticket(str(ticket_id) if ticket_id is not None else "", gid_source),
     }
+
+
+def handle_create_ticket(_args: dict[str, Any]) -> dict[str, Any]:
+    gid_source = _ticket_gid_source()
+    return {"source": "sample", "ticket": tickets.create_ticket(gid_source)}
 
 
 def handle_escalate_ticket(args: dict[str, Any]) -> dict[str, Any]:
@@ -280,6 +286,7 @@ HANDLERS = {
     TOOL_APPLY_MACRO: handle_apply_macro,
     TOOL_INGEST_EMAIL: handle_ingest_email,
     TOOL_INGEST_CHAT: handle_ingest_chat,
+    TOOL_CREATE_TICKET: handle_create_ticket,
     TOOL_PULL_MAILBOX: handle_pull_mailbox,
     TOOL_ESCALATE_TICKET: handle_escalate_ticket,
     TOOL_BULK_UPDATE_TICKETS: handle_bulk_update_tickets,

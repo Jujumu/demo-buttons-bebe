@@ -1,5 +1,5 @@
 import { applyBulkAction } from "./bulk-tickets.js";
-import { clerkTicket, clerkTicketRow } from "./clerk-ticket.js";
+import { clerkTicket, clerkTicketRow, composeTicketRecord } from "./clerk-ticket.js";
 import { customers, emptyReturns, macros as fixtureMacros, orders, returnsForOrder, SHOP, ticketInView, tickets as fixtureTickets } from "../fixtures/demo-inbox.js";
 import { REQUEST_TYPE_BUG, REQUEST_TYPE_PRIVACY, REQUEST_TYPE_UNSUBSCRIBE } from "../util.js";
 
@@ -199,6 +199,7 @@ export function createFixtureShop(opts = {}) {
   const fail = opts.fail || {};
   const escalated = new Map();
   const bulk = new Map();
+  const created = [];
 
   function maybeFail(key) {
     if (!fail[key]) return;
@@ -259,7 +260,7 @@ export function createFixtureShop(opts = {}) {
     listTickets({ view, limit } = {}) {
       maybeFail("list");
       const cap = Number(limit) > 0 ? Number(limit) : 20;
-      return fixtureTickets
+      return created.concat(fixtureTickets)
         .map(withBulk)
         .filter((ticket) => ticketInView(ticket, view || "open"))
         .slice(0, cap)
@@ -267,12 +268,22 @@ export function createFixtureShop(opts = {}) {
     },
     getTicket({ ticketId } = {}) {
       maybeFail("thread");
-      const ticket = fixtureTickets.find((row) => row.id === ticketId);
+      const ticket = created.find((row) => row.id === ticketId)
+        || fixtureTickets.find((row) => row.id === ticketId);
       return ticket ? clerkTicket(withBulk(ticket)) : null;
+    },
+    createTicket() {
+      maybeFail("create-ticket");
+      const ticket = composeTicketRecord();
+      created.unshift(ticket);
+      return clerkTicket(ticket);
     },
     draftReply(args = {}) {
       maybeFail("draft");
       const thread = args.thread || {};
+      if (thread.source === "compose") {
+        return { source: "sample", draft: "" };
+      }
       return {
         source: "sample",
         draft: fixtureDraftFromThread(thread, args),

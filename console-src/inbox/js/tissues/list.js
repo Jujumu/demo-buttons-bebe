@@ -7,7 +7,8 @@ import { esc, formatWhen, requestTypeLabel, screenStatus, severityLabel } from "
  * In: `{ tickets, selectedTicketId, views, counts, selectedViewId, collapsed, unreadIds, checkedIds, query }`
  * Out: `{ ticketId }` on `list/selected`, `{ viewId }` on `view/selected`,
  *      `{ ticketId, checked }` on `list/checked`, `{ action }` on `list/bulk`,
- *      `{ query }` on `list/search`, `{ collapsed }` on `list/collapsed`
+ *      `{ query }` on `list/search`, `{}` on `list/new-ticket`,
+ *      `{ collapsed }` on `list/collapsed`
  * Selected row: pale accent wash + narrow accent edge. Uses first-party
  * customerName, snippet, and helpdesk status (open / closed / snoozed) —
  * never Return.status.
@@ -123,6 +124,7 @@ export function createListTissue({ mailbox }) {
             ${ICON_CHEVRON}
           </button>
         </div>
+        <button type="button" class="list-new-ticket" data-list-new-ticket title="New ticket (N)" aria-label="New ticket">New ticket</button>
         <div class="list-tools" role="group" aria-label="List tools">
           ${renderSearch(next)}
           <div class="list-filter-wrap">
@@ -351,6 +353,10 @@ export function createListTissue({ mailbox }) {
         // Title affordance — views live under the filter control.
         ui = { ...ui, filterOpen: !ui.filterOpen };
         paint();
+        return;
+      }
+      if (event.target.closest("[data-list-new-ticket]")) {
+        mailbox.publish(MAILBOX_TOPICS.LIST_NEW_TICKET, {});
         return;
       }
       if (event.target.closest("[data-list-sort]")) {
