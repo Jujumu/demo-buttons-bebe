@@ -203,6 +203,23 @@ class ContractTests(unittest.TestCase):
         self.assertFalse(http_payload["ok"])
         self.assertIn(http_payload["error"], {"outbound_disabled", "no_real_recipient", "confirmation_required"})
 
+    def test_cli_list_tickets_open_view(self) -> None:
+        payload = self._cli(["list-tickets", "--view", "open", "--limit", "100"])
+        self.assertEqual(payload["_exit"], 0)
+        self.assertTrue(payload["ok"])
+        self.assertGreaterEqual(len(payload["tickets"]), 1)
+        ids = {row["id"] for row in payload["tickets"]}
+        self.assertIn("t-ada-track", ids)
+        self.assertNotIn("t-ada-closed", ids)
+        self.assertNotIn("t-jordan-ship", ids)
+        for row in payload["tickets"]:
+            self.assertEqual(row["status"], "open")
+        via_dispatch = dispatch("helpdesk.list_tickets", {"view": "open", "limit": 100})
+        self.assertEqual(
+            [row["id"] for row in payload["tickets"]],
+            [row["id"] for row in via_dispatch["tickets"]],
+        )
+
     def test_unknown_tool_is_structured_json(self) -> None:
         payload = invoke("helpdesk.send", {})
         self.assertFalse(payload["ok"])

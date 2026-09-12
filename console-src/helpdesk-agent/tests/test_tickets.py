@@ -55,6 +55,19 @@ class TicketContractTests(unittest.TestCase):
         snoozed = dispatch("helpdesk.list_tickets", {"view": "snoozed", "limit": 20})["tickets"]
         self.assertEqual(snoozed[0]["status"], "snoozed")
         self.assertIsNone(snoozed[0]["orderId"])
+        opened = dispatch("helpdesk.list_tickets", {"view": "open", "limit": 100})["tickets"]
+        self.assertGreaterEqual(len(opened), 1)
+        open_ids = {row["id"] for row in opened}
+        self.assertIn("t-ada-track", open_ids)
+        self.assertTrue(
+            any(row["id"] not in {item["id"] for item in mine} for row in opened),
+            "Open must include open tickets that Assigned to me does not",
+        )
+        self.assertNotIn("t-ada-closed", open_ids)
+        self.assertNotIn("t-jordan-ship", open_ids)
+        for row in opened:
+            self.assertEqual(row["status"], "open")
+            self.assertNotEqual(row["status"], "OPEN")
 
     def test_get_ticket_returns_messages_and_status_events(self) -> None:
         payload = dispatch("helpdesk.get_ticket", {"ticketId": "1001"})
