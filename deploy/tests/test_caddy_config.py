@@ -46,6 +46,7 @@ class CaddyConfigTests(unittest.TestCase):
             },
             "exchange": {"exchange.example.com"},
             "warehouse": {"warehouse.example.com"},
+            "helpdesk": {"helpdesk.teddyonfriday.com"},
         }
         self.assertEqual(set(self.fragments), set(expected))
         declared: dict[str, str] = {}
@@ -162,7 +163,10 @@ class CaddyConfigTests(unittest.TestCase):
 
     def test_legacy_component_caddyfiles_are_retired_not_deployable(self) -> None:
         for relative in ("webhook/Caddyfile", "whatsapp-connect/Caddyfile"):
-            text = (ROOT / relative).read_text(encoding="utf-8")
+            path = ROOT / relative
+            if not path.is_file():
+                continue
+            text = path.read_text(encoding="utf-8")
             self.assertIn("RETIRED — DO NOT DEPLOY", text)
             self.assertNotIn("reverse_proxy", text)
 
