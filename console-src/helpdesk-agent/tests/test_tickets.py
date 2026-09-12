@@ -102,7 +102,7 @@ class TicketContractTests(unittest.TestCase):
         self.assertIn("t-remy-bug", [row["id"] for row in restored])
 
     def test_list_tickets_invalid_view_names_escalated(self) -> None:
-        payload = invoke("helpdesk.list_tickets", {"view": "spam", "limit": 20})
+        payload = invoke("helpdesk.list_tickets", {"view": "search", "limit": 20})
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["error"], "bad_request")
         self.assertIn("escalated", payload["message"])
@@ -151,10 +151,77 @@ class TicketContractTests(unittest.TestCase):
         self.assertIn("t-nora-old", [row["id"] for row in restored])
 
     def test_list_tickets_invalid_view_names_trash(self) -> None:
-        payload = invoke("helpdesk.list_tickets", {"view": "spam", "limit": 20})
+        payload = invoke("helpdesk.list_tickets", {"view": "search", "limit": 20})
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["error"], "bad_request")
         self.assertIn("trash", payload["message"])
+        self.assertEqual(payload["details"]["field"], "view")
+
+    def test_list_tickets_spam_view(self) -> None:
+        payload = dispatch("helpdesk.list_tickets", {"view": "spam", "limit": 100})
+        self.assertTrue(payload["ok"])
+        rows = payload["tickets"]
+        ids = [row["id"] for row in rows]
+        self.assertIn("t-pix-spam", ids)
+        self.assertNotIn("t-ada-track", ids)
+        self.assertNotIn("t-ada-closed", ids)
+        self.assertNotIn("t-jordan-ship", ids)
+        self.assertNotIn("t-remy-bug", ids)
+        self.assertNotIn("t-nora-old", ids)
+        pix = next(row for row in rows if row["id"] == "t-pix-spam")
+        self.assertNotIn("spam", pix)
+        for row in rows:
+            ticket = dispatch("helpdesk.get_ticket", {"ticketId": row["id"]})["ticket"]
+            self.assertTrue(ticket["spam"])
+        ada = dispatch("helpdesk.get_ticket", {"ticketId": "t-ada-track"})["ticket"]
+        self.assertFalse(ada.get("spam"))
+        self.assertEqual(ada["status"], "open")
+        via_invoke = invoke("helpdesk.list_tickets", {"view": "spam", "limit": 100})
+        self.assertTrue(via_invoke["ok"])
+        self.assertEqual([row["id"] for row in via_invoke["tickets"]], ids)
+
+    def test_list_tickets_other_views_exclude_spam(self) -> None:
+        hidden = "t-pix-spam"
+        for view in ("open", "escalated", "closed", "all", "snoozed", "mine", "unassigned", "trash"):
+            ids = [
+                row["id"]
+                for row in dispatch("helpdesk.list_tickets", {"view": view, "limit": 100})["tickets"]
+            ]
+            self.assertNotIn(hidden, ids, view)
+
+    def test_list_tickets_spam_empty_when_none(self) -> None:
+        from helpdesk import tickets as tickets_mod
+
+        pix = next(ticket for ticket in tickets_mod._store if ticket["id"] == "t-pix-spam")
+        pix["spam"] = False
+        rows = dispatch("helpdesk.list_tickets", {"view": "spam", "limit": 100})["tickets"]
+        self.assertEqual(rows, [])
+        reset_tickets()
+        restored = dispatch("helpdesk.list_tickets", {"view": "spam", "limit": 100})["tickets"]
+        self.assertIn("t-pix-spam", [row["id"] for row in restored])
+
+    def test_list_tickets_spam_wins_over_archived(self) -> None:
+        from helpdesk import tickets as tickets_mod
+
+        pix = next(ticket for ticket in tickets_mod._store if ticket["id"] == "t-pix-spam")
+        pix["archived"] = True
+        spam_ids = [
+            row["id"]
+            for row in dispatch("helpdesk.list_tickets", {"view": "spam", "limit": 100})["tickets"]
+        ]
+        trash_ids = [
+            row["id"]
+            for row in dispatch("helpdesk.list_tickets", {"view": "trash", "limit": 100})["tickets"]
+        ]
+        self.assertIn("t-pix-spam", spam_ids)
+        self.assertNotIn("t-pix-spam", trash_ids)
+        reset_tickets()
+
+    def test_list_tickets_invalid_view_names_spam(self) -> None:
+        payload = invoke("helpdesk.list_tickets", {"view": "search", "limit": 20})
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["error"], "bad_request")
+        self.assertIn("spam", payload["message"])
         self.assertEqual(payload["details"]["field"], "view")
 
     def test_get_ticket_returns_messages_and_status_events(self) -> None:
