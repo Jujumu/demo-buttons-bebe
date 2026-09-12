@@ -5,8 +5,8 @@ writes. Mute words, never color-alone. Four panes / three chrome stay.
 Human Send. `WRITE_TOOLS` untouched. Gorgias off.
 
 This file is the thin addendum for list-toolbar filters. Do not ship
-request-type, severity, or Search from this document — those wait for
-later slices.
+request-type or severity from this document — those wait for later
+slices.
 
 ## Default boot (this slice)
 
@@ -137,8 +137,23 @@ First-party list chrome. No Shopify Admin field. No Cute Things write.
    or Apply macro.
 5. Review selection + menu with `/?select=1&bulk=1`.
 
+## Search (this slice)
+
+First-party list chrome only. Not a view. No Shopify Admin field.
+
+1. Search field in the list toolbar next to filter/sort. Placeholder
+   **Search tickets**. Ink / mute / line only. Not purple.
+2. Narrows the current view. Case-insensitive substring on customer
+   name, subject, snippet, and id. Empty query shows the view.
+3. Empty copy is **No matches.** when the query has no hits. Empty
+   view copy stays `No tickets in this view.`
+4. Do not add Search to the filter menu. No `data-view="search"`.
+   No `list_tickets` `q`.
+5. Review hits with `/?q=ada`. Empty with `/?q=zzzz`.
+
 ## Out of this PR
 
-Do not add request-type, severity, or Search chrome here.
+Do not add request-type or severity chrome here.
 Do not ship Unread as a Views menu item.
+Do not ship New ticket.
 Do not ship Add tag, Assign to team, Change priority, Export, or Apply macro.

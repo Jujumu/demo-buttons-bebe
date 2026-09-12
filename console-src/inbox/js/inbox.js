@@ -3,7 +3,7 @@ import { SHOP, STORE_NAME, macros as fixtureMacros, ticketInView, tickets as fix
 import { createMailbox } from "./mailbox.js";
 import { createHelpdeskShop } from "./shop/helpdesk-shop.js";
 import { createComposerTissue } from "./tissues/composer.js";
-import { createListTissue } from "./tissues/list.js";
+import { createListTissue, ticketMatchesQuery } from "./tissues/list.js";
 import { createRailOrgan } from "./tissues/rail.js";
 import { createThreadTissue } from "./tissues/thread.js";
 import { applyBulkAction } from "./shop/bulk-tickets.js";
@@ -66,6 +66,7 @@ export function createInboxOrgan(opts = {}) {
     (pinnedCatalog || fixtureTickets).map((ticket) => ticket.id).filter(Boolean),
   );
   const checkedIds = new Set();
+  let ticketQuery = "";
   let writeGate = {
     mutationsEnabled: false,
     refused: ["send", "refund", "cancel"],
@@ -126,7 +127,7 @@ export function createInboxOrgan(opts = {}) {
   }
 
   function visibleTickets() {
-    return listRows;
+    return listRows.filter((ticket) => ticketMatchesQuery(ticket, ticketQuery));
   }
 
   function selectedTicket() {
@@ -514,6 +515,7 @@ export function createInboxOrgan(opts = {}) {
       collapsed: listCollapsed,
       unreadIds: [...unreadIds],
       checkedIds: [...checkedIds],
+      query: ticketQuery,
     };
   }
 
@@ -556,6 +558,7 @@ export function createInboxOrgan(opts = {}) {
       macros: composerModel.macros,
       macrosOpen,
       query: composerModel.query,
+      ticketQuery,
       selectedMacroId: composerModel.selectedMacroId,
       searchOpen: composerModel.searchOpen,
     };
@@ -658,6 +661,10 @@ export function createInboxOrgan(opts = {}) {
     });
     mailbox.subscribe(MAILBOX_TOPICS.LIST_BULK, ({ action, assignee }) => {
       runBulk({ action, assignee }).then(refreshRail).then(paint);
+    });
+    mailbox.subscribe(MAILBOX_TOPICS.LIST_SEARCH, ({ query }) => {
+      ticketQuery = String(query ?? "");
+      paint();
     });
     mailbox.subscribe(MAILBOX_TOPICS.LIST_SELECTED, ({ ticketId }) => {
       selectedId = ticketId;
@@ -880,6 +887,14 @@ export function createInboxOrgan(opts = {}) {
         ensureSelection();
         return refreshThread();
       }).then(refreshRail).then(refreshComposer).then(() => refreshMacros(macroQuery)).then(afterUi);
+    },
+    searchTickets(query) {
+      ticketQuery = String(query ?? "");
+      return afterUi();
+    },
+    clearTicketSearch() {
+      ticketQuery = "";
+      return afterUi();
     },
     checkTickets(ids, checked = true) {
       for (const id of ids || []) {

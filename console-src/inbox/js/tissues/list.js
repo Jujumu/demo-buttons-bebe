@@ -4,18 +4,28 @@ import { esc, formatWhen, requestTypeLabel, screenStatus, severityLabel } from "
 
 /**
  * List tissue. Client of helpdesk.list_tickets + view switcher.
- * In: `{ tickets, selectedTicketId, views, counts, selectedViewId, collapsed, unreadIds, checkedIds }`
+ * In: `{ tickets, selectedTicketId, views, counts, selectedViewId, collapsed, unreadIds, checkedIds, query }`
  * Out: `{ ticketId }` on `list/selected`, `{ viewId }` on `view/selected`,
  *      `{ ticketId, checked }` on `list/checked`, `{ action }` on `list/bulk`,
- *      `{ collapsed }` on `list/collapsed`
+ *      `{ query }` on `list/search`, `{ collapsed }` on `list/collapsed`
  * Selected row: pale accent wash + narrow accent edge. Uses first-party
  * customerName, snippet, and helpdesk status (open / closed / snoozed) —
  * never Return.status.
- * Chrome: Inbox title + filter (views) / sort / collapse — no separate views pane.
+ * Chrome: Inbox title + filter (views) / sort / search / collapse — no separate views pane.
+ * Search narrows the current view. It is not a view.
  * Filter menu includes Open (`status === "open"`), Escalated (`escalated`),
  * Trash (`archived`), and Spam (`spam`).
  * Open queues omit the Open chip. Escalated queues omit an Escalated chip.
  */
+
+export function ticketMatchesQuery(ticket, query) {
+  const needle = String(query ?? "").trim().toLowerCase();
+  if (!needle) return true;
+  const name = listCustomerName(ticket);
+  const hay = [name, ticket.subject, ticket.snippet, ticket.id]
+    .map((part) => String(part ?? "").toLowerCase());
+  return hay.some((part) => part.includes(needle));
+}
 
 const ICON_FILTER = `<svg class="list-tool-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
   <path fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" d="M2.5 4h11M2.5 8h11M2.5 12h11"/>
@@ -55,6 +65,7 @@ export function createListTissue({ mailbox }) {
     collapsed: false,
     unreadIds: [],
     checkedIds: [],
+    query: "",
   };
   let ui = { sort: "default", filterOpen: false, bulkOpen: false, assignOpen: false };
   let host = null;
@@ -69,7 +80,13 @@ export function createListTissue({ mailbox }) {
       collapsed: Boolean(input.collapsed),
       unreadIds: Array.isArray(input.unreadIds) ? input.unreadIds : [],
       checkedIds: Array.isArray(input.checkedIds) ? input.checkedIds : [],
+      query: String(input.query ?? ""),
     };
+  }
+
+  function listedTickets(next = model) {
+    const rows = (next.tickets || []).filter((ticket) => ticketMatchesQuery(ticket, next.query));
+    return sortedTickets(rows);
   }
 
   function sortedTickets(tickets) {
@@ -109,6 +126,7 @@ export function createListTissue({ mailbox }) {
           </button>
         </div>
         <div class="list-tools" role="group" aria-label="List tools">
+          ${renderSearch(next)}
           <div class="list-filter-wrap">
             <button type="button" class="list-tool-btn" data-list-filter title="Views" aria-label="Views" aria-haspopup="listbox" aria-expanded="${ui.filterOpen ? "true" : "false"}" aria-pressed="${ui.filterOpen ? "true" : "false"}">${ICON_FILTER}</button>
             ${renderViewMenu(next)}
@@ -118,6 +136,17 @@ export function createListTissue({ mailbox }) {
         </div>
       </div>
     </header>`;
+  }
+
+  function renderSearch(next = model) {
+    const query = String(next.query ?? "");
+    const clear = query.trim()
+      ? `<button type="button" class="list-search-clear" data-list-search-clear aria-label="Clear search">${ICON_CLOSE}</button>`
+      : "";
+    return `<label class="list-search-wrap">
+      <input type="search" class="list-search" data-list-search placeholder="Search tickets" aria-label="Search tickets" value="${esc(query)}">
+      ${clear}
+    </label>`;
   }
 
   function renderSelectionBar(next, tickets) {
@@ -208,12 +237,15 @@ export function createListTissue({ mailbox }) {
         </button>
       </div>`;
     }
-    const tickets = sortedTickets(next.tickets);
+    const tickets = listedTickets(next);
     const unreadIds = next.unreadIds || [];
     const checkedIds = next.checkedIds || [];
+    const empty = String(next.query ?? "").trim()
+      ? `<p class="empty-pane">No matches.</p>`
+      : `<p class="empty-pane">No tickets in this view.</p>`;
     const rows = tickets.length
       ? tickets.map((ticket) => renderRow(ticket, next.selectedTicketId, unreadIds, checkedIds)).join("")
-      : `<p class="empty-pane">No tickets in this view.</p>`;
+      : empty;
     return `<div class="pane-inner">
       ${renderToolbar(next)}
       ${renderSelectionBar(next, tickets)}
@@ -223,13 +255,46 @@ export function createListTissue({ mailbox }) {
 
   function paint() {
     if (!host) return;
+    // innerHTML replace drops the caret; restore if the field was focused.
+    const active = typeof document !== "undefined" ? document.activeElement : null;
+    const keep = Boolean(active?.closest?.("[data-list-search]") && host.contains?.(active));
+    const start = keep ? active.selectionStart : null;
+    const end = keep ? active.selectionEnd : null;
     host.innerHTML = render(model);
+    if (!keep) return;
+    const field = host.querySelector?.("[data-list-search]");
+    field?.focus?.();
+    if (start != null) field?.setSelectionRange?.(start, end);
+  }
+
+  function applyQuery(query) {
+    model = { ...model, query: String(query ?? "") };
+    ui = { ...ui, filterOpen: false, bulkOpen: false, assignOpen: false };
+    mailbox.publish(MAILBOX_TOPICS.LIST_SEARCH, { query: model.query });
+    paint();
   }
 
   function mount(el) {
     host = el;
     paint();
+    el.onkeydown = (event) => {
+      if (event.key !== "Escape") return;
+      const field = event.target?.closest?.("[data-list-search]");
+      if (!field) return;
+      event.preventDefault?.();
+      applyQuery("");
+    };
+    el.oninput = (event) => {
+      const field = event.target?.closest?.("[data-list-search]");
+      if (!field) return;
+      applyQuery(field.value ?? event.target?.value ?? "");
+    };
     el.onclick = (event) => {
+      if (event.target.closest("[data-list-search-clear]")) {
+        event.preventDefault();
+        applyQuery("");
+        return;
+      }
       const selectOne = event.target.closest("[data-ticket-select]");
       if (selectOne) {
         event.preventDefault();
@@ -241,7 +306,7 @@ export function createListTissue({ mailbox }) {
       }
       if (event.target.closest("[data-select-all]")) {
         event.preventDefault();
-        const visible = sortedTickets(model.tickets).map((ticket) => ticket.id);
+        const visible = listedTickets(model).map((ticket) => ticket.id);
         const allOn = visible.length > 0 && visible.every((id) => (model.checkedIds || []).includes(id));
         mailbox.publish(MAILBOX_TOPICS.LIST_CHECKED_ALL, { checked: !allOn });
         return;
