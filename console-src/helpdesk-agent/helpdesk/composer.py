@@ -24,12 +24,11 @@ from .fixtures_sample import (
 from .names import SAMPLE_SHOP
 from .shop import rail_get_customer, rail_get_order, rail_get_returns, rail_list_past_orders
 
-# Sample ticket → rail GIDs so CLI `draft-reply --ticket 1001` can load context.
+# Canonical ticket id → rail GIDs. Derived from SAMPLE_GIDS so this map
+# cannot drift. Numeric aliases (1001 / #1003) resolve first via tickets.resolve_id.
 SAMPLE_RAIL = {
-    "1001": {"customerId": ADA, "orderId": ORDER_ADA},
-    "t-ada-track": {"customerId": ADA, "orderId": ORDER_ADA},
-    "1002": {"customerId": CASEY, "orderId": ORDER_CASEY_A},
-    "1003": {"customerId": JORDAN, "orderId": None},
+    ticket_id: {"customerId": customer_id, "orderId": order_id}
+    for ticket_id, (customer_id, order_id) in tickets.SAMPLE_GIDS.items()
 }
 
 _SAMPLE_GIDS = frozenset({
@@ -147,7 +146,7 @@ def _load_thread(args: dict[str, Any]) -> dict[str, Any]:
 
 
 def _lookup_ids(args: dict[str, Any], thread: dict[str, Any]) -> tuple[str | None, str | None]:
-    mapped = SAMPLE_RAIL.get(str(thread.get("id") or _ticket_id(args)))
+    mapped = SAMPLE_RAIL.get(tickets.resolve_id(str(thread.get("id") or _ticket_id(args))))
     customer_id = args.get("customerId") or args.get("customer_id") or thread.get("customerId")
     order_id = args.get("orderId") or args.get("order_id") or thread.get("orderId")
     if mapped:
@@ -172,7 +171,7 @@ def _try_rail(loader, shop: str | None, ident: str | None) -> Any | None:
 def _shop_for_rail(shop: str | None, customer_id: str | None, order_id: str | None, thread: dict[str, Any]) -> str | None:
     """Sample/SEED GIDs must load from SAMPLE_SHOP — never Cute Things (not_found → hollow draft)."""
     ticket_id = str(thread.get("id") or "")
-    if ticket_id in SAMPLE_RAIL:
+    if tickets.resolve_id(ticket_id) in SAMPLE_RAIL:
         return SAMPLE_SHOP
     if (customer_id and customer_id in _SAMPLE_GIDS) or (order_id and order_id in _SAMPLE_GIDS):
         return SAMPLE_SHOP

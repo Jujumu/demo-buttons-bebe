@@ -56,6 +56,9 @@ _PRIVACY_MARKERS = (
     "erase my data",
 )
 
+# Numeric shortcuts to canonical ticket ids. "1003" is Jordan's ticket
+# (t-jordan-ship), not Casey's throw — that seed cites order #1003 in copy
+# but does not own this alias.
 ALIASES = {
     "1001": "t-ada-track",
     "1002": "t-casey-visor",
@@ -700,8 +703,24 @@ def append_agent_message(
     return get_ticket(ticket["id"], gid_source)
 
 
-def _resolve_id(ticket_id: str) -> str:
-    return ALIASES.get(str(ticket_id), str(ticket_id))
+def resolve_id(ticket_id: str) -> str:
+    """Map numeric / #order shortcuts to a canonical ticket id."""
+    raw = str(ticket_id or "").strip()
+    if raw.startswith("#"):
+        raw = raw[1:].strip()
+    return ALIASES.get(raw, raw)
+
+
+_resolve_id = resolve_id
+
+
+def sample_rail(ticket_id: str) -> dict[str, Any] | None:
+    """SAMPLE_GIDS row for a ticket or alias. None if the id is not a sample seed."""
+    gids = SAMPLE_GIDS.get(resolve_id(ticket_id))
+    if gids is None:
+        return None
+    customer_id, order_id = gids
+    return {"customerId": customer_id, "orderId": order_id}
 
 
 def _gids_for(ticket: dict, gid_source: str = "sample") -> tuple[str | None, str | None]:
