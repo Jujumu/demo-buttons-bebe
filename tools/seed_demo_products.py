@@ -18,7 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "console-src" / "helpdesk-agent"))
 
-from helpdesk.auth import mint_token, require_pinned_shop  # noqa: E402
+from helpdesk.auth import mint_token, require_configured_shop  # noqa: E402
 from helpdesk.env import load_shopify_env  # noqa: E402
 
 SEED_TAG = "demo-seed-2026-09"
@@ -665,7 +665,7 @@ def main() -> int:
         print(f"expected 50 products, got {len(PRODUCTS)}", file=sys.stderr)
         return 2
     env = load_shopify_env()
-    shop = require_pinned_shop(env)
+    shop = require_configured_shop(env)
     token = mint_token(env["SHOPIFY_CLIENT_ID"], env["SHOPIFY_CLIENT_SECRET"], env=env)
     ver = env.get("SHOPIFY_API_VERSION") or "2026-07"
     print(f"seeding {len(PRODUCTS)} products on {shop} ({ver})")

@@ -8,7 +8,7 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from .auth import cached_token, normalize_shop, require_pinned_shop
+from .auth import cached_token, normalize_shop, require_configured_shop
 from .errors import HelpdeskError, forbidden_write
 from .names import API_VERSION
 
@@ -34,12 +34,12 @@ def graphql(
     env: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     assert_query_only(document)
-    pinned = require_pinned_shop(env)
-    if normalize_shop(shop) != pinned:
-        raise HelpdeskError("auth_failed", "Shopify shop is not the pinned live host")
+    configured = require_configured_shop(env)
+    if normalize_shop(shop) != configured:
+        raise HelpdeskError("auth_failed", "Shopify shop does not match SHOPIFY_SHOP")
     token = cached_token(client_id, client_secret, env=env)
     request = Request(
-        f"https://{pinned}/admin/api/{api_version}/graphql.json",
+        f"https://{configured}/admin/api/{api_version}/graphql.json",
         data=json.dumps({"query": document, "variables": variables or {}}).encode("utf-8"),
         headers={
             "Content-Type": "application/json",
