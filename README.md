@@ -12,11 +12,23 @@ built-in production store.
 
 See **[CONNECT.md](CONNECT.md)**. Short version:
 
-1. Create a Dev Dashboard app and Release a version with read scopes.
+1. Create a Dev Dashboard app and Release a version with read scopes
+   (`read_products`, `read_orders`, `read_customers`; optional
+   `read_fulfillments`). No write scopes.
 2. Install the app on a shop in the **same Shopify organization**.
 3. Copy `.env.example` to `.env` and set `SHOPIFY_SHOP`, `SHOPIFY_CLIENT_ID`,
-   `SHOPIFY_CLIENT_SECRET`. Keep `SHOPIFY_MUTATIONS_ENABLED=0`.
-4. Fill Gorgias and other placeholders the same way.
+   `SHOPIFY_CLIENT_SECRET`. Keep `SHOPIFY_MUTATIONS_ENABLED=0`. Optional:
+   `AGENTMAIL_API_KEY`.
+4. Run the inbox:
+
+```bash
+docker compose up --build
+```
+
+Open [http://127.0.0.1:8766/](http://127.0.0.1:8766/). Compose reads `.env`
+at runtime. The image never contains secrets.
+
+Without Docker: `./console-src/inbox/run-review.sh`.
 
 If token minting returns `shop_not_permitted`, the app and shop are not in the
 same org.
@@ -24,8 +36,8 @@ same org.
 ## Local Cute Things demo
 
 `demo/.env.example` is an optional **local sandbox only**
-(`yznyc1-ez.myshopify.com`). Do not point it at a live merchant shop. See
-`demo/README.md`.
+(`yznyc1-ez.myshopify.com`). Cute Things is fixture/demo, not the default
+shop. Do not point that profile at a live merchant shop. See `demo/README.md`.
 
 ## Safety model
 
