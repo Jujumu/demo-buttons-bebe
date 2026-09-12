@@ -1,0 +1,30 @@
+# Buyer inbox. Secrets come from .env at runtime — never baked into the image.
+#   cp .env.example .env
+#   docker compose up --build
+# Open http://127.0.0.1:8766/
+
+services:
+  inbox:
+    build:
+      context: .
+      dockerfile: docker/helpdesk/Dockerfile
+    image: buttonsbebe-inbox:local
+    ports:
+      - "8766:8766"
+    env_file:
+      - .env
+    environment:
+      INBOX_HOST: "0.0.0.0"
+      INBOX_PORT: "8766"
+      SHOPIFY_API_VERSION: "${SHOPIFY_API_VERSION:-2026-07}"
+      SHOPIFY_MUTATIONS_ENABLED: "${SHOPIFY_MUTATIONS_ENABLED:-0}"
+      GORGIAS_BRIDGE_ENABLED: "${GORGIAS_BRIDGE_ENABLED:-0}"
+      HELPDESK_OUTBOUND_ENABLED: "${HELPDESK_OUTBOUND_ENABLED:-0}"
+      HELPDESK_STORE_FILE: /data/intake_tickets.json
+      HELPDESK_SEEN_FILE: /data/seen_messages.json
+    volumes:
+      - helpdesk-data:/data
+    restart: unless-stopped
+
+volumes:
+  helpdesk-data:

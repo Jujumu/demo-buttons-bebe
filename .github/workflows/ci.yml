@@ -47,3 +47,30 @@ jobs:
           cache-dependency-path: whatsapp-connect/package-lock.json
       - run: npm ci
       - run: npm test
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Buyer env file without live credentials
+        run: cp .env.example .env
+      - name: Build inbox image without secrets
+        run: docker compose build
+      - name: Image must not contain a baked .env
+        run: docker compose run --rm --no-deps --entrypoint test inbox ! -f /app/.env
+      - name: Smoke inbox without live Shopify credentials
+        run: |
+          set -euo pipefail
+          docker compose up -d --no-build
+          ok=0
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8766/health >/tmp/inbox-health.json; then
+              ok=1
+              break
+            fi
+            sleep 1
+          done
+          test "$ok" = "1"
+          grep -q '"ok": true' /tmp/inbox-health.json
+          curl -fsS -o /dev/null http://127.0.0.1:8766/index.html
+          docker compose down
