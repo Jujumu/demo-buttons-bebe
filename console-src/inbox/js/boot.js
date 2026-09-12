@@ -11,7 +11,7 @@ if (live) shop.setShop(live.shop);
 const params = new URLSearchParams(location.search);
 // Always list from helpdesk.list_tickets (SEED + intake). Live mint only
 // pins the shop host — do not replace the catalog with the 5-row live stub.
-// Default chrome is All. ?view= overrides (mine/open/escalated/trash/spam/…).
+// Default chrome is All. ?view= overrides (mine/open/escalated/unsubscribe/privacy/bug/trash/spam/…).
 // ?empty=1 pins an empty catalog so filtered empty copy can be reviewed.
 const emptyList = params.get("empty") === "1";
 const organ = createInboxOrgan({

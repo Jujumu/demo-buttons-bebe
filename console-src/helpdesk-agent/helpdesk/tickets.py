@@ -31,7 +31,20 @@ from .fixtures_live_holes import (
 from .fixtures_demo_tickets import DEMO_SEED_TICKETS
 from .fixtures_sample import ADA, CASEY, JORDAN, ORDER_ADA, ORDER_CASEY_A, ORDER_CASEY_B
 
-VIEWS = ("open", "escalated", "closed", "all", "snoozed", "mine", "unassigned", "trash", "spam")
+VIEWS = (
+    "open",
+    "escalated",
+    "unsubscribe",
+    "privacy",
+    "bug",
+    "closed",
+    "all",
+    "snoozed",
+    "mine",
+    "unassigned",
+    "trash",
+    "spam",
+)
 TICKET_STATUSES = ("open", "closed", "snoozed")
 BULK_ACTIONS = ("assign", "snooze", "trash")
 REQUEST_TYPES = ("marketing_unsubscribe", "privacy_request", "bug")
@@ -840,6 +853,12 @@ def ticket_in_view(ticket: dict, view: str) -> bool:
         return True
     if view == "escalated":
         return bool(ticket.get("escalated"))
+    if view == "unsubscribe":
+        return ticket.get("requestType") == "marketing_unsubscribe"
+    if view == "privacy":
+        return ticket.get("requestType") == "privacy_request"
+    if view == "bug":
+        return ticket.get("requestType") == "bug"
     if view == "open":
         return status == "open"
     if view == "closed":
@@ -876,7 +895,7 @@ def _row(ticket: dict, gid_source: str = "sample") -> dict:
 def list_tickets(view: str = "open", limit: int = 20, gid_source: str = "sample") -> list[dict]:
     if view not in VIEWS:
         raise bad_request(
-            "view must be open, escalated, closed, all, snoozed, mine, unassigned, trash, or spam",
+            "view must be open, escalated, unsubscribe, privacy, bug, closed, all, snoozed, mine, unassigned, trash, or spam",
             field="view",
         )
     try:

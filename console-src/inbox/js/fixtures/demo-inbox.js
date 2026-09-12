@@ -344,6 +344,9 @@ export const views = [
   { id: "unassigned", label: "Unassigned" },
   { id: "open", label: "Open" },
   { id: "escalated", label: "Escalated" },
+  { id: "unsubscribe", label: "Unsubscribe" },
+  { id: "privacy", label: "Privacy" },
+  { id: "bug", label: "Bug" },
   { id: "all", label: "All" },
   { id: "snoozed", label: "Snoozed" },
   { id: "closed", label: "Closed" },
@@ -705,6 +708,9 @@ export function ticketInView(ticket, viewId) {
   if (archived) return false;
   if (viewId === "all") return true;
   if (viewId === "escalated") return Boolean(ticket.escalated);
+  if (viewId === "unsubscribe") return ticket.requestType === "marketing_unsubscribe";
+  if (viewId === "privacy") return ticket.requestType === "privacy_request";
+  if (viewId === "bug") return ticket.requestType === "bug";
   if (viewId === "open") return ticket.status === "open";
   if (viewId === "mine") return ticket.assignee === "me" && ticket.status === "open";
   if (viewId === "unassigned") return ticket.assignee == null && ticket.status === "open";

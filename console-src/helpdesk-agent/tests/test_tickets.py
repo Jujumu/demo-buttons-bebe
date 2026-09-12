@@ -132,7 +132,7 @@ class TicketContractTests(unittest.TestCase):
 
     def test_list_tickets_other_views_exclude_archived(self) -> None:
         hidden = "t-nora-old"
-        for view in ("open", "escalated", "closed", "all", "snoozed", "mine", "unassigned"):
+        for view in ("open", "escalated", "unsubscribe", "privacy", "bug", "closed", "all", "snoozed", "mine", "unassigned"):
             ids = [
                 row["id"]
                 for row in dispatch("helpdesk.list_tickets", {"view": view, "limit": 100})["tickets"]
@@ -182,7 +182,7 @@ class TicketContractTests(unittest.TestCase):
 
     def test_list_tickets_other_views_exclude_spam(self) -> None:
         hidden = "t-pix-spam"
-        for view in ("open", "escalated", "closed", "all", "snoozed", "mine", "unassigned", "trash"):
+        for view in ("open", "escalated", "unsubscribe", "privacy", "bug", "closed", "all", "snoozed", "mine", "unassigned", "trash"):
             ids = [
                 row["id"]
                 for row in dispatch("helpdesk.list_tickets", {"view": view, "limit": 100})["tickets"]
@@ -222,6 +222,79 @@ class TicketContractTests(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["error"], "bad_request")
         self.assertIn("spam", payload["message"])
+        self.assertEqual(payload["details"]["field"], "view")
+
+    def test_list_tickets_unsubscribe_view(self) -> None:
+        payload = dispatch("helpdesk.list_tickets", {"view": "unsubscribe", "limit": 100})
+        self.assertTrue(payload["ok"])
+        rows = payload["tickets"]
+        ids = [row["id"] for row in rows]
+        self.assertIn("t-priya-unsub", ids)
+        self.assertNotIn("t-lee-privacy", ids)
+        self.assertNotIn("t-remy-bug", ids)
+        self.assertNotIn("t-ada-track", ids)
+        self.assertNotIn("t-nora-old", ids)
+        self.assertNotIn("t-pix-spam", ids)
+        for row in rows:
+            self.assertEqual(row["requestType"], "marketing_unsubscribe")
+        via_invoke = invoke("helpdesk.list_tickets", {"view": "unsubscribe", "limit": 100})
+        self.assertTrue(via_invoke["ok"])
+        self.assertEqual([row["id"] for row in via_invoke["tickets"]], ids)
+
+    def test_list_tickets_privacy_view(self) -> None:
+        payload = dispatch("helpdesk.list_tickets", {"view": "privacy", "limit": 100})
+        self.assertTrue(payload["ok"])
+        rows = payload["tickets"]
+        ids = [row["id"] for row in rows]
+        self.assertIn("t-lee-privacy", ids)
+        self.assertNotIn("t-priya-unsub", ids)
+        self.assertNotIn("t-remy-bug", ids)
+        self.assertNotIn("t-ada-track", ids)
+        for row in rows:
+            self.assertEqual(row["requestType"], "privacy_request")
+        via_invoke = invoke("helpdesk.list_tickets", {"view": "privacy", "limit": 100})
+        self.assertTrue(via_invoke["ok"])
+        self.assertEqual([row["id"] for row in via_invoke["tickets"]], ids)
+
+    def test_list_tickets_bug_view(self) -> None:
+        payload = dispatch("helpdesk.list_tickets", {"view": "bug", "limit": 100})
+        self.assertTrue(payload["ok"])
+        rows = payload["tickets"]
+        ids = [row["id"] for row in rows]
+        self.assertIn("t-remy-bug", ids)
+        self.assertNotIn("t-priya-unsub", ids)
+        self.assertNotIn("t-lee-privacy", ids)
+        self.assertNotIn("t-ada-track", ids)
+        remy = next(row for row in rows if row["id"] == "t-remy-bug")
+        self.assertEqual(remy["requestType"], "bug")
+        self.assertEqual(remy["severity"], "high")
+        via_invoke = invoke("helpdesk.list_tickets", {"view": "bug", "limit": 100})
+        self.assertTrue(via_invoke["ok"])
+        self.assertEqual([row["id"] for row in via_invoke["tickets"]], ids)
+
+    def test_list_tickets_request_type_views_empty_when_none(self) -> None:
+        from helpdesk import tickets as tickets_mod
+
+        for view, ticket_id, field in (
+            ("unsubscribe", "t-priya-unsub", "requestType"),
+            ("privacy", "t-lee-privacy", "requestType"),
+            ("bug", "t-remy-bug", "requestType"),
+        ):
+            ticket = next(row for row in tickets_mod._store if row["id"] == ticket_id)
+            ticket[field] = None
+            rows = dispatch("helpdesk.list_tickets", {"view": view, "limit": 100})["tickets"]
+            self.assertEqual(rows, [], view)
+            reset_tickets()
+            restored = dispatch("helpdesk.list_tickets", {"view": view, "limit": 100})["tickets"]
+            self.assertIn(ticket_id, [row["id"] for row in restored], view)
+
+    def test_list_tickets_invalid_view_names_request_type(self) -> None:
+        payload = invoke("helpdesk.list_tickets", {"view": "search", "limit": 20})
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["error"], "bad_request")
+        self.assertIn("unsubscribe", payload["message"])
+        self.assertIn("privacy", payload["message"])
+        self.assertIn("bug", payload["message"])
         self.assertEqual(payload["details"]["field"], "view")
 
     def test_get_ticket_returns_messages_and_status_events(self) -> None:
