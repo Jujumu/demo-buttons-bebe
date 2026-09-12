@@ -4,7 +4,8 @@ FROM python:3.12-slim-bookworm
 
 WORKDIR /app
 
-RUN useradd --system --uid 10001 --home /data --create-home helpdesk \
+RUN groupadd --gid 10001 helpdesk \
+    && useradd --uid 10001 --gid 10001 --home /data --create-home helpdesk \
     && mkdir -p /data \
     && chown helpdesk:helpdesk /data
 
