@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 import sys
 import unittest
@@ -128,17 +129,21 @@ class HelpdeskDoorTests(unittest.TestCase):
             "helpdesk.get_customer",
             {"shop": SAMPLE_SHOP, "customerId": ADA},
         )
-        with httpx.Client(
-            transport=httpx.ASGITransport(app=app_module.app),
-            base_url="http://demo.test",
-        ) as client:
-            response = client.post(
-                "/dashboard/api/helpdesk",
-                json={
-                    "tool": "helpdesk.get_customer",
-                    "arguments": {"shop": SAMPLE_SHOP, "customerId": ADA},
-                },
-            )
+
+        async def _post():
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app_module.app),
+                base_url="http://demo.test",
+            ) as client:
+                return await client.post(
+                    "/dashboard/api/helpdesk",
+                    json={
+                        "tool": "helpdesk.get_customer",
+                        "arguments": {"shop": SAMPLE_SHOP, "customerId": ADA},
+                    },
+                )
+
+        response = asyncio.run(_post())
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), expected)
 

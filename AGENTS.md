@@ -105,6 +105,7 @@ When signed, tell the human: Ready for review, then squash-merge. Do not nag the
 ## Learned Workspace Facts
 
 - Inbox preview: local `console-src/inbox/run-review.sh` → `http://127.0.0.1:8766/` (`INBOX_PORT`); interim VPS serves `https://helpdesk.teddyonfriday.com/` (systemd `helpdesk-inbox` → `:8766`).
+- Poteto Mode: see helpdesk-design/POTETO.md (thin PR, verify, unslopped).
 - Final client host is a Hostinger VPS; treat cutover as fresh install + DNS/proxy + webhook URL change, not a lift-and-shift of this box.
 - `helpdesk.pull_mailbox` needs Python package `agentmail` plus `AGENTMAIL_API_KEY`; if the package is missing it can fall back to fixtures and never ingest live mail.
 - Live tickets use the real intake From display name as `customerName` (e.g. the human’s Gmail), not the Ada/Sam scenario labels.

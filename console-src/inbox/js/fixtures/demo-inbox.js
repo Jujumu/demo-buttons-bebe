@@ -342,6 +342,7 @@ export function returnsForOrder(orderId) {
 export const views = [
   { id: "mine", label: "Assigned to me" },
   { id: "unassigned", label: "Unassigned" },
+  { id: "open", label: "Open" },
   { id: "all", label: "All" },
   { id: "snoozed", label: "Snoozed" },
   { id: "closed", label: "Closed" },

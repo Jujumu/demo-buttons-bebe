@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { IDS, tickets as fixtureTickets } from "../js/fixtures/demo-inbox.js";
+import { IDS, tickets as fixtureTickets, ticketInView, views } from "../js/fixtures/demo-inbox.js";
 import { createInboxOrgan } from "../js/inbox.js";
 import { createMailbox } from "../js/mailbox.js";
 import { createFixtureShop } from "../js/shop/fixture-shop.js";
@@ -497,6 +497,76 @@ test("boot only pulls mailbox when ?pull=1", () => {
   const boot = readFileSync(join(here, "../js/boot.js"), "utf8");
   assert.match(boot, /params\.get\("pull"\)\s*===\s*"1"/);
   assert.doesNotMatch(boot, /await organ\.pullMailbox\(\{ limit:[^}]+\}\);\s*organ\.mount/);
+});
+
+test("boot defaults to Assigned to me and offers empty Open review", () => {
+  const boot = readFileSync(join(here, "../js/boot.js"), "utf8");
+  assert.match(boot, /params\.get\("view"\) \|\| "mine"/);
+  assert.doesNotMatch(boot, /params\.get\("view"\) \|\| "open"/);
+  assert.match(boot, /params\.get\("empty"\)\s*===\s*"1"/);
+  assert.match(boot, /params\.get\("menu"\)\s*===\s*"1"/);
+  assert.match(boot, /await organ\.mount\(root\)/);
+});
+
+test("list toolbar menu includes Open and keeps existing views", async () => {
+  assert.deepEqual(views.map((view) => view.id), [
+    "mine",
+    "unassigned",
+    "open",
+    "all",
+    "snoozed",
+    "closed",
+  ]);
+  const snap = await createInboxOrgan({ viewId: "open" }).ready();
+  assert.match(snap.html, /data-view="mine"/);
+  assert.match(snap.html, /list-menu-label">Assigned to me</);
+  assert.match(snap.html, /data-view="unassigned"/);
+  assert.match(snap.html, /data-view="open"/);
+  assert.match(snap.html, /list-menu-label">Open</);
+  assert.match(snap.html, /data-view="all"/);
+  assert.match(snap.html, /data-view="snoozed"/);
+  assert.match(snap.html, /data-view="closed"/);
+  assert.match(snap.html, /class="list-menu-item is-selected" data-view="open"[^>]*aria-selected="true"/);
+  assert.doesNotMatch(snap.html, /data-view="escalated"|data-view="trash"|data-view="spam"/);
+});
+
+test("Open view returns only open tickets and omits the Open chip", async () => {
+  const snap = await createInboxOrgan({ viewId: "open" }).ready();
+  assert.equal(snap.viewId, "open");
+  assert.match(snap.html, /data-ticket="t-ada-track"[^>]*data-status="open"/);
+  assert.match(snap.html, /data-ticket="t-casey-visor"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-ada-closed"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-jordan-ship"/);
+  assert.doesNotMatch(snap.html, /class="ticket-status">Open</);
+  assert.ok(
+    fixtureTickets.some((ticket) => ticketInView(ticket, "open") && !ticketInView(ticket, "mine")),
+    "Open is wider than Assigned to me",
+  );
+  const pinned = await createInboxOrgan({ viewId: "open", tickets: fixtureTickets }).ready();
+  for (const ticket of fixtureTickets) {
+    const inOpen = ticketInView(ticket, "open");
+    assert.equal(inOpen, ticket.status === "open");
+    if (inOpen) assert.match(pinned.html, new RegExp(`data-ticket="${ticket.id}"`));
+    else assert.doesNotMatch(pinned.html, new RegExp(`data-ticket="${ticket.id}"`));
+  }
+});
+
+test("empty Open view keeps mute empty copy", async () => {
+  const snap = await createInboxOrgan({ viewId: "open", tickets: [] }).ready();
+  assert.equal(snap.viewId, "open");
+  assert.match(snap.html, /<p class="empty-pane">No tickets in this view\.<\/p>/);
+  assert.match(snap.html, /class="list-menu-item is-selected" data-view="open"[^>]*aria-selected="true"/);
+  assert.doesNotMatch(snap.html, /data-ticket="/);
+});
+
+test("selectView open uses the same list_tickets view path", async () => {
+  const organ = createInboxOrgan({ viewId: "mine" });
+  await organ.ready();
+  const snap = await organ.selectView("open");
+  assert.equal(snap.viewId, "open");
+  assert.match(snap.html, /class="list-menu-item is-selected" data-view="open"[^>]*aria-selected="true"/);
+  assert.match(snap.html, /data-ticket="t-casey-visor"/);
+  assert.doesNotMatch(snap.html, /data-ticket="t-ada-closed"/);
 });
 
 test("one rail tissue error leaves thread and other rail sections up", async () => {

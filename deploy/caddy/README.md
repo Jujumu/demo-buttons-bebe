@@ -8,6 +8,7 @@ live in `sites/`, one owned fragment per service boundary:
 | `sites/support.caddy` | `hermes.example.com`, `support.example.com` | `127.0.0.1:8000`, `:8085`, `:8087`, `:9119` |
 | `sites/exchange.caddy` | `exchange.example.com` | `127.0.0.1:4100` |
 | `sites/warehouse.caddy` | `warehouse.example.com` | `127.0.0.1:4000` |
+| `sites/helpdesk.caddy` | `helpdesk.example.com` | `127.0.0.1:8766` |
 
 The tracked files are redacted templates. `<WA_TOKEN>` and
 `<WAREHOUSE_PASSWORD_HASH>` are placeholders, not credentials. Production
@@ -114,7 +115,7 @@ It is intentionally fragment-based and keeps the import entrypoint stable.
    ```sh
    cd /etc/caddy
    sha256sum Caddyfile sites/support.caddy sites/exchange.caddy \
-     sites/warehouse.caddy > buttonsbebe-caddy.sha256
+     sites/warehouse.caddy sites/helpdesk.caddy > buttonsbebe-caddy.sha256
    chown root:root buttonsbebe-caddy.sha256
    chmod 0600 buttonsbebe-caddy.sha256
    ```
