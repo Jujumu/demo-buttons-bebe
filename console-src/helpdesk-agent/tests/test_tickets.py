@@ -371,6 +371,65 @@ class TicketContractTests(unittest.TestCase):
         self.assertEqual(ada["status"], "open")
         self.assertNotIn("helpdesk.escalate_ticket", WRITE_TOOLS)
 
+    def test_bulk_update_tickets_is_first_party_not_shopify(self) -> None:
+        from unittest.mock import patch
+
+        with patch("helpdesk.client.graphql") as gql:
+            assigned = dispatch(
+                "helpdesk.bulk_update_tickets",
+                {"ticketIds": ["t-casey-visor"], "action": "assign", "assignee": "me"},
+            )
+            gql.assert_not_called()
+        self.assertTrue(assigned["ok"])
+        self.assertEqual(assigned["action"], "assign")
+        self.assertEqual(assigned["updated"], 1)
+        self.assertEqual(assigned["tickets"][0]["assignee"], "me")
+        mine = {row["id"] for row in dispatch("helpdesk.list_tickets", {"view": "mine", "limit": 100})["tickets"]}
+        self.assertIn("t-casey-visor", mine)
+
+        unassigned = dispatch(
+            "helpdesk.bulk_update_tickets",
+            {"ticketIds": ["t-casey-visor"], "action": "assign", "assignee": "unassigned"},
+        )
+        self.assertIsNone(unassigned["tickets"][0]["assignee"])
+        unassigned_ids = {
+            row["id"]
+            for row in dispatch("helpdesk.list_tickets", {"view": "unassigned", "limit": 100})["tickets"]
+        }
+        self.assertIn("t-casey-visor", unassigned_ids)
+
+        snoozed = dispatch(
+            "helpdesk.bulk_update_tickets",
+            {"ticketIds": ["t-casey-throw"], "action": "snooze"},
+        )
+        self.assertEqual(snoozed["tickets"][0]["status"], "snoozed")
+        snooze_ids = {
+            row["id"] for row in dispatch("helpdesk.list_tickets", {"view": "snoozed", "limit": 100})["tickets"]
+        }
+        self.assertIn("t-casey-throw", snooze_ids)
+        open_ids = {
+            row["id"] for row in dispatch("helpdesk.list_tickets", {"view": "open", "limit": 100})["tickets"]
+        }
+        self.assertNotIn("t-casey-throw", open_ids)
+
+        before_ids = {ticket["id"] for ticket in dispatch("helpdesk.list_tickets", {"view": "all", "limit": 100})["tickets"]}
+        trashed = dispatch(
+            "helpdesk.bulk_update_tickets",
+            {"ticketIds": ["t-ada-track"], "action": "trash"},
+        )
+        gql.assert_not_called()
+        self.assertTrue(trashed["tickets"][0]["archived"])
+        self.assertEqual(trashed["tickets"][0]["status"], "open")
+        all_ids = {row["id"] for row in dispatch("helpdesk.list_tickets", {"view": "all", "limit": 100})["tickets"]}
+        trash_ids = {row["id"] for row in dispatch("helpdesk.list_tickets", {"view": "trash", "limit": 100})["tickets"]}
+        self.assertNotIn("t-ada-track", all_ids)
+        self.assertIn("t-ada-track", trash_ids)
+        self.assertIn("t-ada-track", before_ids)
+        store_ids = {row["id"] for row in dispatch("helpdesk.list_tickets", {"view": "trash", "limit": 100})["tickets"]}
+        self.assertIn("t-ada-track", store_ids)
+        self.assertNotIn("helpdesk.bulk_update_tickets", WRITE_TOOLS)
+        self.assertFalse(any("refund" in (event.get("note") or "") for event in trashed["tickets"][0]["statusEvents"]))
+
     def test_unsubscribe_fixture_surfaces_request_type(self) -> None:
         rows = dispatch("helpdesk.list_tickets", {"view": "open", "limit": 20})["tickets"]
         priya = next(row for row in rows if row["id"] == "t-priya-unsub")

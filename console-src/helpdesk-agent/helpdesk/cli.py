@@ -25,6 +25,7 @@ from .names import (
     TOOL_SEARCH_MACROS,
     TOOL_SEND_REPLY,
     TOOL_SUMMARIZE_THREAD,
+    TOOL_BULK_UPDATE_TICKETS,
     TOOL_ESCALATE_TICKET,
     TOOL_WRITE_GATE_STATUS,
 )
@@ -81,6 +82,10 @@ def build_parser() -> argparse.ArgumentParser:
     escalate = sub.add_parser(CLI_COMMANDS[TOOL_ESCALATE_TICKET])
     escalate.add_argument("--ticket-id", dest="ticketId", required=True)
     escalate.add_argument("--reason", default=None)
+    bulk = sub.add_parser(CLI_COMMANDS[TOOL_BULK_UPDATE_TICKETS])
+    bulk.add_argument("--ticket-id", dest="ticketIds", action="append", required=True)
+    bulk.add_argument("--action", required=True, choices=("assign", "snooze", "trash"))
+    bulk.add_argument("--assignee", default=None)
     sub.add_parser(CLI_COMMANDS[TOOL_WRITE_GATE_STATUS])
     sub.add_parser(CLI_COMMANDS[TOOL_BRIDGE_STATUS])
     send_reply = sub.add_parser(CLI_COMMANDS[TOOL_SEND_REPLY])

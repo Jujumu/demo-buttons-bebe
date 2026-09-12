@@ -100,7 +100,7 @@ class MacroTissueTests(unittest.TestCase):
         reply = handle_rpc({"jsonrpc": "2.0", "id": 11, "method": "tools/list"})
         names = [tool["name"] for tool in reply["result"]["tools"]]
         self.assertEqual(names[: len(TOOL_NAMES)], list(TOOL_NAMES))
-        self.assertEqual(len(TOOL_NAMES), 17)
+        self.assertEqual(len(TOOL_NAMES), 18)
         self.assertIn("helpdesk.search_macros", names)
         self.assertIn("helpdesk.apply_macro", names)
         self.assertIn("helpdesk.ingest_email", names)
