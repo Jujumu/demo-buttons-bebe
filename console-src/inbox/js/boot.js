@@ -11,14 +11,13 @@ if (live) shop.setShop(live.shop);
 const params = new URLSearchParams(location.search);
 // Always list from helpdesk.list_tickets (SEED + intake). Live mint only
 // pins the shop host — do not replace the catalog with the 5-row live stub.
-// Default chrome is Assigned to me. ?view=open is the Open queue.
-// ?view=escalated is the Escalated queue.
+// Default chrome is All. ?view= overrides (mine/open/escalated/trash/spam/…).
 // ?empty=1 pins an empty catalog so filtered empty copy can be reviewed.
 const emptyList = params.get("empty") === "1";
 const organ = createInboxOrgan({
   shop,
   shopHost: live?.shop,
-  viewId: params.get("view") || "mine",
+  viewId: params.get("view") || "all",
   ticketId: emptyList ? undefined : (params.get("ticket") || undefined),
   tickets: emptyList ? [] : undefined,
   privacyGate: params.get("gate") === "privacy",

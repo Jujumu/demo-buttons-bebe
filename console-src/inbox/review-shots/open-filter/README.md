@@ -9,4 +9,4 @@ Local review: `console-src/inbox/run-review.sh` → `http://127.0.0.1:8766/`
 
 `?empty=1` pins an empty catalog for review. It is not a product toggle.
 
-Default boot without `?view=` stays Assigned to me (`mine`).
+Default boot without `?view=` is All (`all`).
