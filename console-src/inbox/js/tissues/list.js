@@ -9,7 +9,7 @@ import { esc, formatWhen, requestTypeLabel, screenStatus, severityLabel } from "
  *      `{ collapsed }` on `list/collapsed`
  * Selected row: pale accent wash + narrow accent edge. Uses first-party
  * customerName, snippet, and helpdesk status (open / closed / snoozed) —
- * never Return.status. Unread is session-local (bold name + ink mark).
+ * never Return.status.
  * Chrome: Inbox title + filter (views) / sort / collapse — no separate views pane.
  * Filter menu includes Open (`status === "open"`), Escalated (`escalated`),
  * Trash (`archived`), and Spam (`spam`).
