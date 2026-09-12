@@ -35,8 +35,8 @@ On the app **Versions** tab:
 4. Click **Release**.
 
 The agent and its Shopify-backed tools stay **read-only**. Keep
-`SHOPIFY_MUTATIONS_ENABLED=0` in `.env`. Human-approved Gorgias send/note
-actions are the only customer-facing writes.
+`SHOPIFY_MUTATIONS_ENABLED=0` in `.env`. A human still sends every customer
+reply. Do not add write scopes.
 
 ## 3. Install the app on your shop
 
@@ -62,16 +62,19 @@ SHOPIFY_CLIENT_ID=...
 SHOPIFY_CLIENT_SECRET=...
 SHOPIFY_API_VERSION=2026-07
 SHOPIFY_MUTATIONS_ENABLED=0
+AGENTMAIL_API_KEY=
 ```
 
-`SHOPIFY_SHOP` is the full `*.myshopify.com` domain, not a custom storefront
-hostname.
+`SHOPIFY_SHOP` is the full `*.myshopify.com` domain of the shop you installed
+on, not a custom storefront hostname and not a hardcoded demo shop.
 
-4. Fill Gorgias and other placeholders the same way. Restart webhook,
-   processor, KB sync, and the MCP tools so they reload `.env`.
+4. Restart the inbox (or `docker compose up`) so it reloads `.env`. Never
+   commit `.env`. Secrets are runtime-only; they are not baked into the
+   Docker image.
 
 Optional local sandbox: `demo/.env.example` is a **local Cute Things demo
-only** (`yznyc1-ez.myshopify.com`). Do not point that profile at a live shop.
+only** (`yznyc1-ez.myshopify.com`). Cute Things is fixture/demo, not the
+production default shop.
 
 ## 5. Sync the catalog (optional)
 
@@ -82,3 +85,26 @@ cd kb && ./sync-products.sh
 The script mints a 24-hour Admin token with the client credentials grant, then
 writes product markdown under `kb/products/`. It reads `SHOPIFY_SHOP`,
 `SHOPIFY_CLIENT_ID`, and `SHOPIFY_CLIENT_SECRET` from the root `.env`.
+
+## 6. Run the inbox in Docker
+
+Copy `.env.example` to `.env`, paste the values from step 4, then:
+
+```bash
+docker compose up --build
+```
+
+Open [http://127.0.0.1:8766/](http://127.0.0.1:8766/). Compose reads `.env`
+at runtime. The image does not contain credentials.
+
+Leave Shopify vars empty to boot the fixture inbox (no live shop). Set
+`AGENTMAIL_API_KEY` only if you want live mailbox pull; missing key uses
+fixture mail. Gorgias stays off unless you set `GORGIAS_BRIDGE_ENABLED=1`
+after adding credentials.
+
+Without Docker:
+
+```bash
+cp .env.example .env
+./console-src/inbox/run-review.sh
+```

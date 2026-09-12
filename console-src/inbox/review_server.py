@@ -67,6 +67,13 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(encoded)
 
+    def do_GET(self):
+        parsed = urlparse(self.path)
+        if parsed.path == "/health":
+            self._json(200, {"ok": True, "service": "inbox"})
+            return
+        return super().do_GET()
+
     def do_POST(self):
         parsed = urlparse(self.path)
         path = parsed.path

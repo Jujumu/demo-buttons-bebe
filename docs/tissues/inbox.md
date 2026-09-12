@@ -15,9 +15,9 @@ a client of `helpdesk.search_macros`; Replace/Append call `helpdesk.apply_macro`
 / `helpdesk.pull_mailbox`
 on that same path. `create_ticket` opens an empty first-party compose
 ticket (null GIDs, no inbound message). `pull_mailbox` is the AgentMail bridge: it maps unread
-inbound mail onto `ingest_email`. Live reads target Cute Things
-(`SHOPIFY_SHOP` pinned to `yznyc1-ez.myshopify.com`) when mint works.
-Mint/Admin failure falls back to `demo-inbox.example` fixtures.
+inbound mail onto `ingest_email`. Live reads target `SHOPIFY_SHOP` (any
+installed `*.myshopify.com` host) when mint works. Mint/Admin failure falls
+back to `demo-inbox.example` fixtures. Cute Things is fixture/demo only.
 `SHOPIFY_MUTATIONS_ENABLED` stays `0`. No live store writes. The Ada OPEN
 return is invented fixture-only and is never injected onto a live shop query.
 No `helpdesk.send` (refused stub). Real Send uses `helpdesk.send_reply`
