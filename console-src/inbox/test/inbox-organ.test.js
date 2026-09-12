@@ -501,13 +501,20 @@ test("boot only pulls mailbox when ?pull=1", () => {
   assert.doesNotMatch(boot, /await organ\.pullMailbox\(\{ limit:[^}]+\}\);\s*organ\.mount/);
 });
 
-test("boot defaults to Assigned to me and offers empty Open review", () => {
+test("boot defaults to All and offers empty Open review", () => {
   const boot = readFileSync(join(here, "../js/boot.js"), "utf8");
-  assert.match(boot, /params\.get\("view"\) \|\| "mine"/);
-  assert.doesNotMatch(boot, /params\.get\("view"\) \|\| "open"/);
+  assert.match(boot, /params\.get\("view"\) \|\| "all"/);
+  assert.doesNotMatch(boot, /params\.get\("view"\) \|\| "mine"/);
   assert.match(boot, /params\.get\("empty"\)\s*===\s*"1"/);
   assert.match(boot, /params\.get\("menu"\)\s*===\s*"1"/);
   assert.match(boot, /await organ\.mount\(root\)/);
+});
+
+test("All view selects All in the filter menu", async () => {
+  const snap = await createInboxOrgan({ viewId: "all" }).ready();
+  assert.equal(snap.viewId, "all");
+  assert.match(snap.html, /class="list-menu-item is-selected" data-view="all"[^>]*aria-selected="true"/);
+  assert.match(snap.html, /list-menu-label">All</);
 });
 
 test("list toolbar menu includes Open and keeps existing views", async () => {
