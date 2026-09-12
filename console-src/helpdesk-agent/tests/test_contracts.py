@@ -25,11 +25,11 @@ class ContractTests(unittest.TestCase):
     def setUp(self) -> None:
         reset_tickets()
 
-    def test_seventeen_tools(self) -> None:
+    def test_eighteen_tools(self) -> None:
         self.assertEqual(tuple(list_tools()), TOOL_NAMES)
-        self.assertEqual(len(TOOLS), 17)
+        self.assertEqual(len(TOOLS), 18)
         names = [item["name"] for item in tool_descriptors()]
-        self.assertEqual(names[:17], list(TOOL_NAMES))
+        self.assertEqual(names[:18], list(TOOL_NAMES))
         self.assertIn("helpdesk.draft_reply", TOOL_NAMES)
         self.assertIn("helpdesk.summarize_thread", TOOL_NAMES)
         self.assertIn("helpdesk.search_macros", TOOL_NAMES)
@@ -38,6 +38,7 @@ class ContractTests(unittest.TestCase):
         self.assertIn("helpdesk.ingest_chat", TOOL_NAMES)
         self.assertIn("helpdesk.pull_mailbox", TOOL_NAMES)
         self.assertIn("helpdesk.escalate_ticket", TOOL_NAMES)
+        self.assertIn("helpdesk.bulk_update_tickets", TOOL_NAMES)
         self.assertIn("helpdesk.write_gate_status", TOOL_NAMES)
         self.assertIn("helpdesk.bridge_status", TOOL_NAMES)
         self.assertIn("helpdesk.send_reply", TOOL_NAMES)
@@ -45,8 +46,8 @@ class ContractTests(unittest.TestCase):
     def test_mcp_lists_live_tools_and_refused_writes(self) -> None:
         reply = handle_rpc({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
         names = [tool["name"] for tool in reply["result"]["tools"]]
-        self.assertEqual(names[:17], list(TOOL_NAMES))
-        self.assertEqual(len(list_tools()), 17)
+        self.assertEqual(names[:18], list(TOOL_NAMES))
+        self.assertEqual(len(list_tools()), 18)
         self.assertIn("helpdesk.send", names)
         self.assertIn("helpdesk.refund", names)
         self.assertIn("helpdesk.cancel", names)
@@ -142,6 +143,19 @@ class ContractTests(unittest.TestCase):
                 "helpdesk.escalate_ticket",
                 ["escalate-ticket", "--ticket-id", "t-ada-track"],
                 {"ticketId": "t-ada-track"},
+            ),
+            (
+                "helpdesk.bulk_update_tickets",
+                [
+                    "bulk-update-tickets",
+                    "--ticket-id",
+                    "t-casey-visor",
+                    "--action",
+                    "assign",
+                    "--assignee",
+                    "me",
+                ],
+                {"ticketIds": ["t-casey-visor"], "action": "assign", "assignee": "me"},
             ),
             (
                 "helpdesk.write_gate_status",

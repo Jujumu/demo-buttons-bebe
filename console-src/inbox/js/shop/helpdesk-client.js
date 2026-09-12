@@ -77,6 +77,9 @@ export function createHelpdeskClient(opts = {}) {
     escalateTicket(args) {
       return invoke("helpdesk.escalate_ticket", args);
     },
+    bulkUpdateTickets(args) {
+      return invoke("helpdesk.bulk_update_tickets", args);
+    },
     writeGateStatus(args) {
       return invoke("helpdesk.write_gate_status", args);
     },

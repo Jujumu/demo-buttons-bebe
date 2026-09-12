@@ -33,6 +33,7 @@ from .fixtures_sample import ADA, CASEY, JORDAN, ORDER_ADA, ORDER_CASEY_A, ORDER
 
 VIEWS = ("open", "escalated", "closed", "all", "snoozed", "mine", "unassigned", "trash", "spam")
 TICKET_STATUSES = ("open", "closed", "snoozed")
+BULK_ACTIONS = ("assign", "snooze", "trash")
 REQUEST_TYPES = ("marketing_unsubscribe", "privacy_request", "bug")
 PRIVACY_SUBTYPES = ("access", "delete", "export")
 SEVERITIES = ("low", "medium", "high", "critical")
@@ -877,6 +878,7 @@ def get_ticket(ticket_id: str, gid_source: str = "sample") -> dict:
             row["privacyHandled"] = bool(ticket.get("privacyHandled"))
             row["unsubscribeHandled"] = bool(ticket.get("unsubscribeHandled"))
             row["bugHandled"] = bool(ticket.get("bugHandled"))
+            row["assignee"] = "me" if ticket.get("assignee") == "me" else None
             return row
     raise not_found("ticket", str(ticket_id))
 
@@ -975,3 +977,100 @@ def mark_bug_handled(ticket_id: str, gid_source: str = "sample") -> dict:
             )
         return get_ticket(canonical, gid_source)
     raise not_found("ticket", str(ticket_id))
+
+
+def _normalize_assignee(value: Any) -> str | None:
+    if value is None:
+        return None
+    raw = str(value).strip().lower()
+    if raw in {"", "unassigned", "none", "null"}:
+        return None
+    if raw == "me":
+        return "me"
+    raise bad_request("assignee must be me or unassigned", field="assignee")
+
+
+def _bulk_ids(raw: Any) -> list[str]:
+    if raw is None:
+        raise bad_request("ticketIds is required", field="ticketIds")
+    if isinstance(raw, str):
+        items = [raw]
+    elif isinstance(raw, (list, tuple)):
+        items = list(raw)
+    else:
+        raise bad_request("ticketIds must be a list", field="ticketIds")
+    ids: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        text = str(item or "").strip()
+        if not text:
+            continue
+        canonical = _resolve_id(text)
+        if canonical in seen:
+            continue
+        seen.add(canonical)
+        ids.append(canonical)
+    if not ids:
+        raise bad_request("ticketIds is required", field="ticketIds")
+    return ids
+
+
+def _apply_bulk(ticket: dict, action: str, assignee: str | None, now: str) -> None:
+    if action == "assign":
+        previous = ticket.get("assignee")
+        ticket["assignee"] = assignee
+        ticket["updatedAt"] = now
+        if previous != assignee:
+            note = "assigned" if assignee == "me" else "unassigned"
+            ticket.setdefault("statusEvents", []).append(
+                {"at": now, "status": ticket["status"], "note": note}
+            )
+        return
+    if action == "snooze":
+        previous = ticket["status"]
+        ticket["status"] = "snoozed"
+        ticket["updatedAt"] = now
+        if previous != "snoozed":
+            ticket.setdefault("statusEvents", []).append(
+                {"at": now, "status": "snoozed", "note": "snoozed"}
+            )
+        return
+    already = bool(ticket.get("archived"))
+    ticket["archived"] = True
+    ticket["updatedAt"] = now
+    if not already:
+        ticket.setdefault("statusEvents", []).append(
+            {"at": now, "status": ticket["status"], "note": "archived"}
+        )
+
+
+def bulk_update_tickets(
+    ticket_ids: Any,
+    action: str,
+    assignee: Any = None,
+    gid_source: str = "sample",
+) -> dict:
+    """First-party bulk assign / snooze / trash. Never a Shopify mutation."""
+    action_key = str(action or "").strip().lower()
+    if action_key not in BULK_ACTIONS:
+        raise bad_request("action must be assign, snooze, or trash", field="action")
+    ids = _bulk_ids(ticket_ids)
+    next_assignee = _normalize_assignee(assignee) if action_key == "assign" else None
+    by_id = {ticket["id"]: ticket for ticket in _store}
+    found: list[dict] = []
+    missing: list[str] = []
+    now = _now_iso()
+    for ticket_id in ids:
+        ticket = by_id.get(ticket_id)
+        if ticket is None:
+            missing.append(ticket_id)
+            continue
+        _apply_bulk(ticket, action_key, next_assignee, now)
+        found.append(get_ticket(ticket_id, gid_source))
+    if not found:
+        raise not_found("ticket", missing[0] if missing else str(ids[0]))
+    return {
+        "action": action_key,
+        "updated": len(found),
+        "tickets": found,
+    }

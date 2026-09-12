@@ -6,6 +6,7 @@ import { createComposerTissue } from "./tissues/composer.js";
 import { createListTissue } from "./tissues/list.js";
 import { createRailOrgan } from "./tissues/rail.js";
 import { createThreadTissue } from "./tissues/thread.js";
+import { applyBulkAction } from "./shop/bulk-tickets.js";
 import { forbiddenControlHits, GATE_CONFIRM_LABEL } from "./util.js";
 
 const RAIL_EXPAND_ICON = `<svg class="list-expand-icon" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" focusable="false">
@@ -64,6 +65,7 @@ export function createInboxOrgan(opts = {}) {
   const unreadIds = new Set(
     (pinnedCatalog || fixtureTickets).map((ticket) => ticket.id).filter(Boolean),
   );
+  const checkedIds = new Set();
   let writeGate = {
     mutationsEnabled: false,
     refused: ["send", "refund", "cancel"],
@@ -91,6 +93,31 @@ export function createInboxOrgan(opts = {}) {
 
   function markRead(ticketId) {
     if (ticketId) unreadIds.delete(ticketId);
+  }
+
+  function clearChecked() {
+    checkedIds.clear();
+  }
+
+  async function runBulk({ action, assignee } = {}) {
+    const ids = [...checkedIds];
+    if (!ids.length || !action) return;
+    if (action === "mark_read") {
+      for (const id of ids) unreadIds.delete(id);
+    } else if (action === "mark_unread") {
+      for (const id of ids) unreadIds.add(id);
+    } else {
+      if (pinnedCatalog) {
+        for (const ticket of pinnedCatalog) {
+          if (ids.includes(ticket.id)) applyBulkAction(ticket, action, assignee);
+        }
+      } else if (typeof shop.bulkUpdateTickets === "function") {
+        await shop.bulkUpdateTickets({ ticketIds: ids, action, assignee });
+      }
+      await refreshList();
+      await refreshThread();
+    }
+    clearChecked();
   }
 
   function afterUi() {
@@ -486,6 +513,7 @@ export function createInboxOrgan(opts = {}) {
       selectedViewId: viewId,
       collapsed: listCollapsed,
       unreadIds: [...unreadIds],
+      checkedIds: [...checkedIds],
     };
   }
 
@@ -510,6 +538,7 @@ export function createInboxOrgan(opts = {}) {
       viewId,
       selectedId,
       unreadIds: [...unreadIds],
+      checkedIds: [...checkedIds],
       selectedHasInkBar: Boolean(selectedId) && html.includes(`data-ticket="${selectedId}"`) && html.includes("is-selected"),
       sendDisabled: composerTissue.sendDisabled(composerModel),
       hideSendAndClose: composerTissue.hideSendAndClose(composerModel),
@@ -596,6 +625,7 @@ export function createInboxOrgan(opts = {}) {
     mailbox.subscribe(MAILBOX_TOPICS.VIEW_SELECTED, ({ viewId: next }) => {
       viewId = next;
       selectedId = null;
+      clearChecked();
       body = "";
       strip = "";
       summarizeText = "";
@@ -606,6 +636,28 @@ export function createInboxOrgan(opts = {}) {
         ensureSelection();
         return refreshThread();
       }).then(refreshRail).then(refreshComposer).then(() => refreshMacros(macroQuery)).then(paint);
+    });
+    mailbox.subscribe(MAILBOX_TOPICS.LIST_CHECKED, ({ ticketId, checked }) => {
+      if (!ticketId) return;
+      if (checked) checkedIds.add(ticketId);
+      else checkedIds.delete(ticketId);
+      paint();
+    });
+    mailbox.subscribe(MAILBOX_TOPICS.LIST_CHECKED_ALL, ({ checked }) => {
+      const visible = visibleTickets();
+      if (checked) {
+        for (const ticket of visible) checkedIds.add(ticket.id);
+      } else {
+        for (const ticket of visible) checkedIds.delete(ticket.id);
+      }
+      paint();
+    });
+    mailbox.subscribe(MAILBOX_TOPICS.LIST_CLEAR_CHECKED, () => {
+      clearChecked();
+      paint();
+    });
+    mailbox.subscribe(MAILBOX_TOPICS.LIST_BULK, ({ action, assignee }) => {
+      runBulk({ action, assignee }).then(refreshRail).then(paint);
     });
     mailbox.subscribe(MAILBOX_TOPICS.LIST_SELECTED, ({ ticketId }) => {
       selectedId = ticketId;
@@ -817,6 +869,7 @@ export function createInboxOrgan(opts = {}) {
     selectView(next) {
       viewId = next;
       selectedId = null;
+      clearChecked();
       body = "";
       strip = "";
       summarizeText = "";
@@ -827,6 +880,33 @@ export function createInboxOrgan(opts = {}) {
         ensureSelection();
         return refreshThread();
       }).then(refreshRail).then(refreshComposer).then(() => refreshMacros(macroQuery)).then(afterUi);
+    },
+    checkTickets(ids, checked = true) {
+      for (const id of ids || []) {
+        if (checked) checkedIds.add(id);
+        else checkedIds.delete(id);
+      }
+      return afterUi();
+    },
+    checkVisible(checked = true) {
+      for (const ticket of visibleTickets()) {
+        if (checked) checkedIds.add(ticket.id);
+        else checkedIds.delete(ticket.id);
+      }
+      return afterUi();
+    },
+    clearChecked() {
+      clearChecked();
+      return afterUi();
+    },
+    openBulkMenu() {
+      listTissue.openBulk(true);
+      return snapshot();
+    },
+    async applyBulk(payload) {
+      await runBulk(payload);
+      await refreshRail();
+      return afterUi();
     },
     selectTicket(id) {
       selectedId = id;

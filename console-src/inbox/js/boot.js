@@ -31,6 +31,12 @@ await organ.mount(root);
 if (params.get("menu") === "1") {
   root.querySelector("[data-list-filter]")?.click();
 }
+if (params.get("select") === "1" || params.get("bulk") === "1") {
+  organ.checkVisible(true);
+}
+if (params.get("bulk") === "1") {
+  organ.openBulkMenu();
+}
 
 // Demo/review: expose organ for WebMCP verify + headless shots (not a product API).
 globalThis.__inboxOrgan = organ;

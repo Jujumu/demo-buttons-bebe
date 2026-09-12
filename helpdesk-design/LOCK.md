@@ -9,7 +9,10 @@ wash. No ink-only bar. IBM Plex.
 List row time is relative (`2h`, `Yesterday`). Absolute stays in the
 thread message header and the list tooltip.
 Unread is session-local (no Shopify field): unread names bold plus a small
-ink mark; selecting a ticket marks it read. Not an Unread view. Omit repeating **Open** in open queues; omit
+ink mark; selecting a ticket marks it read. Not an Unread view. Multi-select
+uses ink checkboxes and an ink **All selected** bar. Bulk v1 is mark read /
+unread, assign (agent or unassigned), snooze, and Delete into Trash
+(`archived`). No purple. Omit repeating **Open** in open queues; omit
 repeating **Escalated** in escalated queues if any; keep
 Closed / Snoozed. Trash is archived tickets only, not Closed.
 Spam is a first-party soft-hide pile, not Trash and not a Shopify

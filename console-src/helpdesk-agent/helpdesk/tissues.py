@@ -23,6 +23,7 @@ from .names import (
     TOOL_APPLY_MACRO,
     TOOL_BRIDGE_STATUS,
     TOOL_DRAFT_REPLY,
+    TOOL_BULK_UPDATE_TICKETS,
     TOOL_ESCALATE_TICKET,
     TOOL_GET_CUSTOMER,
     TOOL_GET_ORDER,
@@ -75,6 +76,27 @@ def handle_escalate_ticket(args: dict[str, Any]) -> dict[str, Any]:
         "ticket": tickets.escalate_ticket(
             str(ticket_id) if ticket_id is not None else "",
             None if reason is None else str(reason),
+            gid_source,
+        ),
+    }
+
+
+def handle_bulk_update_tickets(args: dict[str, Any]) -> dict[str, Any]:
+    ids = (
+        args.get("ticketIds")
+        or args.get("ticket_ids")
+        or args.get("ticketId")
+        or args.get("ticket_id")
+    )
+    action = args.get("action")
+    assignee = args.get("assignee")
+    gid_source = _ticket_gid_source()
+    return {
+        "source": "sample",
+        **tickets.bulk_update_tickets(
+            ids,
+            str(action) if action is not None else "",
+            assignee,
             gid_source,
         ),
     }
@@ -260,6 +282,7 @@ HANDLERS = {
     TOOL_INGEST_CHAT: handle_ingest_chat,
     TOOL_PULL_MAILBOX: handle_pull_mailbox,
     TOOL_ESCALATE_TICKET: handle_escalate_ticket,
+    TOOL_BULK_UPDATE_TICKETS: handle_bulk_update_tickets,
     TOOL_WRITE_GATE_STATUS: handle_write_gate_status,
     TOOL_BRIDGE_STATUS: handle_bridge_status,
     TOOL_SEND_REPLY: handle_send_reply,

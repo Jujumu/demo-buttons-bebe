@@ -44,6 +44,10 @@ class HelpdeskDoorTests(unittest.TestCase):
             ("helpdesk.ingest_chat", dict(CHAT_WITH_1001)),
             ("helpdesk.pull_mailbox", {"limit": 5}),
             ("helpdesk.escalate_ticket", {"ticketId": "t-ada-track"}),
+            (
+                "helpdesk.bulk_update_tickets",
+                {"ticketIds": ["t-casey-visor"], "action": "assign", "assignee": "me"},
+            ),
             ("helpdesk.write_gate_status", {}),
             ("helpdesk.bridge_status", {}),
         ]

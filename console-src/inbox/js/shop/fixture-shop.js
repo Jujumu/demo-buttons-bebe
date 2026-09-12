@@ -1,3 +1,4 @@
+import { applyBulkAction } from "./bulk-tickets.js";
 import { clerkTicket, clerkTicketRow } from "./clerk-ticket.js";
 import { customers, emptyReturns, macros as fixtureMacros, orders, returnsForOrder, SHOP, ticketInView, tickets as fixtureTickets } from "../fixtures/demo-inbox.js";
 import { REQUEST_TYPE_BUG, REQUEST_TYPE_PRIVACY, REQUEST_TYPE_UNSUBSCRIBE } from "../util.js";
@@ -197,6 +198,7 @@ export function fixtureDraftFromThread(thread = {}, rail = {}) {
 export function createFixtureShop(opts = {}) {
   const fail = opts.fail || {};
   const escalated = new Map();
+  const bulk = new Map();
 
   function maybeFail(key) {
     if (!fail[key]) return;
@@ -215,6 +217,13 @@ export function createFixtureShop(opts = {}) {
         extra.event,
       ].filter(Boolean),
     };
+  }
+
+  function withBulk(ticket) {
+    const extra = bulk.get(ticket.id);
+    const base = withEscalate(ticket);
+    if (!extra) return base;
+    return { ...base, ...extra };
   }
 
   return {
@@ -251,6 +260,7 @@ export function createFixtureShop(opts = {}) {
       maybeFail("list");
       const cap = Number(limit) > 0 ? Number(limit) : 20;
       return fixtureTickets
+        .map(withBulk)
         .filter((ticket) => ticketInView(ticket, view || "open"))
         .slice(0, cap)
         .map(clerkTicketRow);
@@ -258,7 +268,7 @@ export function createFixtureShop(opts = {}) {
     getTicket({ ticketId } = {}) {
       maybeFail("thread");
       const ticket = fixtureTickets.find((row) => row.id === ticketId);
-      return ticket ? clerkTicket(withEscalate(ticket)) : null;
+      return ticket ? clerkTicket(withBulk(ticket)) : null;
     },
     draftReply(args = {}) {
       maybeFail("draft");
@@ -313,7 +323,30 @@ export function createFixtureShop(opts = {}) {
         reason: reason ? String(reason).trim() : "",
         event: { at: new Date().toISOString(), status: ticket.status, note },
       });
-      return clerkTicket(withEscalate(ticket));
+      return clerkTicket(withBulk(ticket));
+    },
+    bulkUpdateTickets({ ticketIds, action, assignee } = {}) {
+      maybeFail("bulk");
+      const ids = Array.isArray(ticketIds) ? ticketIds : ticketIds ? [ticketIds] : [];
+      const tickets = [];
+      for (const id of ids) {
+        const ticket = fixtureTickets.find((row) => row.id === id);
+        if (!ticket) continue;
+        const current = {
+          ...withBulk(ticket),
+          statusEvents: [...(withBulk(ticket).statusEvents || [])],
+        };
+        applyBulkAction(current, action, assignee);
+        bulk.set(id, {
+          assignee: current.assignee,
+          status: current.status,
+          archived: current.archived,
+          updatedAt: current.updatedAt,
+          statusEvents: current.statusEvents,
+        });
+        tickets.push(clerkTicket(withBulk(ticket)));
+      }
+      return { action, updated: tickets.length, tickets };
     },
     markPrivacyHandled({ ticketId } = {}) {
       maybeFail("privacy-handled");

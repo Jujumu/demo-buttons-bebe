@@ -16,6 +16,7 @@ TOOL_INGEST_EMAIL = "helpdesk.ingest_email"
 TOOL_INGEST_CHAT = "helpdesk.ingest_chat"
 TOOL_PULL_MAILBOX = "helpdesk.pull_mailbox"
 TOOL_ESCALATE_TICKET = "helpdesk.escalate_ticket"
+TOOL_BULK_UPDATE_TICKETS = "helpdesk.bulk_update_tickets"
 TOOL_WRITE_GATE_STATUS = "helpdesk.write_gate_status"
 TOOL_BRIDGE_STATUS = "helpdesk.bridge_status"
 TOOL_SEND_REPLY = "helpdesk.send_reply"
@@ -35,6 +36,7 @@ TOOL_NAMES = (
     TOOL_INGEST_CHAT,
     TOOL_PULL_MAILBOX,
     TOOL_ESCALATE_TICKET,
+    TOOL_BULK_UPDATE_TICKETS,
     TOOL_WRITE_GATE_STATUS,
     TOOL_BRIDGE_STATUS,
     TOOL_SEND_REPLY,
@@ -55,6 +57,7 @@ CLI_COMMANDS = {
     TOOL_INGEST_CHAT: "ingest-chat",
     TOOL_PULL_MAILBOX: "pull-mailbox",
     TOOL_ESCALATE_TICKET: "escalate-ticket",
+    TOOL_BULK_UPDATE_TICKETS: "bulk-update-tickets",
     TOOL_WRITE_GATE_STATUS: "write-gate-status",
     TOOL_BRIDGE_STATUS: "bridge-status",
     TOOL_SEND_REPLY: "send-reply",

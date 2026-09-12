@@ -11,6 +11,7 @@ from .names import (
     TOOL_APPLY_MACRO,
     TOOL_BRIDGE_STATUS,
     TOOL_DRAFT_REPLY,
+    TOOL_BULK_UPDATE_TICKETS,
     TOOL_ESCALATE_TICKET,
     TOOL_GET_CUSTOMER,
     TOOL_GET_ORDER,
@@ -91,6 +92,11 @@ SCHEMAS = {
         "ticketId": {"type": "string"},
         "reason": {"type": "string", "description": "optional first-party note; never a Shopify mutation"},
     },
+    TOOL_BULK_UPDATE_TICKETS: {
+        "ticketIds": {"type": "array", "items": {"type": "string"}},
+        "action": {"type": "string", "description": "assign | snooze | trash"},
+        "assignee": {"type": "string", "description": "me or unassigned; assign only"},
+    },
     TOOL_WRITE_GATE_STATUS: {},
     TOOL_BRIDGE_STATUS: {},
     TOOL_SEND_REPLY: {
@@ -107,6 +113,11 @@ def _description(name: str) -> str:
         return (
             "First-party helpdesk escalate. Sets escalated/pending on the ticket. "
             "Never a Shopify Admin mutation. Human still owns Send."
+        )
+    if name == TOOL_BULK_UPDATE_TICKETS:
+        return (
+            "First-party bulk assign, snooze, or trash. Trash sets archived. "
+            "Never a Shopify Admin mutation. Never hard-delete. Human still owns Send."
         )
     if name == TOOL_WRITE_GATE_STATUS:
         return (
