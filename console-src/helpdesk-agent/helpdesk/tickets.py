@@ -29,7 +29,7 @@ from .fixtures_live_holes import (
 from .fixtures_demo_tickets import DEMO_SEED_TICKETS
 from .fixtures_sample import ADA, CASEY, JORDAN, ORDER_ADA, ORDER_CASEY_A, ORDER_CASEY_B
 
-VIEWS = ("open", "closed", "all", "snoozed", "mine", "unassigned")
+VIEWS = ("open", "escalated", "closed", "all", "snoozed", "mine", "unassigned")
 TICKET_STATUSES = ("open", "closed", "snoozed")
 REQUEST_TYPES = ("marketing_unsubscribe", "privacy_request", "bug")
 PRIVACY_SUBTYPES = ("access", "delete", "export")
@@ -276,6 +276,8 @@ SEED_TICKETS = (
         "severity": "high",
         "device": "iOS",
         "bugHandled": False,
+        "escalated": True,
+        "escalationReason": "app crash",
         "messages": [
             {
                 "id": "m10-bug",
@@ -289,6 +291,7 @@ SEED_TICKETS = (
         ],
         "statusEvents": [
             {"at": "2026-08-28T16:01:00Z", "status": "open", "note": "created"},
+            {"at": "2026-08-28T16:02:00Z", "status": "open", "note": "escalated: app crash"},
         ],
     },
 ) + tuple(DEMO_SEED_TICKETS)
@@ -734,6 +737,8 @@ def ticket_in_view(ticket: dict, view: str) -> bool:
     status = ticket["status"]
     if view == "all":
         return True
+    if view == "escalated":
+        return bool(ticket.get("escalated"))
     if view == "open":
         return status == "open"
     if view == "closed":
@@ -769,7 +774,7 @@ def _row(ticket: dict, gid_source: str = "sample") -> dict:
 
 def list_tickets(view: str = "open", limit: int = 20, gid_source: str = "sample") -> list[dict]:
     if view not in VIEWS:
-        raise bad_request("view must be open, closed, all, snoozed, mine, or unassigned", field="view")
+        raise bad_request("view must be open, escalated, closed, all, snoozed, mine, or unassigned", field="view")
     try:
         cap = int(limit)
     except (TypeError, ValueError) as exc:

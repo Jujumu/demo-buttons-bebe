@@ -11,7 +11,8 @@ import { esc, formatWhen, requestTypeLabel, screenStatus, severityLabel } from "
  * customerName, snippet, and helpdesk status (open / closed / snoozed) —
  * never Return.status. Unread is session-local (bold name).
  * Chrome: Inbox title + filter (views) / sort / collapse — no separate views pane.
- * Filter menu includes Open (`status === "open"`). Open queues omit the Open chip.
+ * Filter menu includes Open (`status === "open"`) and Escalated (`escalated`).
+ * Open queues omit the Open chip. Escalated queues omit an Escalated chip.
  */
 
 const ICON_FILTER = `<svg class="list-tool-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false">

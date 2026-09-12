@@ -357,7 +357,7 @@ class TicketContractTests(unittest.TestCase):
         self.assertEqual(ticket["device"], "iOS")
         self.assertFalse(ticket["bugHandled"])
         self.assertEqual(ticket["status"], "open")
-        self.assertFalse(ticket.get("escalated"))
+        self.assertTrue(ticket.get("escalated"))
         from helpdesk.tickets import mark_bug_handled
 
         handled = mark_bug_handled("t-remy-bug")
