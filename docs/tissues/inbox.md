@@ -50,9 +50,10 @@ Demo names only (Ada Demo, Casey Sandbox, Jordan Preview). No customer PII.
 
 - **In:** `{ views, counts, selectedViewId }`
 - **Out:** `{ viewId }` on `view/selected`
-- **Default views:** Assigned to me, Unassigned, Open, Escalated, All, Snoozed, Closed.
+- **Default views:** Assigned to me, Unassigned, Open, Escalated, All, Snoozed, Closed, Trash.
   Default boot is Assigned to me (`mine`). Open is `status === "open"`.
   Escalated is `escalated` true, with no status constraint.
+  Trash is `archived` true. Archived tickets stay out of every other view.
 - **Degrade:** empty list; other panes stay
 
 ### list
