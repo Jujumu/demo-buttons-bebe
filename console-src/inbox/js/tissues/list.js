@@ -118,7 +118,7 @@ export function createListTissue({ mailbox }) {
   function renderToolbar(next = model) {
     return `<header class="pane-head list-toolbar">
       <a class="console-link" href="../index.html">Console</a>
-      <div class="list-toolbar-row">
+      <div class="list-toolbar-row list-toolbar-row--chrome">
         <div class="list-scope">
           <button type="button" class="list-scope-btn" data-list-inbox aria-label="Inbox" title="Open the views menu">
             <span class="list-scope-label">Inbox</span>
@@ -127,7 +127,6 @@ export function createListTissue({ mailbox }) {
         </div>
         <button type="button" class="list-new-ticket" data-list-new-ticket title="New ticket (N)" aria-label="New ticket">New ticket</button>
         <div class="list-tools" role="group" aria-label="List tools">
-          ${renderSearch(next)}
           <div class="list-filter-wrap">
             <button type="button" class="list-tool-btn" data-list-filter title="Views" aria-label="Views" aria-haspopup="listbox" aria-expanded="${ui.filterOpen ? "true" : "false"}" aria-pressed="${ui.filterOpen ? "true" : "false"}">${ICON_FILTER}</button>
             ${renderViewMenu(next)}
@@ -135,6 +134,9 @@ export function createListTissue({ mailbox }) {
           <button type="button" class="list-tool-btn" data-list-sort title="Sort ${ui.sort === "oldest" ? "newest first" : ui.sort === "newest" ? "oldest first" : "newest first"}" aria-label="Sort list">${ICON_SORT}</button>
           <button type="button" class="list-tool-btn" data-list-collapse title="Collapse list" aria-label="Collapse ticket list">${ICON_CLOSE}</button>
         </div>
+      </div>
+      <div class="list-toolbar-row list-toolbar-row--search">
+        ${renderSearch(next)}
       </div>
     </header>`;
   }
