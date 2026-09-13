@@ -595,7 +595,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 .ticket-avatar--4 { background: color-mix(in srgb, var(--mute) 14%, #EDE6DC); }
 .ticket-copy { flex: 1 1 auto; min-width: 0; }
 .ticket-who { display: flex; align-items: center; gap: 6px; min-width: 0; }
-/* Unread: ink mark, never blue / red / purple or color-alone. */
+/* Unread: ink mark, never color-alone. */
 .ticket-unread-mark {
   flex: 0 0 6px;
   width: 6px;

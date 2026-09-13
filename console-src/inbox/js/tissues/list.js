@@ -250,13 +250,13 @@ export function createListTissue({ mailbox }) {
     const typeWord = requestTypeLabel(ticket.requestType);
     if (typeWord) {
       pills.push(
-        `<span class="ticket-pill ticket-badge ticket-request" data-request-type="${esc(ticket.requestType)}">${esc(typeWord)}</span>`,
+        `<span class="ticket-badge ticket-request" data-request-type="${esc(ticket.requestType)}">${esc(typeWord)}</span>`,
       );
     }
     const severityWord = severityLabel(ticket.severity);
     if (severityWord) {
       pills.push(
-        `<span class="ticket-pill ticket-badge ticket-severity" data-severity="${esc(ticket.severity)}">${esc(severityWord)}</span>`,
+        `<span class="ticket-badge ticket-severity" data-severity="${esc(ticket.severity)}">${esc(severityWord)}</span>`,
       );
     }
     return pills.join("");

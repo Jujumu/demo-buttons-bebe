@@ -1306,9 +1306,9 @@ test("left list polish: name is not New ticket, clear hides, unread is ink, pill
   const jordan = empty.html.match(/<button[^>]*data-ticket="t-jordan-ship"[^>]*>[\s\S]*?<\/button>/)?.[0] || "";
   assert.match(jordan, /class="ticket-pill ticket-status"[^>]*>Snoozed</);
   assert.match(empty.html, /class="ticket-pill ticket-status"[^>]*>Open</);
-  assert.match(empty.html, /class="ticket-pill ticket-badge ticket-request"[^>]*>Unsubscribe</);
-  assert.match(empty.html, /class="ticket-pill ticket-badge ticket-request"[^>]*>Privacy</);
-  assert.match(empty.html, /class="ticket-pill ticket-badge ticket-request"[^>]*>Bug</);
+  assert.match(empty.html, /class="ticket-badge ticket-request"[^>]*>Unsubscribe</);
+  assert.match(empty.html, /class="ticket-badge ticket-request"[^>]*>Privacy</);
+  assert.match(empty.html, /class="ticket-badge ticket-request"[^>]*>Bug</);
   assert.match(css, /\.ticket-pill[\s\S]*background:\s*color-mix\([^)]*var\(--ink\)/);
   assert.match(css, /\.list-toolbar-row--search \.list-tool-btn\s*\{[^}]*width:\s*40px/);
   assert.match(css, /\.list-toolbar-row--search \.list-tool-btn\s*\{[^}]*height:\s*40px/);
