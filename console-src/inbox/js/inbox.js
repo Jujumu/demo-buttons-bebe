@@ -35,7 +35,7 @@ function safeMount(tissue, el, input) {
 
 /**
  * Inbox organ: list + thread + rail + composer.
- * Views live in the list filter menu (no separate views pane).
+ * Primary views live on list chips. Overflow views live in the filter menu.
  * One tissue error stays in its pane.
  */
 export function createInboxOrgan(opts = {}) {

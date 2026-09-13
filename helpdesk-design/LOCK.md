@@ -3,14 +3,16 @@
 Chrome is list / thread / rail (views live in the list toolbar). Column
 balance is roughly **24% / 54% / 22%** (list / thread / rail) with
 sensible min-widths; list and rail each collapse to a ~36px strip.
-Selected list row is a **narrow accent edge** (`3–4px` `#B5471D`) plus a
-**pale accent wash** (`color-mix` accent into surface ~8–12%). No grey
-wash. No ink-only bar. IBM Plex.
+Selected list row is a **4px ink leading bar** (`#1C1916`) plus a
+**soft tint** (`color-mix` ink into surface ~6%). Not accent-alone.
+Not purple. IBM Plex. List pane chrome is header + chips + search +
+rows. See `FILTERS-SEARCH.md` Left list chrome 2026-09-13.
 List row time is relative (`2h`, `Yesterday`). Absolute stays in the
 thread message header and the list tooltip.
 Unread is session-local (no Shopify field): unread names bold plus a small
 ink mark; selecting a ticket marks it read. Not an Unread view.
-**New ticket** in the list toolbar opens an empty first-party compose
+**+ New ticket** in the list header is accent fill `#B5471D` with a
+white label (hit ≥40px). It opens an empty first-party compose
 ticket. No Shopify Customer or Order create. Human Send only. Multi-select
 uses ink checkboxes and an ink **All selected** bar. Bulk v1 is mark read /
 unread, assign (agent or unassigned), snooze, and Delete into Trash

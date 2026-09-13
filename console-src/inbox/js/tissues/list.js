@@ -9,13 +9,13 @@ import { esc, formatWhen, requestTypeLabel, screenStatus, severityLabel } from "
  *      `{ ticketId, checked }` on `list/checked`, `{ action }` on `list/bulk`,
  *      `{ query }` on `list/search`, `{}` on `list/new-ticket`,
  *      `{ collapsed }` on `list/collapsed`
- * Selected row: pale accent wash + narrow accent edge. Uses first-party
+ * Selected row: soft tint + 4px ink leading bar. Uses first-party
  * customerName, snippet, and helpdesk status (open / closed / snoozed) —
  * never Return.status.
- * Filter menu includes Open (`status === "open"`), Escalated (`escalated`),
- * Unsubscribe / Privacy / Bug (`requestType`), High / Critical (Bug
- * `severity`), Trash (`archived`), and Spam (`spam`).
- * Open queues omit the Open chip. Escalated queues omit an Escalated chip.
+ * Primary chips (always visible): All · Open · Escalated · Snoozed · Closed.
+ * Overflow filter menu: Assigned to me · Unassigned · Trash · Spam ·
+ * Unsubscribe · Privacy · Bug · High · Critical. No Pending / Waiting / Starred.
+ * Open queues omit the Open status pill. Escalated queues omit an Escalated pill.
  */
 
 export function ticketMatchesQuery(ticket, query) {
@@ -42,10 +42,6 @@ const ICON_CLOSE = `<svg class="list-tool-icon" width="16" height="16" viewBox="
   <path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" d="M4.25 4.25l7.5 7.5M11.75 4.25l-7.5 7.5"/>
 </svg>`;
 
-const ICON_CHEVRON = `<svg class="list-scope-chevron" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" focusable="false">
-  <path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M2.75 4.5 6 7.75 9.25 4.5"/>
-</svg>`;
-
 const ICON_EXPAND = `<svg class="list-expand-icon" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" focusable="false">
   <path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M5 2.5 9.5 7 5 11.5"/>
 </svg>`;
@@ -54,6 +50,40 @@ const ICON_CLOCK = `<svg class="list-bulk-icon" width="14" height="14" viewBox="
   <circle fill="none" stroke="currentColor" stroke-width="1.4" cx="7" cy="7" r="5"/>
   <path fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" d="M7 4.25V7l1.85 1.35"/>
 </svg>`;
+
+const PRIMARY_VIEW_IDS = Object.freeze(["all", "open", "escalated", "snoozed", "closed"]);
+const OVERFLOW_VIEW_IDS = Object.freeze([
+  "mine",
+  "unassigned",
+  "trash",
+  "spam",
+  "unsubscribe",
+  "privacy",
+  "bug",
+  "bug_high",
+  "bug_critical",
+]);
+
+function viewById(views, id) {
+  return (views || []).find((view) => view.id === id) || { id, label: id };
+}
+
+function scopeTitle(next) {
+  if (next.selectedViewId === "all") return "Inbox";
+  return viewById(next.views, next.selectedViewId).label || "Inbox";
+}
+
+function customerInitial(name) {
+  const letter = String(name || "").trim().charAt(0);
+  return /[A-Za-z0-9]/.test(letter) ? letter.toUpperCase() : "?";
+}
+
+function avatarTone(name) {
+  const text = String(name || "");
+  let hash = 0;
+  for (let i = 0; i < text.length; i += 1) hash = (hash + text.charCodeAt(i)) % 5;
+  return hash;
+}
 
 export function createListTissue({ mailbox }) {
   let model = {
@@ -102,10 +132,11 @@ export function createListTissue({ mailbox }) {
   }
 
   function renderViewMenu(next) {
-    const items = (next.views || []).map((view) => {
-      const on = view.id === next.selectedViewId;
-      const count = next.counts?.[view.id] ?? 0;
-      return `<button type="button" class="list-menu-item${on ? " is-selected" : ""}" data-view="${esc(view.id)}" role="option" aria-selected="${on ? "true" : "false"}">
+    const items = OVERFLOW_VIEW_IDS.map((id) => {
+      const view = viewById(next.views, id);
+      const on = id === next.selectedViewId;
+      const count = next.counts?.[id] ?? 0;
+      return `<button type="button" class="list-menu-item${on ? " is-selected" : ""}" data-view="${esc(id)}" role="option" aria-selected="${on ? "true" : "false"}">
         <span class="list-menu-label">${esc(view.label)}</span>
         <span class="list-menu-count">${esc(count)}</span>
       </button>`;
@@ -115,28 +146,44 @@ export function createListTissue({ mailbox }) {
     </div>`;
   }
 
+  function renderChips(next) {
+    const chips = PRIMARY_VIEW_IDS.map((id) => {
+      const view = viewById(next.views, id);
+      const on = id === next.selectedViewId;
+      const count = next.counts?.[id] ?? 0;
+      return `<button type="button" class="list-chip${on ? " is-selected" : ""}" data-view="${esc(id)}" role="tab" aria-selected="${on ? "true" : "false"}">
+        <span class="list-chip-label">${esc(view.label)}</span>
+        <span class="list-chip-count">${esc(count)}</span>
+      </button>`;
+    }).join("");
+    return `<div class="list-toolbar-row list-toolbar-row--chips">
+      <div class="list-chips" role="tablist" aria-label="Ticket status">${chips}</div>
+    </div>`;
+  }
+
   function renderToolbar(next = model) {
+    const title = scopeTitle(next);
+    const count = next.counts?.[next.selectedViewId] ?? listedTickets(next).length;
     return `<header class="pane-head list-toolbar">
       <a class="console-link" href="../index.html">Console</a>
       <div class="list-toolbar-row list-toolbar-row--chrome">
         <div class="list-scope">
-          <button type="button" class="list-scope-btn" data-list-inbox aria-label="Inbox" title="Open the views menu">
-            <span class="list-scope-label">Inbox</span>
-            ${ICON_CHEVRON}
-          </button>
+          <span class="list-scope-label">${esc(title)}</span>
+          <span class="list-count-badge" data-list-count>${esc(count)}</span>
         </div>
-        <button type="button" class="list-new-ticket" data-list-new-ticket title="New ticket (N)" aria-label="New ticket">New ticket</button>
+        <button type="button" class="list-new-ticket" data-list-new-ticket title="New ticket (N)" aria-label="New ticket">+ New ticket</button>
+      </div>
+      ${renderChips(next)}
+      <div class="list-toolbar-row list-toolbar-row--search">
+        ${renderSearch(next)}
         <div class="list-tools" role="group" aria-label="List tools">
           <div class="list-filter-wrap">
-            <button type="button" class="list-tool-btn" data-list-filter title="Views" aria-label="Views" aria-haspopup="listbox" aria-expanded="${ui.filterOpen ? "true" : "false"}" aria-pressed="${ui.filterOpen ? "true" : "false"}">${ICON_FILTER}</button>
+            <button type="button" class="list-tool-btn" data-list-filter title="More views" aria-label="More views" aria-haspopup="listbox" aria-expanded="${ui.filterOpen ? "true" : "false"}" aria-pressed="${ui.filterOpen ? "true" : "false"}">${ICON_FILTER}</button>
             ${renderViewMenu(next)}
           </div>
           <button type="button" class="list-tool-btn" data-list-sort title="Sort ${ui.sort === "oldest" ? "newest first" : ui.sort === "newest" ? "oldest first" : "newest first"}" aria-label="Sort list">${ICON_SORT}</button>
           <button type="button" class="list-tool-btn" data-list-collapse title="Collapse list" aria-label="Collapse ticket list">${ICON_CLOSE}</button>
         </div>
-      </div>
-      <div class="list-toolbar-row list-toolbar-row--search">
-        ${renderSearch(next)}
       </div>
     </header>`;
   }
@@ -216,17 +263,18 @@ export function createListTissue({ mailbox }) {
       </label>
       <button type="button" class="ticket-row${on ? " is-selected" : ""}${unreadClass}" data-ticket="${esc(ticket.id)}" data-status="${esc(status)}"${typeAttr}${severityAttr}${deviceAttr} aria-current="${on ? "true" : "false"}">
         <span class="ticket-bar" aria-hidden="true"></span>
-        <span class="ticket-top">
+        <span class="ticket-avatar ticket-avatar--${avatarTone(name)}" aria-hidden="true">${esc(customerInitial(name))}</span>
+        <span class="ticket-copy">
           <span class="ticket-who">${unreadMark}<span class="ticket-name">${esc(name)}</span></span>
-          <span class="ticket-meta">
-            ${typeHtml}
-            ${severityHtml}
-            ${statusHtml}
-            <time class="ticket-time" datetime="${esc(ticket.updatedAt || "")}" title="${esc(formatWhen(ticket.updatedAt))}">${esc(formatWhen(ticket.updatedAt, { relative: true }))}</time>
-          </span>
+          <span class="ticket-subject">${esc(ticket.subject)}</span>
+          <span class="ticket-snippet">${esc(ticket.snippet || "")}</span>
         </span>
-        <span class="ticket-subject">${esc(ticket.subject)}</span>
-        <span class="ticket-snippet">${esc(ticket.snippet || "")}</span>
+        <span class="ticket-meta">
+          <time class="ticket-time" datetime="${esc(ticket.updatedAt || "")}" title="${esc(formatWhen(ticket.updatedAt))}">${esc(formatWhen(ticket.updatedAt, { relative: true }))}</time>
+          ${typeHtml}
+          ${severityHtml}
+          ${statusHtml}
+        </span>
       </button>
     </div>`;
   }
@@ -348,12 +396,6 @@ export function createListTissue({ mailbox }) {
         return;
       }
       if (event.target.closest("[data-list-filter]")) {
-        ui = { ...ui, filterOpen: !ui.filterOpen };
-        paint();
-        return;
-      }
-      if (event.target.closest("[data-list-inbox]")) {
-        // Title affordance — views live under the filter control.
         ui = { ...ui, filterOpen: !ui.filterOpen };
         paint();
         return;
