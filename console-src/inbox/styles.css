@@ -117,7 +117,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 .pane-head h2 { font-size: 14px; font-weight: 600; }
 
 .pane-list .list-toolbar {
-  padding: 10px 12px 8px;
+  padding: 10px 8px 8px;
   background: var(--ground);
 }
 .pane-list .list-toolbar .console-link {
@@ -188,7 +188,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 .list-chips {
   display: flex;
   flex-wrap: nowrap;
-  gap: 4px;
+  gap: 3px;
   width: 100%;
   overflow-x: auto;
   scrollbar-width: thin;
@@ -196,15 +196,15 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 .list-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   flex: 0 0 auto;
-  height: 28px;
-  padding: 0 7px;
+  height: 26px;
+  padding: 0 6px;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: var(--surface);
   color: var(--mute);
-  font-size: 12px;
+  font-size: 11px;
   white-space: nowrap;
 }
 .list-chip.is-selected {
