@@ -167,6 +167,13 @@ class CaddyConfigTests(unittest.TestCase):
         self.assertIn('respond "Not found" 404', catch_all)
         self.assertNotIn("reverse_proxy", catch_all)
 
+    def test_helpdesk_console_matcher_includes_inbox_root_styles(self) -> None:
+        text = self.fragments["helpdesk"]
+        self.assertIn(
+            "@console path /console/* /index.html /js/* /css/* /styles.css /",
+            text,
+        )
+
     def test_legacy_component_caddyfiles_are_retired_not_deployable(self) -> None:
         for relative in ("webhook/Caddyfile", "whatsapp-connect/Caddyfile"):
             text = (ROOT / relative).read_text(encoding="utf-8")
