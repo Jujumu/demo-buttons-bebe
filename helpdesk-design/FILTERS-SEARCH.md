@@ -197,8 +197,8 @@ First-party list chrome. No Shopify Admin field. No Cute Things write.
 
 First-party list chrome. No Shopify Customer or Order create.
 
-1. **New ticket** control in the list toolbar next to Inbox / Search /
-   filter. Mute / ink / line only. Not purple.
+1. **New ticket** control on toolbar row 1, next to Inbox and the
+   sort/view tools. Mute / ink / line only. Not purple.
 2. Click (or optional `N` when not typing) creates an empty first-party
    ticket and selects it. Compose focuses. Thread has no inbound
    messages. Rail stays `No customer` / `No order`.
@@ -211,19 +211,24 @@ First-party list chrome. No Shopify Customer or Order create.
 
 First-party list chrome only. Not a view. No Shopify Admin field.
 
-1. Search field in the list toolbar next to filter/sort. Placeholder
+Two-row list toolbar so Inbox · New ticket · Search are not cramped
+on one line.
+
+1. **Row 1:** Inbox scope (filter menu) + **New ticket** + sort/view
+   tools.
+2. **Row 2:** Search field full width + clear control. Placeholder
    **Search tickets**. Ink / mute / line only. Not purple.
-2. Narrows the current view. Case-insensitive substring on customer
+3. Narrows the current view. Case-insensitive substring on customer
    name, subject, snippet, and id. Empty query shows the view.
-3. Empty copy is **No matches.** when the query has no hits. Empty
+4. Empty copy is **No matches.** when the query has no hits. Empty
    view copy stays `No tickets in this view.`
-4. When the filtered list is empty, hide the previously selected
+5. When the filtered list is empty, hide the previously selected
    thread and composer. Thread copy stays `Select a ticket.`
    Composer copy stays `Select a ticket to reply.` Keep the held
    `selectedId`. Clearing the query restores that ticket.
-5. Do not add Search to the filter menu. No `data-view="search"`.
+6. Do not add Search to the filter menu. No `data-view="search"`.
    No `list_tickets` `q`.
-6. Review hits with `/?q=ada`. Empty with `/?q=zzzz`.
+7. Review chrome at `/`. Hits with `/?q=ada`. Empty with `/?q=zzzz`.
 
 ## Out of this PR
 

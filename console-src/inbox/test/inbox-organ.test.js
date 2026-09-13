@@ -1499,6 +1499,27 @@ test("composer macro Insert and Append never publish send", () => {
   assert.ok(events.every((row) => row[0] !== "send"));
 });
 
+test("list toolbar is two rows with search full width", async () => {
+  const organ = createInboxOrgan({ viewId: "all" });
+  const snap = await organ.ready();
+  const chromeAt = snap.html.indexOf("list-toolbar-row--chrome");
+  const searchRowAt = snap.html.indexOf("list-toolbar-row--search");
+  const newTicketAt = snap.html.indexOf("data-list-new-ticket");
+  const searchFieldAt = snap.html.indexOf("data-list-search");
+  const filterAt = snap.html.indexOf("data-list-filter");
+  const sortAt = snap.html.indexOf("data-list-sort");
+  assert.ok(chromeAt > 0);
+  assert.ok(searchRowAt > chromeAt);
+  assert.ok(newTicketAt > chromeAt && newTicketAt < searchRowAt);
+  assert.ok(filterAt > chromeAt && filterAt < searchRowAt);
+  assert.ok(sortAt > chromeAt && sortAt < searchRowAt);
+  assert.ok(searchFieldAt > searchRowAt);
+  assert.match(snap.html, /placeholder="Search tickets"/);
+  const css = readFileSync(join(here, "../styles.css"), "utf8");
+  assert.match(css, /\.list-toolbar-row--search\s*\{[^}]*width:\s*100%/);
+  assert.match(css, /\.list-search-wrap\s*\{[^}]*width:\s*100%/);
+});
+
 test("search tickets matches name subject snippet and id", async () => {
   const organ = createInboxOrgan({ viewId: "all" });
   await organ.ready();
