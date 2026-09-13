@@ -257,12 +257,12 @@ export function createListTissue({ mailbox }) {
       ? `<span class="ticket-unread-mark" aria-hidden="true"></span>`
       : "";
     const name = listCustomerName(ticket);
-    return `<div class="ticket-item${checked ? " is-checked" : ""}">
+    return `<div class="ticket-item${checked ? " is-checked" : ""}${on ? " is-selected" : ""}">
+      <span class="ticket-bar" aria-hidden="true"></span>
       <label class="ticket-check">
         <input type="checkbox" data-ticket-select="${esc(ticket.id)}" ${checked ? "checked" : ""} aria-label="Select ${esc(name)}">
       </label>
       <button type="button" class="ticket-row${on ? " is-selected" : ""}${unreadClass}" data-ticket="${esc(ticket.id)}" data-status="${esc(status)}"${typeAttr}${severityAttr}${deviceAttr} aria-current="${on ? "true" : "false"}">
-        <span class="ticket-bar" aria-hidden="true"></span>
         <span class="ticket-avatar ticket-avatar--${avatarTone(name)}" aria-hidden="true">${esc(customerInitial(name))}</span>
         <span class="ticket-copy">
           <span class="ticket-who">${unreadMark}<span class="ticket-name">${esc(name)}</span></span>

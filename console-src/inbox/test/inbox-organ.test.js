@@ -76,9 +76,9 @@ test("selected list row CSS is soft tint + 4px ink leading bar", () => {
   const css = readFileSync(join(here, "../styles.css"), "utf8");
   assert.match(css, /--ink:\s*#1C1916/);
   assert.match(css, /--accent:\s*#B5471D/);
-  assert.match(css, /\.ticket-row \.ticket-bar[\s\S]*width:\s*4px/);
-  assert.match(css, /\.ticket-row\.is-selected\s*\{[^}]*color-mix\([^)]*var\(--ink\)/);
-  assert.match(css, /\.ticket-row\.is-selected \.ticket-bar[\s\S]*background:\s*var\(--ink\)/);
+  assert.match(css, /\.ticket-item \.ticket-bar[\s\S]*width:\s*4px/);
+  assert.match(css, /\.ticket-item\.is-selected[\s\S]*color-mix\([^)]*var\(--ink\)/);
+  assert.match(css, /\.ticket-item\.is-selected \.ticket-bar[\s\S]*background:\s*var\(--ink\)/);
   assert.match(css, /\.ticket-check input\s*\{[^}]*accent-color:\s*var\(--ink\)/);
   assert.match(css, /\.list-select-bar\s*\{[^}]*color:\s*var\(--ink\)/);
   assert.match(css, /Soft tint \+ 4px ink leading bar on the selected ticket/);
@@ -88,7 +88,7 @@ test("selected list row CSS is soft tint + 4px ink leading bar", () => {
   assert.match(css, /\.ship-company\s*\{[^}]*color:\s*var\(--mute\)/);
   assert.match(css, /\.ship-number\s*\{[^}]*font-family:\s*var\(--mono\)/);
   assert.doesNotMatch(css, /\.ticket-row\.is-selected\s*\{[^}]*background:\s*var\(--surface\)\s*;/);
-  assert.doesNotMatch(css, /\.ticket-row\.is-selected \.ticket-bar[\s\S]*background:\s*var\(--accent\)/);
+  assert.doesNotMatch(css, /\.ticket-item\.is-selected \.ticket-bar[\s\S]*background:\s*var\(--accent\)/);
   assert.doesNotMatch(css, /#6B46C1|#7C3AED|#5B21B6/);
 });
 
@@ -1665,6 +1665,7 @@ test("left list chrome has header chips search and avatar rows", async () => {
   assert.match(css, /\.ticket-row\s*\{[^}]*min-height:\s*56px/);
   assert.match(css, /\.list-chips\s*\{[^}]*flex-wrap:\s*nowrap/);
   assert.match(css, /\.list-chips\s*\{[^}]*overflow-x:\s*auto/);
+  assert.match(snap.html, /list-chip-label">Closed</);
 });
 
 test("primary chip click publishes the view", () => {

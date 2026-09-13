@@ -188,7 +188,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 .list-chips {
   display: flex;
   flex-wrap: nowrap;
-  gap: 6px;
+  gap: 4px;
   width: 100%;
   overflow-x: auto;
   scrollbar-width: thin;
@@ -196,15 +196,15 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 .list-chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   flex: 0 0 auto;
-  height: 32px;
-  padding: 0 10px;
+  height: 28px;
+  padding: 0 7px;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: var(--surface);
   color: var(--mute);
-  font-size: 13px;
+  font-size: 12px;
   white-space: nowrap;
 }
 .list-chip.is-selected {
@@ -436,6 +436,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 
 .ticket-list { overflow: auto; }
 .ticket-item {
+  position: relative;
   display: flex;
   align-items: stretch;
   border-bottom: 1px solid var(--line);
@@ -538,22 +539,31 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   color: var(--ink);
 }
 .ticket-row:active { transform: translateY(1px); }
-.ticket-row .ticket-bar {
+.ticket-item .ticket-bar {
   display: none;
   position: absolute;
   left: 0; top: 0; bottom: 0;
   width: 4px;
   background: var(--ink);
+  z-index: 1;
 }
 /* Soft tint + 4px ink leading bar on the selected ticket. */
+.ticket-item.is-selected,
 .ticket-row.is-selected {
   background: color-mix(in srgb, var(--ink) 6%, var(--surface));
   box-shadow: none;
 }
+.ticket-item.is-selected .ticket-row {
+  background: transparent;
+}
+.ticket-item.is-selected:hover,
 .ticket-row.is-selected:hover {
   background: color-mix(in srgb, var(--ink) 8%, var(--surface));
 }
-.ticket-row.is-selected .ticket-bar {
+.ticket-item.is-selected:hover .ticket-row {
+  background: transparent;
+}
+.ticket-item.is-selected .ticket-bar {
   display: block;
   width: 4px;
   background: var(--ink);
