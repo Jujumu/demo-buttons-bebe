@@ -13,6 +13,40 @@ Default chrome is **All** (`all`). `?view=` still overrides
 (`mine` / `open` / `escalated` / `unsubscribe` / `privacy` / `bug` /
 `bug_high` / `bug_critical` / `trash` / `spam` / other view ids).
 
+## Left list chrome (2026-09-13)
+
+List pane chrome only. Thread and rail stay. Paper cream `#F4F0EA` +
+IBM Plex + ink selection. Do not clone a white Gorgias skin.
+
+Stack top → bottom.
+
+1. **Header.** Title **Inbox** (or the current view name) + **count
+   badge**. **`+ New ticket`** on the right. New ticket is accent fill
+   `#B5471D` with a white label. Hit ≥40px. Not icon-only.
+2. **Status chips.** Horizontal scrollable pill chips with counts.
+   Not a single dropdown as the only switcher.
+   - Primary (always visible, order locked): `All` · `Open` ·
+     `Escalated` · `Snoozed` · `Closed`
+   - Overflow via filter / More menu: Assigned to me · Unassigned ·
+     Trash · Spam · Unsubscribe · Privacy · Bug · High · Critical
+   - Do not invent Pending / Waiting / Starred.
+   - Selected chip: ink or soft tint + ink label. Not purple. Not
+     accent-alone.
+   - Boot remains **All**. Chips scroll horizontally. No 3+ wrap
+     lines in v1.
+3. **Search row.** Search full width (flex) · filter control (overflow
+   views / sort). Clear × when the query is non-empty. Placeholder
+   `Search tickets`. Hit ≥40px. Keep PR 54 searchMiss (hide stale
+   thread + composer). Rail-clear-on-miss stays parked.
+4. **Rows** L→R: checkbox · avatar circle with the customer **initial**
+   (mute palette) · text stack (name; unread = bold + ink mark ·
+   subject · snippet) · meta (relative time · status / request-type
+   pill). Selected = soft tint **and** 4px ink leading bar. Min-height
+   56px.
+
+Reference shot: `helpdesk-design/refs/left-list-chrome-2026-09-13.png`.
+Playground before: https://helpdesk.srv804603.hstgr.cloud
+
 ## Open (shipped)
 
 `helpdesk.list_tickets` accepts `{ view: "open" }` on the same
@@ -197,8 +231,9 @@ First-party list chrome. No Shopify Admin field. No Cute Things write.
 
 First-party list chrome. No Shopify Customer or Order create.
 
-1. **New ticket** control on toolbar row 1, next to Inbox and the
-   sort/view tools. Mute / ink / line only. Not purple.
+1. **+ New ticket** control on the header row, right of Inbox + count.
+   Accent fill `#B5471D` with a white label. Hit ≥40px. Not icon-only.
+   Not purple.
 2. Click (or optional `N` when not typing) creates an empty first-party
    ticket and selects it. Compose focuses. Thread has no inbound
    messages. Rail stays `No customer` / `No order`.
@@ -211,13 +246,14 @@ First-party list chrome. No Shopify Customer or Order create.
 
 First-party list chrome only. Not a view. No Shopify Admin field.
 
-Two-row list toolbar so Inbox · New ticket · Search are not cramped
-on one line.
+Three-row list toolbar. Header · chips · search. See Left list
+chrome 2026-09-13.
 
-1. **Row 1:** Inbox scope (filter menu) + **New ticket** + sort/view
-   tools.
-2. **Row 2:** Search field full width + clear control. Placeholder
-   **Search tickets**. Ink / mute / line only. Not purple.
+1. **Header:** Inbox (or view name) + count · **+ New ticket**.
+2. **Chips:** All · Open · Escalated · Snoozed · Closed.
+3. **Search:** field full width (flex) + filter / sort tools + clear
+   when the query is non-empty. Placeholder **Search tickets**. Hit
+   ≥40px. Ink / mute / line only on the field. Not purple.
 3. Narrows the current view. Case-insensitive substring on customer
    name, subject, snippet, and id. Empty query shows the view.
 4. Empty copy is **No matches.** when the query has no hits. Empty

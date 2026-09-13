@@ -72,22 +72,23 @@ test("mount first-paints the Ada draft strip above the composer box", async () =
   assert.doesNotMatch(composer.slice(boxAt), /data-draft-strip/);
 });
 
-test("selected list row CSS is pale accent wash + narrow accent edge", () => {
+test("selected list row CSS is soft tint + 4px ink leading bar", () => {
   const css = readFileSync(join(here, "../styles.css"), "utf8");
   assert.match(css, /--ink:\s*#1C1916/);
   assert.match(css, /--accent:\s*#B5471D/);
-  assert.match(css, /\.ticket-row \.ticket-bar[\s\S]*width:\s*3px/);
-  assert.match(css, /\.ticket-row\.is-selected\s*\{[^}]*color-mix\([^)]*var\(--accent\)/);
+  assert.match(css, /\.ticket-item \.ticket-bar[\s\S]*width:\s*4px/);
+  assert.match(css, /\.ticket-item\.is-selected[\s\S]*color-mix\([^)]*var\(--ink\)/);
+  assert.match(css, /\.ticket-item\.is-selected \.ticket-bar[\s\S]*background:\s*var\(--ink\)/);
   assert.match(css, /\.ticket-check input\s*\{[^}]*accent-color:\s*var\(--ink\)/);
   assert.match(css, /\.list-select-bar\s*\{[^}]*color:\s*var\(--ink\)/);
-  assert.match(css, /Pale accent wash \+ narrow accent edge on the selected ticket/);
+  assert.match(css, /Soft tint \+ 4px ink leading bar on the selected ticket/);
   assert.match(css, /\.track-link\s*\{[^}]*color:\s*var\(--accent\)/);
   assert.match(css, /\.invoice-link\s*\{[^}]*color:\s*var\(--accent\)/);
   assert.doesNotMatch(css, /\.track-link\s*\{[^}]*font-family:\s*var\(--mono\)/);
   assert.match(css, /\.ship-company\s*\{[^}]*color:\s*var\(--mute\)/);
   assert.match(css, /\.ship-number\s*\{[^}]*font-family:\s*var\(--mono\)/);
   assert.doesNotMatch(css, /\.ticket-row\.is-selected\s*\{[^}]*background:\s*var\(--surface\)\s*;/);
-  assert.doesNotMatch(css, /\.ticket-row\.is-selected \.ticket-bar[\s\S]*background:\s*#1C1916/);
+  assert.doesNotMatch(css, /\.ticket-item\.is-selected \.ticket-bar[\s\S]*background:\s*var\(--accent\)/);
   assert.doesNotMatch(css, /#6B46C1|#7C3AED|#5B21B6/);
 });
 
@@ -213,7 +214,7 @@ test("inbox organ renders three panes and an ink selected bar", async () => {
   assert.match(snap.html, /data-pane="thread"/);
   assert.match(snap.html, /data-pane="rail"/);
   assert.doesNotMatch(snap.html, /data-pane="icons"|fifth-column/);
-  assert.match(snap.html, /list-scope-label">Inbox</);
+  assert.match(snap.html, /list-scope-label">Assigned to me</);
   assert.match(snap.html, /data-list-filter/);
   assert.match(snap.html, /data-view="mine"/);
   assert.match(snap.html, /ticket-bar/);
@@ -513,14 +514,15 @@ test("boot defaults to All and offers empty Open review", () => {
   assert.match(boot, /await organ\.mount\(root\)/);
 });
 
-test("All view selects All in the filter menu", async () => {
+test("All view selects All on the primary chip", async () => {
   const snap = await createInboxOrgan({ viewId: "all" }).ready();
   assert.equal(snap.viewId, "all");
-  assert.match(snap.html, /class="list-menu-item is-selected" data-view="all"[^>]*aria-selected="true"/);
-  assert.match(snap.html, /list-menu-label">All</);
+  assert.match(snap.html, /class="list-chip is-selected" data-view="all"[^>]*aria-selected="true"/);
+  assert.match(snap.html, /list-chip-label">All</);
+  assert.match(snap.html, /list-scope-label">Inbox</);
 });
 
-test("list toolbar menu includes Open and keeps existing views", async () => {
+test("list toolbar chips hold primary views and the menu holds overflow", async () => {
   assert.deepEqual(views.map((view) => view.id), [
     "mine",
     "unassigned",
@@ -538,13 +540,20 @@ test("list toolbar menu includes Open and keeps existing views", async () => {
     "spam",
   ]);
   const snap = await createInboxOrgan({ viewId: "open" }).ready();
+  assert.match(snap.html, /list-chip-label">All</);
+  assert.match(snap.html, /list-chip-label">Open</);
+  assert.match(snap.html, /list-chip-label">Escalated</);
+  assert.match(snap.html, /list-chip-label">Snoozed</);
+  assert.match(snap.html, /list-chip-label">Closed</);
+  assert.match(snap.html, /class="list-chip is-selected" data-view="open"[^>]*aria-selected="true"/);
   assert.match(snap.html, /data-view="mine"/);
   assert.match(snap.html, /list-menu-label">Assigned to me</);
   assert.match(snap.html, /data-view="unassigned"/);
-  assert.match(snap.html, /data-view="open"/);
-  assert.match(snap.html, /list-menu-label">Open</);
-  assert.match(snap.html, /data-view="escalated"/);
-  assert.match(snap.html, /list-menu-label">Escalated</);
+  assert.match(snap.html, /list-menu-label">Unassigned</);
+  assert.match(snap.html, /data-view="trash"/);
+  assert.match(snap.html, /list-menu-label">Trash</);
+  assert.match(snap.html, /data-view="spam"/);
+  assert.match(snap.html, /list-menu-label">Spam</);
   assert.match(snap.html, /data-view="unsubscribe"/);
   assert.match(snap.html, /list-menu-label">Unsubscribe</);
   assert.match(snap.html, /data-view="privacy"/);
@@ -555,14 +564,11 @@ test("list toolbar menu includes Open and keeps existing views", async () => {
   assert.match(snap.html, /list-menu-label">High</);
   assert.match(snap.html, /data-view="bug_critical"/);
   assert.match(snap.html, /list-menu-label">Critical</);
-  assert.match(snap.html, /data-view="all"/);
-  assert.match(snap.html, /data-view="snoozed"/);
-  assert.match(snap.html, /data-view="closed"/);
-  assert.match(snap.html, /data-view="trash"/);
-  assert.match(snap.html, /list-menu-label">Trash</);
-  assert.match(snap.html, /data-view="spam"/);
-  assert.match(snap.html, /list-menu-label">Spam</);
-  assert.match(snap.html, /class="list-menu-item is-selected" data-view="open"[^>]*aria-selected="true"/);
+  assert.doesNotMatch(snap.html, /list-menu-label">All</);
+  assert.doesNotMatch(snap.html, /list-menu-label">Open</);
+  assert.doesNotMatch(snap.html, /list-menu-label">Pending</);
+  assert.doesNotMatch(snap.html, /list-menu-label">Waiting</);
+  assert.doesNotMatch(snap.html, /list-menu-label">Starred</);
   assert.doesNotMatch(snap.html, /data-view="search"/);
   assert.doesNotMatch(snap.html, /data-view="unread"/);
   assert.doesNotMatch(snap.html, /list-menu-label">Unread</);
@@ -593,7 +599,7 @@ test("empty Open view keeps mute empty copy", async () => {
   const snap = await createInboxOrgan({ viewId: "open", tickets: [] }).ready();
   assert.equal(snap.viewId, "open");
   assert.match(snap.html, /<p class="empty-pane">No tickets in this view\.<\/p>/);
-  assert.match(snap.html, /class="list-menu-item is-selected" data-view="open"[^>]*aria-selected="true"/);
+  assert.match(snap.html, /class="list-chip is-selected" data-view="open"[^>]*aria-selected="true"/);
   assert.doesNotMatch(snap.html, /data-ticket="/);
 });
 
@@ -602,15 +608,15 @@ test("selectView open uses the same list_tickets view path", async () => {
   await organ.ready();
   const snap = await organ.selectView("open");
   assert.equal(snap.viewId, "open");
-  assert.match(snap.html, /class="list-menu-item is-selected" data-view="open"[^>]*aria-selected="true"/);
+  assert.match(snap.html, /class="list-chip is-selected" data-view="open"[^>]*aria-selected="true"/);
   assert.match(snap.html, /data-ticket="t-casey-visor"/);
   assert.doesNotMatch(snap.html, /data-ticket="t-ada-closed"/);
 });
 
-test("list toolbar menu includes Escalated after Open", async () => {
+test("list toolbar chips include Escalated after Open", async () => {
   const snap = await createInboxOrgan({ viewId: "escalated" }).ready();
-  assert.match(snap.html, /class="list-menu-item is-selected" data-view="escalated"[^>]*aria-selected="true"/);
-  assert.match(snap.html, /list-menu-label">Escalated</);
+  assert.match(snap.html, /class="list-chip is-selected" data-view="escalated"[^>]*aria-selected="true"/);
+  assert.match(snap.html, /list-chip-label">Escalated</);
 });
 
 test("Escalated view returns only escalated tickets and omits Escalated chrome", async () => {
@@ -636,7 +642,7 @@ test("empty Escalated view keeps mute empty copy", async () => {
   const snap = await createInboxOrgan({ viewId: "escalated", tickets: [] }).ready();
   assert.equal(snap.viewId, "escalated");
   assert.match(snap.html, /<p class="empty-pane">No tickets in this view\.<\/p>/);
-  assert.match(snap.html, /class="list-menu-item is-selected" data-view="escalated"[^>]*aria-selected="true"/);
+  assert.match(snap.html, /class="list-chip is-selected" data-view="escalated"[^>]*aria-selected="true"/);
   assert.doesNotMatch(snap.html, /data-ticket="/);
 });
 
@@ -645,7 +651,7 @@ test("selectView escalated uses the same list_tickets view path", async () => {
   await organ.ready();
   const snap = await organ.selectView("escalated");
   assert.equal(snap.viewId, "escalated");
-  assert.match(snap.html, /class="list-menu-item is-selected" data-view="escalated"[^>]*aria-selected="true"/);
+  assert.match(snap.html, /class="list-chip is-selected" data-view="escalated"[^>]*aria-selected="true"/);
   assert.match(snap.html, /data-ticket="t-remy-bug"/);
   assert.doesNotMatch(snap.html, /data-ticket="t-ada-track"/);
 });
@@ -1499,25 +1505,31 @@ test("composer macro Insert and Append never publish send", () => {
   assert.ok(events.every((row) => row[0] !== "send"));
 });
 
-test("list toolbar is two rows with search full width", async () => {
+test("list toolbar stacks header chips then search", async () => {
   const organ = createInboxOrgan({ viewId: "all" });
   const snap = await organ.ready();
   const chromeAt = snap.html.indexOf("list-toolbar-row--chrome");
+  const chipsAt = snap.html.indexOf("list-toolbar-row--chips");
   const searchRowAt = snap.html.indexOf("list-toolbar-row--search");
   const newTicketAt = snap.html.indexOf("data-list-new-ticket");
   const searchFieldAt = snap.html.indexOf("data-list-search");
   const filterAt = snap.html.indexOf("data-list-filter");
   const sortAt = snap.html.indexOf("data-list-sort");
   assert.ok(chromeAt > 0);
-  assert.ok(searchRowAt > chromeAt);
-  assert.ok(newTicketAt > chromeAt && newTicketAt < searchRowAt);
-  assert.ok(filterAt > chromeAt && filterAt < searchRowAt);
-  assert.ok(sortAt > chromeAt && sortAt < searchRowAt);
-  assert.ok(searchFieldAt > searchRowAt);
+  assert.ok(chipsAt > chromeAt);
+  assert.ok(searchRowAt > chipsAt);
+  assert.ok(newTicketAt > chromeAt && newTicketAt < chipsAt);
+  assert.ok(filterAt > searchRowAt);
+  assert.ok(sortAt > searchRowAt);
+  assert.ok(searchFieldAt > searchRowAt && searchFieldAt < filterAt);
   assert.match(snap.html, /placeholder="Search tickets"/);
+  assert.match(snap.html, />\+ New ticket</);
+  assert.match(snap.html, /data-list-count/);
   const css = readFileSync(join(here, "../styles.css"), "utf8");
   assert.match(css, /\.list-toolbar-row--search\s*\{[^}]*width:\s*100%/);
-  assert.match(css, /\.list-search-wrap\s*\{[^}]*width:\s*100%/);
+  assert.match(css, /\.list-search-wrap\s*\{[^}]*flex:\s*1 1 auto/);
+  assert.match(css, /\.list-new-ticket\s*\{[^}]*min-height:\s*40px/);
+  assert.match(css, /\.list-new-ticket\s*\{[^}]*background:\s*var\(--accent\)/);
 });
 
 test("search tickets matches name subject snippet and id", async () => {
@@ -1629,12 +1641,59 @@ test("clear and Esc restore the view", async () => {
   assert.match(empty.html, /<p class="empty-pane">No tickets in this view\.<\/p>/);
 });
 
+test("left list chrome has header chips search and avatar rows", async () => {
+  const snap = await createInboxOrgan({ viewId: "all" }).ready();
+  assert.match(snap.html, /list-scope-label">Inbox</);
+  assert.match(snap.html, /data-list-count>/);
+  assert.match(snap.html, />\+ New ticket</);
+  assert.match(snap.html, /class="list-chip is-selected" data-view="all"/);
+  assert.match(snap.html, /class="list-chips"[^>]*role="tablist"/);
+  assert.match(snap.html, /aria-label="More views"/);
+  assert.doesNotMatch(snap.html, /list-chip-label">Pending</);
+  assert.doesNotMatch(snap.html, /list-chip-label">Waiting</);
+  assert.doesNotMatch(snap.html, /list-chip-label">Starred</);
+  const ada = snap.html.match(/<div class="ticket-item[\s\S]*?data-ticket="t-ada-track"[\s\S]*?<\/button>\s*<\/div>/)?.[0] || "";
+  assert.match(ada, /ticket-check/);
+  assert.match(ada, /ticket-avatar[^>]*>A</);
+  assert.match(ada, /ticket-name">Ada Demo</);
+  assert.match(ada, /ticket-subject/);
+  assert.match(ada, /ticket-snippet/);
+  assert.match(ada, /<time class="ticket-time"/);
+  assert.match(ada, /ticket-bar/);
+  assert.match(ada, /class="ticket-row is-selected"/);
+  const css = readFileSync(join(here, "../styles.css"), "utf8");
+  assert.match(css, /\.ticket-row\s*\{[^}]*min-height:\s*56px/);
+  assert.match(css, /\.list-chips\s*\{[^}]*flex-wrap:\s*nowrap/);
+  assert.match(css, /\.list-chips\s*\{[^}]*overflow-x:\s*auto/);
+  assert.match(snap.html, /list-chip-label">Closed</);
+});
+
+test("primary chip click publishes the view", () => {
+  const mailbox = createMailbox();
+  const events = [];
+  mailbox.subscribe(MAILBOX_TOPICS.VIEW_SELECTED, (payload) => events.push(payload));
+  const list = createListTissue({ mailbox });
+  const host = { innerHTML: "", onclick: null, onkeydown: null };
+  list.update({
+    tickets: fixtureTickets.filter((ticket) => ticketInView(ticket, "all")),
+    views,
+    counts: { all: 3, open: 2 },
+    selectedViewId: "all",
+  });
+  list.mount(host);
+  host.onclick({
+    target: { closest: (sel) => (sel === "[data-view]" ? { dataset: { view: "open" } } : null) },
+    preventDefault() {},
+  });
+  assert.deepEqual(events, [{ viewId: "open" }]);
+});
+
 test("new ticket chrome is in the list toolbar", async () => {
   const organ = createInboxOrgan({ viewId: "all" });
   const snap = await organ.ready();
   assert.match(snap.html, /data-list-new-ticket/);
   assert.match(snap.html, /aria-label="New ticket"/);
-  assert.match(snap.html, />New ticket</);
+  assert.match(snap.html, />\+ New ticket</);
   const css = readFileSync(join(here, "../styles.css"), "utf8");
   assert.match(css, /\.list-new-ticket\s*\{/);
   const boot = readFileSync(join(here, "../js/boot.js"), "utf8");
