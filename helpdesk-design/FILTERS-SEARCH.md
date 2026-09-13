@@ -47,6 +47,33 @@ Stack top → bottom.
 Reference shot: `helpdesk-design/refs/left-list-chrome-2026-09-13.png`.
 Playground before: https://helpdesk.srv804603.hstgr.cloud
 
+## Polish + fixtures (2026-09-13)
+
+List pane only. Thread and rail stay. Paper cream + IBM Plex.
+
+1. **New-ticket name.** Never show `New ticket` as the customer name.
+   Use a real display name or `Untitled`. Subject may stay `New ticket`
+   when compose is empty.
+2. **Unread.** Bold name + small **ink** mark. Not blue / red / purple
+   dots. Never color-alone.
+3. **Search clear.** Show `×` only when the query is non-empty. Hide
+   when empty.
+4. **Row meta pills.** Every row: relative time + mute status /
+   request-type pill (word + soft tint). Open rows get an Open pill in
+   All. Omit repeating Open only in the Open view. Snoozed / Closed /
+   Unsubscribe / Privacy / Bug are pills, not floating plain text under
+   time.
+5. **Selected.** Soft surface tint **and** the 4px ink leading bar.
+   Not purple wash.
+6. **Search tools hit.** Filter and sort each ≥40px, outside the
+   field. Clear only when needed. Do not jam three icons inside the
+   field.
+
+Avatars use soft varied ground tints. Snippet stays mute at ≥4.5:1 on
+cream. Chips scroll; do not wrap to 3+ lines.
+
+Review: `/?new=1`, `/`, `/?q=ada`, `/?ticket=t-jordan-ship`.
+
 ## Open (shipped)
 
 `helpdesk.list_tickets` accepts `{ view: "open" }` on the same
@@ -251,9 +278,11 @@ chrome 2026-09-13.
 
 1. **Header:** Inbox (or view name) + count · **+ New ticket**.
 2. **Chips:** All · Open · Escalated · Snoozed · Closed.
-3. **Search:** field full width (flex) + filter / sort tools + clear
-   when the query is non-empty. Placeholder **Search tickets**. Hit
-   ≥40px. Ink / mute / line only on the field. Not purple.
+3. **Search:** field full width (flex) + filter / sort tools outside
+   the field (each ≥40px) + clear `×` only when the query is
+   non-empty. Placeholder **Search tickets**. Hit ≥40px. Ink / mute /
+   line only on the field. Not purple. Do not jam three icons inside
+   the field.
 3. Narrows the current view. Case-insensitive substring on customer
    name, subject, snippet, and id. Empty query shows the view.
 4. Empty copy is **No matches.** when the query has no hits. Empty

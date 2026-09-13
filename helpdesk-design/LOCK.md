@@ -11,9 +11,14 @@ List row time is relative (`2h`, `Yesterday`). Absolute stays in the
 thread message header and the list tooltip.
 Unread is session-local (no Shopify field): unread names bold plus a small
 ink mark; selecting a ticket marks it read. Not an Unread view.
+Not blue / red / purple. Never color-alone.
 **+ New ticket** in the list header is accent fill `#B5471D` with a
 white label (hit ≥40px). It opens an empty first-party compose
-ticket. No Shopify Customer or Order create. Human Send only. Multi-select
+ticket. List name is **Untitled** (or a real display name) — never
+`New ticket` as the customer name. Subject may stay `New ticket`.
+Row meta is relative time plus a mute status / request-type pill
+(word + soft tint). Open pill in All; omit repeating Open only in
+the Open view. No Shopify Customer or Order create. Human Send only. Multi-select
 uses ink checkboxes and an ink **All selected** bar. Bulk v1 is mark read /
 unread, assign (agent or unassigned), snooze, and Delete into Trash
 (`archived`). No purple. Omit repeating **Open** in open queues; omit

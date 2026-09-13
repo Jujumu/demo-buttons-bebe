@@ -128,21 +128,29 @@ def inbound_from_name(ticket: dict[str, Any], message: dict[str, Any]) -> tuple[
     return from_name, from_email or None
 
 
+def _is_compose_placeholder_name(name: str) -> bool:
+    return not name or name.lower() == "new ticket"
+
+
 def project_customer_name(ticket: dict[str, Any]) -> str:
     name = _clean(ticket.get("customerName"))
     email = _clean(ticket.get("fromEmail")) or None
-    if name and not is_mailbox_name(name, email):
+    if name and not _is_compose_placeholder_name(name) and not is_mailbox_name(name, email):
         return name
     for message in ticket.get("messages") or []:
         if not isinstance(message, dict) or is_agent_message(message):
             continue
         persona, _ = inbound_from_name(ticket, message)
-        if persona and not is_mailbox_name(persona, message.get("fromEmail") or email):
+        if (
+            persona
+            and not is_mailbox_name(persona, message.get("fromEmail") or email)
+            and not _is_compose_placeholder_name(persona)
+        ):
             return persona
     if email and not is_mailbox_email(email):
         return email
-    if name and not is_mailbox_name(name, email):
-        return name
+    if _is_compose_placeholder_name(name) or ticket.get("source") == "compose":
+        return "Untitled"
     return "Customer" if is_mailbox_name(name, email) else (name or "Customer")
 
 

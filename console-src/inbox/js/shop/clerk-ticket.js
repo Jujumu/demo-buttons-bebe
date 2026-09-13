@@ -93,19 +93,24 @@ export function messageSpeaker(ticket, message) {
   };
 }
 
+function isComposePlaceholderName(name) {
+  const text = clean(name).toLowerCase();
+  return !text || text === "new ticket";
+}
+
 export function listCustomerName(ticket) {
   const name = clean(ticket?.customerName);
   const email = clean(ticket?.fromEmail);
-  if (name && !isMailboxName(name, email)) return name;
+  if (name && !isComposePlaceholderName(name) && !isMailboxName(name, email)) return name;
   for (const message of ticket?.messages || []) {
     if (isAgentMessage(message)) continue;
     const speaker = messageSpeaker(ticket, message);
-    if (speaker.name && !isMailboxName(speaker.name, speaker.email || email)) {
+    if (speaker.name && !isMailboxName(speaker.name, speaker.email || email) && !isComposePlaceholderName(speaker.name)) {
       return speaker.name;
     }
   }
   if (email && !isMailboxEmail(email)) return email;
-  if (name && !isMailboxName(name, email)) return name;
+  if (isComposePlaceholderName(name) || ticket?.source === "compose") return "Untitled";
   return isMailboxName(name, email) ? "Customer" : (name || "Customer");
 }
 
@@ -158,7 +163,7 @@ export function composeTicketRecord(now = new Date().toISOString()) {
   composeSeq += 1;
   return {
     id: `t-new-${composeSeq}`,
-    customerName: "New ticket",
+    customerName: "Untitled",
     subject: "New ticket",
     snippet: "",
     status: "open",
