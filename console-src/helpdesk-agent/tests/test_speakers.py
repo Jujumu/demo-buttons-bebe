@@ -61,3 +61,13 @@ class SpeakerTests(unittest.TestCase):
             ],
         }
         self.assertEqual(project_customer_name(ticket), "Sam")
+
+    def test_compose_placeholder_name_is_untitled(self) -> None:
+        self.assertEqual(
+            project_customer_name({"customerName": "New ticket", "source": "compose", "messages": []}),
+            "Untitled",
+        )
+        self.assertEqual(
+            project_customer_name({"customerName": "Untitled", "source": "compose", "messages": []}),
+            "Untitled",
+        )

@@ -765,7 +765,7 @@ def create_ticket(gid_source: str = "sample") -> dict:
     _next_seq += 1
     ticket = {
         "id": ticket_id,
-        "customerName": "New ticket",
+        "customerName": "Untitled",
         "subject": "New ticket",
         "snippet": "",
         "status": "open",

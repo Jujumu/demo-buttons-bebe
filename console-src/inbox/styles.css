@@ -140,6 +140,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 }
 .list-toolbar-row--search {
   width: 100%;
+  gap: 8px;
 }
 .list-scope {
   display: inline-flex;
@@ -261,8 +262,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 .list-tools {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   flex: 0 0 auto;
+  padding-left: 8px;
+  margin-left: 2px;
+  border-left: 1px solid var(--line);
 }
 .list-toolbar-row--search .list-tool-btn {
   width: 40px;
@@ -279,11 +283,14 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 .list-search {
   width: 100%;
   min-height: 40px;
-  padding: 0 32px 0 10px;
+  padding: 0 10px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
   color: var(--ink);
+}
+.list-search-wrap:has(.list-search-clear) .list-search {
+  padding-right: 32px;
 }
 .list-search::placeholder {
   color: var(--mute);
@@ -577,17 +584,18 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   height: 28px;
   margin-top: 2px;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--mute) 22%, var(--ground));
   color: var(--ink);
   font-size: 11px;
   font-weight: 600;
 }
+.ticket-avatar--0 { background: color-mix(in srgb, var(--ink) 7%, #E8E2D6); }
 .ticket-avatar--1 { background: color-mix(in srgb, var(--ink) 10%, var(--ground)); }
-.ticket-avatar--2 { background: color-mix(in srgb, var(--mute) 28%, var(--surface)); }
+.ticket-avatar--2 { background: color-mix(in srgb, var(--mute) 22%, var(--surface)); }
 .ticket-avatar--3 { background: color-mix(in srgb, var(--ink) 8%, #E6DFD4); }
-.ticket-avatar--4 { background: color-mix(in srgb, var(--mute) 16%, #EDE6DC); }
+.ticket-avatar--4 { background: color-mix(in srgb, var(--mute) 14%, #EDE6DC); }
 .ticket-copy { flex: 1 1 auto; min-width: 0; }
 .ticket-who { display: flex; align-items: center; gap: 6px; min-width: 0; }
+/* Unread: ink mark, never color-alone. */
 .ticket-unread-mark {
   flex: 0 0 6px;
   width: 6px;
@@ -596,22 +604,26 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
   background: var(--ink);
 }
 .ticket-name { font-weight: 400; font-size: 14px; min-width: 0; }
-.ticket-row.is-unread:not(.is-selected) .ticket-name { font-weight: 600; }
-.ticket-row.is-selected .ticket-name,
+.ticket-row.is-unread .ticket-name { font-weight: 600; }
 .ticket-row:not(.is-unread) .ticket-name { font-weight: 400; }
 .ticket-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
-.ticket-status { color: var(--mute); font-size: 11px; font-weight: 500; letter-spacing: .02em; }
-.ticket-badge {
+.ticket-pill,
+.ticket-badge,
+.ticket-status {
   display: inline-block;
   color: var(--mute);
   font-size: 10px;
   font-weight: 500;
   letter-spacing: .02em;
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: 1px 5px;
+  border-radius: 999px;
+  padding: 1px 6px;
   line-height: 1.3;
+  background: color-mix(in srgb, var(--ink) 5%, var(--surface));
 }
+.ticket-pill[data-status="open"] { background: color-mix(in srgb, var(--ink) 6%, var(--surface)); }
+.ticket-pill[data-status="snoozed"] { background: color-mix(in srgb, var(--warn) 12%, var(--surface)); }
+.ticket-pill[data-status="closed"] { background: color-mix(in srgb, var(--mute) 14%, var(--surface)); }
 .ticket-request { color: var(--mute); }
 .ticket-severity { color: var(--mute); }
 .ticket-time { color: var(--mute); font-size: 11px; font-variant-numeric: tabular-nums; }
@@ -619,7 +631,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 .ticket-snippet {
   display: block;
   margin-top: 3px;
-  color: var(--mute);
+  /* Mute on cream ≥4.5:1 — ink mix keeps the word mute without going grey-on-cream. */
+  color: color-mix(in srgb, var(--ink) 42%, var(--mute));
   font-size: 13px;
   white-space: nowrap;
   overflow: hidden;

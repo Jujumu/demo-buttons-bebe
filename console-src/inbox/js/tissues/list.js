@@ -15,7 +15,8 @@ import { esc, formatWhen, requestTypeLabel, screenStatus, severityLabel } from "
  * Primary chips (always visible): All · Open · Escalated · Snoozed · Closed.
  * Overflow filter menu: Assigned to me · Unassigned · Trash · Spam ·
  * Unsubscribe · Privacy · Bug · High · Critical. No Pending / Waiting / Starred.
- * Open queues omit the Open status pill. Escalated queues omit an Escalated pill.
+ * Open queues omit the repeating Open status pill. All other views show it.
+ * Escalated queues omit an Escalated pill. Compose list name is Untitled.
  */
 
 export function ticketMatchesQuery(ticket, query) {
@@ -40,6 +41,10 @@ const ICON_SORT = `<svg class="list-tool-icon" width="16" height="16" viewBox="0
 
 const ICON_CLOSE = `<svg class="list-tool-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
   <path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" d="M4.25 4.25l7.5 7.5M11.75 4.25l-7.5 7.5"/>
+</svg>`;
+
+const ICON_COLLAPSE = `<svg class="list-tool-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+  <path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M3.25 3.25h4.25v9.5H3.25zM11.5 5.25 9 8l2.5 2.75"/>
 </svg>`;
 
 const ICON_EXPAND = `<svg class="list-expand-icon" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" focusable="false">
@@ -182,7 +187,7 @@ export function createListTissue({ mailbox }) {
             ${renderViewMenu(next)}
           </div>
           <button type="button" class="list-tool-btn" data-list-sort title="Sort ${ui.sort === "oldest" ? "newest first" : ui.sort === "newest" ? "oldest first" : "newest first"}" aria-label="Sort list">${ICON_SORT}</button>
-          <button type="button" class="list-tool-btn" data-list-collapse title="Collapse list" aria-label="Collapse ticket list">${ICON_CLOSE}</button>
+          <button type="button" class="list-tool-btn" data-list-collapse title="Collapse list" aria-label="Collapse ticket list">${ICON_COLLAPSE}</button>
         </div>
       </div>
     </header>`;
@@ -232,23 +237,38 @@ export function createListTissue({ mailbox }) {
     </div>`;
   }
 
-  function renderRow(ticket, selectedId, unreadIds, checkedIds) {
+  function renderPills(ticket, viewId) {
+    const pills = [];
+    const status = ticket.status || "";
+    const statusWord = screenStatus(status);
+    const omitOpen = viewId === "open" && status === "open";
+    if (statusWord && !omitOpen) {
+      pills.push(
+        `<span class="ticket-pill ticket-status" data-status="${esc(status)}">${esc(statusWord)}</span>`,
+      );
+    }
+    const typeWord = requestTypeLabel(ticket.requestType);
+    if (typeWord) {
+      pills.push(
+        `<span class="ticket-badge ticket-request" data-request-type="${esc(ticket.requestType)}">${esc(typeWord)}</span>`,
+      );
+    }
+    const severityWord = severityLabel(ticket.severity);
+    if (severityWord) {
+      pills.push(
+        `<span class="ticket-badge ticket-severity" data-severity="${esc(ticket.severity)}">${esc(severityWord)}</span>`,
+      );
+    }
+    return pills.join("");
+  }
+
+  function renderRow(ticket, selectedId, unreadIds, checkedIds, viewId) {
     const on = ticket.id === selectedId;
     const unread = unreadIds.includes(ticket.id);
     const checked = checkedIds.includes(ticket.id);
     const status = ticket.status || "";
-    const statusWord = status === "open" ? "" : screenStatus(status);
     const typeWord = requestTypeLabel(ticket.requestType);
     const severityWord = severityLabel(ticket.severity);
-    const statusHtml = statusWord
-      ? `<span class="ticket-status">${esc(statusWord)}</span>`
-      : "";
-    const typeHtml = typeWord
-      ? `<span class="ticket-badge ticket-request" data-request-type="${esc(ticket.requestType)}">${esc(typeWord)}</span>`
-      : "";
-    const severityHtml = severityWord
-      ? `<span class="ticket-badge ticket-severity" data-severity="${esc(ticket.severity)}">${esc(severityWord)}</span>`
-      : "";
     const typeAttr = typeWord ? ` data-request-type="${esc(ticket.requestType)}"` : "";
     const severityAttr = severityWord ? ` data-severity="${esc(ticket.severity)}"` : "";
     const deviceAttr = ticket.device ? ` data-device="${esc(ticket.device)}"` : "";
@@ -271,9 +291,7 @@ export function createListTissue({ mailbox }) {
         </span>
         <span class="ticket-meta">
           <time class="ticket-time" datetime="${esc(ticket.updatedAt || "")}" title="${esc(formatWhen(ticket.updatedAt))}">${esc(formatWhen(ticket.updatedAt, { relative: true }))}</time>
-          ${typeHtml}
-          ${severityHtml}
-          ${statusHtml}
+          ${renderPills(ticket, viewId)}
         </span>
       </button>
     </div>`;
@@ -295,7 +313,7 @@ export function createListTissue({ mailbox }) {
       ? `<p class="empty-pane">No matches.</p>`
       : `<p class="empty-pane">No tickets in this view.</p>`;
     const rows = tickets.length
-      ? tickets.map((ticket) => renderRow(ticket, next.selectedTicketId, unreadIds, checkedIds)).join("")
+      ? tickets.map((ticket) => renderRow(ticket, next.selectedTicketId, unreadIds, checkedIds, next.selectedViewId)).join("")
       : empty;
     return `<div class="pane-inner">
       ${renderToolbar(next)}

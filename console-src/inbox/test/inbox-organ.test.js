@@ -8,6 +8,7 @@ import { IDS, tickets as fixtureTickets, ticketInView, views } from "../js/fixtu
 import { createInboxOrgan } from "../js/inbox.js";
 import { createMailbox } from "../js/mailbox.js";
 import { createFixtureShop } from "../js/shop/fixture-shop.js";
+import { listCustomerName } from "../js/shop/clerk-ticket.js";
 import { createComposerTissue } from "../js/tissues/composer.js";
 import { createListTissue } from "../js/tissues/list.js";
 import { MAILBOX_TOPICS } from "../js/contracts.js";
@@ -189,19 +190,19 @@ test("bug ticket shows mute severity and device without a Shopify write control"
   assert.doesNotMatch(ada.html, /class="thread-request mute"/);
 });
 
-test("list rows show helpdesk status closed snoozed and omit Open chip", async () => {
+test("list rows show mute status pills including Open in All", async () => {
   const snap = await createInboxOrgan({ viewId: "all" }).ready();
   assert.match(snap.html, /data-ticket="t-ada-track"[^>]*data-status="open"/);
   assert.match(snap.html, /data-ticket="t-ada-closed"[^>]*data-status="closed"/);
   assert.match(snap.html, /data-ticket="t-jordan-ship"[^>]*data-status="snoozed"/);
   assert.doesNotMatch(snap.html, /data-ticket="t-nora-old"/);
   assert.doesNotMatch(snap.html, /data-ticket="t-pix-spam"/);
-  assert.doesNotMatch(snap.html, /class="ticket-status">Open</);
-  assert.match(snap.html, /class="ticket-status">Closed</);
-  assert.match(snap.html, /class="ticket-status">Snoozed</);
-  assert.doesNotMatch(snap.html, /class="ticket-status">OPEN</);
-  assert.doesNotMatch(snap.html, /class="ticket-status">CLOSED</);
-  assert.doesNotMatch(snap.html, /class="ticket-status">SNOOZED</);
+  assert.match(snap.html, /class="ticket-pill ticket-status"[^>]*>Open</);
+  assert.match(snap.html, /class="ticket-pill ticket-status"[^>]*>Closed</);
+  assert.match(snap.html, /class="ticket-pill ticket-status"[^>]*>Snoozed</);
+  assert.doesNotMatch(snap.html, /class="ticket-pill ticket-status"[^>]*>OPEN</);
+  assert.doesNotMatch(snap.html, /class="ticket-pill ticket-status"[^>]*>CLOSED</);
+  assert.doesNotMatch(snap.html, /class="ticket-pill ticket-status"[^>]*>SNOOZED</);
 });
 
 test("inbox organ renders three panes and an ink selected bar", async () => {
@@ -581,7 +582,7 @@ test("Open view returns only open tickets and omits the Open chip", async () => 
   assert.match(snap.html, /data-ticket="t-casey-visor"/);
   assert.doesNotMatch(snap.html, /data-ticket="t-ada-closed"/);
   assert.doesNotMatch(snap.html, /data-ticket="t-jordan-ship"/);
-  assert.doesNotMatch(snap.html, /class="ticket-status">Open</);
+  assert.doesNotMatch(snap.html, /class="ticket-pill ticket-status"[^>]*>Open</);
   assert.ok(
     fixtureTickets.some((ticket) => ticketInView(ticket, "open") && !ticketInView(ticket, "mine")),
     "Open is wider than Assigned to me",
@@ -1268,6 +1269,54 @@ test("unread row has ink mark; opening marks read", async () => {
   assert.doesNotMatch(priyaOpen, /ticket-unread-mark/);
 });
 
+test("left list polish: name is not New ticket, clear hides, unread is ink, pills present", async () => {
+  const css = readFileSync(join(here, "../styles.css"), "utf8");
+  assert.equal(listCustomerName({ customerName: "New ticket", source: "compose", messages: [] }), "Untitled");
+  assert.equal(listCustomerName({ customerName: "Ada Demo" }), "Ada Demo");
+
+  const empty = await createInboxOrgan({ viewId: "all" }).ready();
+  assert.doesNotMatch(empty.html, /data-list-search-clear/);
+  assert.doesNotMatch(empty.html, /ticket-name">New ticket</);
+
+  const shop = createFixtureShop();
+  const organ = createInboxOrgan({ shop, viewId: "all" });
+  await organ.ready();
+  const created = await organ.createTicket();
+  const newRow = created.html.match(new RegExp(`<button[^>]*data-ticket="${created.selectedId}"[^>]*>[\\s\\S]*?<\\/button>`))?.[0] || "";
+  assert.match(newRow, /ticket-name">Untitled</);
+  assert.doesNotMatch(newRow, /ticket-name">New ticket</);
+  assert.match(newRow, /ticket-subject">New ticket</);
+  const stored = await shop.getTicket({ ticketId: created.selectedId });
+  assert.equal(stored.customerName, "Untitled");
+  assert.notEqual(stored.customerName, "New ticket");
+
+  const queried = organ.searchTickets("ada");
+  assert.match(queried.html, /data-list-search-clear/);
+  assert.doesNotMatch(organ.searchTickets("").html, /data-list-search-clear/);
+  assert.doesNotMatch(organ.searchTickets("   ").html, /data-list-search-clear/);
+
+  const unread = empty.html.match(/<button[^>]*data-ticket="t-priya-unsub"[^>]*>[\s\S]*?<\/button>/)?.[0] || "";
+  assert.match(unread, /class="ticket-row is-unread"/);
+  assert.match(unread, /ticket-unread-mark/);
+  assert.match(unread, /ticket-name">Priya Lane</);
+  assert.match(css, /\.ticket-unread-mark[\s\S]*background:\s*var\(--ink\)/);
+  assert.doesNotMatch(css, /\.ticket-unread-mark\s*\{[^}]*background:\s*(?:#3[Bb]82[Ff]6|#2563[Ee][Bb]|#ef4444|#dc2626|#7[Cc]3[Aa][Ee][Dd]|blue|red|purple)/);
+  assert.doesNotMatch(css, /#3[Bb]82[Ff]6|#2563[Ee][Bb]|#EF4444|#DC2626|#7[Cc]3[Aa][Ee][Dd]/);
+
+  const jordan = empty.html.match(/<button[^>]*data-ticket="t-jordan-ship"[^>]*>[\s\S]*?<\/button>/)?.[0] || "";
+  assert.match(jordan, /class="ticket-pill ticket-status"[^>]*>Snoozed</);
+  assert.match(empty.html, /class="ticket-pill ticket-status"[^>]*>Open</);
+  assert.match(empty.html, /class="ticket-badge ticket-request"[^>]*>Unsubscribe</);
+  assert.match(empty.html, /class="ticket-badge ticket-request"[^>]*>Privacy</);
+  assert.match(empty.html, /class="ticket-badge ticket-request"[^>]*>Bug</);
+  assert.match(css, /\.ticket-pill[\s\S]*background:\s*color-mix\([^)]*var\(--ink\)/);
+  assert.match(css, /\.list-toolbar-row--search \.list-tool-btn\s*\{[^}]*width:\s*40px/);
+  assert.match(css, /\.list-toolbar-row--search \.list-tool-btn\s*\{[^}]*height:\s*40px/);
+  assert.match(css, /\.list-tools\s*\{[^}]*border-left:\s*1px solid var\(--line\)/);
+  assert.match(css, /\.ticket-avatar--0\s*\{[^}]*background:\s*color-mix/);
+  assert.match(css, /\.list-chips\s*\{[^}]*flex-wrap:\s*nowrap/);
+});
+
 test("selection bar and bulk menu use ink chrome", async () => {
   const organ = createInboxOrgan({ viewId: "all", ticketId: "t-ada-track" });
   let snap = await organ.ready();
@@ -1715,7 +1764,7 @@ test("new ticket creates an empty first-party ticket and focuses compose", async
   assert.equal(snap.focusCompose, true);
   const ticket = await shop.getTicket({ ticketId: snap.selectedId });
   assert.equal(ticket.subject, "New ticket");
-  assert.equal(ticket.customerName, "New ticket");
+  assert.equal(ticket.customerName, "Untitled");
   assert.equal(ticket.source, "compose");
   assert.equal(ticket.customerId, null);
   assert.equal(ticket.orderId, null);

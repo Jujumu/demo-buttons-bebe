@@ -27,7 +27,7 @@ class CreateTicketTests(unittest.TestCase):
         self.assertTrue(payload["ok"])
         ticket = payload["ticket"]
         self.assertTrue(str(ticket["id"]).startswith("t-in-"))
-        self.assertEqual(ticket["customerName"], "New ticket")
+        self.assertEqual(ticket["customerName"], "Untitled")
         self.assertEqual(ticket["subject"], "New ticket")
         self.assertEqual(ticket["snippet"], "")
         self.assertEqual(ticket["status"], "open")
