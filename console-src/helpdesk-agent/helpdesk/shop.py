@@ -7,7 +7,7 @@ from typing import Any
 from . import fixtures_live_holes as live_holes
 from . import fixtures_sample as sample
 from . import queries
-from .auth import PINNED_LIVE_SHOP, cached_token, normalize_shop
+from .auth import cached_token, is_myshopify_host, normalize_shop
 from .client import graphql
 from .dto import clerk_customer, clerk_history_row, clerk_order, clerk_returns
 from .env import load_shopify_env
@@ -119,8 +119,8 @@ def _can_mint(shop: str, env: dict[str, str]) -> bool:
     return bool(
         env.get("SHOPIFY_CLIENT_ID")
         and env.get("SHOPIFY_CLIENT_SECRET")
-        and configured == PINNED_LIVE_SHOP
-        and request == PINNED_LIVE_SHOP
+        and is_myshopify_host(configured)
+        and request == configured
     )
 
 

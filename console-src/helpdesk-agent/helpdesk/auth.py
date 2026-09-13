@@ -10,10 +10,9 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from .env import load_shopify_env
 from .errors import HelpdeskError
-from .names import LIVE_HOLE_SHOP
 
-PINNED_LIVE_SHOP = LIVE_HOLE_SHOP
 _TOKEN_PATH = "/admin/oauth/access_token"
+_MYSHOPIFY_SUFFIX = ".myshopify.com"
 
 _cache: dict[str, object] = {"token": None, "expires_at": 0.0, "shop": ""}
 
@@ -36,13 +35,24 @@ def shop_from_env(env: dict[str, str] | None = None) -> str:
     return normalize_shop(env.get("SHOPIFY_SHOP", ""))
 
 
-def require_pinned_shop(env: dict[str, str] | None = None) -> str:
+def is_myshopify_host(shop: str) -> bool:
+    host = normalize_shop(shop)
+    return bool(host.endswith(_MYSHOPIFY_SUFFIX) and host.count(".") >= 2)
+
+
+def require_configured_shop(env: dict[str, str] | None = None) -> str:
+    """Return SHOPIFY_SHOP. Any installed *.myshopify.com host. No Cute Things pin."""
     shop = shop_from_env(env)
     if not shop:
         raise HelpdeskError("auth_failed", "Shopify shop is not configured")
-    if shop != PINNED_LIVE_SHOP:
-        raise HelpdeskError("auth_failed", "Shopify shop is not the pinned live host")
+    if not is_myshopify_host(shop):
+        raise HelpdeskError("auth_failed", "Shopify shop must be a myshopify.com host")
     return shop
+
+
+def require_pinned_shop(env: dict[str, str] | None = None) -> str:
+    """Deprecated alias. Does not pin a shop; same as require_configured_shop."""
+    return require_configured_shop(env)
 
 
 class _RefuseRedirects(HTTPRedirectHandler):
@@ -67,7 +77,7 @@ def mint_token(
     env: dict[str, str] | None = None,
     opener: Any | None = None,
 ) -> str:
-    shop = require_pinned_shop(env)
+    shop = require_configured_shop(env)
     if not client_id or not client_secret:
         raise _auth_failed()
     body = json.dumps(
@@ -109,7 +119,7 @@ def cached_token(
     env: dict[str, str] | None = None,
     opener: Any | None = None,
 ) -> str:
-    shop = require_pinned_shop(env)
+    shop = require_configured_shop(env)
     if _cache["token"] and _cache["shop"] == shop and float(_cache["expires_at"]) > time.time():
         return str(_cache["token"])
     return mint_token(client_id, client_secret, env=env, opener=opener)

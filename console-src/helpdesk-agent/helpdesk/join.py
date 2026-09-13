@@ -1,4 +1,4 @@
-"""Cute Things Shopify join. Reads only. Miss → GID null. No Customer writes."""
+"""Look-only Shopify join against SHOPIFY_SHOP. Miss → GID null. No Customer writes."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import re
 
 from . import fixtures_live_holes as live_holes
 from . import queries
-from .auth import PINNED_LIVE_SHOP
+from .auth import shop_from_env
 from .client import graphql
 from .env import load_shopify_env
 from .errors import HelpdeskError
@@ -42,12 +42,21 @@ def _fixture_customer(email: str) -> dict[str, str] | None:
     return None
 
 
+def _live_join_shop(env: dict[str, str]) -> str | None:
+    shop = shop_from_env(env)
+    if not shop:
+        return None
+    if _try_live(shop, env) is None:
+        return None
+    return shop
+
+
 def _live_order(name: str, env: dict[str, str]) -> dict[str, str | None] | None:
-    live = _try_live(LIVE_HOLE_SHOP, env)
-    if live is None:
+    shop = _live_join_shop(env)
+    if shop is None:
         return None
     data = graphql(
-        PINNED_LIVE_SHOP,
+        shop,
         env["SHOPIFY_CLIENT_ID"],
         env["SHOPIFY_CLIENT_SECRET"],
         queries.ORDER_BY_NAME_QUERY,
@@ -64,11 +73,11 @@ def _live_order(name: str, env: dict[str, str]) -> dict[str, str | None] | None:
 
 
 def _live_customer(email: str, env: dict[str, str]) -> dict[str, str] | None:
-    live = _try_live(LIVE_HOLE_SHOP, env)
-    if live is None:
+    shop = _live_join_shop(env)
+    if shop is None:
         return None
     data = graphql(
-        PINNED_LIVE_SHOP,
+        shop,
         env["SHOPIFY_CLIENT_ID"],
         env["SHOPIFY_CLIENT_SECRET"],
         queries.CUSTOMER_BY_EMAIL_QUERY,
@@ -114,7 +123,7 @@ def join_shopify(
     channel: str,
     env: dict[str, str] | None = None,
 ) -> tuple[str | None, str | None]:
-    """Return (customerId, orderId). Cute Things only. Miss → (None, None)."""
+    """Return (customerId, orderId). Live shop from env; fixtures if mint is off."""
     env = env if env is not None else load_shopify_env()
     order_id: str | None = None
     customer_id: str | None = None
@@ -131,4 +140,5 @@ def join_shopify(
     return customer_id, order_id
 
 
+# Fixture-fallback host when live mint is off. Live join uses SHOPIFY_SHOP.
 JOIN_SHOP = LIVE_HOLE_SHOP

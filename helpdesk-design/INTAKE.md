@@ -70,8 +70,10 @@ Agent messages are ignored (echo safe). Customer messages call
 
 ## Shopify join (reads only)
 
-Cute Things `yznyc1-ez.myshopify.com`. No new Shopify DTO fields.
-Never `customerCreate`. Never `Customer.email`. Miss → GID null.
+Look-only join against `SHOPIFY_SHOP` from env (any installed
+`*.myshopify.com` host). Cute Things fixtures when mint is off. No new
+Shopify DTO fields. Never `customerCreate`. Never `Customer.email`. Miss →
+GID null.
 
 1. Parse `Order.name` (`#1001`) first via `orders(first:1, query:"name:1001")`.
 2. Else `customers(first:1, query:"email:\"addr\"")` against

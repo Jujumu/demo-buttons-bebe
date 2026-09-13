@@ -59,12 +59,14 @@ Mailbox is AgentMail `helpdesk-support@agentmail.to` (display Demo Shop
 Support). It is not a Shopify object. Prize/lottery/unsubscribe-farm copy is
 spam and never becomes a ticket (`list_tickets` will not show it).
 
-Shopify join is Cute Things reads only (`yznyc1-ez.myshopify.com`, Admin
-GraphQL 2026-07). Parse `Order.name` from subject/body (`#1001`) first; else
-match `fromEmail` to `Customer.defaultEmailAddress.emailAddress`. Chat has no
-email, so order-name only. Miss → GID null. Never `customerCreate`. Never
-deprecated `Customer.email`. `customerName` is the intake From name, never
-`Customer.displayName`. Ticket status is helpdesk `open`.
+Shopify join is look-only Admin GraphQL **2026-07** against `SHOPIFY_SHOP`
+(any installed `*.myshopify.com` host). Parse `Order.name` from subject/body
+(`#1001`) first; else match `fromEmail` to
+`Customer.defaultEmailAddress.emailAddress`. Chat has no email, so order-name
+only. Miss → GID null. Never `customerCreate`. Never deprecated
+`Customer.email`. `customerName` is the intake From name, never
+`Customer.displayName`. Ticket status is helpdesk `open`. Cute Things
+fixtures fill `#1001`–`#1004` when live mint is off.
 
 The inbox is a client of these live tools. MCP, CLI, and
 `POST /console/api/helpdesk` (`{ tool, arguments }`) share `invoke()`.
@@ -182,9 +184,10 @@ onto a live shop query.
 
 Reads use `SHOPIFY_SHOP`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`.
 Mint reads shop from `SHOPIFY_SHOP` only (strip `https://`, trailing slash,
-lowercase) and pins it to Cute Things (`yznyc1-ez.myshopify.com`). Unset or
-any other host refuses mint. The token POST never follows 3xx redirects, so
-the client secret is never sent to another host. Missing env or mint failure
+lowercase). The host must be `*.myshopify.com`. It is not pinned to Cute
+Things. Unset or a non-myshopify host refuses mint. The requested shop must
+match `SHOPIFY_SHOP`. The token POST never follows 3xx redirects, so the
+client secret is never sent to another host. Missing env or mint failure
 falls back to labeled sample/live-hole fixtures. Tokens are never written to
 disk or printed. `SHOPIFY_MUTATIONS_ENABLED` stays `0`; writes are refused.
 
